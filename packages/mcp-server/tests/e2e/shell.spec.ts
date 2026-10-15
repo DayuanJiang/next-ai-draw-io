@@ -78,8 +78,9 @@ test("start_session opens the shell, which loads the bundled draw.io", async ({
     await expect(page.getByTestId("shell-status")).toHaveText(
         "Connected to the MCP server",
     )
+    // The session id's random part, until the diagram is in a file
     await expect(page.getByTestId("shell-session")).toHaveText(
-        shellUrl.slice(-8),
+        shellUrl.split("-").pop() ?? "",
     )
     expect(errors).toEqual([])
 })
@@ -222,7 +223,17 @@ test("exporting another page shows it for a moment, then the user's page comes b
         name: "Second",
         xml: `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="s1" value="OnSecond" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>`,
     })
-    await expect(frame.getByText("Second")).toBeVisible({ timeout: 10_000 })
+    await expect(frame.getByText("Second", { exact: true })).toBeVisible({
+        timeout: 10_000,
+    })
+    // The preview follows the page the agent changed; the user goes back
+    const activeTab = frame.locator(".geTabContainer .geActivePage")
+    await expect(activeTab).toHaveText("Second", { timeout: 10_000 })
+    await frame
+        .locator(".geTabContainer")
+        .getByText("Page-1", { exact: true })
+        .click()
+    await expect(activeTab).toHaveText("Page-1")
     // SVG has no page option in draw.io: the server sends a one-page
     // projection, which the shell shows only for the export
     const file = join(dataDir, "second.svg")
@@ -233,9 +244,7 @@ test("exporting another page shows it for a moment, then the user's page comes b
     expect(text).toContain("exported successfully")
     expect(readFileSync(file, "utf8")).toContain("OnSecond")
     await expect(frame.getByText("First page")).toBeVisible({ timeout: 10_000 })
-    await expect(frame.locator(".geTabContainer .geActivePage")).toHaveText(
-        "Page-1",
-    )
+    await expect(activeTab).toHaveText("Page-1")
     // The projection was never pushed as the document
     const xml = await toolText("get_diagram")
     expect(xml).toContain('value="First page"')
@@ -257,6 +266,9 @@ test("a screenshot of another page leaves the page on screen alone", async ({
         timeout: 10_000,
     })
     const activeTab = tabs.locator(".geActivePage")
+    // The preview follows the page the agent changed; the user goes back
+    await expect(activeTab).toHaveText("Backside", { timeout: 10_000 })
+    await tabs.getByText("Page-1", { exact: true }).click()
     await expect(activeTab).toHaveText("Page-1")
     // The page on screen, as the editor reports it to the server
     const before = await toolText("get_selection")

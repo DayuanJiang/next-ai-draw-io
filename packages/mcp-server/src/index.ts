@@ -45,6 +45,7 @@ import { editDiagram, targetPageXml } from "./edit-diagram.ts"
 import {
     checkEditGate,
     contentFingerprint,
+    countChanges,
     describeChanges,
     markPageSeen,
 } from "./edit-gate.ts"
@@ -53,11 +54,13 @@ import {
     addHistory,
     getHistory,
     type HistoryEntry,
+    type HistorySource,
     isInHistory,
     otherVersions,
 } from "./history.ts"
 import {
     activePreviewUi,
+    changeCount,
     DRAWIO_BASE_URL,
     type ExportFormat,
     type ExportOptions,
@@ -73,6 +76,7 @@ import {
     requestSync,
     restoreHistoryEntry,
     restoreSavedSession,
+    setSessionFile,
     setState,
     shutdown,
     startHttpServer,
@@ -136,6 +140,17 @@ onSessionRecreate((sessionId) => {
 const OTHER_PAGES_UNSEEN =
     "You have not seen the other pages in their current state."
 
+// The preview outlines what a write changed (lib/drawio/editor-bridge.ts),
+// which the model's own screenshots never show
+const OUTLINE_NOTE =
+    "The preview outlines the changed cells for a few seconds on the page that changed. The outline is not part of the diagram and never appears in exports or screenshots; never edit the diagram to remove it."
+// The classic preview page draws no outline
+const outlineNote = () => (activePreviewUi() === "classic" ? "" : OUTLINE_NOTE)
+
+// get_diagram shows plain cells the way the model writes them (foldCells)
+const COMPACT_NOTE =
+    "Plain shapes are in compact form: x, y, w and h on the mxCell stand for its mxGeometry. edit_diagram and add_page take this form as it is."
+
 /**
  * The browser's state of a session. After it expired (or the process
  * restarted) the saved file comes back first, so a tool never builds on an
@@ -188,13 +203,13 @@ const packageVersion: string = require("../package.json").version
 // Hosts truncate instructions (Claude Code at 2,048 characters) and may show
 // only the first 512, so the essentials come first. The full rules are in
 // DRAWING_GUIDE, returned by start_session.
-const INSTRUCTIONS = `next-ai-drawio creates and edits draw.io diagrams and shows them live in a browser preview, where the user can also edit them by hand.
+const INSTRUCTIONS = `next-ai-drawio creates and edits draw.io diagrams and shows them live in a browser preview, where the user can also edit them by hand. Use it for every change to a .drawio or .drawio.svg file too: load_diagram the file, edit with edit_diagram, then export_diagram to the same path; never write its XML yourself.
 
 Start with start_session: it opens the preview and its result contains the drawing guide (layout, edge routing and style rules). Follow the guide when drawing; call get_drawing_guide if it is no longer in your context.
 
 Before using cloud or icon shapes (AWS, Azure, GCP, Kubernetes, Cisco, BPMN...), call get_shape_library and use the exact style names it returns. Never guess icon style names.
 
-To draw from a file, image or web page, read it yourself first; the server only receives XML. Open existing .drawio files with load_diagram.
+To draw from a file, image or web page, read it yourself first; the server only receives XML.
 
 After drawing or heavily editing a complex diagram, pass screenshot: true on that create_new_diagram or edit_diagram call (or call screenshot_diagram) to see the result, and fix overlapping shapes and edges that cross shapes.
 
@@ -332,19 +347,21 @@ function syncFromBrowser(session: Session) {
  * the browser's image of it), the new one is pushed to the preview and
  * recorded in History (its image comes later, from the browser). seen: the
  * model wrote this exact XML knowing the state it built on, so edit_diagram
- * may follow without a get_diagram round-trip.
+ * may follow without a get_diagram round-trip. source: what the version
+ * cards call the entry (an opened file, an added page).
  */
 function commitDocument(
     session: Session,
     xml: string,
     seen: boolean,
     browserSvg?: string,
+    source?: HistorySource,
 ) {
     if (session.xml) keepInHistory(session.id, session.xml, browserSvg)
     session.xml = xml
     setState(session.id, xml)
     session.lastSeenXml = seen ? xml : ""
-    addHistory(session.id, xml, "")
+    addHistory(session.id, xml, "", source)
 }
 
 // The drawing guide plus the user's own rules from instructions.md, read
@@ -462,7 +479,7 @@ registerTool(
 
         const savePath = autosaver.pathFor(sessionId)
         const saveNote = savePath
-            ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. To continue this diagram in a later conversation, call start_session with session_id=${sessionId}. list_saved_diagrams lists older diagrams.`
+            ? `\n\nAuto-save: after every change the diagram is saved to ${savePath}. Never edit that file or load a changed copy of it; change the diagram with edit_diagram. To continue this diagram in a later conversation, call start_session with session_id=${sessionId}. list_saved_diagrams lists older diagrams.`
             : ""
         const rulesNote = `\n\nYour own drawing rules: write them in ${customInstructionsPath()} (Markdown, up to 5000 characters, read on every call).`
         // The bundled draw.io is served from the preview's own origin; an
@@ -474,8 +491,14 @@ registerTool(
 
         log.info(`Started session ${sessionId}, browser at ${browserUrl}`)
 
+        // A tab that opens by itself surprises the user unless the agent
+        // says what it is; last, after the long guide, so it is not missed
+        const tabNote =
+            process.env.BROWSER === "none"
+                ? "Give the user the Browser URL above: the live preview of the diagram, where they can also edit it by hand; you see their edits."
+                : "A browser tab with the live preview just opened. In your reply, tell the user in one sentence that it shows the diagram as you draw and that you see the edits they make there."
         return ok(
-            `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}\n\nThe browser will now show real-time diagram updates.${originNote}${saveNote}${rulesNote}\n\n${guideText()}`,
+            `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}${originNote}${saveNote}${rulesNote}\n\n${guideText()}\n\n${tabNote}`,
         )
     },
     { write: true },
@@ -580,6 +603,8 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
         // The user's state goes to History before the AI overwrites it
         const browserState = syncFromBrowser(session)
         commitDocument(session, xml, true, browserState?.svg)
+        // A new document, in no file until it is exported
+        setSessionFile(session.id, null)
 
         // Report page count back to the caller so the LLM learns whether
         // multi-page worked or fell back to single.
@@ -602,7 +627,7 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                 type: "text",
                 text: cleared
                     ? "Canvas cleared: one blank page. The previous diagram is in History."
-                    : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}`,
+                    : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}\n\n${outlineNote()}`,
             },
         ]
         // The page on screen: the new document's first page after a full
@@ -638,6 +663,7 @@ registerTool(
         title: "Load diagram file",
         description:
             "Load a .drawio diagram into the current session, REPLACING the entire diagram (all pages). " +
+            "To change an existing file, load it here, edit with edit_diagram, then export_diagram to the same path; never rewrite the file by hand. " +
             "Provide ONE of two mutually exclusive sources: 'path' (the server reads the file from disk — you do NOT need to read the file yourself or pass its XML through create_new_diagram) " +
             "or 'xml' (the raw file content you already have — from another tool, a repository read, or an API response — so no temporary file needs to be written first). " +
             "Both accept plain XML and draw.io's compressed save format. " +
@@ -713,7 +739,9 @@ registerTool(
         //   input — keep the gate.
         const browserState = syncFromBrowser(session)
         const markSeen = inlineXml !== undefined && !loaded.hadCompressedPages
-        commitDocument(session, xml, markSeen, browserState?.svg)
+        commitDocument(session, xml, markSeen, browserState?.svg, "load")
+        // The preview names the file (inline XML is in none)
+        setSessionFile(session.id, path !== undefined ? sourceLabel : null)
 
         const pageSummary = describePages(xml)
         log.info(`Diagram loaded (${pageSummary})`)
@@ -721,9 +749,14 @@ registerTool(
         const gateHint = markSeen
             ? ""
             : "\n\nCall get_diagram before edit_diagram — you haven't seen this file's cell IDs yet."
+        // The preview is a copy: the file changes only when it is exported
+        const saveHint =
+            path !== undefined
+                ? `\n\nEdits change the preview, not the file. When the changes are done, call export_diagram with path ${sourceLabel} to save them back to the file.`
+                : ""
 
         return ok(
-            `Diagram loaded from ${sourceLabel}!\n\nThe diagram is now visible in your browser.\n\n${pageSummary}${gateHint}`,
+            `Diagram loaded from ${sourceLabel}!\n\nThe diagram is now visible in your browser.\n\n${pageSummary}${gateHint}${saveHint}\n\n${outlineNote()}`,
         )
     },
     { write: true },
@@ -868,10 +901,17 @@ registerTool(
 
         log.info(`Diagram edited successfully`)
 
+        // The preview's version card counts only real changes: say which
+        // updates changed nothing, so the model can tell the user
+        const { unchanged } = outcome
+        const unchangedNote =
+            unchanged.length > 0
+                ? ` ${unchanged.length} of them changed nothing (id ${unchanged.join(", ")} already matched), so ${outcome.applied - unchanged.length} operation(s) changed the diagram.`
+                : ""
         const content: CallToolResult["content"] = [
             {
                 type: "text",
-                text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.`,
+                text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.${unchangedNote}\n\n${outlineNote()}`,
             },
         ]
         // Without a selector the edit went to the first page, while the
@@ -965,7 +1005,7 @@ registerTool(
         if (!hasPageSelector(pageSelector)) {
             session.lastSeenXml = liveXml
             return ok(
-                `Current diagram XML:\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}${changesNote}`,
+                `Current diagram XML. ${COMPACT_NOTE}\n\n${foldCells(session.xml)}\n\n${pageList}${staleNote}${changesNote}`,
             )
         }
 
@@ -990,7 +1030,7 @@ registerTool(
                 ? ""
                 : `\n\nNote: ${OTHER_PAGES_UNSEEN} Call get_diagram without a page selector before editing.`
         return ok(
-            `Page ${projection.index} ("${projection.name}"):\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${changesNote}${otherPagesNote}`,
+            `Page ${projection.index} ("${projection.name}"). ${COMPACT_NOTE}\n\n${foldCells(projection.xml)}\n\n${pageList}${staleNote}${changesNote}${otherPagesNote}`,
         )
     },
     { needsSession: true },
@@ -1104,6 +1144,28 @@ function previewStalledNote(sessionId: string, next = "then retry") {
     return `The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (${previewUrl(getServerPort(), sessionId)}), ${next}.`
 }
 
+// Exported images get a margin, and a PNG a white background unless asked
+// otherwise (draw.io keeps a page's own background color over it); the
+// preview passes these on to draw.io's export
+const IMAGE_MARGIN = 20
+function imageOptions(
+    format: ExportFormat,
+    transparent = false,
+): ExportOptions {
+    if (format !== "png") return { border: IMAGE_MARGIN }
+    return transparent
+        ? { border: IMAGE_MARGIN, transparent: true }
+        : { border: IMAGE_MARGIN, background: "#ffffff" }
+}
+
+/** A PNG's size from its IHDR chunk, which always comes first */
+function pngSize(png: Buffer): { width: number; height: number } | null {
+    if (png.length < 24 || png.toString("ascii", 12, 16) !== "IHDR") {
+        return null
+    }
+    return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }
+}
+
 /** The <diagram id> of the page a selector targets, for draw.io's pageId. */
 function pageIdFor(xml: string, selector: PageSelector): string | undefined {
     const doc = parseMxfile(xml)
@@ -1130,9 +1192,10 @@ const SCREENSHOT_CHECKLIST = `Check this rendering of the diagram for:
 3. Text that is cut off, overlapping or too small to read (warning)
 4. Layout problems: cramped shapes, poor spacing or misalignment (warning)
 5. Rendering errors: missing, incomplete or broken elements, such as an icon that did not load (critical)
+6. Labels on top of lines or shape borders, arrowheads ending on text or icons, edges crossing other edges (warning)
 Name the elements that have a problem, for example "the 'Login' box overlaps 'Register'".
 Give concrete fixes, for example "move 'Login' 50 px left".
-If there are critical issues, fix them with edit_diagram and take one more screenshot. Do at most two rounds of fixes. Minor cosmetic issues are fine, and diagrams with only 1 or 2 shapes pass unless something is clearly broken.`
+If there are critical issues, fix them with edit_diagram and take one more screenshot; fix the warnings in the same round when you can. Do at most two rounds of fixes. Diagrams with only 1 or 2 shapes pass unless something is clearly broken. Do not tell the user the check passed while problems remain: name the ones you left.`
 
 /**
  * Have the preview tab render a page of xml as a PNG. Returns the image
@@ -1187,6 +1250,7 @@ async function captureScreenshot(
     let data: string | undefined
     for (const width of SCREENSHOT_WIDTHS) {
         data = await exportViaBrowser(sessionId, "png", projectionXml, {
+            ...imageOptions("png"),
             width,
             pageId,
         })
@@ -1247,7 +1311,8 @@ registerTool(
         title: "Export diagram",
         description:
             "Export the current diagram to a file. Supports .drawio (XML), .png, .svg, and .drawio.svg (an SVG with the diagram embedded, which draw.io and load_diagram can open again). " +
-            "The format is auto-detected from the file extension, or can be specified explicitly.\n\n" +
+            "The format is auto-detected from the file extension, or can be specified explicitly. " +
+            "Images get a 20 px margin; a PNG has a white background (or the page's own background color) unless transparent is true.\n\n" +
             "Multi-page behaviour:\n" +
             "- .drawio with NO page selector: writes the full <mxfile> (all pages).\n" +
             "- .drawio with a page selector: writes a single-page <mxfile> containing only that page.\n" +
@@ -1267,10 +1332,23 @@ registerTool(
                 .describe(
                     "Export format. If omitted, detected from file extension. Defaults to drawio.",
                 ),
+            transparent: z
+                .boolean()
+                .optional()
+                .describe(
+                    "PNG only: a transparent background instead of white. Default false.",
+                ),
         },
         annotations: { openWorldHint: false },
     },
-    async ({ path: rawPath, format, page_id, page_name, page_index }) => {
+    async ({
+        path: rawPath,
+        format,
+        transparent,
+        page_id,
+        page_name,
+        page_index,
+    }) => {
         const path = expandHome(rawPath)
         // start_session may replace currentSession while this waits
         const session = activeSession()
@@ -1306,6 +1384,8 @@ registerTool(
         // Fetch latest state, so a page selector works on a bare
         // <mxGraphModel> pushed by the browser
         const browserState = syncFromBrowser(session)
+        // A change while the file is written leaves it behind the preview
+        const changesBefore = changeCount(session.id)
 
         if (!session.xml) {
             return fail("No diagram to export. Please create a diagram first.")
@@ -1336,8 +1416,16 @@ registerTool(
 
             await writeFile(absolutePath, outXml, "utf-8")
             log.info(`Diagram exported to ${absolutePath}`)
+            // The whole diagram is in this file now: the preview names it
+            if (!hasPageSelector(pageSelector)) {
+                setSessionFile(
+                    session.id,
+                    absolutePath,
+                    changeCount(session.id) !== changesBefore,
+                )
+            }
             return ok(
-                `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${outXml.length} characters${syncNote}`,
+                `Diagram exported successfully!\n\nFile: ${absolutePath}\nSize: ${outXml.length} characters\n${describePages(outXml)}${syncNote}`,
             )
         }
 
@@ -1363,7 +1451,6 @@ registerTool(
         if (previewStalled(session.id)) {
             return fail(previewStalledNote(session.id))
         }
-
         // -----------------------------------------------------------------
         // Page-targeted PNG/SVG export.
         //
@@ -1395,11 +1482,15 @@ registerTool(
             projectionXml = projection.xml
         }
 
+        const pngTransparent = detectedFormat === "png" && transparent === true
         const exportData = await exportViaBrowser(
             session.id,
             browserFormat,
             projectionXml,
-            pngPageId ? { pageId: pngPageId } : undefined,
+            {
+                ...imageOptions(browserFormat, pngTransparent),
+                ...(pngPageId && { pageId: pngPageId }),
+            },
         )
 
         if (!exportData) {
@@ -1410,10 +1501,18 @@ registerTool(
             )
         }
 
-        // Decode and write
+        // Decode and write; what the file holds goes in the result, so the
+        // model need not open it to check
+        const shows = hasPageSelector(pageSelector)
+            ? `page ${describeSelector(pageSelector)}`
+            : "the page on screen"
+        let details = ""
         if (detectedFormat === "png") {
             const base64 = exportData.replace(/^data:image\/png;base64,/, "")
-            await writeFile(absolutePath, Buffer.from(base64, "base64"))
+            const png = Buffer.from(base64, "base64")
+            await writeFile(absolutePath, png)
+            const size = pngSize(png)
+            details = `Image: ${size ? `${size.width} x ${size.height} px, ` : ""}${pngTransparent ? "transparent" : "white"} background, ${IMAGE_MARGIN} px margin, showing ${shows}`
         } else {
             let svgContent = exportData
             if (svgContent.startsWith("data:image/svg+xml;base64,")) {
@@ -1424,6 +1523,18 @@ registerTool(
                 svgContent = Buffer.from(base64, "base64").toString("utf-8")
             }
             await writeFile(absolutePath, svgContent, "utf-8")
+            details = `Image: ${IMAGE_MARGIN} px margin, showing ${shows}`
+            if (detectedFormat === "drawio.svg") {
+                // The file holds the diagram too (one page with a selector)
+                details += `\nEmbedded diagram: ${describePages(projectionXml ?? session.xml)}`
+                if (!projectionXml) {
+                    setSessionFile(
+                        session.id,
+                        absolutePath,
+                        changeCount(session.id) !== changesBefore,
+                    )
+                }
+            }
         }
 
         const written = await stat(absolutePath)
@@ -1431,7 +1542,7 @@ registerTool(
             `Diagram exported to ${absolutePath} (${detectedFormat}, ${written.size} bytes)`,
         )
         return ok(
-            `Diagram exported successfully!\n\nFile: ${absolutePath}\nFormat: ${detectedFormat}\nSize: ${written.size} bytes`,
+            `Diagram exported successfully!\n\nFile: ${absolutePath}\nFormat: ${detectedFormat}\nSize: ${written.size} bytes\n${details}`,
         )
     },
     { needsSession: true },
@@ -1443,7 +1554,11 @@ registerTool(
  * parsed Document the caller can mutate, plus a writer that persists.
  */
 async function loadMxfileForMutation(): Promise<
-    | { ok: true; doc: Document; writeBack: () => void }
+    | {
+          ok: true
+          doc: Document
+          writeBack: (source?: HistorySource) => void
+      }
     | { ok: false; message: string }
 > {
     if (!currentSession) return { ok: false, message: NO_SESSION }
@@ -1479,7 +1594,7 @@ async function loadMxfileForMutation(): Promise<
     return {
         ok: true,
         doc,
-        writeBack: () => {
+        writeBack: (source?: HistorySource) => {
             // The store may hold user edits the model has not seen yet; the
             // result counts as seen only when the model built on the latest
             const sawLatest = checkEditGate(
@@ -1491,6 +1606,7 @@ async function loadMxfileForMutation(): Promise<
                 serializeMxfile(doc),
                 sawLatest,
                 browserState?.svg,
+                source,
             )
         },
     }
@@ -1575,12 +1691,18 @@ registerTool(
         // (throws on a page id in use or a whole <mxfile> as content)
         const info = addPageToDoc(loaded.doc, { id, name, xml: cleanXml })
 
-        loaded.writeBack()
+        loaded.writeBack("add_page")
         log.info(
             `Added page id=${info.id} name="${info.name}" index=${info.index}`,
         )
+        // With two tabs the default name of the first one says nothing
+        const first = listPagesFromDoc(loaded.doc)[0]
+        const renameHint =
+            info.index === 1 && /^Page-\d+$/.test(first?.name ?? "")
+                ? `\n\nThe first page is still called "${first.name}": give it a name that says what it shows with rename_page.`
+                : ""
         return ok(
-            `Page added.\n\nid=${info.id}\nname=${info.name}\nindex=${info.index}\ncells=${info.cellCount}`,
+            `Page added.\n\nid=${info.id}\nname=${info.name}\nindex=${info.index}\ncells=${info.cellCount}${renameHint}`,
         )
     },
     { write: true },
@@ -1665,8 +1787,28 @@ registerTool(
     { write: true },
 )
 
-/** The versions restore_version can go to, numbered by steps_back. */
-function describeVersions(entries: HistoryEntry[]): string {
+// Who made a History entry, as restore_version names it; the AI's writes
+// carry no source
+const SOURCE_LABELS: Record<HistorySource, string> = {
+    user: "edit by hand",
+    recover: "edit by hand",
+    restore: "restored copy",
+    load: "opened file",
+    add_page: "added a page",
+}
+
+/**
+ * The versions restore_version can go to, numbered by steps_back, each
+ * with who made it and what it changed from the entry before it, so the
+ * model can match them with the preview's version cards. justLeft: right
+ * after a restore, steps_back=1 is the version the canvas just left.
+ */
+function describeVersions(
+    sessionId: string,
+    entries: HistoryEntry[],
+    justLeft = false,
+): string {
+    const history = getHistory(sessionId)
     return entries
         .slice(0, 20)
         .map((entry, i) => {
@@ -1678,7 +1820,23 @@ function describeVersions(entries: HistoryEntry[]): string {
                           .map((p) => `"${p.name}" (${p.cellCount} cells)`)
                           .join(", ")
                     : "no pages parsed"
-            return `steps_back=${i + 1}: ${names}`
+            const at = history.findIndex((e) => e.id === entry.id)
+            const previous = at > 0 ? history[at - 1] : undefined
+            // An edit's own change; an opened file, a page or a restored
+            // copy is told by what it is
+            const counted =
+                !entry.source ||
+                entry.source === "user" ||
+                entry.source === "recover"
+            const by = entry.source ? SOURCE_LABELS[entry.source] : "AI change"
+            const what = !hasCells(entry.xml)
+                ? "blank page"
+                : previous && counted
+                  ? `${by}, ${countChanges(previous.xml, entry.xml) || "no shape changed"}`
+                  : by
+            const mark =
+                justLeft && i === 0 ? " (the version you just left)" : ""
+            return `steps_back=${i + 1}${mark}: ${what}; ${names}`
         })
         .join(" | ")
 }
@@ -1713,7 +1871,7 @@ registerTool(
         }
         if (candidates.length < stepsBack) {
             return fail(
-                `Only ${candidates.length} other version(s) in History: ${describeVersions(candidates)}`,
+                `Only ${candidates.length} other version(s) in History: ${describeVersions(session.id, candidates)}`,
             )
         }
         const entry = candidates[stepsBack - 1]
@@ -1740,9 +1898,13 @@ registerTool(
             ? " Your manual changes were kept in History (steps_back=1 brings them back)."
             : ""
         const next =
-            describeVersions(otherVersions(session.id, entry.xml)) || "none"
+            describeVersions(
+                session.id,
+                otherVersions(session.id, entry.xml),
+                true,
+            ) || "none"
         return ok(
-            `Restored the version ${stepsBack} step(s) back.${manualNote}\n\n${describePages(entry.xml)}\n\nVersions you can go to now: ${next}\n\nCall get_diagram before edit_diagram.`,
+            `Restored the version ${stepsBack} step(s) back.${manualNote}\n\n${describePages(entry.xml)}\n\nVersions you can go to now: ${next}\n\nCall get_diagram before edit_diagram.\n\n${outlineNote()}`,
         )
     },
     { write: true, needsSession: true },

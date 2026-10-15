@@ -118,6 +118,21 @@ describe("foldCells", () => {
         }
     })
 
+    it("folds a shape on the left or top edge, whose x or y draw.io leaves out", () => {
+        const atOrigin =
+            '<mxCell id="2" value="Start" style="rounded=1;" vertex="1" parent="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>'
+        expect(foldCells(atOrigin)).toBe(
+            '<mxCell id="2" value="Start" style="rounded=1;" x="0" y="0" w="120" h="60"/>',
+        )
+        const onTop = atOrigin.replace("<mxGeometry ", '<mxGeometry x="40" ')
+        expect(foldCells(onTop)).toBe(
+            '<mxCell id="2" value="Start" style="rounded=1;" x="40" y="0" w="120" h="60"/>',
+        )
+        expect(canonical(expandCompactCells(foldCells(onTop)))).toBe(
+            canonical(onTop.replace("<mxGeometry ", '<mxGeometry y="0" ')),
+        )
+    })
+
     it("round-trips through expandCompactCells", () => {
         const page = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${shapeLong}${edgeLong}<mxCell id="lane1" value="Lane" style="swimlane;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="200" height="200" as="geometry"/></mxCell><mxCell id="3" value="Step" style="rounded=1;" vertex="1" parent="lane1"><mxGeometry x="20" y="60" width="160" height="40" as="geometry"/></mxCell><mxCell id="6" edge="1" parent="1" source="2" target="3"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="750" y="80"/></Array></mxGeometry></mxCell></root></mxGraphModel>`
         const folded = foldCells(page)

@@ -409,6 +409,28 @@ describe("buildVersions", () => {
             "Changed by hand",
             "Changed the diagram",
         ])
+        const opened = buildVersions(
+            list(
+                [
+                    entry(0, A, { source: "load" }),
+                    entry(1, AB, { source: "add_page" }),
+                ],
+                1,
+            ),
+            cache(),
+        )
+        expect(opened.versions.map((v) => versionLabel(v, dict))).toEqual([
+            "Opened the file",
+            "Added a page",
+        ])
+    })
+
+    it("keeps the cells each change touched, to outline them again", () => {
+        const { versions } = buildVersions(
+            list([entry(0, A), entry(1, ABC)], 1),
+            cache(),
+        )
+        expect(versions[1].touchedIds).toEqual(["b", "c"])
     })
 })
 
@@ -621,6 +643,8 @@ describe("useNodeVersions", () => {
         expect(result.current.canUndo).toBe(false)
         expect(result.current.canRedo).toBe(false)
         expect(result.current.undoneId).toBeNull()
+        // The card of the version the edit was made on says so
+        expect(result.current.editedSinceId).toBe("1")
         // The AI writes: the server kept the hand edit first
         const manual = doc(cell("a", "A") + cell("b", "B") + cell("m", "M"))
         await act(async () =>
@@ -642,6 +666,19 @@ describe("useNodeVersions", () => {
             "user",
             null,
         ])
+    })
+
+    it("names the version a hand edit was made on: the one on the canvas last", async () => {
+        const server = fakeSync(list([entry(0, A), entry(1, AB)], 0))
+        const { result } = renderHook(() => useNodeVersions(server.sync), {
+            wrapper,
+        })
+        await flush()
+        expect(result.current.editedSinceId).toBeNull()
+        await act(async () =>
+            server.serve(list([entry(0, A), entry(1, AB)], null)),
+        )
+        expect(result.current.editedSinceId).toBe("0")
     })
 
     it("does not restore twice at once, nor what is not a version", async () => {

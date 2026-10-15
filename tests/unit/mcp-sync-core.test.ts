@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+    changedPageId,
     createMcpSync,
     decideLoad,
     type ExportRequest,
@@ -659,6 +660,22 @@ describe("MCP sync export requests", () => {
         expect(t.exports).toHaveLength(1)
     })
 
+    it("passes the server's margin and background choice to draw.io as they are", async () => {
+        const t = await inStep()
+        const poll = t.sync.poll()
+        t.next("GET").answer(
+            exportState({ exportOptions: { border: 20, transparent: true } }),
+        )
+        await poll
+        expect(t.nextExport().request).toEqual({
+            format: "png",
+            scale: 2,
+            currentPage: true,
+            border: 20,
+            transparent: true,
+        })
+    })
+
     it("renders a page by its id without touching the canvas", async () => {
         const t = await inStep()
         const poll = t.sync.poll()
@@ -683,6 +700,7 @@ describe("MCP sync export requests", () => {
             exportState({
                 exportFormat: "svg",
                 exportXml: "<mxfile>page 2 only</mxfile>",
+                exportOptions: { border: 20 },
             }),
         )
         await poll
@@ -692,7 +710,8 @@ describe("MCP sync export requests", () => {
         expect(t.exports).toHaveLength(0)
         await vi.advanceTimersByTimeAsync(600)
         const request = t.nextExport()
-        expect(request.request).toEqual({ format: "svg" })
+        // The server's margin goes to draw.io as it is
+        expect(request.request).toEqual({ format: "svg", border: 20 })
         // An autosave of the projection is not the document
         t.sync.onAutoSave("<mxfile>page 2 edited</mxfile>")
         await t.settle()
@@ -873,12 +892,15 @@ describe("MCP sync export requests", () => {
             exportState({
                 exportFormat: "svg",
                 exportXml: "<mxfile>page 2 only</mxfile>",
+                exportOptions: { border: 20 },
             }),
         )
         await again
         expect(t.transients).toHaveLength(2)
         await vi.advanceTimersByTimeAsync(600)
-        expect(t.exports.map((e) => e.request)).toEqual([{ format: "svg" }])
+        expect(t.exports.map((e) => e.request)).toEqual([
+            { format: "svg", border: 20 },
+        ])
     })
 
     it("gives up on an export draw.io never answers and restores the document", async () => {
@@ -1788,5 +1810,135 @@ describe("MCP sync with server writes taken in place", () => {
             source: "edit",
             baseVersion: 4,
         })
+    })
+})
+
+describe("MCP sync with a write on another page than the one on screen", () => {
+    const canvasXml = file(
+        drawioPage("p1", "One", cell("a", "A")) +
+            drawioPage("p2", "Two", cell("b", "B")),
+    )
+    const onPage2 = (label: string) =>
+        file(
+            page("p1", "One", cell("a", "A")) +
+                page("p2", "Two", cell("b", "B") + cell("c", label, 300)),
+        )
+
+    it("names the one page a write changed", () => {
+        expect(changedPageId(canvasXml, onPage2("C"))).toBe("p2")
+        const added = file(
+            page("p1", "One", cell("a", "A")) +
+                page("p2", "Two", cell("b", "B")) +
+                page("p3", "Three", ""),
+        )
+        expect(changedPageId(canvasXml, added)).toBe("p3")
+        // Two pages, none, or a first load: no single page
+        const both = file(
+            page("p1", "One", cell("a", "A2")) +
+                page("p2", "Two", cell("b", "B2")),
+        )
+        expect(changedPageId(canvasXml, both)).toBeNull()
+        const same = file(
+            page("p1", "One", cell("a", "A")) +
+                page("p2", "Two", cell("b", "B")),
+        )
+        expect(changedPageId(canvasXml, same)).toBeNull()
+        expect(changedPageId("", onPage2("C"))).toBeNull()
+    })
+
+    it("shows that page after the load and pictures it as a PNG of that page", async () => {
+        const t = await inStep({ currentPageId: "p1" })
+        t.canvas.xml = canvasXml
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, onPage2("C")))
+        await poll
+        expect(t.loads.at(-1)?.decision).toEqual({
+            mode: "load",
+            pageId: "p2",
+        })
+        await vi.advanceTimersByTimeAsync(500)
+        const thumbnail = t.nextExport()
+        expect(thumbnail.request).toEqual({
+            format: "png",
+            pageId: "p2",
+            width: 600,
+        })
+        thumbnail.answer({ data: "data:image/png;base64,AAAA" })
+        await t.settle()
+        expect(t.next("POST", "/api/history-svg").body).toMatchObject({
+            svg: "data:image/png;base64,AAAA",
+            version: 3,
+        })
+    })
+
+    it("leaves the user on their page while they edit by hand", async () => {
+        const t = await inStep({ currentPageId: "p1" })
+        await edit(t, canvasXml)
+        t.next("POST").answer({
+            status: 200,
+            body: { success: true, version: 3 },
+        })
+        await t.settle()
+        t.canvas.xml = canvasXml
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 4, onPage2("C")))
+        await poll
+        expect(t.loads.at(-1)?.decision).toEqual({ mode: "load" })
+        // Ten seconds without an edit: the next write's page is shown
+        await vi.advanceTimersByTimeAsync(10_001)
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 5, onPage2("C2")))
+        await poll
+        expect(t.loads.at(-1)?.decision).toEqual({
+            mode: "load",
+            pageId: "p2",
+        })
+    })
+})
+
+describe("MCP sync file name", () => {
+    it("reads the file the server names and tells the listeners when it changes", async () => {
+        const t = await inStep()
+        let changes = 0
+        t.sync.onServerChange(() => changes++)
+        const named = (path: string | null) =>
+            state("S1", 2, "<mxfile>A</mxfile>", { file: path })
+        let poll = t.sync.poll()
+        t.next("GET").answer(named("/work/docs/architecture.drawio"))
+        await poll
+        expect(t.sync.read().file).toBe("/work/docs/architecture.drawio")
+        expect(changes).toBe(1)
+        // The same file again is no change
+        poll = t.sync.poll()
+        t.next("GET").answer(named("/work/docs/architecture.drawio"))
+        await poll
+        expect(changes).toBe(1)
+        // A new diagram is in no file
+        poll = t.sync.poll()
+        t.next("GET").answer(named(null))
+        await poll
+        expect(t.sync.read().file).toBeNull()
+        expect(changes).toBe(2)
+    })
+
+    it("tells the listeners when the diagram changed since its file", async () => {
+        const t = await inStep()
+        let changes = 0
+        t.sync.onServerChange(() => changes++)
+        const file = (fileChanged: boolean) =>
+            state("S1", 2, "<mxfile>A</mxfile>", {
+                file: "/work/arch.drawio",
+                fileChanged,
+            })
+        let poll = t.sync.poll()
+        t.next("GET").answer(file(false))
+        await poll
+        expect(t.sync.read().fileChanged).toBe(false)
+        expect(changes).toBe(1)
+        poll = t.sync.poll()
+        t.next("GET").answer(file(true))
+        await poll
+        expect(t.sync.read().fileChanged).toBe(true)
+        expect(changes).toBe(2)
     })
 })

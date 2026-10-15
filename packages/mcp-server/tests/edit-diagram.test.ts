@@ -29,6 +29,69 @@ describe("editDiagram", () => {
         expect(out.applied).toBe(2)
         expect(out.xml).toContain('id="c"')
         expect(out.xml).not.toContain('id="b"')
+        expect(out.unchanged).toEqual([])
+    })
+
+    it("names the updates that sent a cell as it already was", () => {
+        // Another attribute order is still the same cell
+        const doc = `<mxfile>${page("p1", '<mxCell id="a" value="A" style="rounded=1;fillColor=#dae8fc;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>')}</mxfile>`
+        const out = editDiagram(
+            doc,
+            [
+                {
+                    operation: "update",
+                    cell_id: "a",
+                    new_xml:
+                        '<mxCell id="a" value="A" style="fillColor=#dae8fc;rounded=1;html=1;whiteSpace=wrap;" x="0" y="0" w="80" h="40"/>',
+                },
+                { operation: "add", cell_id: "c", new_xml: cell("c") },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        // The stored cell has no html=1: the update adds it, a change
+        expect(out.unchanged).toEqual([])
+        const again = editDiagram(
+            out.xml,
+            [
+                {
+                    operation: "update",
+                    cell_id: "a",
+                    new_xml:
+                        '<mxCell value="A" id="a" style="fillColor=#dae8fc;rounded=1;html=1;whiteSpace=wrap" x="0" y="0" w="80" h="40"/>',
+                },
+                {
+                    operation: "update",
+                    cell_id: "c",
+                    new_xml: cell("c").replace('value="c"', 'value="C2"'),
+                },
+            ],
+            {},
+        )
+        expect(again.ok).toBe(true)
+        if (!again.ok) return
+        expect(again.unchanged).toEqual(["a"])
+    })
+
+    it("counts reordered style keys as a change", () => {
+        // draw.io uses the last value of a repeated key: red before, blue now
+        const doc = `<mxfile>${page("p1", '<mxCell id="a" value="A" style="fillColor=#0000ff;fillColor=#ff0000;html=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>')}</mxfile>`
+        const out = editDiagram(
+            doc,
+            [
+                {
+                    operation: "update",
+                    cell_id: "a",
+                    new_xml:
+                        '<mxCell id="a" value="A" style="fillColor=#ff0000;fillColor=#0000ff;html=1;whiteSpace=wrap;" x="0" y="0" w="80" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.unchanged).toEqual([])
     })
 
     it("applies nothing when one operation fails", () => {

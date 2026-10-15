@@ -71,6 +71,16 @@ describe("applyStyleClasses", () => {
         )
     })
 
+    it("writes a key the cell sets again after a name only once, where it wins", () => {
+        const out = applyStyleClasses(
+            cell("2", "rounded=1;blue;fillColor=#d5e8d4;"),
+            classes,
+        )
+        expect(out).toBe(
+            cell("2", "rounded=1;strokeColor=#6c8ebf;fillColor=#d5e8d4;"),
+        )
+    })
+
     it("leaves unknown names, key=value tokens and other attributes alone", () => {
         const xml = `${cell("2", "text;fontSize=blue;")}<mxCell id="3" vertex="1" parent="1" value="blue">${geometry}</mxCell>`
         expect(applyStyleClasses(xml, classes)).toBe(xml)

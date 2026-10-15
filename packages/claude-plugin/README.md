@@ -17,9 +17,9 @@ Once approved, install via:
 claude --plugin-dir /path/to/packages/claude-plugin
 ```
 
-Or add the MCP server directly:
+Or add the MCP server directly, for every project (`--scope user`):
 ```bash
-claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 ## Features

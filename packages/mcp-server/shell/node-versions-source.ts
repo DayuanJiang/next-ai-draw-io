@@ -27,7 +27,8 @@ export interface NodeVersion extends VersionItem {
     entryId: number
     /** The version this one replaced, when it has a card (undo goes there) */
     beforeId: string | null
-    /** Who made it: "user", "recover", "restore"; null for the AI */
+    /** Who made it: "user", "recover", "restore", "load" (a file opened),
+     * "add_page"; null for the AI */
     source: string | null
 }
 
@@ -63,6 +64,7 @@ interface Change {
     pageId?: string
     summary: ChangeSummary
     fromScratch: boolean
+    touchedIds: string[]
 }
 
 /**
@@ -158,12 +160,12 @@ export function buildVersions(
         if (!change) {
             const beforeXml = previous?.xml ?? ""
             const pageId = changedPage(beforeXml, first.xml)
-            const { summary, fromScratch } = diffDiagrams(
+            const { summary, fromScratch, touchedIds } = diffDiagrams(
                 beforeXml,
                 first.xml,
                 pageId,
             )
-            change = { beforeXml, pageId, summary, fromScratch }
+            change = { beforeXml, pageId, summary, fromScratch, touchedIds }
             cache.changes.set(contentKey, change)
         }
         const svg = [...copies]
@@ -183,6 +185,7 @@ export function buildVersions(
             ...(change.pageId && { pageId: change.pageId }),
             summary: change.summary,
             fromScratch: change.fromScratch,
+            touchedIds: change.touchedIds,
             svg: svg || "",
             source: first.source,
         })
@@ -280,6 +283,17 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
         }
     }
 
+    // A hand edit leaves no version on the canvas (the server keeps it as
+    // one when the next write comes): it was made on the version that was
+    // on it last, or the newest one when this tab never saw any on it
+    const lastOnCanvasRef = useRef<string | null>(null)
+    if (onCanvasId) lastOnCanvasRef.current = onCanvasId
+    const editedSinceId =
+        onCanvasId === null && versions.length > 0
+            ? (versions.find((v) => v.id === lastOnCanvasRef.current)?.id ??
+              versions[versions.length - 1].id)
+            : null
+
     const latest = versions.at(-1)
     // The version the newest one replaced (restore_version's steps_back=1)
     const previous = latest?.beforeId
@@ -294,6 +308,7 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
         versions,
         onCanvasId,
         undoneId,
+        editedSinceId,
         isBusy: busy,
         canUndo,
         canRedo: undoneId !== null,

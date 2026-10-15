@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest"
 import {
     checkEditGate,
     contentFingerprint,
+    countChanges,
     describeChanges,
     markPageSeen,
 } from "../src/edit-gate.ts"
@@ -297,5 +298,30 @@ describe("describeChanges", () => {
         expect(describeChanges(XML_A_PLUS_BOX2, reordered)).toBe(
             "Since you last saw it, the user changed the diagram: the order of the cells changed.",
         )
+    })
+})
+
+describe("countChanges", () => {
+    const EDGE =
+        '<mxCell id="e1" edge="1" parent="1" source="box1" target="box2"><mxGeometry relative="1" as="geometry"/></mxCell>'
+    const BOX2 =
+        '<mxCell id="box2" value="World" vertex="1" parent="1"><mxGeometry x="200" y="40" width="120" height="60" as="geometry"/></mxCell>'
+    const PAGE_2 =
+        '<diagram id="p2" name="Page-2"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>'
+
+    it("counts shapes and connectors added, changed and removed", () => {
+        const after = XML_B.replace("</root>", `${BOX2}${EDGE}</root>`)
+        expect(countChanges(XML_A, after)).toBe(
+            "added 1 shape, added 1 connector, changed 1 shape",
+        )
+        expect(countChanges(after, XML_A)).toBe(
+            "changed 1 shape, removed 1 shape, removed 1 connector",
+        )
+    })
+
+    it("counts pages, and nothing for the same content written another way", () => {
+        const twoPages = XML_A.replace("</mxfile>", `${PAGE_2}</mxfile>`)
+        expect(countChanges(XML_A, twoPages)).toBe("added 1 page")
+        expect(countChanges(XML_A, XML_A_RESERIALIZED)).toBe("")
     })
 })

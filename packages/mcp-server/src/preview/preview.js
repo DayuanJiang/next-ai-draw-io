@@ -362,12 +362,14 @@ async function poll() {
             const extra = s.exportOptions || {};
             const fireExport = () => {
                 // mcpExport carries this export's number and is echoed
-                // back in msg.message (see the handler). PNG: width
-                // caps the size, pageId picks a page; without one
-                // draw.io would use the first page.
+                // back in msg.message (see the handler). The server's
+                // options go to draw.io as they are: the margin and
+                // background, for PNG also width (caps the size) and
+                // pageId (picks a page; without one draw.io would use
+                // the first page).
                 const exportOpts = pendingMcpExport === 'png'
                     ? { action: 'export', format: 'png', scale: 2, currentPage: !extra.pageId, ...extra, mcpExport: seq }
-                    : { action: 'export', format: pendingMcpExport, mcpExport: seq };
+                    : { action: 'export', format: pendingMcpExport, ...extra, mcpExport: seq };
                 iframe.contentWindow.postMessage(JSON.stringify(exportOpts), '*');
             };
             if (s.exportXml) {

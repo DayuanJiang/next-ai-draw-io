@@ -1,5 +1,5 @@
 import { Download, History, Moon, Sun } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { CanvasStage } from "@/components/canvas/canvas-stage"
 import { CompareDialog } from "@/components/canvas/compare-dialog"
 import { VersionsProvider } from "@/components/canvas/versions-context"
@@ -34,6 +34,21 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
     const versions = useNodeVersions(sync)
     const [panelOpen, setPanelOpen] = useState(true)
     const [saveOpen, setSaveOpen] = useState(false)
+    // The file the diagram was opened from or saved to (load_diagram,
+    // export_diagram), named instead of the session id, and whether the
+    // diagram changed since: the file changes only on export_diagram
+    const [file, setFile] = useState<string | null>(null)
+    const [fileChanged, setFileChanged] = useState(false)
+    useEffect(() => {
+        if (!sync) return
+        const readFile = () => {
+            setFile(sync.read().file)
+            setFileChanged(sync.read().fileChanged)
+        }
+        readFile()
+        return sync.onServerChange(readFile)
+    }, [sync])
+    const unsaved = !!file && fileChanged
     const drawioSource = useMemo<DrawioSource>(
         () => ({
             editorUrl: config.drawioBaseUrl,
@@ -74,11 +89,31 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     </span>
                     {config.sessionId && (
                         <span
-                            className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground tabular-nums"
-                            title={config.sessionId}
+                            className={cn(
+                                "flex min-w-0 max-w-[40%] gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground",
+                                !file && "font-mono tabular-nums",
+                            )}
+                            title={
+                                file
+                                    ? `${file}\n${unsaved ? `${dict.shell.fileChangedHint}\n` : ""}${config.sessionId}`
+                                    : config.sessionId
+                            }
                             data-testid="shell-session"
                         >
-                            {config.sessionId.slice(-8)}
+                            <span className="truncate">
+                                {file
+                                    ? file.split(/[\\/]/).pop()
+                                    : config.sessionId.split("-").pop() ||
+                                      config.sessionId}
+                            </span>
+                            {unsaved && (
+                                <span
+                                    className="shrink-0"
+                                    data-testid="shell-file-changed"
+                                >
+                                    · {dict.shell.fileChanged}
+                                </span>
+                            )}
                         </span>
                     )}
                     <span

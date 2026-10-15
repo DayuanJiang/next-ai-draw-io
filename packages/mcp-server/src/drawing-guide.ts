@@ -22,15 +22,16 @@ const styles = styleRules("create_new_diagram or add_page", "the server")
 export const DRAWING_GUIDE = `# Draw.io drawing guide
 
 ## Workflow
-- create_new_diagram draws a new diagram and REPLACES the whole document. add_page adds another tab. edit_diagram changes cells of an existing page. load_diagram opens a .drawio file (the server reads the file itself, or takes the file's content as its 'xml' argument when you already have it in hand). get_diagram returns the current XML, including the user's manual edits. export_diagram saves to a file.
+- create_new_diagram draws a new diagram and REPLACES the whole document. add_page adds another tab. edit_diagram changes cells of an existing page. load_diagram opens a .drawio file (the server reads the file itself, or takes the file's content as its 'xml' argument when you already have it in hand). get_diagram returns the current XML, including the user's manual edits. export_diagram saves to a file. To update an existing .drawio file, load_diagram it, edit with edit_diagram and export_diagram to the same path; never rewrite the file or the auto-save file by hand.
 - When the user refers to what they selected in the preview ("this box", "these arrows"), call get_selection: it returns the selected cells' ids, labels and page, ready for edit_diagram.
 - Before drawing, describe your layout plan in 2-3 sentences, so shapes do not overlap and edges do not cross shapes.
 - Send XML only through tool calls, never in chat text. Never draw a box just to send the user a message.
 - Before using any icon library (AWS, Azure, GCP, Kubernetes, Cisco, BPMN, Material Design, web icons...), call get_shape_library and use the exact style names it returns. NEVER guess icon style names. For AWS, use the AWS 2025 icons (library aws4).
 - After drawing or heavily editing a complex diagram, pass screenshot: true on that create_new_diagram or edit_diagram call (or call screenshot_diagram) to see the result, and fix overlapping shapes and edges that cross shapes.
-- Drawing from a source: to draw from a document (PDF, Markdown, code, data), an image or screenshot, or a web page, first read it yourself (the attachment the user shared, or your own file-reading or web-fetch tools), then plan the layout and draw. This server never receives attachments; it only receives the XML you send. Extract the entities and relationships the diagram needs; do not copy the text into boxes.
+- Drawing from a source: to draw from a document (PDF, Markdown, code, data), an image or screenshot, or a web page, first read it yourself (the attachment the user shared, or your own file-reading or web-fetch tools), then plan the layout and draw. This server never receives attachments; it only receives the XML you send. Extract the entities and relationships the diagram needs; do not copy the text into boxes. When the user asks how their own code or project works, read the relevant files first instead of guessing.
 - When replicating a diagram from an image, match its style and layout closely: straight or curved lines, rounded or square shapes, colors and relative positions. Call screenshot_diagram afterwards and compare with the original.
 - After a successful create_new_diagram or edit_diagram call, do not describe the diagram; the user sees it in the preview. One short sentence at most.
+- The preview outlines the cells each change touched for a few seconds, so the user sees what changed. The outline is not part of the diagram and never appears in exports or screenshots: never edit the diagram to remove it, and if the user asks about it, explain what it is.
 - For artistic requests (a cat, a logo, a scene), compose the picture from standard shapes and connectors while keeping it clear.
 - To clear the canvas to one blank page, call create_new_diagram with only the two root cells <mxCell id="0"/><mxCell id="1" parent="0"/>; the previous diagram stays in History.
 - The preview keeps the last 20 versions (a snapshot before every AI change) and can restore any of them. You can make changes freely; nothing is lost.
@@ -64,6 +65,8 @@ Large diagrams: if the diagram will not fit one call, send the first cells with 
 - Containers (for example AWS cloud boxes) are at most 700 pixels wide and 550 pixels tall.
 - Start near x=40, y=40 and keep elements grouped closely.
 - For large diagrams, stack vertically or use a grid instead of spreading wide.
+- Put a store that several services use (a database, a queue) next to them, so its edges stay short. On architecture diagrams, label the edges with what flows over them (requests, events, data).
+- Sequence diagrams: one lifeline per participant, never two for the same one. Messages are horizontal edges between two lifelines, with the label above the line on a white label background (labelBackgroundColor=#ffffff). Notes go beside a lifeline, never on it.
 
 ## Edge routing rules
 Rule 1: Never let two edges share a path. Two edges between the same nodes exit and enter at different points (exitY=0.3 for the first, exitY=0.7 for the second, not both 0.5).
@@ -114,6 +117,7 @@ When the user asks for a minimal, plain, black-and-white or unstyled diagram, us
 - update replaces a cell: send the complete mxCell in the same compact form (x, y, w, h for a shape), with the same id as cell_id. Named styles are not available here: write each cell's complete style.
 - add inserts a new cell with a new id. One cell per operation.
 - delete removes a cell. Its children and every edge connected to it are deleted too, so give only the container's id.
+- When you move shapes, update their connectors in the same call: new exit and entry points, and new waypoints or none (an edge without <Array as="points">). Old waypoints keep pulling the edge to where the shapes were.
 - All-or-nothing: if any operation fails, nothing is applied. A rejected call includes the current XML of the page; rebuild your operations on it and retry.
 - Use create_new_diagram for a new diagram, a major restructuring or an empty canvas. Use edit_diagram for small changes: adding or removing a few elements, labels, colors or positions. Never redraw a large diagram for a small change.
 
@@ -121,5 +125,5 @@ When the user asks for a minimal, plain, black-and-white or unstyled diagram, us
     {"page_name": "CNN", "operations": [{"operation": "add", "cell_id": "conv-1", "new_xml": "<mxCell id=\\"conv-1\\" value=\\"Conv\\" x=\\"40\\" y=\\"40\\" w=\\"120\\" h=\\"60\\"/>"}]}
     {"page_index": 1, "operations": [{"operation": "delete", "cell_id": "5"}]}
 
-Pages: list_pages shows every page's id, name and index. edit_diagram, get_diagram and export_diagram take an optional page_id, page_name or page_index; without one they use the first page.
+Pages: list_pages shows every page's id, name and index. edit_diagram, get_diagram and export_diagram take an optional page_id, page_name or page_index; without one they use the first page. Give every page a name that says what it shows (rename_page renames the first one when you add a second).
 `

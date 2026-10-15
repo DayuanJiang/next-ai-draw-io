@@ -53,14 +53,40 @@ const hasToken = (style: string, token: string) =>
  */
 function applyToStyle(style: string, classes: StyleClasses): string {
     const out: string[] = []
+    let expanded = false
     for (const token of style.split(";")) {
         const definition = token.includes("=")
             ? undefined
             : classes.get(token.trim())
         if (definition === undefined) out.push(token)
-        else if (definition !== "") out.push(definition)
+        else {
+            expanded = true
+            if (definition !== "") out.push(definition)
+        }
     }
-    return out.join(";")
+    const result = out.join(";")
+    // An entity's own ";" would split it into tokens
+    return expanded && !result.includes("&") ? dropOverridden(result) : result
+}
+
+/**
+ * Keep only the last setting of a key, where it is set last: a name
+ * expanded before an override would otherwise leave the key twice, which
+ * draw.io reads as the last one but a model reading the XML may not
+ */
+function dropOverridden(style: string): string {
+    const tokens = style.split(";")
+    const keyOf = (token: string) =>
+        token.includes("=") ? token.slice(0, token.indexOf("=")) : null
+    return tokens
+        .filter((token, i) => {
+            const key = keyOf(token)
+            return (
+                key === null ||
+                !tokens.slice(i + 1).some((later) => keyOf(later) === key)
+            )
+        })
+        .join(";")
 }
 
 /**

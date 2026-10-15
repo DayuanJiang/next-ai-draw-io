@@ -181,6 +181,76 @@ function listCells(cells: string[]): string {
     return cells.length > 20 ? `${shown} and ${cells.length - 20} more` : shown
 }
 
+/** A cell's flag, which a wrapped cell keeps on its inner mxCell */
+function cellFlag(cell: Element, name: string): string | null {
+    const inner =
+        cell.tagName === "mxCell" ? cell : cell.querySelector("mxCell")
+    return inner?.getAttribute(name) ?? null
+}
+
+/**
+ * What changed from one version to the next, counted by kind, for
+ * restore_version's list: "added 2 shapes, changed 1 connector". Pages are
+ * paired by index and cells by id, as in describeChanges. "" when no shape
+ * or connector changed.
+ */
+export function countChanges(beforeXml: string, afterXml: string): string {
+    const parse = (xml: string) => {
+        const normalized = normalizeToMxfile(xml)
+        return normalized ? parseMxfile(normalized) : null
+    }
+    const before = parse(beforeXml)
+    const after = parse(afterXml)
+    if (!before || !after) return ""
+    const pagesBefore = Array.from(before.querySelectorAll("diagram"))
+    const pagesAfter = Array.from(after.querySelectorAll("diagram"))
+    const counts = new Map<string, number>()
+    const count = (action: string, cell: Element) => {
+        const kind =
+            cellFlag(cell, "edge") === "1"
+                ? "connector"
+                : cellFlag(cell, "vertex") === "1"
+                  ? "shape"
+                  : null
+        if (!kind) return
+        const key = `${action} ${kind}`
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    const pageCount = Math.max(pagesBefore.length, pagesAfter.length)
+    for (let i = 0; i < pageCount; i++) {
+        const cellsBefore = pagesBefore[i]
+            ? pageCells(pagesBefore[i])
+            : new Map<string, Element>()
+        const cellsAfter = pagesAfter[i]
+            ? pageCells(pagesAfter[i])
+            : new Map<string, Element>()
+        for (const [id, cell] of cellsAfter) {
+            const old = cellsBefore.get(id)
+            if (!old) count("added", cell)
+            else if (canonicalizeElement(old) !== canonicalizeElement(cell))
+                count("changed", cell)
+        }
+        for (const [id, cell] of cellsBefore) {
+            if (!cellsAfter.has(id)) count("removed", cell)
+        }
+    }
+    const parts: string[] = []
+    const pagesAdded = pagesAfter.length - pagesBefore.length
+    if (pagesAdded !== 0) {
+        const n = Math.abs(pagesAdded)
+        parts.push(
+            `${pagesAdded > 0 ? "added" : "removed"} ${n} page${n > 1 ? "s" : ""}`,
+        )
+    }
+    for (const action of ["added", "changed", "removed"]) {
+        for (const kind of ["shape", "connector"]) {
+            const n = counts.get(`${action} ${kind}`)
+            if (n) parts.push(`${action} ${n} ${kind}${n > 1 ? "s" : ""}`)
+        }
+    }
+    return parts.join(", ")
+}
+
 /**
  * One paragraph naming what the user changed between the XML the model last
  * saw and the live store, for stale rejections and get_diagram. Pages are

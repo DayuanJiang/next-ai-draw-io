@@ -107,10 +107,10 @@ MCP（Model Context Protocol、AI エージェントが外部ツールを呼び�
 }
 ```
 
-Claude Code ならコマンド一つです。
+Claude Code ならコマンド一つです（`--scope user` を付けると、どのプロジェクトでも使えます）。
 
 ```bash
-claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 あとは AI に「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを描いて」と頼めば、描かれていく様子がブラウザに表示されます。MCP サーバーには Web アプリの作図機能のほとんどが入っています。
