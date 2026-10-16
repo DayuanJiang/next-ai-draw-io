@@ -18,6 +18,7 @@
  * surface.
  */
 
+import { spawn } from "node:child_process"
 import { readFile, stat, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
@@ -429,6 +430,20 @@ registerTool(
     },
 )
 
+// On Windows the open package starts PowerShell with an encoded command,
+// which Kaspersky blocks as PowerShell started from a script (#998).
+// cmd's start hands the URL to the default browser instead
+async function openBrowser(url: string) {
+    if (process.platform !== "win32") return open(url)
+    spawn(`start "" "${url}"`, {
+        shell: true,
+        stdio: "ignore",
+        windowsHide: true,
+    })
+        .on("error", (err) => log.warn(`Could not open the browser: ${err}`))
+        .unref()
+}
+
 // Tool: start_session
 registerTool(
     "start_session",
@@ -463,7 +478,7 @@ registerTool(
         // Open the browser. BROWSER=none (the convention of CRA and Vite
         // dev servers) skips it: the e2e tests and headless hosts set it
         const browserUrl = previewUrl(port, sessionId)
-        if (process.env.BROWSER !== "none") await open(browserUrl)
+        if (process.env.BROWSER !== "none") await openBrowser(browserUrl)
 
         // A saved diagram comes back from its file. lastSeenXml stays
         // empty, so edit_diagram asks for get_diagram first.
