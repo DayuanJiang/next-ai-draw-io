@@ -6,14 +6,11 @@ import remarkGfm from "remark-gfm"
 import { type Doc, HeadingIds, resolveDocLink } from "@/lib/docs"
 import type { Locale } from "@/lib/i18n/config"
 import { CopyCommand } from "./copy-command"
+import { DEMO_LINE, DEMO_SCENES } from "./demo-names"
 import { DemoPlayer } from "./demo-player"
-import { DEMO_SCENES, type DocsDemos } from "./demo-texts"
+import type { DocsDemos } from "./demo-texts"
 import { FLOWCHART } from "./flowchart-diagram"
 import { McpDemo } from "./mcp-demo"
-
-// A line "<!-- demo: versions -->" in a docs file shows that scene of the
-// editor demo on the site; GitHub shows nothing for it
-const DEMO_LINE = /^<!--\s*demo:\s*([a-z-]+)\s*-->[ \t]*$/gm
 
 /** A docs page's Markdown, with links, headings and code made for the site */
 export function DocMarkdown({

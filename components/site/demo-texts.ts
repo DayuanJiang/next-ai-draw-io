@@ -92,15 +92,6 @@ const TEXTS: Record<
     },
 }
 
-// The scenes the docs can show, by the name used in their Markdown; here, since a
-// client module would give the server only a reference to it
-export const DEMO_SCENES: Record<string, number> = {
-    generate: 0,
-    "hand-edit": 1,
-    "ai-edit": 2,
-    versions: 3,
-}
-
 const EMPTY = {
     shapesAdded: 0,
     edgesAdded: 0,
