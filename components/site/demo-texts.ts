@@ -61,7 +61,7 @@ const TEXTS: Record<
             },
             {
                 title: "バージョン履歴",
-                text: "以前のバージョンにいつでも戻せます",
+                text: "以前のバージョンに戻せます",
             },
         ],
         prompts: {
