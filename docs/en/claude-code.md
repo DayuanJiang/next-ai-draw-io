@@ -38,6 +38,8 @@ Other requests that work well:
 - "Turn docs/architecture.md into a diagram with AWS icons"
 - "Open diagrams/system.drawio and add the new queue service"
 
+<!-- demo: mcp -->
+
 ## Work on the diagram together
 
 - **Edit by hand.** The preview is a full draw.io editor. Move shapes, change labels or restyle them; Claude reads the diagram, including your changes, before it edits again.

@@ -6,8 +6,10 @@ import remarkGfm from "remark-gfm"
 import { type Doc, HeadingIds, resolveDocLink } from "@/lib/docs"
 import type { Locale } from "@/lib/i18n/config"
 import { CopyCommand } from "./copy-command"
-import { DemoPlayer, type DemoTexts } from "./demo-player"
-import { DEMO_SCENES } from "./demo-texts"
+import { DemoPlayer } from "./demo-player"
+import { DEMO_SCENES, type DocsDemos } from "./demo-texts"
+import { FLOWCHART } from "./flowchart-diagram"
+import { McpDemo } from "./mcp-demo"
 
 // A line "<!-- demo: versions -->" in a docs file shows that scene of the
 // editor demo on the site; GitHub shows nothing for it
@@ -18,13 +20,31 @@ export function DocMarkdown({
     doc,
     lang,
     copyLabels,
-    demo,
+    demos,
 }: {
     doc: Doc
     lang: Locale
     copyLabels: { copy: string; copied: string }
-    demo: DemoTexts
+    demos: DocsDemos
 }) {
+    // The demo named in a "<!-- demo: name -->" line
+    const demoNamed = (name: string) => {
+        if (name === "tour") return <DemoPlayer texts={demos.editor} tour />
+        if (name === "mcp") return <McpDemo texts={demos.mcp} />
+        if (name === "flowchart") {
+            return (
+                <DemoPlayer
+                    texts={demos.flowchart}
+                    scene={0}
+                    diagram={FLOWCHART}
+                />
+            )
+        }
+        const scene = DEMO_SCENES[name]
+        return scene === undefined ? null : (
+            <DemoPlayer texts={demos.editor} scene={scene} />
+        )
+    }
     // Counted in page order, as the table of contents counted them
     const ids = new HeadingIds()
     const heading =
@@ -72,17 +92,13 @@ export function DocMarkdown({
                 ),
                 pre: ({ children }) => {
                     const [code] = Children.toArray(children)
-                    const scene =
+                    const demo =
                         isValidElement<{ className?: string }>(code) &&
                         code.props.className === "language-demo"
-                            ? DEMO_SCENES[textOf(children).trim()]
-                            : undefined
-                    if (scene !== undefined) {
-                        return (
-                            <div className="not-prose my-7">
-                                <DemoPlayer texts={demo} scene={scene} />
-                            </div>
-                        )
+                            ? demoNamed(textOf(children).trim())
+                            : null
+                    if (demo) {
+                        return <div className="not-prose my-7">{demo}</div>
                     }
                     return (
                         <div className="not-prose my-5">

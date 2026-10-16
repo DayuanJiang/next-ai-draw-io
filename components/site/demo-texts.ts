@@ -3,6 +3,7 @@ import { getDictionary } from "@/lib/i18n/dictionaries"
 import { formatMessage } from "@/lib/i18n/utils"
 import { describeChangeSummary, describeTotals } from "@/lib/version-text"
 import type { DemoTexts } from "./demo-player"
+import type { McpDemoTexts } from "./mcp-demo"
 
 // The demo's own texts: its steps, the conversation and the replay button
 const TEXTS: Record<
@@ -137,3 +138,72 @@ export async function demoTexts(lang: Locale): Promise<DemoTexts> {
         },
     }
 }
+
+// The flowchart demo's request and answer
+const FLOWCHART_TEXTS: Record<Locale, { prompt: string; reply: string }> = {
+    en: {
+        prompt: "Draw a flowchart for a refund request: reject orders older than 30 days, otherwise refund and email the customer",
+        reply: "A refund flow from left to right: support checks the order, a decision on its age, then a rejection, or a refund and an email to the customer.",
+    },
+    zh: {
+        prompt: "画一个退款申请的流程图：超过 30 天的订单拒绝，否则退款并给客户发邮件",
+        reply: "一个从左到右的退款流程：客服核对订单，按订单时间判断，然后拒绝申请，或者退款并给客户发邮件。",
+    },
+    ja: {
+        prompt: "返金申請のフローチャートを描いて。30 日を過ぎた注文は却下し、それ以外は返金してお客様にメールする",
+        reply: "左から右への返金フローです。サポートが注文を確認し、注文日で分岐して、却下するか、返金してお客様にメールします。",
+    },
+    "zh-Hant": {
+        prompt: "畫一個退款申請的流程圖：超過 30 天的訂單拒絕，否則退款並寄電子郵件給客戶",
+        reply: "一個從左到右的退款流程：客服核對訂單，依訂單時間判斷，然後拒絕申請，或者退款並寄電子郵件給客戶。",
+    },
+}
+
+// The MCP demo's request and the agent's words; tool names stay in English
+const MCP_TEXTS: Record<Locale, Omit<McpDemoTexts, "replay">> = {
+    en: {
+        prompt: "Read this repo and draw its architecture",
+        intro: "I'll read the project first, then draw it.",
+        done: "The architecture is in the preview: API Gateway calls Lambda, Cognito handles sign-in, DynamoDB holds the data and S3 the files.",
+    },
+    zh: {
+        prompt: "读一下这个仓库，画出它的架构",
+        intro: "我先读一下项目，然后画出来。",
+        done: "架构图已经在预览里了：API Gateway 调用 Lambda，Cognito 负责登录，DynamoDB 存数据，S3 存文件。",
+    },
+    ja: {
+        prompt: "このリポジトリを読んでアーキテクチャを図にして",
+        intro: "まずプロジェクトを読んでから描きます。",
+        done: "アーキテクチャ図をプレビューに描きました。API Gateway が Lambda を呼び出し、Cognito がサインイン、DynamoDB がデータ、S3 がファイルを担当します。",
+    },
+    "zh-Hant": {
+        prompt: "讀一下這個儲存庫，畫出它的架構",
+        intro: "我先讀一下專案，然後畫出來。",
+        done: "架構圖已經在預覽裡了：API Gateway 呼叫 Lambda，Cognito 負責登入，DynamoDB 存資料，S3 存檔案。",
+    },
+}
+
+/** Every demo the docs can show, in a language */
+export async function docsDemos(lang: Locale) {
+    const editor = await demoTexts(lang)
+    const v = (await getDictionary(lang)).versions
+    const flow = FLOWCHART_TEXTS[lang]
+    return {
+        editor,
+        flowchart: {
+            ...editor,
+            prompts: { ...editor.prompts, draw: flow.prompt },
+            replies: { ...editor.replies, draw: flow.reply },
+            versions: {
+                ...editor.versions,
+                drawSummary: describeTotals(
+                    { ...EMPTY, shapesAdded: 8, edgesAdded: 8 },
+                    v,
+                ),
+            },
+        } satisfies DemoTexts,
+        mcp: { ...MCP_TEXTS[lang], replay: editor.replay },
+    }
+}
+
+export type DocsDemos = Awaited<ReturnType<typeof docsDemos>>

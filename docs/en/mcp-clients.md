@@ -61,4 +61,6 @@ Settings go in the server's `env`, for example `"env": { "DRAWIO_LANG": "ja" }`.
 
 Restart the client, then ask, for example, "Read this repo and draw its architecture". The preview opens in your browser and the diagram appears as it is drawn.
 
+<!-- demo: mcp -->
+
 The preview refuses to be embedded in other pages, so VS Code's Simple Browser and Cursor's browser show it blank. Open its URL in a regular browser.

@@ -6,6 +6,8 @@ The editor has the draw.io canvas on the left and the chat on the right. You des
 
 Type a description in the chat and press Enter. A good request names the parts of the diagram and how they connect, for example "a login sequence diagram with SMS codes and retries".
 
+<!-- demo: generate -->
+
 On the start screen, the examples show what the editor can do. Pick one and press Send: its saved answer appears at once, without calling the AI.
 
 To start from something you already have:
@@ -25,11 +27,15 @@ To change only part of the diagram, select those shapes on the canvas first. An 
 
 While an answer is coming, Stop ends it. Under an answer you can regenerate it, and a message you sent can be edited and sent again.
 
+<!-- demo: ai-edit -->
+
 ## Edit by hand
 
 The canvas is the draw.io editor, so everything in draw.io works here: drag shapes, connect them, edit labels with a double click, and change colors, fonts and lines in the Format panel at the top right. Ctrl+Z and Ctrl+Y undo and redo your edits.
 
 Each change the AI makes is outlined for a few seconds, so you can see what it did. See [Versions and undo](./versions.md) for going back.
+
+<!-- demo: hand-edit -->
 
 ## Your diagrams
 

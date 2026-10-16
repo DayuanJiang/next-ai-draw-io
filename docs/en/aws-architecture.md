@@ -19,6 +19,8 @@ What helps:
 - **Say which way it flows.** For example "left to right, from the users to the database".
 - **Ask for animated connectors** when the direction of requests or data matters.
 
+<!-- demo: generate -->
+
 ## Start from something you have
 
 - **A screenshot or a whiteboard photo**: upload it and ask the AI to redraw it with AWS icons.

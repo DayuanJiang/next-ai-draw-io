@@ -15,7 +15,7 @@ export function ThemeToggle() {
                     document.documentElement.classList.contains("dark")
                 useSettingsStore.getState().setTheme(isDark ? "light" : "dark")
             }}
-            className="rounded-lg p-2 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+            className="rounded-lg p-2 hover:bg-foreground/[0.07] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
             aria-label={label}
             title={label}
         >

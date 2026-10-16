@@ -19,6 +19,8 @@ What helps:
 
 The AI uses draw.io's flowchart and BPMN shape libraries: decisions are diamonds, and a request for BPMN gets BPMN shapes for events, gateways and tasks.
 
+<!-- demo: flowchart -->
+
 ## Sequence diagrams
 
 Name the participants, then the messages between them in order, including the unhappy paths:

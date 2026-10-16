@@ -53,7 +53,7 @@ export async function SiteHeader({
                 <div className="flex items-center gap-1">
                     <a
                         href={GITHUB_URL}
-                        className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted hover:text-foreground"
+                        className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-foreground/[0.07] hover:text-foreground"
                         aria-label="GitHub"
                     >
                         <GitHubIcon className="size-4" />

@@ -2,6 +2,8 @@
 
 Next AI Draw.io draws and edits draw.io diagrams by chatting with an AI. You describe a diagram, the AI draws it on a real draw.io canvas, and you keep working on it by hand or by asking for changes. Every change the AI makes is outlined and saved as a version you can restore.
 
+<!-- demo: tour -->
+
 ## Three ways to use it
 
 | Where | What you get | Start here |

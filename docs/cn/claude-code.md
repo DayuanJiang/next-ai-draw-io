@@ -38,6 +38,8 @@ Claude 会用自己的工具读取代码，在您的浏览器里打开预览，�
 - “把 docs/architecture.md 转成带 AWS 图标的图表”
 - “打开 diagrams/system.drawio，加上新的队列服务”
 
+<!-- demo: mcp -->
+
 ## 一起修改图表
 
 - **手动编辑。** 预览就是完整的 draw.io 编辑器。您可以移动图形、修改标签或更改样式；Claude 再次编辑前会读取图表，包括您的改动。

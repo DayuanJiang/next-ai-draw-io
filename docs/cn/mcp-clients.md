@@ -61,4 +61,6 @@ default_tools_approval_mode = "approve"
 
 重启客户端，然后提一个需求，比如“读一下这个仓库，画出它的架构”。浏览器里会打开预览，图表会边画边显示。
 
+<!-- demo: mcp -->
+
 预览页不允许被嵌入到其他页面中，所以 VS Code 的 Simple Browser 和 Cursor 的浏览器里会显示空白。请在普通浏览器里打开它的 URL。

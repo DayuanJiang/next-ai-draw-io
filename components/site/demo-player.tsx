@@ -15,6 +15,7 @@ import {
     useCallback,
     useEffect,
     useLayoutEffect,
+    useMemo,
     useRef,
     useState,
 } from "react"
@@ -65,9 +66,18 @@ type Box = { left: number; top: number; width: number; height: number }
 // About how long each step plays, for its progress bar
 const STEP_MS = [5800, 3100, 6100, 5900]
 
-const SHAPES = ["cloud", "users", "apigw", "cognito", "lambda", "dynamo", "s3"]
-const EDGES = ["e1", "e2", "e3", "e4", "e5"]
-const ALL_EDGES = [...EDGES, "e6"]
+/** A draw.io SVG export and the ids of its cells, in the order they are drawn */
+export type DemoDiagram = { svg: string; shapes: string[]; edges: string[] }
+
+// The serverless API every step of the demo is made for; the cache and its
+// connector (e6) come with the AI's change
+const SERVERLESS: DemoDiagram = {
+    svg: SERVERLESS_SVG,
+    shapes: ["cloud", "users", "apigw", "cognito", "lambda", "dynamo", "s3"],
+    edges: ["e1", "e2", "e3", "e4", "e5"],
+}
+const ADDED_SHAPES = ["cache"]
+const ADDED_EDGES = ["e6"]
 
 // The hand edit drags S3 left; its connector from Lambda (e5) then bends.
 // Coordinates are those of the exported SVG (viewBox 731 x 402).
@@ -94,6 +104,8 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
 export function DemoPlayer({
     texts,
     scene,
+    tour,
+    diagram = SERVERLESS,
 }: {
     texts: DemoTexts
     /**
@@ -101,15 +113,30 @@ export function DemoPlayer({
      * no step tabs. The steps before it are applied at once.
      */
     scene?: number
+    /** In the docs: all the steps with their tabs, once in view */
+    tour?: boolean
+    /** Another diagram, for the generate step only */
+    diagram?: DemoDiagram
 }) {
-    const docs = scene !== undefined
+    const docs = scene !== undefined || !!tour
+    const edges = useMemo(() => [...diagram.edges, ...ADDED_EDGES], [diagram])
+    // The diagram's shape, for its size in the canvas
+    const [, , viewWidth, viewHeight] = (
+        diagram.svg.match(/viewBox="([^"]+)"/)?.[1] ?? "0 0 731 402"
+    )
+        .split(" ")
+        .map(Number)
+    const aspect = viewWidth / viewHeight
     const frame = useRef<HTMLDivElement>(null)
     const head = useRef<HTMLDivElement>(null)
     const body = useRef<HTMLDivElement>(null)
     const stage = useRef<HTMLDivElement>(null)
     const chat = useRef<HTMLDivElement>(null)
     const runId = useRef(0)
-    const [height, setHeight] = useState(docs ? DOCS_HEIGHT : DEMO_HEIGHT)
+    // A wide diagram, such as the flowchart, needs less height in the docs
+    const [height, setHeight] = useState(
+        docs ? (aspect > 2.4 ? "340px" : DOCS_HEIGHT) : DEMO_HEIGHT,
+    )
     // A docs demo has played its step, and offers to play it again
     const [finished, setFinished] = useState(false)
     // The step playing (the number of steps when the demo has ended), and
@@ -190,7 +217,11 @@ export function DemoPlayer({
     // Move S3 by dx and route its connector around the new position
     const moveS3 = useCallback(
         (dx: number) => {
-            cell("s3")?.setAttribute("transform", `translate(${dx} 0)`)
+            // Only the serverless diagram has S3; another one may also have
+            // an e5
+            const s3 = cell("s3")
+            if (!s3) return
+            s3.setAttribute("transform", `translate(${dx} 0)`)
             const { line, arrow } = edgeParts("e5")
             line?.setAttribute("d", dx === 0 ? E5_STRAIGHT : e5Bent(dx))
             if (line && dx !== 0) line.style.strokeDasharray = "none"
@@ -205,10 +236,10 @@ export function DemoPlayer({
 
     const reset = useCallback(() => {
         moveS3(0)
-        for (const id of [...SHAPES, "cache", ...ALL_EDGES]) {
+        for (const id of [...diagram.shapes, ...ADDED_SHAPES, ...edges]) {
             cell(id)?.classList.remove("on", "changed")
         }
-        for (const id of ALL_EDGES) {
+        for (const id of edges) {
             const { line } = edgeParts(id)
             if (!line) continue
             const length = Math.ceil(line.getTotalLength())
@@ -228,17 +259,15 @@ export function DemoPlayer({
         setEditedSince(null)
         setOnCanvas(null)
         setFinished(false)
-    }, [cell, edgeParts, moveS3])
+    }, [cell, diagram, edgeParts, edges, moveS3])
 
     const show = useCallback(
         (id: string) => {
             cell(id)?.classList.add("on")
-            const { line } = ALL_EDGES.includes(id)
-                ? edgeParts(id)
-                : { line: null }
+            const { line } = edges.includes(id) ? edgeParts(id) : { line: null }
             if (line) line.style.strokeDashoffset = "0"
         },
-        [cell, edgeParts],
+        [cell, edgeParts, edges],
     )
 
     /*
@@ -432,11 +461,11 @@ export function DemoPlayer({
                     await type(texts.prompts.draw)
                     await send(texts.prompts.draw, texts.drawing)
                     await reply(texts.replies.draw, async () => {
-                        for (const s of SHAPES) {
+                        for (const s of diagram.shapes) {
                             show(s)
                             await wait(170)
                         }
-                        for (const e of EDGES) {
+                        for (const e of diagram.edges) {
                             show(e)
                             await wait(230)
                         }
@@ -541,7 +570,18 @@ export function DemoPlayer({
                 if (!(error instanceof Stopped)) throw error
             }
         },
-        [boxOf, cell, icon, moveS3, pointOf, reset, show, stagePoint, texts],
+        [
+            boxOf,
+            cell,
+            diagram,
+            icon,
+            moveS3,
+            pointOf,
+            reset,
+            show,
+            stagePoint,
+            texts,
+        ],
     )
 
     // The newest message stays in view, as in the editor's chat
@@ -570,13 +610,14 @@ export function DemoPlayer({
         const stop = () => {
             runId.current++
         }
-        if (scene !== undefined) {
+        if (docs) {
             // A page of docs can hold several demos: each starts when seen
             const seen = new IntersectionObserver(
                 ([entry]) => {
                     if (!entry.isIntersecting) return
                     seen.disconnect()
-                    play(scene, scene)
+                    if (scene === undefined) play()
+                    else play(scene, scene)
                 },
                 { threshold: 0.4 },
             )
@@ -591,7 +632,7 @@ export function DemoPlayer({
         ).matches
         play(reduced ? texts.steps.length - 1 : 0)
         return stop
-    }, [play, scene, texts.steps.length])
+    }, [docs, play, scene, texts.steps.length])
 
     const versions = messages.flatMap((m) =>
         m.role === "ai" && m.version ? [m.version] : [],
@@ -614,7 +655,7 @@ export function DemoPlayer({
             <div
                 ref={head}
                 className={
-                    docs
+                    scene !== undefined
                         ? "hidden"
                         : "grid grid-cols-4 border-b border-border bg-canvas"
                 }
@@ -656,7 +697,10 @@ export function DemoPlayer({
                                 </span>
                                 <span className="truncate">{s.title}</span>
                             </span>
-                            <span className="mt-0.5 block truncate pl-[26px] text-[12px] text-muted-foreground">
+                            {/* The docs' column is too narrow for the notes */}
+                            <span
+                                className={`mt-0.5 block truncate pl-[26px] text-[12px] text-muted-foreground ${docs ? "hidden" : ""}`}
+                            >
                                 {s.text}
                             </span>
                             {state === "active" && (
@@ -676,14 +720,14 @@ export function DemoPlayer({
                 and the diagram shrinks with it (the SVG is 731 x 402) */}
             <div
                 ref={body}
-                className={`relative grid ${docs ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-[minmax(0,1fr)_320px]"}`}
+                className={`relative grid ${docs ? "grid-cols-[minmax(0,1fr)_304px]" : "grid-cols-[minmax(0,1fr)_320px]"}`}
                 style={{ height }}
             >
                 {/* Canvas */}
                 <div
-                    className={`lp-grid relative flex items-center justify-center border-r border-border ${docs ? "px-5" : "px-8"}`}
+                    className={`lp-grid relative flex items-center justify-center border-r border-border ${docs ? "px-3" : "px-8"}`}
                 >
-                    {docs && finished && (
+                    {scene !== undefined && finished && (
                         <button
                             type="button"
                             onClick={() => play(scene, scene)}
@@ -697,11 +741,11 @@ export function DemoPlayer({
                         ref={stage}
                         className="lp-demo relative w-full"
                         style={{
-                            maxWidth: `min(780px, calc((${height} - 56px) * 1.82))`,
+                            maxWidth: `min(780px, calc((${height} - 56px) * ${aspect.toFixed(3)}))`,
                         }}
                     >
                         <div
-                            dangerouslySetInnerHTML={{ __html: SERVERLESS_SVG }}
+                            dangerouslySetInnerHTML={{ __html: diagram.svg }}
                         />
                         {selection && (
                             <div
@@ -730,7 +774,7 @@ export function DemoPlayer({
                             m.role === "user" ? (
                                 <div
                                     key={`${i}-u`}
-                                    className="lp-msg ml-6 self-end rounded-2xl rounded-br-md bg-secondary px-3 py-2 text-[13px] leading-snug"
+                                    className="lp-msg ml-6 self-end rounded-2xl rounded-br-md bg-secondary px-3 py-2 text-[13px] leading-snug [text-wrap:pretty]"
                                 >
                                     {m.selected && (
                                         <span className="mb-1.5 flex w-fit max-w-full items-center gap-1.5 rounded-lg bg-marker-soft px-2 py-1 text-[11.5px] font-medium text-marker-ink">
@@ -742,7 +786,7 @@ export function DemoPlayer({
                             ) : (
                                 <div
                                     key={`${i}-a`}
-                                    className="lp-msg text-[13px] leading-snug"
+                                    className="lp-msg text-[13px] leading-snug [text-wrap:pretty]"
                                 >
                                     {m.text}
                                     {m.version && (
@@ -755,6 +799,7 @@ export function DemoPlayer({
                                             editedSince={
                                                 editedSince === m.version.n
                                             }
+                                            compact={docs}
                                         />
                                     )}
                                 </div>
@@ -801,8 +846,9 @@ export function DemoPlayer({
                     </div>
                 </div>
 
-                {/* The pointer moves over both the canvas and the chat */}
-                {cursor && (
+                {/* The pointer moves over both the canvas and the chat; a
+                    docs step that has ended leaves the shapes uncovered */}
+                {cursor && !(scene !== undefined && finished) && (
                     <div
                         className={`lp-cursor pointer-events-none absolute ${dragging ? "lp-dragging" : ""}`}
                         style={{ left: `${cursor.x}px`, top: `${cursor.y}px` }}
@@ -829,6 +875,7 @@ function VersionCard({
     onCanvas,
     pressed,
     editedSince,
+    compact,
 }: {
     version: Version
     texts: DemoTexts["versions"]
@@ -836,6 +883,8 @@ function VersionCard({
     onCanvas: boolean
     pressed: boolean
     editedSince: boolean
+    /** Smaller text, for the docs' narrower chat */
+    compact?: boolean
 }) {
     const [Icon, action] =
         latest && onCanvas
@@ -852,13 +901,15 @@ function VersionCard({
                 >
                     v{version.n}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+                <span
+                    className={`min-w-0 flex-1 truncate font-medium ${compact ? "text-[12px]" : "text-[12.5px]"}`}
+                >
                     {version.title}
                 </span>
                 {/* An older version the canvas shows has nothing to restore */}
                 <span
                     data-demo={`action-${version.n}`}
-                    className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11.5px] transition-colors ${pressed ? "bg-accent text-foreground" : "text-muted-foreground"} ${onCanvas && !latest ? "opacity-40" : ""}`}
+                    className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-md transition-colors ${compact ? "px-1 text-[11px]" : "px-1.5 text-[11.5px]"} ${pressed ? "bg-accent text-foreground" : "text-muted-foreground"} ${onCanvas && !latest ? "opacity-40" : ""}`}
                 >
                     <Icon className="size-3.5" />
                     {action}
