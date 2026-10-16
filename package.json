@@ -103,7 +103,7 @@
     },
     "devDependencies": {
         "@biomejs/biome": "2.5.15",
-        "@opennextjs/cloudflare": "^1.17.1",
+        "@opennextjs/cloudflare": "^1.20.2",
         "@playwright/test": "^1.57.0",
         "@tailwindcss/postcss": "^4",
         "@tailwindcss/typography": "^0.5.19",
