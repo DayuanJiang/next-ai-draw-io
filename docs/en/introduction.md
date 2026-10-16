@@ -34,7 +34,9 @@ The demo site has a daily usage limit. In Settings you can pick another provider
 
 ## Next steps
 
-- [Use it from Claude Code](./claude-code.md)
-- [AWS architecture diagrams](./aws-architecture.md)
+- [Draw and edit](./editor.md) in the web app
+- [Versions and undo](./versions.md)
+- [Use it from Claude Code](./claude-code.md) or [other MCP clients](./mcp-clients.md)
+- [AWS architecture diagrams](./aws-architecture.md) and [flowcharts and sequence diagrams](./flowcharts.md)
 - [Run it with Docker](./docker.md)
 - [FAQ](./FAQ.md)

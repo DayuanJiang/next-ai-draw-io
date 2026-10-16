@@ -88,8 +88,12 @@ describe("docs files", () => {
         expect(doc.summary).toMatch(/^The MCP server lets Claude Code/)
     })
 
-    it("falls back to Simplified Chinese, then English", () => {
-        expect(loadDoc("zh-Hant", "docker").locale).toBe("zh")
-        expect(loadDoc("ja", "claude-code").locale).toBe("en")
+    it("has every page in English, Chinese and Japanese", () => {
+        for (const file of DOCS_NAV.flatMap((group) => group.files)) {
+            expect(loadDoc("zh", file).locale).toBe("zh")
+            expect(loadDoc("ja", file).locale).toBe("ja")
+            // Traditional Chinese shows the Simplified page
+            expect(loadDoc("zh-Hant", file).locale).toBe("zh")
+        }
     })
 })

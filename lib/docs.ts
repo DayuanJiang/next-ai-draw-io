@@ -28,7 +28,16 @@ export const DOCS_NAV: { group: Record<Locale, string>; files: string[] }[] = [
             ja: "はじめに",
             "zh-Hant": "入門",
         },
-        files: ["introduction", "claude-code"],
+        files: ["introduction", "claude-code", "mcp-clients"],
+    },
+    {
+        group: {
+            en: "Using the editor",
+            zh: "使用编辑器",
+            ja: "エディタの使い方",
+            "zh-Hant": "使用編輯器",
+        },
+        files: ["editor", "versions", "settings"],
     },
     {
         group: {
@@ -37,7 +46,7 @@ export const DOCS_NAV: { group: Record<Locale, string>; files: string[] }[] = [
             ja: "ユースケース",
             "zh-Hant": "使用情境",
         },
-        files: ["aws-architecture"],
+        files: ["aws-architecture", "flowcharts"],
     },
     {
         group: {
