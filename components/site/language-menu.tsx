@@ -3,7 +3,7 @@
 import { Check, Globe } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { LANGUAGE_NAMES } from "./site-texts"
 
@@ -18,6 +18,7 @@ export function LanguageMenu({
 }) {
     const [open, setOpen] = useState(false)
     const menu = useRef<HTMLDivElement>(null)
+    const listId = useId()
     // The page without its locale, "/about" for "/zh/about"
     const rest = (usePathname() ?? "").replace(/^\/[^/]+/, "")
 
@@ -51,13 +52,15 @@ export function LanguageMenu({
                 aria-label={label}
                 title={label}
                 aria-expanded={open}
-                aria-haspopup="menu"
+                aria-controls={listId}
             >
                 <Globe className="size-[18px]" />
             </button>
+            {/* A list of links that Tab moves through, not a menu with arrow
+                keys */}
             {open && (
                 <div
-                    role="menu"
+                    id={listId}
                     className="absolute top-full right-0 z-20 mt-1.5 w-40 rounded-xl border border-border bg-card p-1 shadow-[0_12px_32px_-12px_rgba(20,24,29,0.35)]"
                 >
                     {i18n.locales.map((locale) => (
@@ -66,7 +69,6 @@ export function LanguageMenu({
                             href={`/${locale}${rest}`}
                             hrefLang={locale}
                             lang={locale}
-                            role="menuitem"
                             onClick={() => setOpen(false)}
                             className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[13.5px] hover:bg-muted ${locale === lang ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                             aria-current={locale === lang ? "page" : undefined}
