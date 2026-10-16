@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect } from "react"
 import { BrandMark } from "@/components/workspace/brand-mark"
 import { i18n, type Locale } from "@/lib/i18n/config"
 
@@ -47,6 +48,10 @@ export function NotFoundPage() {
         ? (first as Locale)
         : "en"
     const t = TEXTS[lang]
+    // The server's title is in English: it cannot know the language
+    useEffect(() => {
+        document.title = `${t.title} | Next AI Draw.io`
+    }, [t.title])
     return (
         <div className="site lp-grid flex min-h-screen items-center justify-center bg-canvas px-8 text-foreground">
             <div className="max-w-md text-center">

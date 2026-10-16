@@ -214,12 +214,23 @@ export default async function About({ params }: Props) {
                                             labels={site.copy}
                                         />
                                     )}
-                                    <a
-                                        href={way.href}
-                                        className="inline-block text-[15px] font-medium underline decoration-border underline-offset-4 hover:decoration-foreground"
-                                    >
-                                        {way.action}
-                                    </a>
+                                    {/* Link adds the base path to the
+                                        site's own pages */}
+                                    {way.href.startsWith("/") ? (
+                                        <Link
+                                            href={way.href}
+                                            className="inline-block text-[15px] font-medium underline decoration-border underline-offset-4 hover:decoration-foreground"
+                                        >
+                                            {way.action}
+                                        </Link>
+                                    ) : (
+                                        <a
+                                            href={way.href}
+                                            className="inline-block text-[15px] font-medium underline decoration-border underline-offset-4 hover:decoration-foreground"
+                                        >
+                                            {way.action}
+                                        </a>
+                                    )}
                                 </div>
                             </div>
                         ))}

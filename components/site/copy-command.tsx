@@ -1,7 +1,8 @@
 "use client"
 
 import { Check, Copy } from "lucide-react"
-import { Fragment, useState } from "react"
+import { Fragment } from "react"
+import { useCopy } from "@/lib/clipboard"
 
 /**
  * A shell command, or a few lines of code or config, with a button that
@@ -17,7 +18,8 @@ export function CopyCommand({
     /** The shell prompt before a one-line command; "" for none */
     prompt?: string
 }) {
-    const [copied, setCopied] = useState(false)
+    // Falls back to execCommand where the Clipboard API is missing (HTTP)
+    const { copied, copy } = useCopy()
     const multiline = command.includes("\n")
     return (
         <div className="flex items-start gap-2 rounded-lg border border-border bg-[#14181d] py-2.5 pr-2 pl-3.5 text-[#ececec] dark:bg-black/40">
@@ -44,11 +46,7 @@ export function CopyCommand({
             )}
             <button
                 type="button"
-                onClick={async () => {
-                    await navigator.clipboard.writeText(command)
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 1500)
-                }}
+                onClick={() => copy(command)}
                 className="shrink-0 rounded-md p-1.5 text-[#a7a9aa] hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-[#ffd84d]"
                 aria-label={copied ? labels.copied : labels.copy}
                 title={copied ? labels.copied : labels.copy}

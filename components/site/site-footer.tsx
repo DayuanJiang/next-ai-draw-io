@@ -60,12 +60,23 @@ export function SiteFooter({ lang, path }: { lang: Locale; path: string }) {
                         <ul className="mt-3 space-y-2 text-[13.5px] text-muted-foreground">
                             {column.links.map((item) => (
                                 <li key={item.href}>
-                                    <a
-                                        href={item.href}
-                                        className="hover:text-foreground"
-                                    >
-                                        {item.label}
-                                    </a>
+                                    {/* Link adds the base path to the
+                                        site's own pages */}
+                                    {item.href.startsWith("/") ? (
+                                        <Link
+                                            href={item.href}
+                                            className="hover:text-foreground"
+                                        >
+                                            {item.label}
+                                        </Link>
+                                    ) : (
+                                        <a
+                                            href={item.href}
+                                            className="hover:text-foreground"
+                                        >
+                                            {item.label}
+                                        </a>
+                                    )}
                                 </li>
                             ))}
                         </ul>
