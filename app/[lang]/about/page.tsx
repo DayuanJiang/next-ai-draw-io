@@ -5,6 +5,7 @@ import { GitHubIcon } from "@/components/icons/github"
 import Image from "@/components/image-with-basepath"
 import type { Locale } from "@/lib/i18n/config"
 import { hasLocale } from "@/lib/i18n/dictionaries"
+import { localeAlternates, OG_IMAGE, OG_LOCALE } from "@/lib/seo"
 
 type ExampleId = "resnet50" | "rag" | "auth" | "scrum" | "inno"
 
@@ -406,8 +407,31 @@ type Props = { params: Promise<{ lang: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { lang } = await params
+    const locale: Locale = hasLocale(lang) ? lang : "en"
     const t = textsFor(lang)
-    return { title: t.title, description: t.description, keywords: t.keywords }
+    // openGraph and twitter replace the layout's whole objects, so the
+    // shared fields are repeated here
+    return {
+        title: t.title,
+        description: t.description,
+        keywords: t.keywords,
+        alternates: localeAlternates(locale, "/about"),
+        openGraph: {
+            title: t.title,
+            description: t.description,
+            type: "website",
+            url: `/${locale}/about`,
+            siteName: "Next AI Draw.io",
+            locale: OG_LOCALE[locale],
+            images: [{ ...OG_IMAGE, alt: t.title }],
+        },
+        twitter: {
+            card: "summary_large_image",
+            title: t.title,
+            description: t.description,
+            images: [OG_IMAGE.url],
+        },
+    }
 }
 
 export default async function About({ params }: Props) {

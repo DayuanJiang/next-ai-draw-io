@@ -1,18 +1,20 @@
 import type { MetadataRoute } from "next"
+import { i18n } from "@/lib/i18n/config"
+import { localeUrls, SITE_URL } from "@/lib/seo"
 
+// Every page in every locale, each listing its other languages. The URLs are
+// the final ones: "/" and "/about" redirect to a locale.
 export default function sitemap(): MetadataRoute.Sitemap {
-    return [
-        {
-            url: "https://next-ai-drawio.jiang.jp",
-            lastModified: new Date(),
-            changeFrequency: "weekly",
-            priority: 1,
-        },
-        {
-            url: "https://next-ai-drawio.jiang.jp/about",
-            lastModified: new Date(),
-            changeFrequency: "monthly",
-            priority: 0.8,
-        },
-    ]
+    return ["", "/about"].flatMap((path) => {
+        const languages = Object.fromEntries(
+            Object.entries(localeUrls(path)).map(([locale, url]) => [
+                locale,
+                `${SITE_URL}${url}`,
+            ]),
+        )
+        return i18n.locales.map((locale) => ({
+            url: languages[locale],
+            alternates: { languages },
+        }))
+    })
 }
