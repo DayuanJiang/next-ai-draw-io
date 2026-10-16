@@ -56,6 +56,7 @@ import { getSystemPrompt } from "@/lib/system-prompts"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
+import { imageRefNote } from "@/packages/mcp-server/src/embedded-images.ts"
 
 // No explicit cap: a reasoning model can spend minutes planning before it emits
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
@@ -437,21 +438,24 @@ ${userInputText}
     const selectionContext = formatSelectionContext(body.selectedCells)
     // The model reads the diagram in the compact notation it writes
     // (compact-cells.ts); the canvas itself keeps the full XML
+    const shownPrevious = previousXml ? foldCells(previousXml) : ""
+    const shownCurrent = foldCells(xml || "")
+    const imageNote = imageRefNote(`${shownPrevious}${shownCurrent}`)
     const xmlContext = `${
-        previousXml
+        shownPrevious
             ? `Previous diagram XML (before user's last message):
 """xml
-${foldCells(previousXml)}
+${shownPrevious}
 """
 
 `
             : ""
     }Current diagram XML (AUTHORITATIVE - the source of truth), shown in the same compact notation you write (shapes with x, y, w, h; edges with source and target):
 """xml
-${foldCells(xml || "")}
+${shownCurrent}
 """
 
-IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. The user can also undo or restore your earlier edits with the version buttons, so never reuse positions from your earlier tool calls; take every position from the Current diagram XML.${selectionContext ? `\n\n${selectionContext}` : ""}
+IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. The user can also undo or restore your earlier edits with the version buttons, so never reuse positions from your earlier tool calls; take every position from the Current diagram XML.${imageNote ? `\n\n${imageNote}` : ""}${selectionContext ? `\n\n${selectionContext}` : ""}
 
 Write your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or these notes.`
 

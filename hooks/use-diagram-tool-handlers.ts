@@ -13,6 +13,7 @@ import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete } from "@/lib/utils"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
 import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
+import { restoreImageData } from "@/packages/mcp-server/src/embedded-images.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 
@@ -159,6 +160,11 @@ export function useDiagramToolHandlers({
     const shownToModel = (xml: string) =>
         foldCells(pageModelXml(xml, aiPageId()) ?? xml)
 
+    // The model's XML with the pictures it was shown as references
+    // (embedded-images.ts) put back
+    const withImages = (xml: string) =>
+        restoreImageData(xml, chartXMLRef.current)
+
     // A drawn page goes onto the model's page of the canvas file, which
     // keeps its other pages; a drawing that brings several pages replaces
     // the file. Either way it keeps the file's variables unless it sets its own.
@@ -229,7 +235,7 @@ NEXT STEP: Call append_diagram with the continuation XML.
         // One undo step (and a version) right away, before the screenshot
         // check: a stop, another chat or a hand edit during the check then
         // finds the diagram already in place
-        const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
+        const prepared = prepareNewDiagram(withImages(finalXml), NEW_PAGE)
         const validationError = prepared.ok
             ? commit(onAiPage(prepared.xml), toolCall.toolCallId)
             : prepared.error
@@ -538,7 +544,7 @@ Start your continuation with the NEXT character after where it stopped.`,
             const finalXml = partialXmlRef.current
             partialXmlRef.current = "" // Reset
 
-            const prepared = prepareNewDiagram(finalXml, NEW_PAGE)
+            const prepared = prepareNewDiagram(withImages(finalXml), NEW_PAGE)
             // The continuation ends here, drawn or not: it takes the stored
             // originals, so the preview code undoes none of them later
             const originalXml = takeOriginals()

@@ -26,8 +26,10 @@
  * foldCells is the reverse, for the diagram shown to the model: it writes
  * the plain shapes and edges compactly and leaves everything else as it is,
  * so the model reads the notation it is asked to write. Folding then
- * expanding gives the same cells back.
+ * expanding gives the same cells back, except that the data of embedded
+ * pictures becomes a reference (embedded-images.ts).
  */
+import { hideImageData } from "./embedded-images.ts"
 import { readAttributes, type TagAttribute } from "./xml-attributes.ts"
 
 // A whole mxCell: self-closing, or with its children (cells never nest)
@@ -157,9 +159,10 @@ function plainGeometry(body: string): Map<string, string> | null {
  * is the relative geometry.
  * Both must name their parent, since expanding fills in the layer for a
  * missing one. Everything else, including wrapped cells' extra data and
- * edge labels, is left as written.
+ * edge labels, is left as written, apart from embedded pictures' data.
  */
-export function foldCells(xml: string): string {
+export function foldCells(input: string): string {
+    const xml = hideImageData(input)
     return xml.replace(CELL_BLOCK, (block, attrText: string, body?: string) => {
         if (body === undefined) return block
         const attrs = readAttributes(attrText)

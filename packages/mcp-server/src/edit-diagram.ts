@@ -12,6 +12,7 @@ import {
     applyDiagramOperations,
     type DiagramOperation,
 } from "./diagram-operations.ts"
+import { restoreImageData } from "./embedded-images.ts"
 import { type PageSelector, projectPage } from "./pages.ts"
 import { addDefaultStyles, edgeIdsOf } from "./style-classes.ts"
 import { validateAndFixXml, validateMxCellStructure } from "./xml-validation.ts"
@@ -92,11 +93,15 @@ export function editDiagram(
             fixes.push(`${op.cell_id}: ${check.fixes.join(", ")}`)
         }
         // The defaults the model is told not to write (style-classes.ts),
-        // added after the fixes so a repaired cell gets them too
+        // added after the fixes so a repaired cell gets them too; the
+        // pictures it was shown as references (embedded-images.ts) go back in
         prepared.push({
             ...op,
             new_xml: addDefaultStyles(
-                expandCompactCells(check.fixed ?? op.new_xml, layer),
+                expandCompactCells(
+                    restoreImageData(check.fixed ?? op.new_xml, xml),
+                    layer,
+                ),
                 edges,
             ),
         })

@@ -14,7 +14,13 @@
  * browser bridge is covered by the Playwright e2e suite.
  */
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+    existsSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path, { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -341,4 +347,32 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         const transparent = props.transparent as { type?: string } | undefined
         expect(transparent?.type).toBe("boolean")
     })
+
+    it("shows an embedded picture as a reference and keeps it on a redraw", async () => {
+        const data = `iVBORw0KGgo${"Q1".repeat(300)}AAAA==`
+        const doc = `<mxfile><diagram id="p1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="img" value="" style="shape=image;image=data:image/png,${data};" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="120" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
+        expect(
+            (await callTool("load_diagram", { xml: doc })).isError,
+        ).toBeFalsy()
+        const shown = textOf(await callTool("get_diagram", {}))
+        expect(shown).not.toContain(data)
+        expect(shown).toContain("Keep a reference exactly as written")
+        const cell = shown.match(/<mxCell id="img"[^>]*\/>/)?.[0] ?? ""
+        expect(cell).toContain("embedded-image-")
+        // Redrawn from the cell as it was shown
+        const drawn = await callTool("create_new_diagram", { xml: cell })
+        expect(drawn.isError).toBeFalsy()
+        const file = path.join(dataDir, "redrawn.drawio")
+        const exported = await callTool("export_diagram", { path: file })
+        expect(exported.isError).toBeFalsy()
+        const saved = readFileSync(file, "utf8")
+        expect(saved).toContain(data)
+        expect(saved).not.toContain("embedded-image-")
+        // A new page started from the cell as it was shown
+        const added = await callTool("add_page", { name: "Copy", xml: cell })
+        expect(added.isError).toBeFalsy()
+        const pageFile = path.join(dataDir, "copy.drawio")
+        await callTool("export_diagram", { path: pageFile, page_name: "Copy" })
+        expect(readFileSync(pageFile, "utf8")).toContain(data)
+    }, 30000)
 })
