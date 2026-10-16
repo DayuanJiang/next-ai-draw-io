@@ -40,7 +40,8 @@
         "openFileAfterAnswer": "回答が終わるまでお待ちください。そのあと {name} をもう一度開いてください。",
         "attachedImage": "添付画像",
         "retry": "再試行",
-        "sendKeyHint": "{send} 送信 · {newline} 改行"
+        "sendKeyHint": "{send} 送信 · {newline} 改行",
+        "drawingElapsed": "描画中… {seconds} 秒経過"
     },
     "examples": {
         "paperToDiagram": "論文を図に",

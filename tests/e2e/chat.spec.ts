@@ -6,7 +6,7 @@ import {
     sendMessage,
     test,
 } from "./lib/fixtures"
-import { createTextOnlyResponse, sse } from "./lib/helpers"
+import { createTextOnlyResponse, sse, toolCallEvents } from "./lib/helpers"
 
 test.describe("Crossing the mobile breakpoint", () => {
     test.beforeEach(async ({ page }) => {
@@ -118,5 +118,53 @@ test.describe("Answers", () => {
         await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible(
             { timeout: 3000 },
         )
+    })
+})
+
+// GPT-6 Luna on Bedrock sends a tool call's input only once it is complete:
+// after its plan sentence the chat sits still while it writes the diagram
+test("a model drawing silently shows the time so far", async ({ page }) => {
+    const call = toolCallEvents("silent-1", "display_diagram", {
+        xml: '<mxCell id="2" value="Box" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>',
+    })
+    await chunkedReplies(page, [
+        [
+            sse(
+                [
+                    { type: "start" },
+                    { type: "text-start", id: "t" },
+                    { type: "text-delta", id: "t", delta: "I'll draw a box." },
+                ],
+                false,
+            ),
+            9000,
+            sse(
+                [
+                    { type: "text-end", id: "t" },
+                    call.start,
+                    ...call.deltas,
+                    call.done,
+                ],
+                false,
+            ),
+            sse([{ type: "finish" }]),
+        ],
+    ])
+    await openApp(page)
+    await sendMessage(page, "Draw a box")
+    await expect(page.getByText("I'll draw a box.")).toBeVisible({
+        timeout: 10000,
+    })
+    // Not while something new is still arriving
+    const clock = page.getByTestId("silent-work")
+    await expect(clock).toBeHidden()
+    await expect(clock).toBeVisible({ timeout: 8000 })
+    await expect(clock).toHaveText(/^Drawing… \d+ s$/)
+    // Gone once the drawing arrives
+    await expect(clock).toBeHidden({ timeout: 10000 })
+    await expect(
+        page.locator('[data-tool-state="output-available"]'),
+    ).toHaveCount(1, {
+        timeout: 10000,
     })
 })

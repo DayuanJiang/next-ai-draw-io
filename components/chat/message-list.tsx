@@ -603,6 +603,37 @@ function ErrorNotice({
     )
 }
 
+// Nothing new on screen for this long while answering: say it is still at work
+const QUIET_MS = 5000
+
+/**
+ * Seconds since the answer began, and whether it has shown nothing new
+ * (`signature` unchanged) for QUIET_MS; ticks each second while busy. Some
+ * providers send a drawing only once it is complete (GPT-6 Luna on Bedrock),
+ * so the chat can sit still for minutes while the model writes it.
+ */
+function useAnswerClock(busy: boolean, signature: string) {
+    const [startedAt, setStartedAt] = useState(0)
+    const [changedAt, setChangedAt] = useState(0)
+    const [now, setNow] = useState(0)
+    useEffect(() => {
+        setStartedAt(busy ? Date.now() : 0)
+        if (!busy) return
+        const timer = setInterval(() => setNow(Date.now()), 1000)
+        return () => clearInterval(timer)
+    }, [busy])
+    // Runs on each new signature: that is the change
+    useEffect(() => {
+        setChangedAt(Date.now())
+    }, [signature])
+    return {
+        seconds: startedAt
+            ? Math.max(0, Math.round((now - startedAt) / 1000))
+            : 0,
+        quiet: busy && startedAt > 0 && now - changedAt >= QUIET_MS,
+    }
+}
+
 export function MessageList() {
     const dict = useDictionary()
     const openSettings = useUiStore((s) => s.openSettings)
@@ -638,6 +669,35 @@ export function MessageList() {
         (m) => m.role === "assistant" && !noticeOf(m),
     )
     const lastUserIndex = messages.map((m) => m.role).lastIndexOf("user")
+
+    // What the answer shows last. A reasoning row and a drawing on its way
+    // have their own progress; after a plan sentence or a finished tool the
+    // model can work silently, and then the row below shows the time so far.
+    const last = messages[messages.length - 1]
+    const lastPart = last?.parts?.at(-1)
+    const lastTool =
+        lastPart && isToolUIPart(lastPart)
+            ? (lastPart as unknown as ToolPartLike)
+            : undefined
+    const clock = useAnswerClock(
+        engine.isBusy,
+        [
+            messages.length,
+            last?.parts?.length,
+            lastPart?.type === "text" ? lastPart.text.length : 0,
+            lastTool?.state,
+            lastTool?.input?.xml?.length,
+            lastTool?.input?.operations?.length,
+        ].join(":"),
+    )
+    const silentWork =
+        engine.isBusy &&
+        clock.quiet &&
+        last?.role === "assistant" &&
+        !noticeOf(last) &&
+        lastPart?.type !== "reasoning" &&
+        lastTool?.state !== "input-streaming" &&
+        lastTool?.state !== "input-available"
 
     return (
         <div className="space-y-4 px-4 pt-4 pb-2">
@@ -694,6 +754,15 @@ export function MessageList() {
                         <Shimmer as="span">{dict.reasoning.thinking}</Shimmer>
                     </div>
                 )}
+            {silentWork && (
+                <div className="px-1 text-[13px]" data-testid="silent-work">
+                    <Shimmer as="span">
+                        {formatMessage(dict.chat.drawingElapsed, {
+                            seconds: clock.seconds,
+                        })}
+                    </Shimmer>
+                </div>
+            )}
             <div ref={endRef} />
         </div>
     )

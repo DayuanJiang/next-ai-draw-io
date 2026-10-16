@@ -40,7 +40,8 @@
         "openFileAfterAnswer": "Wait for the answer to finish, then open {name} again.",
         "attachedImage": "Attached image",
         "retry": "Retry",
-        "sendKeyHint": "{send} send · {newline} new line"
+        "sendKeyHint": "{send} send · {newline} new line",
+        "drawingElapsed": "Drawing… {seconds} s"
     },
     "examples": {
         "paperToDiagram": "Paper to diagram",
