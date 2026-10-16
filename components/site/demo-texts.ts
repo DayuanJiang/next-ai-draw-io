@@ -52,15 +52,17 @@ const TEXTS: Record<
     },
     ja: {
         replay: "もう一度再生",
+        // A phone's narrow step tab breaks a title only where it has a
+        // space or a zero-width space
         steps: [
             { title: "生成", text: "伝えた内容を AI が図にします" },
             { title: "手で編集", text: "draw.io と同じように図形を移動" },
             {
-                title: "AI に修正を頼む",
+                title: "AI に\u200b修正を\u200b頼む",
                 text: "図形を選んで変更を頼みます",
             },
             {
-                title: "バージョン履歴",
+                title: "バージョン\u200b履歴",
                 text: "以前のバージョンに戻せます",
             },
         ],

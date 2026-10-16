@@ -34,12 +34,15 @@ export function CopyCommand({
                             {prompt}{" "}
                         </span>
                     )}
-                    {/* Wrap only between words: browsers would also break
-                        at the hyphens of --scope or mcp-server */}
+                    {/* Wrap between words: browsers would also break at the
+                        hyphens of --scope or mcp-server. A word longer than
+                        the line, on a phone, still breaks inside. */}
                     {command.split(" ").map((word, i) => (
                         <Fragment key={`${i}-${word}`}>
                             {i > 0 && " "}
-                            <span className="whitespace-nowrap">{word}</span>
+                            <span className="inline-block max-w-full [overflow-wrap:anywhere]">
+                                {word}
+                            </span>
                         </Fragment>
                     ))}
                 </code>

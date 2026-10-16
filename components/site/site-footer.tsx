@@ -37,8 +37,8 @@ export function SiteFooter({ lang, path }: { lang: Locale; path: string }) {
     ]
     return (
         <footer className="border-t border-border bg-canvas">
-            <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] gap-10 px-8 pt-12 pb-10">
-                <div>
+            <div className="mx-auto grid max-w-7xl grid-cols-2 gap-x-6 gap-y-9 px-5 pt-10 pb-9 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] md:gap-10 md:px-8 md:pt-12 md:pb-10">
+                <div className="col-span-2 md:col-span-1">
                     <Link
                         href={`/${lang}/about`}
                         className="flex items-center gap-2.5"
@@ -57,7 +57,7 @@ export function SiteFooter({ lang, path }: { lang: Locale; path: string }) {
                         <h2 className="text-[13px] font-semibold">
                             {column.title}
                         </h2>
-                        <ul className="mt-3 space-y-2 text-[13.5px] text-muted-foreground">
+                        <ul className="mt-3 space-y-2.5 text-[14px] text-muted-foreground md:space-y-2 md:text-[13.5px]">
                             {column.links.map((item) => (
                                 <li key={item.href}>
                                     {/* Link adds the base path to the
@@ -82,7 +82,7 @@ export function SiteFooter({ lang, path }: { lang: Locale; path: string }) {
                         </ul>
                     </div>
                 ))}
-                <div>
+                <div className="col-span-2 md:col-span-1">
                     <h2 className="text-[13px] font-semibold">{t.support}</h2>
                     <p className="mt-3 text-[13.5px] leading-relaxed text-muted-foreground">
                         {t.sponsorText}{" "}
@@ -98,9 +98,9 @@ export function SiteFooter({ lang, path }: { lang: Locale; path: string }) {
                     </p>
                 </div>
             </div>
-            <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 border-t border-border px-8 py-5 text-[12.5px] text-muted-foreground">
+            <div className="mx-auto flex max-w-7xl flex-col-reverse items-start justify-between gap-3 border-t border-border px-5 py-5 text-[12.5px] text-muted-foreground md:flex-row md:items-center md:gap-6 md:px-8">
                 <span>{t.license}</span>
-                <nav className="flex gap-4">
+                <nav className="flex flex-wrap gap-x-4 gap-y-2">
                     {i18n.locales.map((locale) => (
                         <Link
                             key={locale}

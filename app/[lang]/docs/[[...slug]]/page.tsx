@@ -1,5 +1,11 @@
 import "@/components/site/site.css"
-import { ChevronLeft, ChevronRight, SquarePen } from "lucide-react"
+import {
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    SquarePen,
+    TextAlignStart,
+} from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -86,7 +92,7 @@ async function resolve(params: Props["params"]) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-    const { lang, file, doc } = await resolve(params)
+    const { file, doc } = await resolve(params)
     const path = docsPath(file)
     // Only the languages the page is written in; a page shown in another
     // language points to that language's page
@@ -182,43 +188,41 @@ export default async function DocsPage({ params }: Props) {
             <div className="border-b border-border">
                 <SiteHeader lang={lang} current="docs" wide />
             </div>
+            {/* Below 1024 px the pages open from a bar under the header */}
+            <details
+                key={file}
+                className="group sticky top-0 z-20 border-b border-border bg-canvas lg:hidden"
+            >
+                <summary className="flex cursor-pointer list-none items-center gap-2.5 px-5 py-2.5 text-[14px] md:px-8 [&::-webkit-details-marker]:hidden">
+                    <TextAlignStart className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                        {doc.title}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 text-[13px] text-muted-foreground">
+                        {SITE_TEXTS[lang].nav.pages}
+                        <ChevronDown className="size-4 group-open:rotate-180" />
+                    </span>
+                </summary>
+                <nav className="max-h-[70svh] overflow-y-auto border-t border-border px-3 pt-4 pb-2 text-[15px] md:px-6">
+                    <PageList lang={lang} file={file} />
+                </nav>
+            </details>
             {/* Below 1280 px the page's headings give their room to the text */}
-            <div className="mx-auto grid max-w-[1440px] grid-cols-[232px_minmax(0,1fr)] gap-12 px-8 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
+            <div className="mx-auto grid max-w-[1440px] px-5 md:px-8 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-12 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
                 {/* Pages */}
-                <nav className="sticky top-0 max-h-screen self-start overflow-y-auto py-8 text-[14px]">
-                    {DOCS_NAV.map((g) => (
-                        <div key={g.group.en} className="mb-6">
-                            <h2 className="mb-1.5 px-2.5 text-[12.5px] font-semibold text-muted-foreground">
-                                {g.group[lang]}
-                            </h2>
-                            <ul className="space-y-0.5">
-                                {g.files.map((f) => (
-                                    <li key={f}>
-                                        <Link
-                                            href={`/${lang}${docsPath(f)}`}
-                                            className={`block rounded-md px-2.5 py-1.5 ${f === file ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                                            aria-current={
-                                                f === file ? "page" : undefined
-                                            }
-                                        >
-                                            {loadDoc(lang, f).title}
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ))}
+                <nav className="sticky top-0 max-h-screen self-start overflow-y-auto py-8 text-[14px] max-lg:hidden">
+                    <PageList lang={lang} file={file} />
                 </nav>
 
                 {/* The page */}
-                <main className="min-w-0 py-10">
+                <main className="min-w-0 py-7 lg:py-10">
                     <div className="mx-auto max-w-[760px]">
                         {group && (
                             <p className="text-[13px] font-medium text-muted-foreground">
                                 {group.group[lang]}
                             </p>
                         )}
-                        <h1 className="mt-1.5 text-[34px] leading-tight font-semibold tracking-[-0.025em]">
+                        <h1 className="mt-1.5 text-[28px] leading-tight font-semibold tracking-[-0.025em] md:text-[34px]">
                             {doc.title}
                         </h1>
                         {notice && (
@@ -240,7 +244,7 @@ export default async function DocsPage({ params }: Props) {
                                 demos={await docsDemos(lang)}
                             />
                         </article>
-                        <div className="mt-14 grid grid-cols-2 gap-4 border-t border-border pt-6">
+                        <div className="mt-14 grid gap-3 border-t border-border pt-6 sm:grid-cols-2 sm:gap-4">
                             {previous ? (
                                 <PageLink
                                     href={`/${lang}${docsPath(previous)}`}
@@ -248,7 +252,7 @@ export default async function DocsPage({ params }: Props) {
                                     title={loadDoc(lang, previous).title}
                                 />
                             ) : (
-                                <span />
+                                <span className="max-sm:hidden" />
                             )}
                             {next && (
                                 <PageLink
@@ -277,6 +281,30 @@ export default async function DocsPage({ params }: Props) {
             <SiteFooter lang={lang} path={docsPath(file)} />
         </div>
     )
+}
+
+/** The docs' pages, by group */
+function PageList({ lang, file }: { lang: Locale; file: string }) {
+    return DOCS_NAV.map((g) => (
+        <div key={g.group.en} className="mb-6">
+            <h2 className="mb-1.5 px-2.5 text-[12.5px] font-semibold text-muted-foreground">
+                {g.group[lang]}
+            </h2>
+            <ul className="space-y-0.5">
+                {g.files.map((f) => (
+                    <li key={f}>
+                        <Link
+                            href={`/${lang}${docsPath(f)}`}
+                            className={`block rounded-md px-2.5 py-1.5 ${f === file ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                            aria-current={f === file ? "page" : undefined}
+                        >
+                            {loadDoc(lang, f).title}
+                        </Link>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    ))
 }
 
 function PageLink({

@@ -17,7 +17,16 @@ export const LANGUAGE_NAMES: Record<Locale, string> = {
 }
 
 export type SiteTexts = {
-    nav: { docs: string; mcp: string; openEditor: string; language: string }
+    nav: {
+        docs: string
+        mcp: string
+        openEditor: string
+        language: string
+        /** The button that opens the links on a phone */
+        menu: string
+        /** The docs' list of pages on a phone */
+        pages: string
+    }
     copy: { copy: string; copied: string }
     footer: {
         tagline: string
@@ -45,6 +54,8 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
             mcp: "MCP server",
             openEditor: "Open the editor",
             language: "Language",
+            menu: "Menu",
+            pages: "All pages",
         },
         copy: { copy: "Copy the command", copied: "Copied" },
         footer: {
@@ -72,6 +83,8 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
             mcp: "MCP 服务器",
             openEditor: "打开编辑器",
             language: "语言",
+            menu: "菜单",
+            pages: "全部页面",
         },
         copy: { copy: "复制命令", copied: "已复制" },
         footer: {
@@ -99,6 +112,8 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
             mcp: "MCP サーバー",
             openEditor: "エディタを開く",
             language: "言語",
+            menu: "メニュー",
+            pages: "すべてのページ",
         },
         copy: { copy: "コマンドをコピー", copied: "コピーしました" },
         footer: {
@@ -126,6 +141,8 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
             mcp: "MCP 伺服器",
             openEditor: "開啟編輯器",
             language: "語言",
+            menu: "選單",
+            pages: "所有頁面",
         },
         copy: { copy: "複製指令", copied: "已複製" },
         footer: {

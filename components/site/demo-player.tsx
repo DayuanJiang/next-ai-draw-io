@@ -12,6 +12,7 @@ import {
     X,
 } from "lucide-react"
 import {
+    type CSSProperties,
     useCallback,
     useEffect,
     useId,
@@ -678,13 +679,13 @@ export function DemoPlayer({
                             key={s.title}
                             type="button"
                             onClick={() => play(i)}
-                            className={`relative min-w-0 px-4 py-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${i > 0 ? "border-l border-border" : ""} ${state === "active" ? "bg-card" : "hover:bg-card/60"}`}
+                            className={`relative min-w-0 px-2 py-2 text-left md:px-4 md:py-2.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${i > 0 ? "border-l border-border" : ""} ${state === "active" ? "bg-card" : "hover:bg-card/60"}`}
                             aria-current={
                                 state === "active" ? "step" : undefined
                             }
                         >
                             <span
-                                className={`flex items-center gap-2 text-[13px] font-medium ${state === "next" ? "text-muted-foreground" : "text-foreground"}`}
+                                className={`flex flex-col items-start gap-1 text-[12px] leading-tight font-medium md:flex-row md:items-center md:gap-2 md:text-[13px] ${state === "next" ? "text-muted-foreground" : "text-foreground"}`}
                             >
                                 <span
                                     className={`flex size-[18px] shrink-0 items-center justify-center rounded-[5px] text-[11px] font-semibold tabular-nums ${
@@ -701,11 +702,16 @@ export function DemoPlayer({
                                         i + 1
                                     )}
                                 </span>
-                                <span className="truncate">{s.title}</span>
+                                {/* A phone's narrow tabs wrap the title,
+                                    between words only */}
+                                <span className="max-w-full [word-break:keep-all] md:truncate">
+                                    {s.title}
+                                </span>
                             </span>
-                            {/* The docs' column is too narrow for the notes */}
+                            {/* The docs' column and a phone are too narrow
+                                for the notes */}
                             <span
-                                className={`mt-0.5 block truncate pl-[26px] text-[12px] text-muted-foreground ${docs ? "hidden" : ""}`}
+                                className={`mt-0.5 hidden truncate pl-[26px] text-[12px] text-muted-foreground ${docs ? "" : "md:block"}`}
                             >
                                 {s.text}
                             </span>
@@ -723,21 +729,22 @@ export function DemoPlayer({
                 })}
             </div>
             {/* The demo fits the first screen: its height follows the window,
-                and the diagram shrinks with it (the SVG is 731 x 402) */}
+                and the diagram shrinks with it (the SVG is 731 x 402). On a
+                phone the canvas is as wide as the screen, above the chat. */}
             <div
                 ref={body}
-                className={`relative grid ${docs ? "grid-cols-[minmax(0,1fr)_304px]" : "grid-cols-[minmax(0,1fr)_320px]"}`}
-                style={{ height }}
+                className={`relative grid grid-rows-[auto_270px] md:h-(--demo-height) md:grid-rows-1 ${docs ? "md:grid-cols-[minmax(0,1fr)_304px]" : "md:grid-cols-[minmax(0,1fr)_320px]"}`}
+                style={{ "--demo-height": height } as CSSProperties}
             >
                 {/* Canvas */}
                 <div
-                    className={`lp-grid relative flex items-center justify-center border-r border-border ${docs ? "px-3" : "px-8"}`}
+                    className={`lp-grid relative flex items-center justify-center border-border px-1.5 py-10 max-md:border-b md:border-r md:py-0 ${docs ? "md:px-3" : "md:px-8"}`}
                 >
                     {scene !== undefined && finished && (
                         <button
                             type="button"
                             onClick={() => play(scene, scene)}
-                            className="absolute top-2.5 left-2.5 z-[3] flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[12.5px] font-medium shadow-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                            className="absolute top-2 left-2 z-[3] flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 md:top-2.5 md:left-2.5 md:py-1.5 text-[12.5px] font-medium shadow-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
                         >
                             <RotateCcw className="size-3.5" />
                             {texts.replay}
@@ -745,10 +752,12 @@ export function DemoPlayer({
                     )}
                     <div
                         ref={stage}
-                        className="lp-demo relative w-full"
-                        style={{
-                            maxWidth: `min(780px, calc((${height} - 56px) * ${aspect.toFixed(3)}))`,
-                        }}
+                        className="lp-demo relative w-full md:max-w-(--stage-width)"
+                        style={
+                            {
+                                "--stage-width": `min(780px, calc((${height} - 56px) * ${aspect.toFixed(3)}))`,
+                            } as CSSProperties
+                        }
                     >
                         <div dangerouslySetInnerHTML={{ __html: markup }} />
                         {selection && (

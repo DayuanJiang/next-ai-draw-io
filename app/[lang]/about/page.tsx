@@ -148,9 +148,9 @@ export default async function About({ params }: Props) {
 
             <div className="lp-grid border-b border-border">
                 <SiteHeader lang={lang} />
-                <section className="mx-auto max-w-7xl px-8 pt-4 pb-12">
-                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-end gap-12">
-                        <h1 className="text-[clamp(34px,3.6vw,48px)] leading-[1.08] font-semibold tracking-[-0.035em] [text-wrap:balance]">
+                <section className="mx-auto max-w-7xl px-4 pt-6 pb-10 md:px-8 md:pt-4 md:pb-12">
+                    <div className="grid items-end gap-5 px-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12 md:px-0">
+                        <h1 className="text-[clamp(32px,3.6vw,48px)] leading-[1.08] font-semibold tracking-[-0.035em] [text-wrap:balance]">
                             {/* A Chinese headline breaks only after its comma */}
                             {t.h1.split(/(?<=，)/).map((part) => (
                                 <span key={part} className="inline-block">
@@ -178,7 +178,7 @@ export default async function About({ params }: Props) {
                             </div>
                         </div>
                     </div>
-                    <div className="mt-7">
+                    <div className="mt-8 md:mt-7">
                         <DemoPlayer texts={demo} />
                     </div>
                 </section>
@@ -187,16 +187,16 @@ export default async function About({ params }: Props) {
             <main>
                 {/* Three ways to use it */}
                 <section className="border-b border-border bg-card">
-                    <div className="mx-auto max-w-7xl px-8 pt-12">
+                    <div className="mx-auto max-w-7xl px-5 pt-12 md:px-8">
                         <h2 className="text-[22px] font-semibold tracking-[-0.02em]">
                             {t.waysHeading}
                         </h2>
                     </div>
-                    <div className="mx-auto grid max-w-7xl grid-cols-3 divide-x divide-border px-8">
+                    <div className="mx-auto grid max-w-7xl divide-border px-5 max-lg:divide-y md:px-8 lg:grid-cols-3 lg:divide-x">
                         {ways.map((way) => (
                             <div
                                 key={way.title}
-                                className="px-8 pt-7 pb-12 first:pl-0 last:pr-0"
+                                className="py-8 first:pt-7 lg:px-8 lg:pt-7 lg:pb-12 lg:first:pl-0 lg:last:pr-0"
                             >
                                 <span className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-canvas">
                                     <way.icon className="size-[18px]" />
@@ -238,14 +238,14 @@ export default async function About({ params }: Props) {
                 </section>
 
                 {/* Examples */}
-                <section className="mx-auto max-w-7xl px-8 py-16">
+                <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
                     <h2 className="text-[22px] font-semibold tracking-[-0.02em]">
                         {t.examplesHeading}
                     </h2>
                     <p className="mt-2 text-[15px] text-muted-foreground">
                         {t.examplesIntro}
                     </p>
-                    <div className="mt-8 grid grid-cols-2 gap-5">
+                    <div className="mt-8 grid gap-5 md:grid-cols-2">
                         <Example
                             example={hero}
                             texts={t.examples[hero.id]}
@@ -265,11 +265,11 @@ export default async function About({ params }: Props) {
 
                 {/* Other features */}
                 <section className="border-y border-border bg-card">
-                    <div className="mx-auto max-w-7xl px-8 py-16">
+                    <div className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
                         <h2 className="text-[22px] font-semibold tracking-[-0.02em]">
                             {t.moreHeading}
                         </h2>
-                        <div className="mt-8 grid grid-cols-3 gap-x-12 gap-y-9">
+                        <div className="mt-8 grid gap-x-12 gap-y-7 sm:grid-cols-2 md:grid-cols-3 md:gap-y-9">
                             {t.more.map((item, i) => (
                                 <div key={item.title}>
                                     <h3 className="text-[15.5px] font-semibold">
@@ -296,8 +296,8 @@ export default async function About({ params }: Props) {
                 </section>
 
                 {/* AI providers */}
-                <section className="mx-auto max-w-7xl px-8 py-16">
-                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-12">
+                <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
+                    <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] md:gap-12">
                         <div>
                             <h2 className="text-[22px] font-semibold tracking-[-0.02em] [text-wrap:balance]">
                                 {t.providersHeading}
@@ -322,8 +322,8 @@ export default async function About({ params }: Props) {
 
                 {/* Closing call to action */}
                 <section className="lp-grid border-t border-border">
-                    <div className="mx-auto flex max-w-7xl items-center justify-between gap-8 px-8 py-14">
-                        <h2 className="text-[26px] font-semibold tracking-[-0.025em]">
+                    <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-5 px-5 py-12 md:flex-row md:items-center md:gap-8 md:px-8 md:py-14">
+                        <h2 className="text-[24px] font-semibold tracking-[-0.025em] md:text-[26px]">
                             {t.ctaHeading}
                         </h2>
                         <div className="flex items-center gap-3">
@@ -363,10 +363,10 @@ function Example({
 }) {
     return (
         <figure
-            className={`overflow-hidden rounded-xl border border-border bg-card ${wide ? "col-span-2 grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]" : ""}`}
+            className={`overflow-hidden rounded-xl border border-border bg-card ${wide ? "md:col-span-2 md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]" : ""}`}
         >
             <div
-                className={`lp-grid flex items-center justify-center p-6 ${wide ? "h-[420px] border-r border-border" : "h-[320px] border-b border-border"}`}
+                className={`lp-grid flex items-center justify-center border-border p-5 md:p-6 ${wide ? "h-[280px] border-b md:h-[420px] md:border-r md:border-b-0" : "h-[240px] border-b md:h-[320px]"}`}
             >
                 <Image
                     src={example.src}
@@ -377,7 +377,9 @@ function Example({
                 />
             </div>
             <figcaption
-                className={wide ? "self-center px-8 py-6" : "px-5 py-4"}
+                className={
+                    wide ? "self-center px-5 py-4 md:px-8 md:py-6" : "px-5 py-4"
+                }
             >
                 <h3 className="text-[15.5px] font-semibold">{texts.title}</h3>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
