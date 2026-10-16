@@ -52,6 +52,7 @@ import {
     findServerModelById,
 } from "@/lib/server-model-config"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
+import { withHeartbeat } from "@/lib/stream-heartbeat"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
@@ -563,13 +564,15 @@ Write your reply in the language of the user's own words in their latest message
         }),
     })
 
-    const response = result.toUIMessageStreamResponse({
-        sendReasoning: true,
-        // On the server's keys the provider's text can name its account.
-        // Keyless endpoints keep theirs: the desktop app's Ollama is the
-        // user's own, and EdgeOne's text is our function's explanation.
-        onError: (error) => streamErrorText(error, onServerCredentials),
-    })
+    const response = withHeartbeat(
+        result.toUIMessageStreamResponse({
+            sendReasoning: true,
+            // On the server's keys the provider's text can name its account.
+            // Keyless endpoints keep theirs: the desktop app's Ollama is the
+            // user's own, and EdgeOne's text is our function's explanation.
+            onError: (error) => streamErrorText(error, onServerCredentials),
+        }),
+    )
     modelStreamResponses.add(response)
     requestOfResponse.set(response, req)
     return response
