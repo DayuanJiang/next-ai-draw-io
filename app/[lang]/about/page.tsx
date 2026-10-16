@@ -138,10 +138,9 @@ export default async function About({ params }: Props) {
         versions: {
             created: v.created,
             edited: v.edited,
-            undone: v.undone,
             undo: v.undo,
-            redo: v.redo,
             restoreV1: formatMessage(v.restoreVersion, { n: 1 }),
+            restoreV2: formatMessage(v.restoreVersion, { n: 2 }),
             editedSince: v.editedSince,
             drawSummary: describeTotals(
                 { ...EMPTY, shapesAdded: 7, edgesAdded: 5 },

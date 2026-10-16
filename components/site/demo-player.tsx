@@ -6,20 +6,25 @@ import {
     Loader2,
     MousePointer2,
     Pencil,
-    Redo2,
     RotateCcw,
     SquareDashedMousePointer,
     Undo2,
     X,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from "react"
 import { flushSync } from "react-dom"
 
 /*
  * A scripted demo of the editor on the landing page, in four steps: a prompt
  * draws the diagram, the user drags a shape by hand, selects another and
- * asks the AI to change it, then undoes and redoes that change from its
- * version card. The diagram is a real draw.io export whose cells carry
+ * asks the AI to change it, then restores version 1 from its card and goes
+ * back to version 2. The diagram is a real draw.io export whose cells carry
  * data-cell-id; the demo only shows, moves and restyles them. Nothing calls
  * an AI.
  */
@@ -38,10 +43,9 @@ export type DemoTexts = {
     versions: {
         created: string
         edited: string
-        undone: string
         undo: string
-        redo: string
         restoreV1: string
+        restoreV2: string
         editedSince: string
         drawSummary: string
         cacheSummary: string
@@ -56,7 +60,7 @@ type Point = { x: number; y: number }
 type Box = { left: number; top: number; width: number; height: number }
 
 // About how long each step plays, for its progress bar
-const STEP_MS = [5900, 4100, 6100, 4700]
+const STEP_MS = [5800, 3100, 6100, 5900]
 
 const SHAPES = ["cloud", "users", "apigw", "cognito", "lambda", "dynamo", "s3"]
 const EDGES = ["e1", "e2", "e3", "e4", "e5"]
@@ -87,6 +91,7 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
     const head = useRef<HTMLDivElement>(null)
     const body = useRef<HTMLDivElement>(null)
     const stage = useRef<HTMLDivElement>(null)
+    const chat = useRef<HTMLDivElement>(null)
     const runId = useRef(0)
     const [height, setHeight] = useState(DEMO_HEIGHT)
     // The step playing (the number of steps when the demo has ended), and
@@ -100,11 +105,13 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
     const [cursor, setCursor] = useState<Point | null>(null)
     const [dragging, setDragging] = useState(false)
     const [clicks, setClicks] = useState(0)
-    const [pressed, setPressed] = useState(false)
+    // The version card whose button is being pressed
+    const [pressed, setPressed] = useState<number | null>(null)
     const [selection, setSelection] = useState<Box | null>(null)
     const [outline, setOutline] = useState<Box | null>(null)
     const [editedSince, setEditedSince] = useState<number | null>(null)
-    const [undone, setUndone] = useState(false)
+    // The version the canvas shows; none after a hand edit
+    const [onCanvas, setOnCanvas] = useState<number | null>(null)
 
     const cell = useCallback(
         (id: string) =>
@@ -197,11 +204,11 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
         setThinking(null)
         setCursor(null)
         setDragging(false)
-        setPressed(false)
+        setPressed(null)
         setSelection(null)
         setOutline(null)
         setEditedSince(null)
-        setUndone(false)
+        setOnCanvas(null)
     }, [cell, edgeParts, moveS3])
 
     const show = useCallback(
@@ -312,14 +319,55 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                 if (!fast) setClicks((n) => n + 1)
                 await wait(180)
             }
-            // Press the action button of the newest version card
-            const pressAction = async () => {
-                setPressed(true)
+            // Press the button of a version card
+            const pressAction = async (n: number) => {
+                setPressed(n)
                 await click()
-                setPressed(false)
+                setPressed(null)
             }
-            const actionButton = () =>
-                frame.current?.querySelector('[data-demo="action"]')
+            const actionButton = (n: number) =>
+                frame.current?.querySelector(`[data-demo="action-${n}"]`)
+            // Scroll the chat so a version card is clear of the faded top
+            // and of the bottom, as a user would before pressing its button
+            const reveal = async (n: number) => {
+                const list = chat.current
+                const card = actionButton(n)?.closest("[data-demo-card]")
+                if (!list || !card) return
+                const box = list.getBoundingClientRect()
+                const r = card.getBoundingClientRect()
+                const top = r.top - box.top + list.scrollTop
+                const target =
+                    top - 56 < list.scrollTop
+                        ? top - 56
+                        : top + r.height + 8 > list.scrollTop + box.height
+                          ? top + r.height + 8 - box.height
+                          : list.scrollTop
+                if (target === list.scrollTop) return
+                list.scrollTo({
+                    top: target,
+                    behavior: fast ? "auto" : "smooth",
+                })
+                await wait(400)
+            }
+            // A restore moves S3 back or forth, as the editor loads the
+            // version
+            const slideS3 = (from: number, to: number, ms: number) => {
+                if (fast) {
+                    moveS3(to)
+                    return Promise.resolve()
+                }
+                return new Promise<void>((resolve, reject) => {
+                    const start = performance.now()
+                    const frameStep = (now: number) => {
+                        if (!alive()) return reject(new Stopped())
+                        const t = Math.min(1, (now - start) / ms)
+                        moveS3(from + (to - from) * ease(t))
+                        if (t < 1) requestAnimationFrame(frameStep)
+                        else resolve()
+                    }
+                    requestAnimationFrame(frameStep)
+                })
+            }
             // Drag S3 with the pointer, one animation frame at a time
             const drag = (from: Point, box: Box, dx: number, ms: number) => {
                 const width = stage.current?.getBoundingClientRect().width ?? 0
@@ -370,6 +418,7 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                         }
                     })
                     addVersion(versions.draw)
+                    setOnCanvas(versions.draw.n)
                     await wait(900)
                 },
                 // 2. Drag a shape by hand, as in draw.io
@@ -386,12 +435,11 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                         await drag(grab, box, DRAG_X, 1000)
                         setDragging(false)
                     }
+                    // S3 stays selected until the next click selects
+                    // another shape
                     setEditedSince(versions.draw.n)
-                    await wait(350)
-                    await moveTo(stagePoint(14, 86), 550)
-                    await click()
-                    setSelection(null)
-                    await wait(900)
+                    setOnCanvas(null)
+                    await wait(1000)
                 },
                 // 3. Select a shape and ask the AI to change it
                 async () => {
@@ -414,30 +462,39 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                         setOutline(boxOf(icon("cache")))
                     })
                     addVersion(versions.cache)
+                    setOnCanvas(versions.cache.n)
                     setEditedSince(null)
                     await wait(1500)
                     setOutline(null)
                     cell("e6")?.classList.remove("changed")
                 },
-                // 4. Undo the AI's change from its version card, then redo it
+                // 4. Restore version 1, then go back to version 2
                 async () => {
-                    setCursor(stagePoint(92, 70))
+                    // From where the user just typed
+                    setCursor(
+                        pointOf(
+                            frame.current?.querySelector(
+                                '[data-demo="composer"]',
+                            ),
+                        ),
+                    )
                     await wait(50)
-                    await moveTo(pointOf(actionButton()), 900)
-                    await pressAction()
-                    setUndone(true)
+                    await reveal(1)
+                    await moveTo(pointOf(actionButton(1)), 900)
+                    await pressAction(1)
+                    setOnCanvas(1)
                     cell("cache")?.classList.remove("on")
                     cell("e6")?.classList.remove("on")
-                    await wait(1700)
-                    // The button now says Redo and has another width
-                    await moveTo(pointOf(actionButton()), 250)
-                    await pressAction()
-                    setUndone(false)
+                    await slideS3(DRAG_X, 0, 600)
+                    await wait(1500)
+                    await reveal(2)
+                    await moveTo(pointOf(actionButton(2)), 700)
+                    await pressAction(2)
+                    setOnCanvas(2)
                     show("cache")
                     show("e6")
-                    setOutline(boxOf(icon("cache")))
-                    await wait(1400)
-                    setOutline(null)
+                    await slideS3(0, DRAG_X, 600)
+                    await wait(1200)
                     setCursor(null)
                 },
             ]
@@ -458,6 +515,12 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
         },
         [boxOf, cell, icon, moveS3, pointOf, reset, show, stagePoint, texts],
     )
+
+    // The newest message stays in view, as in the editor's chat
+    useLayoutEffect(() => {
+        const list = chat.current
+        if (list) list.scrollTop = list.scrollHeight
+    }, [messages, thinking])
 
     // End the demo at the bottom of the first screen
     useEffect(() => {
@@ -593,7 +656,12 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
 
                 {/* Chat */}
                 <div className="flex min-h-0 flex-col bg-canvas">
-                    <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-hidden p-3 [mask-image:linear-gradient(to_bottom,transparent,#000_48px)]">
+                    <div
+                        ref={chat}
+                        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 [mask-image:linear-gradient(to_bottom,transparent,#000_48px)] [scrollbar-width:none]"
+                    >
+                        {/* Pushes a short chat to the bottom */}
+                        <div className="mt-auto" />
                         {messages.map((m, i) =>
                             m.role === "user" ? (
                                 <div
@@ -618,12 +686,8 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                                             version={m.version}
                                             texts={texts.versions}
                                             latest={latest === m.version}
-                                            undone={
-                                                undone && latest === m.version
-                                            }
-                                            pressed={
-                                                pressed && latest === m.version
-                                            }
+                                            onCanvas={onCanvas === m.version.n}
+                                            pressed={pressed === m.version.n}
                                             editedSince={
                                                 editedSince === m.version.n
                                             }
@@ -640,7 +704,10 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                         )}
                     </div>
                     <div className="border-t border-border p-3">
-                        <div className="rounded-xl border border-border bg-card px-3 pt-2.5 pb-2">
+                        <div
+                            className="rounded-xl border border-border bg-card px-3 pt-2.5 pb-2"
+                            data-demo="composer"
+                        >
                             {chip && (
                                 <span className="mb-1.5 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-marker-soft py-1 pr-1 pl-2 text-[11.5px] font-medium text-marker-ink">
                                     {selectedChip}
@@ -687,47 +754,47 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
     )
 }
 
-/** A version card like the editor's: undo or redo on the newest version,
- * restore on older ones */
+/**
+ * A version card like the editor's: the newest version, while the canvas
+ * shows it, can be undone; any other version can be restored
+ */
 function VersionCard({
     version,
     texts,
     latest,
-    undone,
+    onCanvas,
     pressed,
     editedSince,
 }: {
     version: Version
     texts: DemoTexts["versions"]
     latest: boolean
-    undone: boolean
+    onCanvas: boolean
     pressed: boolean
     editedSince: boolean
 }) {
-    // As in the editor: after a hand edit, the newest version can only be
-    // restored, since undoing it would also take the hand edit away
-    const undoable = latest && !editedSince
-    const [Icon, action] = undoable
-        ? undone
-            ? [Redo2, texts.redo]
-            : [Undo2, texts.undo]
-        : [RotateCcw, texts.restoreV1]
+    const [Icon, action] =
+        latest && onCanvas
+            ? [Undo2, texts.undo]
+            : [RotateCcw, version.n === 1 ? texts.restoreV1 : texts.restoreV2]
     return (
-        <div className="lp-msg mt-2 rounded-xl border border-border bg-card px-2.5 py-2">
+        <div
+            className="lp-msg mt-2 rounded-xl border border-border bg-card px-2.5 py-2"
+            data-demo-card
+        >
             <div className="flex items-center gap-1.5">
                 <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${undoable && !undone ? "bg-marker-soft text-marker-ink" : "bg-muted text-muted-foreground"}`}
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${onCanvas ? "bg-marker-soft text-marker-ink" : "bg-muted text-muted-foreground"}`}
                 >
                     v{version.n}
                 </span>
-                <span
-                    className={`min-w-0 flex-1 truncate text-[12.5px] font-medium ${undone ? "text-muted-foreground" : ""}`}
-                >
-                    {undone ? texts.undone : version.title}
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+                    {version.title}
                 </span>
+                {/* An older version the canvas shows has nothing to restore */}
                 <span
-                    data-demo={latest ? "action" : undefined}
-                    className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11.5px] transition-colors ${pressed ? "bg-accent text-foreground" : "text-muted-foreground"}`}
+                    data-demo={`action-${version.n}`}
+                    className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11.5px] transition-colors ${pressed ? "bg-accent text-foreground" : "text-muted-foreground"} ${onCanvas && !latest ? "opacity-40" : ""}`}
                 >
                     <Icon className="size-3.5" />
                     {action}

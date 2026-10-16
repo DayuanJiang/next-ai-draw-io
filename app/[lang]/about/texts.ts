@@ -63,7 +63,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
                 },
                 {
                     title: "Version history",
-                    text: "Undo or redo any AI change",
+                    text: "Go back to any earlier version",
                 },
             ],
             prompts: {
@@ -169,7 +169,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
                 { title: "生成", text: "AI 按您的描述画图" },
                 { title: "手动编辑", text: "像在 draw.io 里一样拖动图形" },
                 { title: "让 AI 修改", text: "选中图形，告诉 AI 怎么改" },
-                { title: "版本历史", text: "撤销或重做 AI 的任何修改" },
+                { title: "版本历史", text: "随时恢复到之前的版本" },
             ],
             prompts: {
                 draw: "在 AWS 上画一个无服务器 REST API",
@@ -270,7 +270,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
                 },
                 {
                     title: "バージョン履歴",
-                    text: "AI の変更を取り消し・やり直し",
+                    text: "以前のバージョンにいつでも戻せます",
                 },
             ],
             prompts: {
@@ -379,7 +379,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
                 { title: "產生", text: "AI 依照您的描述畫圖" },
                 { title: "手動編輯", text: "像在 draw.io 裡一樣拖曳圖形" },
                 { title: "讓 AI 修改", text: "選取圖形，告訴 AI 怎麼改" },
-                { title: "版本紀錄", text: "復原或重做 AI 的任何修改" },
+                { title: "版本紀錄", text: "隨時還原到之前的版本" },
             ],
             prompts: {
                 draw: "在 AWS 上畫一個無伺服器 REST API",
