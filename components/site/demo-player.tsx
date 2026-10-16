@@ -14,13 +14,14 @@ import {
 import {
     useCallback,
     useEffect,
+    useId,
     useLayoutEffect,
     useMemo,
     useRef,
     useState,
 } from "react"
 import { flushSync } from "react-dom"
-import { SERVERLESS_SVG } from "./serverless-diagram"
+import { SERVERLESS_SVG, withOwnId } from "./serverless-diagram"
 
 /*
  * A scripted demo of the editor on the landing page, in four steps: a prompt
@@ -120,6 +121,8 @@ export function DemoPlayer({
 }) {
     const docs = scene !== undefined || !!tour
     const edges = useMemo(() => [...diagram.edges, ...ADDED_EDGES], [diagram])
+    const uid = useId().replace(/[^a-zA-Z0-9]/g, "")
+    const markup = useMemo(() => withOwnId(diagram.svg, uid), [diagram, uid])
     // The diagram's shape, for its size in the canvas
     const [, , viewWidth, viewHeight] = (
         diagram.svg.match(/viewBox="([^"]+)"/)?.[1] ?? "0 0 731 402"
@@ -744,9 +747,7 @@ export function DemoPlayer({
                             maxWidth: `min(780px, calc((${height} - 56px) * ${aspect.toFixed(3)}))`,
                         }}
                     >
-                        <div
-                            dangerouslySetInnerHTML={{ __html: diagram.svg }}
-                        />
+                        <div dangerouslySetInnerHTML={{ __html: markup }} />
                         {selection && (
                             <div
                                 className="lp-select pointer-events-none absolute"

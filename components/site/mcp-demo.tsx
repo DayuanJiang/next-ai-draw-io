@@ -1,8 +1,8 @@
 "use client"
 
 import { RotateCcw } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
-import { SERVERLESS_SVG } from "./serverless-diagram"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { SERVERLESS_SVG, withOwnId } from "./serverless-diagram"
 
 /*
  * A scripted demo of the MCP server for the docs: in a terminal, the user asks
@@ -34,6 +34,10 @@ export function McpDemo({ texts }: { texts: McpDemoTexts }) {
     const frame = useRef<HTMLDivElement>(null)
     const canvas = useRef<HTMLDivElement>(null)
     const runId = useRef(0)
+    const markup = withOwnId(
+        SERVERLESS_SVG,
+        useId().replace(/[^a-zA-Z0-9]/g, ""),
+    )
     const [typed, setTyped] = useState("")
     const [lines, setLines] = useState<Line[]>([])
     const [working, setWorking] = useState(false)
@@ -230,9 +234,7 @@ export function McpDemo({ texts }: { texts: McpDemoTexts }) {
                     className={`lp-grid relative flex flex-1 items-center justify-center px-2 transition-opacity duration-300 ${preview ? "opacity-100" : "opacity-0"}`}
                 >
                     <div ref={canvas} className="lp-demo w-full">
-                        <div
-                            dangerouslySetInnerHTML={{ __html: SERVERLESS_SVG }}
-                        />
+                        <div dangerouslySetInnerHTML={{ __html: markup }} />
                     </div>
                 </div>
             </div>
