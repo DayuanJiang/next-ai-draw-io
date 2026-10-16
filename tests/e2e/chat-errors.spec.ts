@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test"
-import { openApp, sendMessage } from "./lib/fixtures"
+import { getChatInput, openApp, sendMessage } from "./lib/fixtures"
 
 /** Answer the chat request with the given response and send a message */
 async function chatWith(
@@ -109,3 +109,32 @@ test("a refused server key shows only the quota hint and a settings button", asy
     ).toBeVisible()
     await expect(dialog.getByText("Use your own API key")).toBeVisible()
 })
+
+// The quota toast reads the dictionary: outside its provider it threw and
+// the whole page went to the error screen
+for (const [type, title] of [
+    ["request", "Daily Quota Reached"],
+    ["token", "Daily Token Limit Reached"],
+] as const) {
+    test(`the daily ${type} limit shows its toast and the page stays`, async ({
+        page,
+    }) => {
+        await chatWith(page, {
+            status: 429,
+            contentType: "application/json",
+            body: JSON.stringify({
+                error: "Daily limit exceeded",
+                type,
+                used: 50,
+                limit: 50,
+            }),
+        })
+        await expect(page.getByText(title)).toBeVisible({ timeout: 15000 })
+        await getChatInput(page).fill("Still here")
+        await expect(getChatInput(page)).toHaveValue("Still here")
+        await page.getByRole("button", { name: "Use Your API Key" }).click()
+        await expect(
+            page.getByRole("dialog", { name: "Settings" }),
+        ).toBeVisible()
+    })
+}
