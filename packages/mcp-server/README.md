@@ -28,6 +28,12 @@ claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 
 `--scope user` makes the tools available in every project. Without it, they exist only in the folder where you ran the command.
 
+Or install it as a plugin from the Claude Code community marketplace (Claude Code 2.1.275 or later):
+
+```text
+/plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
+```
+
 **Codex CLI**
 
 ```bash
@@ -76,6 +82,18 @@ Restart the client, then ask, for example, "Read this repo and draw its architec
 - **Versions**: the last 20 versions as cards next to the canvas; restore or compare one, or ask the AI to undo (`restore_version`).
 - **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin, and PNGs a white background (`transparent: true` for none).
 - **Offline**: the draw.io editor ships inside the package.
+
+## Choosing a draw.io MCP server
+
+Several MCP servers draw draw.io diagrams. As of October 2026 they differ like this:
+
+| Server | How you see and change the diagram | A good fit when |
+|---|---|---|
+| This server, `@next-ai-drawio/mcp-server` | A live draw.io canvas in your browser. The AI reads it back, including your hand edits and selection; its changes are outlined, Ctrl+Z takes them back, and earlier versions can be restored | You and the AI take turns on the same diagram |
+| draw.io's official [`@drawio/mcp`](https://github.com/jgraph/drawio-mcp) | Opens each diagram from XML, CSV or Mermaid in the draw.io editor in a new tab; no tool reads it back | You want the diagram in the full draw.io editor and edit it yourself from there |
+| draw.io's hosted MCP app, `https://mcp.draw.io/mcp` | Shows the diagram inside the chat in Claude.ai, ChatGPT, VS Code or Cursor, with nothing to install; the diagram is sent to draw.io's server | You work in a chat app and want to see the diagram in the conversation |
+| draw.io's plugin for Claude Code, Codex CLI and Copilot CLI | A skill that writes `.drawio` files; PNG, SVG and PDF export needs draw.io Desktop | You want diagram files in your repository without an MCP server |
+| [`lgazo/drawio-mcp-server`](https://github.com/lgazo/drawio-mcp-server) | A draw.io editor on localhost, or your own draw.io through a browser extension; tools create, read, update and delete single shapes, layers and pages | You want fine-grained tools, several documents at once, or Mermaid import |
 
 ## Saved diagrams
 

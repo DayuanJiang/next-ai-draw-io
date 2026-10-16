@@ -1,7 +1,8 @@
 {
     "name": "@next-ai-drawio/mcp-server",
-    "version": "0.4.2",
-    "description": "MCP server for Next AI Draw.io - AI-powered diagram generation with real-time browser preview",
+    "version": "0.4.3",
+    "description": "draw.io MCP server for Claude Code, Cursor, Codex and VS Code: the AI draws on a live browser canvas you can also edit by hand, with versions and undo",
+    "mcpName": "io.github.DayuanJiang/next-ai-drawio",
     "type": "module",
     "main": "dist/index.js",
     "bin": {
@@ -20,10 +21,18 @@
     },
     "keywords": [
         "mcp",
+        "mcp-server",
         "drawio",
+        "draw.io",
+        "diagrams.net",
         "diagram",
+        "architecture-diagram",
+        "flowchart",
         "ai",
         "claude",
+        "claude-code",
+        "cursor",
+        "codex",
         "model-context-protocol"
     ],
     "author": "DayuanJiang",
@@ -33,7 +42,7 @@
         "url": "https://github.com/DayuanJiang/next-ai-draw-io",
         "directory": "packages/mcp-server"
     },
-    "homepage": "https://next-ai-drawio.jiang.jp",
+    "homepage": "https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server#readme",
     "bugs": {
         "url": "https://github.com/DayuanJiang/next-ai-draw-io/issues"
     },

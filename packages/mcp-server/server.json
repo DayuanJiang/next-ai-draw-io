@@ -1,0 +1,23 @@
+{
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.DayuanJiang/next-ai-drawio",
+    "title": "Next AI Draw.io",
+    "description": "draw.io diagrams your AI agent draws on a live browser canvas that you can also edit by hand",
+    "repository": {
+        "url": "https://github.com/DayuanJiang/next-ai-draw-io",
+        "source": "github",
+        "subfolder": "packages/mcp-server"
+    },
+    "websiteUrl": "https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server#readme",
+    "version": "0.4.3",
+    "packages": [
+        {
+            "registryType": "npm",
+            "identifier": "@next-ai-drawio/mcp-server",
+            "version": "0.4.3",
+            "transport": {
+                "type": "stdio"
+            }
+        }
+    ]
+}

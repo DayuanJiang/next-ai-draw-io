@@ -113,6 +113,12 @@ Claude Code 用一行命令（`--scope user` 让所有项目都能用）：
 claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
+它也是 Claude Code 社区插件市场里的一个插件（需要 Claude Code 2.1.275 或更高版本）：
+
+```text
+/plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
+```
+
 然后对 AI 说"画一个用户认证流程图，包含登录、MFA 和会话管理"，图会实时出现在浏览器里。MCP 服务器包含网页版的大部分画图能力：
 
 -   同一套画图规则和图标库（AWS、Azure、GCP、Kubernetes 等）
@@ -123,7 +129,11 @@ claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 -   自动保存到 `~/.next-ai-drawio/`，重启后接着画
 -   可以让 AI 撤销修改，也可以在 `~/.next-ai-drawio/instructions.md` 里写下自己的画图规则
 
-VS Code、Cursor 等客户端的配置见 [MCP 服务器 README](../../packages/mcp-server/README.md)。
+VS Code、Cursor 等客户端的配置，以及[和其他 draw.io MCP 服务器的对比](../../packages/mcp-server/README.md#choosing-a-drawio-mcp-server)，见 [MCP 服务器 README](../../packages/mcp-server/README.md)。
+
+### 和 draw.io 自带的 AI 有什么不同
+
+draw.io 自带 Generate 工具（Arrange > Insert > Generate）。它在 draw.io 里运行，可以用免费的托管模型，也可以填自己的 API key；把图、页面或选中的图形附加到对话里，它就能修改。Next AI Draw.io 每条消息都会带上当前画布，包括你手动做的修改；AI 的每次修改都是一个可以对比或恢复的版本；支持 25 家模型服务商，包括通过 Ollama 使用本地模型，在演示站、桌面应用和自己的服务器上都能用。
 
 ## 自己部署
 
