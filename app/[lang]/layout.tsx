@@ -175,8 +175,9 @@ export default async function RootLayout({
                     <LocaleProvider locale={validLang}>
                         <DiagramProvider>{children}</DiagramProvider>
                     </LocaleProvider>
+                    {/* Inside: toasts such as the quota one read the dictionary */}
+                    <AppToaster />
                 </DictionaryProvider>
-                <AppToaster />
             </body>
             {process.env.NEXT_PUBLIC_GA_ID && (
                 <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
