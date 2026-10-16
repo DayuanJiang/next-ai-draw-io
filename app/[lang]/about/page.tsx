@@ -163,11 +163,19 @@ export default async function About({ params }: Props) {
                                 {t.lede}
                             </p>
                             <div className="mt-5 flex flex-wrap items-center gap-3">
+                                {/* The editor has no phone layout: a phone
+                                    gets the docs first */}
                                 <Link
                                     href={`/${lang}`}
-                                    className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background"
+                                    className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background max-md:hidden"
                                 >
                                     {t.primary}
+                                </Link>
+                                <Link
+                                    href={`/${lang}/docs`}
+                                    className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background md:hidden"
+                                >
+                                    {t.phonePrimary}
                                 </Link>
                                 <Link
                                     href={`/${lang}/mcp`}
@@ -329,9 +337,15 @@ export default async function About({ params }: Props) {
                         <div className="flex items-center gap-3">
                             <Link
                                 href={`/${lang}`}
-                                className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background"
+                                className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background max-md:hidden"
                             >
                                 {t.primary}
+                            </Link>
+                            <Link
+                                href={`/${lang}/docs`}
+                                className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background md:hidden"
+                            >
+                                {t.phonePrimary}
                             </Link>
                             <a
                                 href={GITHUB_URL}

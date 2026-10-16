@@ -176,3 +176,8 @@
     font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 0.88em;
 }
+
+/* A long command or address in a sentence breaks on a phone */
+.docs-body :not(pre) > code {
+    overflow-wrap: anywhere;
+}

@@ -9,6 +9,8 @@ export type LandingTexts = {
     h1: string
     lede: string
     primary: string
+    /** In place of `primary` on a phone, where the editor does not fit */
+    phonePrimary: string
     secondary: string
     waysHeading: string
     ways: {
@@ -46,6 +48,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         h1: "Draw and edit draw.io diagrams by chatting with an AI",
         lede: "Describe a diagram and the AI draws it on a real draw.io canvas. Every change it makes is outlined and saved as a version you can restore.",
         primary: "Open the editor",
+        phonePrimary: "Read the docs",
         secondary: "Use it from Claude Code",
         waysHeading: "Three ways to use it",
         ways: {
@@ -135,6 +138,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         h1: "和 AI 对话，绘制和修改 draw.io 图表",
         lede: "描述您想要的图表，AI 会在真正的 draw.io 画布上画出来。它的每次修改都会被框出来，并保存为可以恢复的版本。",
         primary: "打开编辑器",
+        phonePrimary: "查看文档",
         secondary: "在 Claude Code 里使用",
         waysHeading: "三种使用方式",
         ways: {
@@ -215,6 +219,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         h1: "AI と話しながら draw.io の図を描いて編集する",
         lede: "描きたい図を伝えると、AI が本物の draw.io キャンバスに描きます。AI の変更はすべて枠で示され、元に戻せるバージョンとして保存されます。",
         primary: "エディタを開く",
+        phonePrimary: "ドキュメントを見る",
         secondary: "Claude Code から使う",
         waysHeading: "3 つの使い方",
         ways: {
@@ -307,6 +312,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         h1: "和 AI 對話，繪製和修改 draw.io 圖表",
         lede: "描述您想要的圖表，AI 會在真正的 draw.io 畫布上畫出來。它的每次修改都會被框出來，並儲存為可以還原的版本。",
         primary: "開啟編輯器",
+        phonePrimary: "查看文件",
         secondary: "在 Claude Code 裡使用",
         waysHeading: "三種使用方式",
         ways: {

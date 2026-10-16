@@ -165,7 +165,7 @@ export function McpDemo({ texts }: { texts: McpDemoTexts }) {
     return (
         <div
             ref={frame}
-            className="relative grid h-[400px] grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)] gap-3"
+            className="relative grid grid-rows-[250px_230px] gap-3 md:h-[400px] md:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)] md:grid-rows-1"
             data-demo-mcp
         >
             {/* The terminal */}

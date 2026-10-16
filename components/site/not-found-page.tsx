@@ -53,7 +53,7 @@ export function NotFoundPage() {
         document.title = `${t.title} | Next AI Draw.io`
     }, [t.title])
     return (
-        <div className="site lp-grid flex min-h-screen items-center justify-center bg-canvas px-8 text-foreground">
+        <div className="site lp-grid flex min-h-screen items-center justify-center bg-canvas px-6 text-foreground md:px-8">
             <div className="max-w-md text-center">
                 <Link
                     href={`/${lang}/about`}

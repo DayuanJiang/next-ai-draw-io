@@ -143,7 +143,19 @@ export default async function Mcp({ params }: Props) {
     const h2 = "text-[22px] font-semibold tracking-[-0.02em]"
     const th =
         "border-b border-border px-4 py-2.5 text-left text-[13px] font-semibold"
-    const td = "border-b border-border px-4 py-3 align-top"
+    const td =
+        "border-b border-border px-4 py-3 align-top max-md:block max-md:border-0 max-md:px-0 max-md:py-1"
+    // On a phone a table shows its rows as blocks, without the header row
+    const table =
+        "w-full border-collapse text-[14px] leading-relaxed max-md:block max-md:[&_tbody]:block max-md:[&_thead]:hidden"
+    const tr =
+        "max-md:block max-md:border-b max-md:border-border max-md:px-4 max-md:py-3 max-md:last:border-b-0"
+    // The column's name above a cell, on a phone
+    const label = (text: string) => (
+        <span className="block text-[12.5px] font-semibold text-foreground md:hidden">
+            {text}
+        </span>
+    )
 
     return (
         <div className="site min-h-screen bg-canvas text-foreground">
@@ -172,7 +184,7 @@ export default async function Mcp({ params }: Props) {
             />
             <div className="lp-grid border-b border-border">
                 <SiteHeader lang={lang} current="mcp" />
-                <section className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] items-center gap-12 px-8 pt-8 pb-16">
+                <section className="mx-auto grid max-w-7xl items-center gap-9 px-5 pt-6 pb-12 md:px-8 md:pt-8 md:pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-12">
                     <div>
                         <h1 className="text-[clamp(32px,3.2vw,44px)] leading-[1.1] font-semibold tracking-[-0.03em] [text-wrap:balance]">
                             {t.h1}
@@ -207,7 +219,7 @@ export default async function Mcp({ params }: Props) {
             <main>
                 <section
                     id="install"
-                    className="mx-auto max-w-7xl scroll-mt-4 px-8 py-16"
+                    className="mx-auto max-w-7xl scroll-mt-4 px-5 py-12 md:px-8 md:py-16"
                 >
                     <h2 className={h2}>{t.installHeading}</h2>
                     <div className="mt-6 max-w-4xl">
@@ -219,9 +231,9 @@ export default async function Mcp({ params }: Props) {
                 </section>
 
                 <section className="border-y border-border bg-card">
-                    <div className="mx-auto max-w-7xl px-8 py-16">
+                    <div className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
                         <h2 className={h2}>{t.featuresHeading}</h2>
-                        <div className="mt-8 grid grid-cols-3 gap-x-12 gap-y-9">
+                        <div className="mt-8 grid gap-x-12 gap-y-7 sm:grid-cols-2 md:gap-y-9 lg:grid-cols-3">
                             {t.features.map((item) => (
                                 <div key={item.title}>
                                     <h3 className="text-[15.5px] font-semibold">
@@ -236,13 +248,13 @@ export default async function Mcp({ params }: Props) {
                     </div>
                 </section>
 
-                <section className="mx-auto max-w-7xl px-8 py-16">
+                <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
                     <h2 className={h2}>{t.compareHeading}</h2>
                     <p className="mt-2 text-[15px] text-muted-foreground">
                         {t.compareIntro}
                     </p>
                     <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
-                        <table className="w-full border-collapse text-[14px] leading-relaxed">
+                        <table className={table}>
                             <thead className="bg-canvas">
                                 <tr>
                                     {t.compareColumns.map((column) => (
@@ -256,12 +268,10 @@ export default async function Mcp({ params }: Props) {
                                 {t.compareRows.map((row, i) => (
                                     <tr
                                         key={row.server}
-                                        className={
-                                            i === 0 ? "bg-marker-soft/40" : ""
-                                        }
+                                        className={`${tr} ${i === 0 ? "bg-marker-soft/40" : ""}`}
                                     >
                                         <td
-                                            className={`${td} w-[24%] font-medium`}
+                                            className={`${td} font-medium md:w-[24%]`}
                                         >
                                             {COMPARE_LINKS[i] ? (
                                                 <a
@@ -277,9 +287,11 @@ export default async function Mcp({ params }: Props) {
                                         <td
                                             className={`${td} text-muted-foreground`}
                                         >
+                                            {label(t.compareColumns[1])}
                                             <Inline text={row.how} />
                                         </td>
-                                        <td className={`${td} w-[26%]`}>
+                                        <td className={`${td} md:w-[26%]`}>
+                                            {label(t.compareColumns[2])}
                                             {row.fit}
                                         </td>
                                     </tr>
@@ -289,10 +301,10 @@ export default async function Mcp({ params }: Props) {
                     </div>
                 </section>
 
-                <section className="mx-auto max-w-7xl px-8 pb-16">
+                <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8 md:pb-16">
                     <h2 className={h2}>{t.toolsHeading}</h2>
                     <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card">
-                        <table className="w-full border-collapse text-[14px] leading-relaxed">
+                        <table className={table}>
                             <thead className="bg-canvas">
                                 <tr>
                                     {t.toolsColumns.map((column) => (
@@ -304,8 +316,8 @@ export default async function Mcp({ params }: Props) {
                             </thead>
                             <tbody className="[&>tr:last-child>td]:border-b-0">
                                 {TOOLS.map((names, i) => (
-                                    <tr key={names[0]}>
-                                        <td className={`${td} w-[36%]`}>
+                                    <tr key={names[0]} className={tr}>
+                                        <td className={`${td} md:w-[36%]`}>
                                             <span className="flex flex-wrap gap-1.5">
                                                 {names.map((name) => (
                                                     <code
@@ -330,7 +342,7 @@ export default async function Mcp({ params }: Props) {
                 </section>
 
                 <section className="border-t border-border bg-card">
-                    <div className="mx-auto max-w-7xl px-8 py-14">
+                    <div className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-14">
                         <h2 className={h2}>{t.moreHeading}</h2>
                         <p className="mt-2 max-w-[48em] text-[15px] leading-relaxed text-muted-foreground">
                             {t.moreText}
