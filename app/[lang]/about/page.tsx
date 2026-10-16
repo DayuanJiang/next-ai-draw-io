@@ -9,6 +9,9 @@ import { localeAlternates, OG_IMAGE, OG_LOCALE } from "@/lib/seo"
 
 type ExampleId = "resnet50" | "rag" | "auth" | "scrum" | "inno"
 
+const MCP_INSTALL =
+    "claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest"
+
 type AboutTexts = {
     title: string
     description: string
@@ -35,8 +38,14 @@ type AboutTexts = {
     bedrock: string
     // Text around the OPENAI_BASE_URL code span
     openai: { before: string; after: string }
-    // Text around the claude-sonnet-4-5 code span
-    modelNote: { before: string; after: string }
+    mcp: {
+        heading: string
+        body: string
+        // Text around the MCP server README link
+        more: { before: string; link: string; after: string }
+    }
+    // Text around the Releases page link
+    desktop: { heading: string; before: string; link: string; after: string }
     supportHeading: string
     // Text around the sponsor link
     sponsor: { before: string; link: string; after: string }
@@ -46,7 +55,7 @@ type AboutTexts = {
     footer: string
 }
 
-const texts: Record<"en" | "zh" | "ja", AboutTexts> = {
+const texts: Record<Locale, AboutTexts> = {
     en: {
         title: "About - Next AI Draw.io",
         description:
@@ -129,9 +138,20 @@ const texts: Record<"en" | "zh" | "ja", AboutTexts> = {
         doubao: "ByteDance Doubao",
         bedrock: "AWS Bedrock (default)",
         openai: { before: "OpenAI / OpenAI-compatible APIs (via ", after: ")" },
-        modelNote: {
-            before: "Note that ",
-            after: " has trained on draw.io diagrams with AWS logos, so if you want to create AWS architecture diagrams, this is the best choice.",
+        mcp: {
+            heading: "In Your AI Agent (MCP)",
+            body: "The MCP server lets Claude Code, Cursor, Codex, VS Code and other AI agents draw on the same canvas, with a live preview in your browser. The agent reads your project's files with its own tools and draws from them. In Claude Code, one command installs it:",
+            more: {
+                before: "Other clients, the Claude Code plugin and a comparison with other draw.io MCP servers are in the",
+                link: "MCP server README",
+                after: ".",
+            },
+        },
+        desktop: {
+            heading: "Desktop App",
+            before: "Installers for Windows, macOS and Linux are on the",
+            link: "Releases page",
+            after: ".",
         },
         supportHeading: "Support & Contact",
         sponsor: {
@@ -219,9 +239,20 @@ const texts: Record<"en" | "zh" | "ja", AboutTexts> = {
         doubao: "字节跳动豆包",
         bedrock: "AWS Bedrock（默认）",
         openai: { before: "OpenAI / OpenAI兼容API（通过 ", after: "）" },
-        modelNote: {
-            before: "注意：",
-            after: " 已在带有AWS标志的draw.io图表上进行训练，因此如果您想创建AWS架构图，这是最佳选择。",
+        mcp: {
+            heading: "在 AI 代理里使用（MCP）",
+            body: "通过 MCP 服务器，Claude Code、Cursor、Codex、VS Code 等 AI 代理可以在同一块画布上画图，并在浏览器里实时预览。代理用自己的工具读取项目里的文件，再根据它们画图。在 Claude Code 里，一行命令就能装好：",
+            more: {
+                before: "其他客户端的配置、Claude Code 插件，以及和其他 draw.io MCP 服务器的对比，见",
+                link: "MCP 服务器 README",
+                after: "。",
+            },
+        },
+        desktop: {
+            heading: "桌面应用",
+            before: "Windows、macOS 和 Linux 的安装包可以在",
+            link: "Releases 页面",
+            after: "下载。",
         },
         supportHeading: "支持与联系",
         sponsor: {
@@ -322,9 +353,20 @@ const texts: Record<"en" | "zh" | "ja", AboutTexts> = {
         doubao: "ByteDance Doubao",
         bedrock: "AWS Bedrock（デフォルト）",
         openai: { before: "OpenAI / OpenAI互換API（", after: "経由）" },
-        modelNote: {
-            before: "注：",
-            after: "はAWSロゴ付きのdraw.ioダイアグラムで学習されているため、AWSアーキテクチャダイアグラムを作成したい場合は最適な選択です。",
+        mcp: {
+            heading: "AI エージェントから使う（MCP）",
+            body: "MCP サーバーを使うと、Claude Code、Cursor、Codex、VS Code などの AI エージェントが同じキャンバスに図を描けます。ブラウザでリアルタイムにプレビューされます。エージェントは自分のツールでプロジェクトのファイルを読み、それをもとに図を描きます。Claude Code ならコマンド一つでインストールできます。",
+            more: {
+                before: "ほかのクライアントの設定、Claude Code プラグイン、ほかの draw.io MCP サーバーとの比較は",
+                link: "MCP サーバーの README",
+                after: " にあります。",
+            },
+        },
+        desktop: {
+            heading: "デスクトップアプリ",
+            before: "Windows、macOS、Linux 向けのインストーラーは",
+            link: "Releases ページ",
+            after: " からダウンロードできます。",
         },
         supportHeading: "サポート＆お問い合わせ",
         sponsor: {
@@ -339,6 +381,107 @@ const texts: Record<"en" | "zh" | "ja", AboutTexts> = {
         },
         openEditor: "エディタを開く",
         footer: "Next AI Draw.io - オープンソースAI搭載ダイアグラムジェネレーター",
+    },
+    "zh-Hant": {
+        title: "關於 - Next AI Draw.io",
+        description:
+            "AI 驅動的圖表建立工具：對話、繪製、視覺化。用自然語言建立 AWS、GCP 和 Azure 架構圖。",
+        keywords: [
+            "AI 圖表",
+            "draw.io",
+            "AWS 架構",
+            "GCP 圖表",
+            "Azure 圖表",
+            "LLM",
+        ],
+        nav: { editor: "編輯器", about: "關於", github: "在 GitHub 上查看" },
+        tagline: "AI 驅動的圖表建立工具：對話、繪製、視覺化",
+        byok: {
+            title: "使用自己的 API Key",
+            body: "您也可以使用自己的 API Key，支援多種服務商。點擊聊天面板中的設定圖示即可設定。",
+            note: "您的 Key 只儲存在瀏覽器本機，不會儲存在伺服器上。",
+        },
+        intro: "一個整合 AI 功能的 Next.js 網頁應用，與 draw.io 圖表無縫結合。透過自然語言指令和 AI 輔助視覺化來建立、修改和增強圖表。",
+        colon: "：",
+        parenOpen: "（",
+        parenClose: "）",
+        featuresHeading: "功能特色",
+        features: [
+            {
+                title: "LLM 驅動的圖表建立",
+                text: "利用大型語言模型，透過自然語言指令直接建立和操作 draw.io 圖表",
+            },
+            {
+                title: "以圖片重現圖表",
+                text: "上傳現有的圖表或圖片，讓 AI 自動重現並改進",
+            },
+            {
+                title: "版本與復原",
+                text: "AI 的每次修改都會成為聊天裡的一個版本，可以比較、還原或復原；在畫布上按 Ctrl+Z 也能撤回",
+            },
+            {
+                title: "互動式聊天介面",
+                text: "與 AI 即時對話來完善您的圖表",
+            },
+            { title: "AWS 架構圖支援", text: "專門支援產生 AWS 架構圖" },
+            {
+                title: "動畫連接線",
+                text: "在圖表元素之間建立動畫連接線，讓視覺效果更好",
+            },
+        ],
+        examplesHeading: "範例",
+        examplesIntro: "以下是一些範例提示詞及其產生的圖表：",
+        examples: {
+            resnet50: {
+                title: "ResNet50 模型架構動畫",
+                alt: "ResNet50 模型架構圖",
+            },
+            rag: { title: "RAG 技術圖", alt: "RAG 架構圖" },
+            auth: { title: "React 和 AWS 認證流程", alt: "認證架構圖" },
+            scrum: { title: "敏捷 Scrum 流程", alt: "敏捷 Scrum 流程圖" },
+            inno: { title: "開放式創新", alt: "開放式創新圖" },
+        },
+        howHeading: "運作原理",
+        howIntro: "本應用使用以下技術：",
+        tech: {
+            nextjs: "用於前端框架和路由",
+            aiSdk: "用於串流 AI 回應和多服務商支援",
+            drawio: "內建在應用裡的編輯器，應用可以直接控制它",
+        },
+        howOutro:
+            "圖表以 XML 格式表示，可在 draw.io 中呈現。AI 會處理您的指令，並據此產生或修改這份 XML。",
+        providersHeading: "多服務商支援",
+        doubao: "字節跳動豆包",
+        bedrock: "AWS Bedrock（預設）",
+        openai: { before: "OpenAI / OpenAI 相容 API（透過 ", after: "）" },
+        mcp: {
+            heading: "在 AI 代理裡使用（MCP）",
+            body: "透過 MCP 伺服器，Claude Code、Cursor、Codex、VS Code 等 AI 代理可以在同一塊畫布上畫圖，並在瀏覽器裡即時預覽。代理會用自己的工具讀取專案裡的檔案，再根據它們畫圖。在 Claude Code 裡，一行指令就能安裝：",
+            more: {
+                before: "其他用戶端的設定、Claude Code 外掛，以及和其他 draw.io MCP 伺服器的比較，請見",
+                link: "MCP 伺服器 README",
+                after: "。",
+            },
+        },
+        desktop: {
+            heading: "桌面應用程式",
+            before: "Windows、macOS 和 Linux 的安裝程式可以在",
+            link: "Releases 頁面",
+            after: "下載。",
+        },
+        supportHeading: "支援與聯絡",
+        sponsor: {
+            before: "如果您覺得這個專案有用，請考慮",
+            link: "贊助",
+            after: "來協助維持線上展示網站！",
+        },
+        contact: {
+            before: "如需支援或諮詢，請在",
+            link: "GitHub 儲存庫",
+            after: "上提交 issue 或聯絡：me[at]jiang.jp",
+        },
+        openEditor: "開啟編輯器",
+        footer: "Next AI Draw.io：開源 AI 驅動的圖表產生器",
     },
 }
 
@@ -397,10 +540,8 @@ const examples: { id: ExampleId; src: string; prompt: ReactNode }[] = [
     },
 ]
 
-// Traditional Chinese has no About text of its own and shows the Simplified one
 function textsFor(rawLang: string): AboutTexts {
-    const lang: Locale = hasLocale(rawLang) ? rawLang : "en"
-    return texts[lang === "zh-Hant" ? "zh" : lang]
+    return texts[hasLocale(rawLang) ? rawLang : "en"]
 }
 
 type Props = { params: Promise<{ lang: string }> }
@@ -576,6 +717,44 @@ export default async function About({ params }: Props) {
                         </div>
                     </div>
 
+                    {/* MCP server */}
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        {t.mcp.heading}
+                    </h2>
+                    <p className="text-gray-700">{t.mcp.body}</p>
+                    <pre className="bg-gray-900 text-gray-100 text-sm rounded-lg p-4 overflow-x-auto">
+                        <code>{MCP_INSTALL}</code>
+                    </pre>
+                    <p className="text-gray-700">
+                        {t.mcp.more.before}{" "}
+                        <a
+                            href="https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server#readme"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
+                            {t.mcp.more.link}
+                        </a>
+                        {t.mcp.more.after}
+                    </p>
+
+                    {/* Desktop app */}
+                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
+                        {t.desktop.heading}
+                    </h2>
+                    <p className="text-gray-700">
+                        {t.desktop.before}{" "}
+                        <a
+                            href="https://github.com/DayuanJiang/next-ai-draw-io/releases/latest"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                        >
+                            {t.desktop.link}
+                        </a>
+                        {t.desktop.after}
+                    </p>
+
                     {/* How It Works */}
                     <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
                         {t.howHeading}
@@ -625,11 +804,6 @@ export default async function About({ params }: Props) {
                         <li>SiliconFlow</li>
                         <li>ModelScope</li>
                     </ul>
-                    <p className="text-gray-700 mt-4">
-                        {t.modelNote.before}
-                        <code>claude-sonnet-4-5</code>
-                        {t.modelNote.after}
-                    </p>
 
                     {/* Support */}
                     <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
