@@ -4,6 +4,7 @@ import Link from "next/link"
 import { CopyCommand } from "@/components/site/copy-command"
 import { Inline } from "@/components/site/inline"
 import { JsonLd } from "@/components/site/json-ld"
+import { PromoVideo } from "@/components/site/promo-video"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import {
@@ -12,7 +13,6 @@ import {
     NPM_URL,
     SITE_TEXTS,
 } from "@/components/site/site-texts"
-import { getAssetUrl } from "@/lib/base-path"
 import type { Locale } from "@/lib/i18n/config"
 import { hasLocale } from "@/lib/i18n/dictionaries"
 import { localeAlternates, OG_IMAGE, OG_LOCALE, SITE_URL } from "@/lib/seo"
@@ -199,18 +199,7 @@ export default async function Mcp({ params }: Props) {
                         </div>
                     </div>
                     <div className="overflow-hidden rounded-xl border border-border bg-black shadow-[0_30px_80px_-40px_rgba(20,24,29,0.55)]">
-                        <video
-                            src={getAssetUrl("/mcp-promo.mp4")}
-                            poster={getAssetUrl("/mcp-promo-poster.jpg")}
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                            controls
-                            preload="metadata"
-                            aria-label={t.video}
-                            className="aspect-video w-full"
-                        />
+                        <PromoVideo label={t.video} />
                     </div>
                 </section>
             </div>
