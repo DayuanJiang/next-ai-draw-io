@@ -614,11 +614,14 @@ export function DemoPlayer({
             runId.current++
         }
         if (docs) {
-            // A page of docs can hold several demos: each starts when seen
+            // A page of docs can hold several demos: each starts when seen,
+            // unless a click on a step tab started it already
+            const before = runId.current
             const seen = new IntersectionObserver(
                 ([entry]) => {
                     if (!entry.isIntersecting) return
                     seen.disconnect()
+                    if (runId.current !== before) return
                     if (scene === undefined) play()
                     else play(scene, scene)
                 },

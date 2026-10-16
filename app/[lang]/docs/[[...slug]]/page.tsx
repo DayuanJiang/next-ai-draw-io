@@ -109,7 +109,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             type: "article",
             url: `/${doc.locale}${path}`,
             siteName: "Next AI Draw.io",
-            locale: OG_LOCALE[lang],
+            // The language the text is in, as for the canonical URL
+            locale: OG_LOCALE[doc.locale],
             images: [{ ...OG_IMAGE, alt: doc.title }],
         },
         twitter: {
@@ -136,7 +137,7 @@ export default async function DocsPage({ params }: Props) {
               : t.inSimplified
 
     const url = `${SITE_URL}/${doc.locale}${docsPath(file)}`
-    const docsHome = `${SITE_URL}/${lang}/docs`
+    const docsHome = `${SITE_URL}/${doc.locale}/docs`
     return (
         <div className="site min-h-screen bg-canvas text-foreground">
             <JsonLd

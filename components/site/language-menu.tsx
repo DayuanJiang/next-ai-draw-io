@@ -18,6 +18,7 @@ export function LanguageMenu({
 }) {
     const [open, setOpen] = useState(false)
     const menu = useRef<HTMLDivElement>(null)
+    const button = useRef<HTMLButtonElement>(null)
     const listId = useId()
     // The page without its locale, "/about" for "/zh/about"
     const rest = (usePathname() ?? "").replace(/^\/[^/]+/, "")
@@ -34,6 +35,8 @@ export function LanguageMenu({
                 return
             }
             setOpen(false)
+            // Escape may close the list while one of its links has focus
+            if (event instanceof KeyboardEvent) button.current?.focus()
         }
         document.addEventListener("mousedown", close)
         document.addEventListener("keydown", close)
@@ -46,6 +49,7 @@ export function LanguageMenu({
     return (
         <div ref={menu} className="relative">
             <button
+                ref={button}
                 type="button"
                 onClick={() => setOpen((o) => !o)}
                 className="rounded-lg p-2 hover:bg-foreground/[0.07] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring aria-expanded:bg-foreground/[0.07] aria-expanded:text-foreground"
