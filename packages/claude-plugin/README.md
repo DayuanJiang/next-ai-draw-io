@@ -4,12 +4,13 @@ AI-powered Draw.io diagram generation with real-time browser preview for Claude 
 
 ## Installation
 
-### From Plugin Directory (Coming Soon)
+### From the Claude Code community marketplace
 
-Once approved, install via:
 ```
-/plugin install next-ai-drawio
+/plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
 ```
+
+This needs Claude Code 2.1.275 or later. On an older version, run `/plugin marketplace add anthropics/claude-plugins-community` first, then `/plugin install next-ai-drawio@claude-community`.
 
 ### Manual Installation
 

@@ -113,6 +113,12 @@ For Claude Code, one command does it (`--scope user` makes it available in every
 claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
+It is also a plugin in the Claude Code community marketplace (Claude Code 2.1.275 or later):
+
+```text
+/plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
+```
+
 Then ask the AI for "a flowchart of user authentication with login, MFA and session management" and the diagram appears in your browser as it is drawn. The MCP server has most of the web app's drawing features:
 
 -   The same drawing rules and icon libraries (AWS, Azure, GCP, Kubernetes and more)
@@ -123,7 +129,11 @@ Then ask the AI for "a flowchart of user authentication with login, MFA and sess
 -   Auto-save to `~/.next-ai-drawio/`, so a diagram survives a restart
 -   Ask the AI to undo, and keep your own drawing rules in `~/.next-ai-drawio/instructions.md`
 
-See the [MCP server README](./packages/mcp-server/README.md) for VS Code, Cursor and other client configurations.
+See the [MCP server README](./packages/mcp-server/README.md) for VS Code, Cursor and other client configurations, and for [how it compares with other draw.io MCP servers](./packages/mcp-server/README.md#choosing-a-drawio-mcp-server).
+
+### Compared with draw.io's built-in AI
+
+draw.io has its own Generate tool (Arrange > Insert > Generate). It runs inside draw.io on a free hosted model or your own API key, and it can change a diagram, page or selection that you attach to its chat. Next AI Draw.io sends the current canvas, including your hand edits, with every message, turns every AI change into a version you can compare or restore, and works with 25 providers, including local models through Ollama, on the demo site, in the desktop app or on your own server.
 
 ## Self-host
 

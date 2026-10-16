@@ -113,6 +113,12 @@ Claude Code ならコマンド一つです（`--scope user` を付けると、�
 claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
+Claude Code のコミュニティプラグインマーケットプレイスにもプラグインとして登録されています（Claude Code 2.1.275 以降）。
+
+```text
+/plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
+```
+
 あとは AI に「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを描いて」と頼めば、描かれていく様子がブラウザに表示されます。MCP サーバーには Web アプリの作図機能のほとんどが入っています。
 
 -   同じ作図ルールとアイコンライブラリ（AWS、Azure、GCP、Kubernetes など）
@@ -123,7 +129,11 @@ claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 -   `~/.next-ai-drawio/` への自動保存。再起動後も続きから描ける
 -   AI に元に戻す操作を頼める。独自の作図ルールは `~/.next-ai-drawio/instructions.md` に書ける
 
-VS Code、Cursor などの設定は [MCP サーバーの README](../../packages/mcp-server/README.md) を参照してください。
+VS Code、Cursor などの設定と[ほかの draw.io MCP サーバーとの比較](../../packages/mcp-server/README.md#choosing-a-drawio-mcp-server)は、[MCP サーバーの README](../../packages/mcp-server/README.md) を参照してください。
+
+### draw.io 標準の AI との違い
+
+draw.io には Generate ツール（Arrange > Insert > Generate）があります。draw.io の中で無料のホスト型モデルか自分の API キーで動き、チャットに添付したダイアグラム、ページ、選択中の図形を変更できます。Next AI Draw.io はメッセージごとに、手作業の変更も含めた現在のキャンバスを送ります。AI の変更はすべてバージョンになり、比較や復元ができます。Ollama のローカルモデルを含む 25 のプロバイダーに対応し、デモサイト、デスクトップアプリ、自分のサーバーのどれでも使えます。
 
 ## 自分でホストする
 
