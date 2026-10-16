@@ -16,7 +16,7 @@
 
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import path from "node:path"
+import path, { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
@@ -288,5 +288,57 @@ describe("MCP server wiring with a session, without a preview tab", () => {
                 "classic preview page cannot read the selection",
             )
         }
+    })
+
+    it("tells the model what each write did and that the outline is no part of the diagram", async () => {
+        const box = (id: string, label: string, x: number) =>
+            `<mxCell id="${id}" value="${label}" x="${x}" y="40" w="120" h="60"/>`
+        const created = textOf(
+            await callTool("create_new_diagram", { xml: box("2", "A", 40) }),
+        )
+        expect(created).toContain("never edit the diagram to remove it")
+        // An update that sends the cell as it is changes nothing
+        const edited = textOf(
+            await callTool("edit_diagram", {
+                operations: [
+                    {
+                        operation: "update",
+                        cell_id: "2",
+                        new_xml: box("2", "A", 40),
+                    },
+                    {
+                        operation: "add",
+                        cell_id: "3",
+                        new_xml: box("3", "B", 240),
+                    },
+                ],
+            }),
+        )
+        expect(edited).toContain(
+            "1 of them changed nothing (id 2 already matched)",
+        )
+        const added = textOf(await callTool("add_page", { name: "Sequence" }))
+        expect(added).toContain('The first page is still called "Page-1"')
+        // restore_version names who made each version and what it changed:
+        // back to the first drawing, two steps
+        const restored = textOf(
+            await callTool("restore_version", { steps_back: 2 }),
+        )
+        expect(restored).toContain(
+            "steps_back=1 (the version you just left): added a page;",
+        )
+        expect(restored).toContain("steps_back=2: AI change, added 1 shape;")
+        // A file opened by path is saved back with export_diagram (which,
+        // like get_diagram, waits for the preview tab this test has not)
+        const path = join(dataDir, "flow.drawio")
+        writeFileSync(path, SAVED_DIAGRAM)
+        const loaded = textOf(await callTool("load_diagram", { path }))
+        expect(loaded).toContain(`call export_diagram with path ${path}`)
+    })
+
+    it("advertises transparent on export_diagram", async () => {
+        const props = await properties("export_diagram")
+        const transparent = props.transparent as { type?: string } | undefined
+        expect(transparent?.type).toBe("boolean")
     })
 })

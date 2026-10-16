@@ -387,6 +387,8 @@ describe("Autosaver History", () => {
             { id: 1, xml: BLANK, source: "user" },
             { id: 2, xml: V2, source: "restore" },
             { id: 3, xml: V1, source: "recover" },
+            { id: 4, xml: V2, source: "load" },
+            { id: 5, xml: V1, source: "add_page" },
         ])
         saver.schedule("mcp-who", V1)
         saver.flush()
@@ -395,6 +397,8 @@ describe("Autosaver History", () => {
             { xml: BLANK, source: "user" },
             { xml: V2, source: "restore" },
             { xml: V1, source: "recover" },
+            { xml: V2, source: "load" },
+            { xml: V1, source: "add_page" },
         ])
         // A source the server does not know is left out
         writeFileSync(

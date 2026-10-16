@@ -107,10 +107,10 @@ https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
 }
 ```
 
-Claude Code 用一行命令：
+Claude Code 用一行命令（`--scope user` 让所有项目都能用）：
 
 ```bash
-claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 然后对 AI 说"画一个用户认证流程图，包含登录、MFA 和会话管理"，图会实时出现在浏览器里。MCP 服务器包含网页版的大部分画图能力：

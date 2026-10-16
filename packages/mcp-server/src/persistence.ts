@@ -41,7 +41,13 @@ export interface SavedHistoryEntry {
     source?: HistorySource
 }
 
-const SOURCES: readonly string[] = ["user", "recover", "restore"]
+const SOURCES: readonly string[] = [
+    "user",
+    "recover",
+    "restore",
+    "load",
+    "add_page",
+]
 const isSource = (v: unknown): v is HistorySource =>
     typeof v === "string" && SOURCES.includes(v)
 

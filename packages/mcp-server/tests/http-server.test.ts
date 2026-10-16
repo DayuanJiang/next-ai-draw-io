@@ -35,6 +35,7 @@ import {
     requestSync,
     restoreHistoryEntry,
     setDrawioDir,
+    setSessionFile,
     setShellDir,
     setState,
     shellConfig,
@@ -366,6 +367,47 @@ describe("POST /api/state", () => {
         })
         expect(late.status).toBe(409)
         expect(getState(id)?.xml).toBe("<mxfile>B</mxfile>")
+    })
+})
+
+describe("the file named in the preview's header", () => {
+    const fileOf = async (id: string) => {
+        const res = await request(`/api/state?sessionId=${id}`)
+        const { file, fileChanged } = JSON.parse(res.body)
+        return { file, fileChanged }
+    }
+
+    it("tells when the diagram changed since the file was opened or saved", async () => {
+        const id = "mcp-file-changed"
+        const version = setState(id, "<mxfile>opened</mxfile>")
+        setSessionFile(id, "/work/arch.drawio")
+        expect(await fileOf(id)).toEqual({
+            file: "/work/arch.drawio",
+            fileChanged: false,
+        })
+        // A sync reply is draw.io's copy of the same diagram
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: "<mxfile>opened, as draw.io writes it</mxfile>",
+            baseVersion: version,
+            source: "sync",
+        })
+        expect((await fileOf(id)).fileChanged).toBe(false)
+        // A hand edit
+        await postJson("/api/state", {
+            sessionId: id,
+            xml: "<mxfile>edited by hand</mxfile>",
+            baseVersion: version,
+        })
+        expect((await fileOf(id)).fileChanged).toBe(true)
+        // Saved to the file again (export_diagram), then an AI write
+        setSessionFile(id, "/work/arch.drawio")
+        expect((await fileOf(id)).fileChanged).toBe(false)
+        setState(id, "<mxfile>AI edit</mxfile>")
+        expect((await fileOf(id)).fileChanged).toBe(true)
+        // A new diagram is in no file
+        setSessionFile(id, null)
+        expect(await fileOf(id)).toEqual({ file: null, fileChanged: false })
     })
 })
 

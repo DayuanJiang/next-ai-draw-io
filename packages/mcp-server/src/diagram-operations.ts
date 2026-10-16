@@ -27,6 +27,8 @@ export interface OperationError {
 export interface ApplyOperationsResult {
     result: string
     errors: OperationError[]
+    /** Ids of updates whose new cell was the same as the old one */
+    unchanged: string[]
 }
 
 // Cells with links, tooltips or custom data are stored as
@@ -70,6 +72,27 @@ function ensurePageRoot(doc: Document, page: Element): Element | null {
     return model.appendChild(
         doc.importNode(blank.documentElement, true),
     ) as Element
+}
+
+/**
+ * A cell as text with its attributes in order, so an update that sends a
+ * cell as it already was counts as no change. The style keys keep their
+ * order: draw.io uses the last value of a repeated key, so reordering them
+ * can change the cell
+ */
+function cellKey(el: Element): string {
+    const attrs = Array.from(el.attributes)
+        .map((a) => {
+            const value =
+                a.name === "style"
+                    ? a.value.split(";").filter(Boolean).join(";")
+                    : a.value
+            return `${a.name}=${JSON.stringify(value)}`
+        })
+        .sort()
+        .join(" ")
+    const children = Array.from(el.children).map(cellKey).join("")
+    return `<${el.tagName} ${attrs}>${children}</${el.tagName}>`
 }
 
 /** Read parent/source/target, which a wrapped cell keeps on its inner mxCell. */
@@ -127,6 +150,7 @@ export function applyDiagramOperations(
     if (parseError) {
         return {
             result: xmlContent,
+            unchanged: [],
             errors: [
                 {
                     type: "update",
@@ -154,6 +178,7 @@ export function applyDiagramOperations(
                 : ""
             return {
                 result: xmlContent,
+                unchanged: [],
                 errors: [
                     {
                         type: "update",
@@ -169,6 +194,7 @@ export function applyDiagramOperations(
                 found.element.getAttribute("id") || `(index ${found.index})`
             return {
                 result: xmlContent,
+                unchanged: [],
                 errors: [
                     {
                         type: "update",
@@ -182,6 +208,7 @@ export function applyDiagramOperations(
         if (hasPageSelector(pageSelector)) {
             return {
                 result: xmlContent,
+                unchanged: [],
                 errors: [
                     {
                         type: "update",
@@ -196,6 +223,7 @@ export function applyDiagramOperations(
         if (!root) {
             return {
                 result: xmlContent,
+                unchanged: [],
                 errors: [
                     {
                         type: "update",
@@ -219,6 +247,7 @@ export function applyDiagramOperations(
     })
     // Ids deleted so far in this batch; deleting one again is a no-op
     const deletedIds = new Set<string>()
+    const unchanged: string[] = []
 
     // Process each operation
     for (const op of operations) {
@@ -243,6 +272,9 @@ export function applyDiagramOperations(
                 continue
             }
 
+            if (cellKey(newCell) === cellKey(existingCell)) {
+                unchanged.push(op.cell_id)
+            }
             existingCell.parentNode?.replaceChild(newCell, existingCell)
             cellMap.set(op.cell_id, newCell)
         } else if (op.operation === "add") {
@@ -356,5 +388,5 @@ export function applyDiagramOperations(
     const serializer = new XMLSerializer()
     const result = serializer.serializeToString(doc)
 
-    return { result, errors }
+    return { result, errors, unchanged }
 }

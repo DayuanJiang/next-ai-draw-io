@@ -19,6 +19,7 @@ import { contentFingerprint } from "@/packages/mcp-server/src/edit-gate.ts"
 import {
     normalizeToMxfile,
     parseMxfile,
+    projectPage,
     serializeMxfile,
 } from "@/packages/mcp-server/src/pages.ts"
 import type { SelectionAnswer } from "@/packages/mcp-server/src/selection.ts"
@@ -34,13 +35,24 @@ export interface ServerState {
     syncRequested: boolean
     exportFormat: ExportFormat | null
     exportXml: string | null
-    exportOptions: { width?: number; pageId?: string } | null
+    /** draw.io export parameters (src/http-server.ts ExportOptions) */
+    exportOptions: {
+        width?: number
+        pageId?: string
+        border?: number
+        background?: string
+        transparent?: boolean
+    } | null
     exportId: string | null
     /** A get_selection request waiting for this tab's answer */
     selectionId?: string | null
     /** Changes when History or the entry on the canvas does (the version
      * cards read History again then); older servers send none */
     historyKey?: string
+    /** The file the diagram was opened from or last saved to */
+    file?: string | null
+    /** The diagram changed since that file was read or written */
+    fileChanged?: boolean
 }
 
 /** An entry of GET /api/history */
@@ -49,7 +61,8 @@ export interface HistoryEntryInfo {
     index: number
     svg: string
     xml: string
-    /** Who made it: "user", "recover", "restore"; null for the AI's writes */
+    /** Who made it: "user", "recover", "restore", "load", "add_page"; null
+     * for the AI's other writes */
     source: string | null
     /** The oldest entry with the same content (itself when it is the first) */
     firstId: number
@@ -66,11 +79,13 @@ export interface HistoryList {
 /**
  * How a server write goes on the canvas: as one undo step on the page the
  * user is viewing (the editor highlights it and Ctrl+Z takes it back), or
- * as a full load of the document (see decideLoad)
+ * as a full load of the document (see decideLoad). pageId of a full load:
+ * the page to show after it, the one the write changed; absent: the page
+ * the user was on
  */
 export type LoadDecision =
     | { mode: "commit"; pageId: string | null }
-    | { mode: "load" }
+    | { mode: "load"; pageId?: string }
 
 export interface ExportRequest {
     format: string
@@ -157,8 +172,9 @@ export interface McpSync {
         listStateId: string | null,
     ): Promise<"ok" | "stale" | "failed">
     /** Called when the server's diagram or History changed (a write
-     * loaded, an edit saved, a thumbnail sent, the state recreated): the
-     * version cards read History again. Returns the unsubscribe */
+     * loaded, an edit saved, a thumbnail sent, the state recreated) or the
+     * file it names: the version cards read History again, the header the
+     * file. Returns the unsubscribe */
     onServerChange(listener: () => void): () => void
     /** For tests and the status bar */
     read(): {
@@ -168,10 +184,20 @@ export interface McpSync {
         latestXml: string | null
         projectionActive: boolean
         status: SyncStatus
+        /** The file the server names for the diagram (the header shows it) */
+        file: string | null
+        /** The diagram changed since that file was read or written */
+        fileChanged: boolean
     }
 }
 
 export const POLL_INTERVAL_MS = 2000
+
+// A hand edit this recent means the user is working on the page on screen
+const EDITING_MS = 10_000
+
+// Width cap of a thumbnail drawn as a PNG (the card shows it at about 300 px)
+const THUMBNAIL_WIDTH = 600
 
 /** The API token the server wrote into a shell page (window.__MCP_CONFIG__) */
 export function tokenFromPage(html: string): string | null {
@@ -267,6 +293,40 @@ export function decideLoad(
     return { mode: "commit", pageId: target.getAttribute("id") }
 }
 
+/**
+ * The one page a server write changed (a page it added counts), by its id,
+ * compared as the MCP core compares pages (names and cells); null when it
+ * changed none or several, or a page of the write has no id
+ */
+export function changedPageId(
+    currentXml: string,
+    nextXml: string,
+): string | null {
+    const normalize = (xml: string) => normalizeToMxfile(xml) ?? xml
+    const ids = (xml: string) => {
+        const doc = parseMxfile(normalize(xml))
+        return doc
+            ? Array.from(doc.querySelectorAll("diagram")).map((page) =>
+                  page.getAttribute("id"),
+              )
+            : null
+    }
+    const before = ids(currentXml)
+    const after = ids(nextXml)
+    if (!before || !after) return null
+    const page = (xml: string, id: string) => {
+        const projection = projectPage(normalize(xml), { page_id: id })
+        return projection.ok ? contentFingerprint(projection.xml) : null
+    }
+    const changed: string[] = []
+    for (const id of after) {
+        if (!id) return null
+        if (!before.includes(id) || page(currentXml, id) !== page(nextXml, id))
+            changed.push(id)
+    }
+    return changed.length === 1 ? changed[0] : null
+}
+
 export function createMcpSync(options: SyncOptions): McpSync {
     const { sessionId, apiBase, canvas, onNotice, onStatus } = options
     const fetchFn = options.fetch ?? ((...args) => globalThis.fetch(...args))
@@ -294,12 +354,20 @@ export function createMcpSync(options: SyncOptions): McpSync {
     // The edit whose SVG export is pending, and what it was based on
     let pendingSvgExport: string | null = null
     // The latest thumbnail export of a loaded server write: the state and
-    // version it showed, and the XML loaded
+    // version it showed, the XML loaded, and the one page it changed
     let thumbExport: {
         stateId: string | null
         version: number
         xml: string
+        pageId?: string | null
     } | null = null
+    // When the user last changed the canvas: a write on another page does
+    // not take them away from the page they are editing
+    let lastEditAt = 0
+    // The file the server names for the diagram, and whether the diagram
+    // changed since
+    let file: string | null = null
+    let fileChanged = false
     // Its picture was not taken because the user had changed the canvas by
     // then: taken when the canvas shows the write again (an undo)
     let thumbMissed = false
@@ -400,10 +468,22 @@ export function createMcpSync(options: SyncOptions): McpSync {
         lastXml = xml
         latestXml = xml
         const before = canvas.currentXml()
-        const decision: LoadDecision =
+        const changedPage = changedPageId(before, xml)
+        let decision: LoadDecision =
             how === "decide"
                 ? decideLoad(before, xml, canvas.currentPageId())
                 : { mode: "load" }
+        // A write on another page shows that page, unless the user is
+        // editing (the restore after a projection goes back to their page)
+        if (
+            how === "decide" &&
+            decision.mode === "load" &&
+            changedPage &&
+            changedPage !== canvas.currentPageId() &&
+            Date.now() - lastEditAt > EDITING_MS
+        ) {
+            decision = { mode: "load", pageId: changedPage }
+        }
         canvas.load(xml, decision)
         // draw.io autosaves its copy only when the write changed its
         // document: after one that left the canvas as it was, the next
@@ -411,18 +491,29 @@ export function createMcpSync(options: SyncOptions): McpSync {
         awaitingCommitCopy =
             decision.mode === "commit" && !sameDiagram(before, xml)
         // currentVersion is the write's version
-        thumbExport = { stateId, version: currentVersion, xml }
+        thumbExport = {
+            stateId,
+            version: currentVersion,
+            xml,
+            pageId: changedPage,
+        }
         thumbMissed = false
         setTimeout(captureThumbnail, 500)
     }
 
     // The image of the server write on the canvas, for its History entry:
     // only for the latest load, once draw.io is ready, and only if the
-    // canvas still shows it when the export answers
+    // canvas still shows it when the export answers. The page it changed
+    // when that is not the page on screen: draw.io renders another page
+    // only as a PNG
     const captureThumbnail = () => {
         const t = thumbExport
         if (!t || !isReady) return
-        canvas.export({ format: "svg" }, 5000).then((result) => {
+        const request: ExportRequest =
+            t.pageId && t.pageId !== canvas.currentPageId()
+                ? { format: "png", pageId: t.pageId, width: THUMBNAIL_WIDTH }
+                : { format: "svg" }
+        canvas.export(request, 5000).then((result) => {
             if (!result?.data || thumbExport !== t) return
             if (!sameDiagram(latestXml, t.xml)) {
                 thumbMissed = true
@@ -615,6 +706,8 @@ export function createMcpSync(options: SyncOptions): McpSync {
         mcpExportId = s.exportId
         const extra = s.exportOptions ?? {}
         const fire = () => {
+            // The server's options (margin, background, PNG page and size)
+            // go to draw.io as they are
             const request: ExportRequest =
                 format === "png"
                     ? {
@@ -623,7 +716,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                           currentPage: !extra.pageId,
                           ...extra,
                       }
-                    : { format }
+                    : { format, ...extra }
             canvas.export(request, 10000).then((result) => {
                 // A later export is running by now, or this one ended
                 if (seq !== mcpExportSeq || pendingMcpExport === null) return
@@ -733,6 +826,12 @@ export function createMcpSync(options: SyncOptions): McpSync {
             }
             // Also the tab's own push, and a version a projection holds back
             noteHistory(s.historyKey ?? String(s.version), stateId)
+            // The header names the file; listeners read it with read()
+            if ((s.file ?? null) !== file || !!s.fileChanged !== fileChanged) {
+                file = s.file ?? null
+                fileChanged = !!s.fileChanged
+                emitChange()
+            }
             // A sync request (get_diagram): after the load above, so draw.io
             // exports what it just loaded; never while a one-page projection
             // is on screen, which would be sent as the whole document
@@ -871,6 +970,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
             if (xml === lastXml || (commitCopy && sameDiagram(xml, lastXml))) {
                 return
             }
+            lastEditAt = Date.now()
             // Request an SVG export, then push the edit with it; remember
             // the version and state it is based on. Without an answer in
             // time, push it without the image.
@@ -958,6 +1058,8 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 latestXml,
                 projectionActive: projectionExportActive,
                 status,
+                file,
+                fileChanged,
             }
         },
     }

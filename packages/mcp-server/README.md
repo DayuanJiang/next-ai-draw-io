@@ -13,7 +13,8 @@ Paste this into Claude Code, Codex, Cursor, VS Code, Cline or any agent that can
 ```text
 Install the drawio MCP server for the client you are running in, following
 https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/packages/mcp-server/README.md
-Name the server "drawio" and keep the servers that are already configured.
+Install it for all my projects (user scope, for Claude Code "--scope user"),
+name the server "drawio" and keep the servers that are already configured.
 Then tell me how to reload so its tools show up.
 ```
 
@@ -22,14 +23,27 @@ Then tell me how to reload so its tools show up.
 **Claude Code**
 
 ```bash
-claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
+
+`--scope user` makes the tools available in every project. Without it, they exist only in the folder where you ran the command.
 
 **Codex CLI**
 
 ```bash
 codex mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
+
+Codex asks before each drawio tool that changes the diagram, and `codex exec` without full access fails with "MCP tool call requires approval". To let the drawio tools run without asking, add one line to the server's section in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.drawio]
+command = "npx"
+args = ["@next-ai-drawio/mcp-server@latest"]
+default_tools_approval_mode = "approve"
+```
+
+To approve only some tools, use `[mcp_servers.drawio.tools.<tool name>]` with `approval_mode = "approve"` instead.
 
 **VS Code** (`.vscode/mcp.json`)
 
@@ -56,11 +70,11 @@ Restart the client, then ask, for example, "Read this repo and draw its architec
 ## Features
 
 - **Draws from your project**: the agent reads your code and documents with its own tools. Existing `.drawio` and `.drawio.svg` files open with `load_diagram`.
-- **The web app's canvas**: the AI's changes are outlined and one Ctrl+Z takes them back. Select shapes and say "these" (`get_selection`). Your hand edits are read before the AI edits again.
+- **The web app's canvas**: the AI's changes are outlined for a few seconds (never in exports) and one Ctrl+Z takes them back. Select shapes and say "these" (`get_selection`). Your hand edits are read before the AI edits again.
 - **Real icons**: the web app's drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes, Cisco and more), so the AI uses real icon names.
 - **Self-check**: the AI can look at a screenshot of the rendered diagram and fix overlaps (`screenshot: true`, or `screenshot_diagram`).
 - **Versions**: the last 20 versions as cards next to the canvas; restore or compare one, or ask the AI to undo (`restore_version`).
-- **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`.
+- **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin, and PNGs a white background (`transparent: true` for none).
 - **Offline**: the draw.io editor ships inside the package.
 
 ## Saved diagrams

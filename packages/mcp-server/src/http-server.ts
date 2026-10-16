@@ -256,7 +256,7 @@ interface SessionState {
     syncRequested?: number // Timestamp when sync requested, cleared when browser responds
     exportFormat?: ExportFormat // Set by MCP tool to request browser export
     exportXml?: string // Single-page projection to load before a page-targeted export
-    exportOptions?: ExportOptions // Extra draw.io export parameters (PNG only)
+    exportOptions?: ExportOptions // Extra draw.io export parameters
     exportId?: string // Random id of the pending export, echoed with its result
     exportData?: string // Base64/SVG data returned by browser after export
     selectionId?: string // Random id of the pending get_selection request
@@ -267,15 +267,50 @@ interface SessionState {
 export type ExportFormat = "png" | "svg" | "xmlsvg"
 
 /**
- * draw.io's PNG export takes these directly: width caps the image size
- * (never upscales), pageId renders a page other than the one on screen.
+ * draw.io's export takes these directly: width caps the image size (never
+ * upscales), pageId renders a page other than the one on screen (both PNG
+ * only), border is the margin, background the color behind a page that has
+ * none, transparent leaves a PNG without any.
  */
 export interface ExportOptions {
     width?: number
     pageId?: string
+    border?: number
+    background?: string
+    transparent?: boolean
 }
 
 const stateStore = new Map<string, SessionState>()
+
+// The file each session's diagram was opened from or last saved to
+// (load_diagram, export_diagram), named in the preview's header, and
+// whether the diagram changed since (the file changes only on export);
+// none: a new diagram that is in no file yet
+const sessionFiles = new Map<string, { path: string; changed: boolean }>()
+
+/** changed: the diagram moved on while the file was written */
+export function setSessionFile(
+    sessionId: string,
+    path: string | null,
+    changed = false,
+): void {
+    if (path) sessionFiles.set(sessionId, { path, changed })
+    else sessionFiles.delete(sessionId)
+}
+
+// Every change of each session's diagram (AI writes and the user's edits),
+// so an export can tell whether one came in while it ran
+const changeCounts = new Map<string, number>()
+
+export function changeCount(sessionId: string): number {
+    return changeCounts.get(sessionId) ?? 0
+}
+
+function markFileChanged(sessionId: string): void {
+    changeCounts.set(sessionId, changeCount(sessionId) + 1)
+    const file = sessionFiles.get(sessionId)
+    if (file) file.changed = true
+}
 
 let server: http.Server | null = null
 let serverPort = 6002
@@ -339,6 +374,11 @@ export function setState(
         selection: existing?.selection,
     })
     log.debug(`State updated: session=${sessionId}, version=${newVersion}`)
+    // An AI write or a restore; the browser's pushes are told apart where
+    // they arrive (a sync reply is no change)
+    if (notify && !fromBrowser && existing?.xml !== xml) {
+        markFileChanged(sessionId)
+    }
     if (notify) stateListener?.(sessionId, xml)
     return newVersion
 }
@@ -568,6 +608,8 @@ function cleanupExpiredSessions(): void {
         if (now - lastActive > SESSION_TTL) {
             stateStore.delete(sessionId)
             clearHistory(sessionId)
+            sessionFiles.delete(sessionId)
+            changeCounts.delete(sessionId)
             log.info(`Cleaned up expired session: ${sessionId}`)
         }
     }
@@ -784,6 +826,8 @@ function handleStateApi(
                 exportId: state?.exportId ?? null,
                 selectionId: state?.selectionId ?? null,
                 historyKey: historyKeyOf(sessionId, state),
+                file: sessionFiles.get(sessionId)?.path ?? null,
+                fileChanged: sessionFiles.get(sessionId)?.changed ?? false,
             }),
         )
     } else if (req.method === "POST") {
@@ -918,7 +962,10 @@ function handleStateApi(
                 }
                 const version = setState(sessionId, data.xml, data.svg, true)
                 const saved = stateStore.get(sessionId)
-                if (saved && data.source !== "sync") saved.userEdited = true
+                if (saved && data.source !== "sync") {
+                    saved.userEdited = true
+                    markFileChanged(sessionId)
+                }
                 res.writeHead(200, { "Content-Type": "application/json" })
                 res.end(
                     JSON.stringify({

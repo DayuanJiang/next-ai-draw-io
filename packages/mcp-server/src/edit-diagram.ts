@@ -17,7 +17,14 @@ import { addDefaultStyles, edgeIdsOf } from "./style-classes.ts"
 import { validateAndFixXml, validateMxCellStructure } from "./xml-validation.ts"
 
 export type EditOutcome =
-    | { ok: true; xml: string; applied: number; fixes: string[] }
+    | {
+          ok: true
+          xml: string
+          applied: number
+          fixes: string[]
+          /** Ids of updates that sent the cell as it already was */
+          unchanged: string[]
+      }
     | { ok: false; errors: string[]; pageError: boolean }
 
 /** Number of top-level elements in an XML fragment. */
@@ -96,11 +103,11 @@ export function editDiagram(
     }
     if (errors.length > 0) return { ok: false, errors, pageError: false }
 
-    const { result, errors: opErrors } = applyDiagramOperations(
-        xml,
-        prepared,
-        selector,
-    )
+    const {
+        result,
+        errors: opErrors,
+        unchanged,
+    } = applyDiagramOperations(xml, prepared, selector)
     // An empty cellId means the page itself could not be edited
     const pageLevel = opErrors.find((e) => e.cellId === "")
     if (pageLevel) {
@@ -126,5 +133,11 @@ export function editDiagram(
         }
     }
 
-    return { ok: true, xml: result, applied: operations.length, fixes }
+    return {
+        ok: true,
+        xml: result,
+        applied: operations.length,
+        fixes,
+        unchanged,
+    }
 }

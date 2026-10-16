@@ -37,21 +37,55 @@ export function useMcpSync(config: ShellConfig): {
 
     useEffect(() => {
         if (!config.sessionId) return
+        // A write on another page loads in full (no commit to outline): what
+        // it changed on that page, outlined once draw.io has loaded it
+        let loadOutline: { ids: string[]; pageId: string } | null = null
+        const outlineLoaded = () => {
+            if (!loadOutline || diagramRef.current.hasPendingLoad()) return
+            // The load already shows that page
+            highlightChangedCells(loadOutline.ids, loadOutline.pageId, {
+                navigate: false,
+            })
+            loadOutline = null
+        }
         const sync = createMcpSync({
             sessionId: config.sessionId,
             apiBase: config.apiBase,
             token: config.token,
             canvas: {
-                load: (xml, decision) =>
+                // A server write that loads in full keeps the user's view
+                load: (xml, decision) => {
+                    const before = diagramRef.current.chartXMLRef.current
                     diagramRef.current.loadDiagram(
                         xml,
                         true,
                         decision.mode,
                         decision.mode === "commit"
                             ? { pageId: decision.pageId }
-                            : undefined,
-                    ),
-                showTransient: (xml) => diagramRef.current.showTransient(xml),
+                            : { keepView: true, pageId: decision.pageId },
+                    )
+                    // Full loads without a page (the document back after an
+                    // export's projection, a recovered session) are not
+                    // outlined; nor is a write a later load replaced
+                    loadOutline = null
+                    if (decision.mode === "load" && decision.pageId) {
+                        const { touchedIds, fromScratch } = diffDiagrams(
+                            before,
+                            xml,
+                            decision.pageId,
+                        )
+                        if (!fromScratch && touchedIds.length > 0) {
+                            loadOutline = {
+                                ids: touchedIds,
+                                pageId: decision.pageId,
+                            }
+                        }
+                    }
+                },
+                showTransient: (xml) => {
+                    loadOutline = null
+                    diagramRef.current.showTransient(xml)
+                },
                 export: (request, timeoutMs) =>
                     diagramRef.current.requestExport(request, timeoutMs),
                 currentXml: () => diagramRef.current.chartXMLRef.current,
@@ -99,10 +133,14 @@ export function useMcpSync(config: ShellConfig): {
                 sync.onAutoSave(message.xml)
             } else if (message.event === "load") {
                 sync.onDrawioLoad()
+                // After the canvas's own load handler (it counts the load
+                // done and shows the page)
+                setTimeout(outlineLoaded, 0)
             }
         }
         window.addEventListener("message", onMessage)
         return () => {
+            loadOutline = null
             window.removeEventListener("message", onMessage)
             sync.stop()
             syncRef.current = null
@@ -114,8 +152,9 @@ export function useMcpSync(config: ShellConfig): {
         syncRef.current?.setReady(diagram.isDrawioReady)
     }, [diagram.isDrawioReady])
 
-    // Mark what a server write changed on the page, as the web app does
-    // for its versions (use-versions.ts); any action on the canvas clears it
+    // Mark what a server write changed on the page for a few seconds, as
+    // the web app does for its versions (use-versions.ts); any action on
+    // the canvas clears it
     useEffect(() => {
         diagram.setCommitHandler(({ beforeXml, afterXml, pageId }) => {
             const { touchedIds, fromScratch } = diffDiagrams(
@@ -123,7 +162,9 @@ export function useMcpSync(config: ShellConfig): {
                 afterXml,
                 pageId,
             )
-            if (!fromScratch) highlightChangedCells(touchedIds)
+            if (!fromScratch) {
+                highlightChangedCells(touchedIds, pageId, { navigate: false })
+            }
         })
         return () => diagram.setCommitHandler(null)
     }, [])

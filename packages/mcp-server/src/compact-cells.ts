@@ -152,8 +152,9 @@ function plainGeometry(body: string): Map<string, string> | null {
 
 /**
  * Write plain shapes and edges compactly, for the diagram shown to the
- * model. A shape is plain when its only child is an mxGeometry with x, y,
- * width and height; an edge when its only child is the relative geometry.
+ * model. A shape is plain when its only child is an mxGeometry with width
+ * and height, and x and y unless they are 0; an edge when its only child
+ * is the relative geometry.
  * Both must name their parent, since expanding fills in the layer for a
  * missing one. Everything else, including wrapped cells' extra data and
  * edge labels, is left as written.
@@ -177,8 +178,10 @@ export function foldCells(xml: string): string {
                 !(a.name === "parent" && a.value === "1"),
         )
         if (byName.get("vertex") === "1" && byName.get("edge") !== "1") {
-            if (geometryKeys.join() !== "height,width,x,y") return block
-            const size = `${attr("x", geometry.get("x") ?? "")}${attr("y", geometry.get("y") ?? "")}${attr("w", geometry.get("width") ?? "")}${attr("h", geometry.get("height") ?? "")}`
+            // draw.io leaves out an x or y of 0
+            const known = geometryKeys.filter((k) => k !== "x" && k !== "y")
+            if (known.join() !== "height,width") return block
+            const size = `${attr("x", geometry.get("x") ?? "0")}${attr("y", geometry.get("y") ?? "0")}${attr("w", geometry.get("width") ?? "")}${attr("h", geometry.get("height") ?? "")}`
             return `<mxCell${attributeText(kept)}${size}/>`
         }
         if (byName.get("edge") === "1" && byName.get("vertex") !== "1") {

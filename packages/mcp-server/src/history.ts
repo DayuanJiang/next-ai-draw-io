@@ -12,10 +12,11 @@ const MAX_HISTORY = 20
 /**
  * Who made an entry's diagram: an edit in the browser ("user"), a tab's
  * copy kept when the server recovered the session ("recover"), a restored
- * copy of an older entry ("restore"). The AI's writes and entries loaded
- * from the saved file carry none.
+ * copy of an older entry ("restore"), a file opened with load_diagram
+ * ("load"), a page added with add_page ("add_page"). The AI's other writes
+ * and entries loaded from an older saved file carry none.
  */
-export type HistorySource = "user" | "recover" | "restore"
+export type HistorySource = "user" | "recover" | "restore" | "load" | "add_page"
 
 export interface HistoryEntry {
     id: number // Stable across shifts of the circular buffer

@@ -107,10 +107,10 @@ Through MCP (Model Context Protocol, the protocol AI agents use to call outside 
 }
 ```
 
-For Claude Code, one command does it:
+For Claude Code, one command does it (`--scope user` makes it available in every project):
 
 ```bash
-claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
 Then ask the AI for "a flowchart of user authentication with login, MFA and session management" and the diagram appears in your browser as it is drawn. The MCP server has most of the web app's drawing features:
