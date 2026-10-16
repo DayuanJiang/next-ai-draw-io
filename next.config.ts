@@ -11,10 +11,17 @@ const nextConfig: NextConfig = {
         APP_VERSION: packageJson.version,
     },
     // Include instrumentation.ts in standalone build for Langfuse telemetry,
-    // and the shape library docs get_shape_library reads at run time
+    // the shape library docs get_shape_library reads at run time, and the
+    // docs pages' Markdown
     outputFileTracingIncludes: {
         "*": ["./instrumentation.ts"],
         "/api/chat": ["./docs/shape-libraries/*.md"],
+        "/[lang]/docs/[[...slug]]": [
+            "./docs/en/*.md",
+            "./docs/cn/*.md",
+            "./docs/ja/*.md",
+        ],
+        "/sitemap.xml": ["./docs/en/*.md", "./docs/cn/*.md", "./docs/ja/*.md"],
     },
     // The Chinese and Japanese About pages used to be separate routes
     async redirects() {

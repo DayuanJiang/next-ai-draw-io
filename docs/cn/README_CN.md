@@ -11,7 +11,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[**在线体验**](https://next-ai-drawio.jiang.jp/) · [**桌面应用**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP 服务器**](#在-ai-代理里使用mcp)
+[**在线体验**](https://next-ai-drawio.jiang.jp/) · [**文档**](https://next-ai-drawio.jiang.jp/zh/docs) · [**桌面应用**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP 服务器**](#在-ai-代理里使用mcp)
 
 </div>
 

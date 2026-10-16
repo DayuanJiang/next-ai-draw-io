@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowUpRight, Terminal, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getAssetUrl } from "@/lib/base-path"
 import { STORAGE_KEYS } from "@/lib/storage"
@@ -28,11 +28,19 @@ function useVideoClosed() {
 }
 
 function PromoVideo({ className }: { className?: string }) {
+    const video = useRef<HTMLVideoElement>(null)
+    // Plays by itself only when the system does not ask for reduced motion
+    useEffect(() => {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            return
+        }
+        video.current?.play().catch(() => {})
+    }, [])
     return (
         <video
+            ref={video}
             src={getAssetUrl("/mcp-promo.mp4")}
             poster={getAssetUrl("/mcp-promo-poster.jpg")}
-            autoPlay
             muted
             loop
             playsInline

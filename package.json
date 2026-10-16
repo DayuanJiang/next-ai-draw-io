@@ -80,6 +80,7 @@
         "react": "^19.1.2",
         "react-dom": "^19.1.2",
         "react-markdown": "^10.1.0",
+        "remark-gfm": "^4.0.1",
         "saxes": "^6.0.0",
         "server-only": "^0.0.1",
         "sonner": "^2.0.7",
