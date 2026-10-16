@@ -40,6 +40,15 @@ export function ButtonTooltip({
     )
 }
 
+/** The look of a square icon button, also for a link that looks like one */
+export const iconButtonClass = cn(
+    "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors",
+    "hover:bg-accent hover:text-foreground",
+    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+    "disabled:pointer-events-none disabled:opacity-35",
+    "[&_svg]:size-4 [&_svg]:stroke-[1.75]",
+)
+
 interface IconButtonProps extends React.ComponentProps<"button"> {
     label: string
     /** Shown next to the label in the tooltip, e.g. "⌘B" */
@@ -66,14 +75,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
                     ref={ref}
                     type="button"
                     aria-label={label}
-                    className={cn(
-                        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors",
-                        "hover:bg-accent hover:text-foreground",
-                        "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
-                        "disabled:pointer-events-none disabled:opacity-35",
-                        "[&_svg]:size-4 [&_svg]:stroke-[1.75]",
-                        className,
-                    )}
+                    className={cn(iconButtonClass, className)}
                     {...props}
                 >
                     {children}

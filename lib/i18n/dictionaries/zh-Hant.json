@@ -10,6 +10,7 @@
     "nav": {
         "newChat": "新增圖紙",
         "settings": "設定",
+        "docs": "文件",
         "hidePanel": "隱藏聊天面板",
         "showPanel": "顯示聊天面板",
         "aiChat": "AI 對話",

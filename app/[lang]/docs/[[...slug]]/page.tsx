@@ -235,7 +235,7 @@ export default async function DocsPage({ params }: Props) {
                         )}
                         <article
                             lang={doc.locale}
-                            className="docs-body prose mt-6 max-w-none text-[15px] leading-relaxed dark:prose-invert prose-headings:tracking-[-0.015em] prose-h2:mt-11 prose-h2:text-[22px] prose-h3:text-[17px] prose-a:font-medium prose-a:underline-offset-4 prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-px prose-code:text-[0.88em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-blockquote:rounded-lg prose-blockquote:border-0 prose-blockquote:bg-muted prose-blockquote:px-4 prose-blockquote:py-0.5 prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none"
+                            className="docs-body prose mt-6 max-w-none text-[15px] leading-relaxed dark:prose-invert prose-headings:font-semibold prose-headings:tracking-[-0.015em] prose-h2:mt-11 prose-h2:text-[22px] prose-h3:text-[17px] prose-a:font-medium prose-a:underline-offset-4 prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-px prose-code:text-[0.88em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-blockquote:rounded-lg prose-blockquote:border-0 prose-blockquote:bg-muted prose-blockquote:px-4 prose-blockquote:py-0.5 prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none"
                         >
                             <DocMarkdown
                                 doc={doc}
