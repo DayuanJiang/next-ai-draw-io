@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, SquarePen } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { demoTexts } from "@/components/site/demo-texts"
 import { DocMarkdown } from "@/components/site/doc-markdown"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
@@ -192,6 +193,7 @@ export default async function DocsPage({ params }: Props) {
                                 doc={doc}
                                 lang={lang}
                                 copyLabels={SITE_TEXTS[lang].copy}
+                                demo={await demoTexts(lang)}
                             />
                         </article>
                         <div className="mt-14 grid grid-cols-2 gap-4 border-t border-border pt-6">

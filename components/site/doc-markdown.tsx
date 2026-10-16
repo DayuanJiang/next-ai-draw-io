@@ -6,16 +6,24 @@ import remarkGfm from "remark-gfm"
 import { type Doc, HeadingIds, resolveDocLink } from "@/lib/docs"
 import type { Locale } from "@/lib/i18n/config"
 import { CopyCommand } from "./copy-command"
+import { DemoPlayer, type DemoTexts } from "./demo-player"
+import { DEMO_SCENES } from "./demo-texts"
+
+// A line "<!-- demo: versions -->" in a docs file shows that scene of the
+// editor demo on the site; GitHub shows nothing for it
+const DEMO_LINE = /^<!--\s*demo:\s*([a-z-]+)\s*-->[ \t]*$/gm
 
 /** A docs page's Markdown, with links, headings and code made for the site */
 export function DocMarkdown({
     doc,
     lang,
     copyLabels,
+    demo,
 }: {
     doc: Doc
     lang: Locale
     copyLabels: { copy: string; copied: string }
+    demo: DemoTexts
 }) {
     // Counted in page order, as the table of contents counted them
     const ids = new HeadingIds()
@@ -62,15 +70,30 @@ export function DocMarkdown({
                         className="rounded-lg border border-border bg-card p-4"
                     />
                 ),
-                pre: ({ children }) => (
-                    <div className="not-prose my-5">
-                        <CopyCommand
-                            command={textOf(children).replace(/\n$/, "")}
-                            labels={copyLabels}
-                            prompt=""
-                        />
-                    </div>
-                ),
+                pre: ({ children }) => {
+                    const [code] = Children.toArray(children)
+                    const scene =
+                        isValidElement<{ className?: string }>(code) &&
+                        code.props.className === "language-demo"
+                            ? DEMO_SCENES[textOf(children).trim()]
+                            : undefined
+                    if (scene !== undefined) {
+                        return (
+                            <div className="not-prose my-7">
+                                <DemoPlayer texts={demo} scene={scene} />
+                            </div>
+                        )
+                    }
+                    return (
+                        <div className="not-prose my-5">
+                            <CopyCommand
+                                command={textOf(children).replace(/\n$/, "")}
+                                labels={copyLabels}
+                                prompt=""
+                            />
+                        </div>
+                    )
+                },
                 table: ({ children }) => (
                     <div className="not-prose my-6 overflow-x-auto rounded-lg border border-border">
                         <table className="docs-table w-full border-collapse text-[14px] leading-relaxed">
@@ -80,7 +103,7 @@ export function DocMarkdown({
                 ),
             }}
         >
-            {doc.body}
+            {doc.body.replace(DEMO_LINE, "```demo\n$1\n```")}
         </Markdown>
     )
 }

@@ -6,8 +6,8 @@ import type { ReactNode } from "react"
 import Image from "@/components/image-with-basepath"
 import { ProviderLogo } from "@/components/provider-logo"
 import { CopyCommand } from "@/components/site/copy-command"
-import { DemoPlayer, type DemoTexts } from "@/components/site/demo-player"
-import { SERVERLESS_SVG } from "@/components/site/serverless-diagram"
+import { DemoPlayer } from "@/components/site/demo-player"
+import { demoTexts } from "@/components/site/demo-texts"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import {
@@ -17,11 +17,9 @@ import {
     SITE_TEXTS,
 } from "@/components/site/site-texts"
 import type { Locale } from "@/lib/i18n/config"
-import { getDictionary, hasLocale } from "@/lib/i18n/dictionaries"
-import { formatMessage } from "@/lib/i18n/utils"
+import { hasLocale } from "@/lib/i18n/dictionaries"
 import { PROVIDER_NAMES, PROVIDERS } from "@/lib/providers"
 import { localeAlternates, OG_IMAGE, OG_LOCALE } from "@/lib/seo"
-import { describeChangeSummary, describeTotals } from "@/lib/version-text"
 import { type ExampleId, TEXTS } from "./texts"
 
 // The example prompts stay in English in every language
@@ -79,15 +77,6 @@ const EXAMPLES: { id: ExampleId; src: string; prompt: ReactNode }[] = [
     },
 ]
 
-const EMPTY = {
-    shapesAdded: 0,
-    edgesAdded: 0,
-    shapesChanged: 0,
-    edgesChanged: 0,
-    shapesRemoved: 0,
-    edgesRemoved: 0,
-}
-
 type Props = { params: Promise<{ lang: string }> }
 
 function localeOf(lang: string): Locale {
@@ -126,32 +115,7 @@ export default async function About({ params }: Props) {
     const lang = localeOf((await params).lang)
     const t = TEXTS[lang]
     const site = SITE_TEXTS[lang]
-    const dict = await getDictionary(lang)
-    const v = dict.versions
-    // The demo's version cards and chat use the editor's own texts
-    const demo: DemoTexts = {
-        ...t.demo,
-        drawing: v.drawing,
-        changing: v.editing,
-        placeholder: dict.chat.placeholder,
-        selected: formatMessage(dict.selection.one, { label: "DynamoDB" }),
-        versions: {
-            created: v.created,
-            edited: v.edited,
-            undo: v.undo,
-            restoreV1: formatMessage(v.restoreVersion, { n: 1 }),
-            restoreV2: formatMessage(v.restoreVersion, { n: 2 }),
-            editedSince: v.editedSince,
-            drawSummary: describeTotals(
-                { ...EMPTY, shapesAdded: 7, edgesAdded: 5 },
-                v,
-            ),
-            cacheSummary: describeChangeSummary(
-                { ...EMPTY, shapesAdded: 1, edgesAdded: 1 },
-                v,
-            ),
-        },
-    }
+    const demo = await demoTexts(lang)
     const ways = [
         {
             icon: Globe,
@@ -215,7 +179,7 @@ export default async function About({ params }: Props) {
                         </div>
                     </div>
                     <div className="mt-7">
-                        <DemoPlayer svg={SERVERLESS_SVG} texts={demo} />
+                        <DemoPlayer texts={demo} />
                     </div>
                 </section>
             </div>

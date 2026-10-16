@@ -17,7 +17,7 @@ export const LANGUAGE_NAMES: Record<Locale, string> = {
 }
 
 export type SiteTexts = {
-    nav: { docs: string; mcp: string; openEditor: string }
+    nav: { docs: string; mcp: string; openEditor: string; language: string }
     copy: { copy: string; copied: string }
     footer: {
         tagline: string
@@ -40,7 +40,12 @@ export type SiteTexts = {
 
 export const SITE_TEXTS: Record<Locale, SiteTexts> = {
     en: {
-        nav: { docs: "Docs", mcp: "MCP server", openEditor: "Open the editor" },
+        nav: {
+            docs: "Docs",
+            mcp: "MCP server",
+            openEditor: "Open the editor",
+            language: "Language",
+        },
         copy: { copy: "Copy the command", copied: "Copied" },
         footer: {
             tagline: "Draw and edit draw.io diagrams by chatting with an AI.",
@@ -62,7 +67,12 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
         },
     },
     zh: {
-        nav: { docs: "文档", mcp: "MCP 服务器", openEditor: "打开编辑器" },
+        nav: {
+            docs: "文档",
+            mcp: "MCP 服务器",
+            openEditor: "打开编辑器",
+            language: "语言",
+        },
         copy: { copy: "复制命令", copied: "已复制" },
         footer: {
             tagline: "和 AI 对话，绘制和修改 draw.io 图表。",
@@ -88,6 +98,7 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
             docs: "ドキュメント",
             mcp: "MCP サーバー",
             openEditor: "エディタを開く",
+            language: "言語",
         },
         copy: { copy: "コマンドをコピー", copied: "コピーしました" },
         footer: {
@@ -110,7 +121,12 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
         },
     },
     "zh-Hant": {
-        nav: { docs: "文件", mcp: "MCP 伺服器", openEditor: "開啟編輯器" },
+        nav: {
+            docs: "文件",
+            mcp: "MCP 伺服器",
+            openEditor: "開啟編輯器",
+            language: "語言",
+        },
         copy: { copy: "複製指令", copied: "已複製" },
         footer: {
             tagline: "和 AI 對話，繪製和修改 draw.io 圖表。",

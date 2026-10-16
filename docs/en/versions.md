@@ -2,6 +2,8 @@
 
 Every change the AI makes is saved as a version, so you can try a request, look at the result and go back if you don't like it.
 
+<!-- demo: ai-edit -->
+
 ## Version cards
 
 Each answer that changes the diagram ends with a version card in the chat. It shows the version number, what happened ("Drew the diagram", "Changed the diagram") and what changed, for example "Added 1 shape, added 1 connector". Show XML opens the XML the AI wrote.
@@ -19,6 +21,8 @@ If you edit the diagram by hand after a version, its card says "You changed the 
 ## Restore an older version
 
 Older cards have Restore v1, Restore v2 and so on. Restoring puts that version on the canvas, and the newer versions stay in the list, so you can restore one of them again later. A message confirms the restore and has an Undo button to go back to the canvas from before it.
+
+<!-- demo: versions -->
 
 ## Compare versions
 

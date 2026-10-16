@@ -19,6 +19,7 @@ import {
     useState,
 } from "react"
 import { flushSync } from "react-dom"
+import { SERVERLESS_SVG } from "./serverless-diagram"
 
 /*
  * A scripted demo of the editor on the landing page, in four steps: a prompt
@@ -30,6 +31,8 @@ import { flushSync } from "react-dom"
  */
 
 export type DemoTexts = {
+    /** The button that plays a docs demo again */
+    replay: string
     /** What each of the four steps shows */
     steps: { title: string; text: string }[]
     prompts: { draw: string; cache: string }
@@ -77,6 +80,8 @@ const e5Bent = (dx: number) =>
 // Before the page measures itself: the header, headline and steps take
 // about 300 px above the demo
 const DEMO_HEIGHT = "clamp(340px, calc(100svh - 300px), 500px)"
+// In the docs' column
+const DOCS_HEIGHT = "400px"
 
 // Chinese and Japanese characters stream one by one, other text word by word
 const CJK = /[\u2e80-\uffef]/
@@ -86,14 +91,27 @@ class Stopped extends Error {}
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
 
-export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
+export function DemoPlayer({
+    texts,
+    scene,
+}: {
+    texts: DemoTexts
+    /**
+     * In the docs: play only this step, once the demo scrolls into view, with
+     * no step tabs. The steps before it are applied at once.
+     */
+    scene?: number
+}) {
+    const docs = scene !== undefined
     const frame = useRef<HTMLDivElement>(null)
     const head = useRef<HTMLDivElement>(null)
     const body = useRef<HTMLDivElement>(null)
     const stage = useRef<HTMLDivElement>(null)
     const chat = useRef<HTMLDivElement>(null)
     const runId = useRef(0)
-    const [height, setHeight] = useState(DEMO_HEIGHT)
+    const [height, setHeight] = useState(docs ? DOCS_HEIGHT : DEMO_HEIGHT)
+    // A docs demo has played its step, and offers to play it again
+    const [finished, setFinished] = useState(false)
     // The step playing (the number of steps when the demo has ended), and
     // when it started, to restart its progress bar
     const [step, setStep] = useState({ index: 0, started: 0 })
@@ -209,6 +227,7 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
         setOutline(null)
         setEditedSince(null)
         setOnCanvas(null)
+        setFinished(false)
     }, [cell, edgeParts, moveS3])
 
     const show = useCallback(
@@ -223,18 +242,18 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
     )
 
     /*
-     * Play the demo from step `from`. The steps before it run at once, to
-     * reach the state it starts from; with reduced motion, step `from` also
-     * runs at once and the demo stops there.
+     * Play the demo from step `from` to step `until`. The steps before it run
+     * at once, to reach the state it starts from; with reduced motion, step
+     * `from` also runs at once and the demo stops there.
      */
     const play = useCallback(
-        async (from = 0) => {
+        async (from = 0, until = texts.steps.length - 1) => {
             const id = ++runId.current
             const alive = () => runId.current === id
             const reduced = window.matchMedia(
                 "(prefers-reduced-motion: reduce)",
             ).matches
-            const last = reduced ? from : texts.steps.length - 1
+            const last = reduced ? from : until
             const versions = {
                 draw: {
                     n: 1,
@@ -347,7 +366,12 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                     top: target,
                     behavior: fast ? "auto" : "smooth",
                 })
-                await wait(400)
+                // Until the scroll has stopped: a longer one takes longer
+                let last = -1
+                for (let i = 0; i < 40 && list.scrollTop !== last; i++) {
+                    last = list.scrollTop
+                    await wait(60)
+                }
             }
             // A restore moves S3 back or forth, as the editor loads the
             // version
@@ -504,11 +528,15 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                 for (let i = 0; i <= last; i++) {
                     fast = reduced || i < from
                     if (i >= from) setStep({ index: i, started: Date.now() })
+                    // The messages just added still rise into place; the
+                    // pointer aims at where they end up
+                    if (i === from && from > 0 && !reduced) await wait(400)
                     await steps[i]()
                 }
                 if (last === steps.length - 1) {
                     setStep({ index: steps.length, started: Date.now() })
                 }
+                setFinished(true)
             } catch (error) {
                 if (!(error instanceof Stopped)) throw error
             }
@@ -524,6 +552,7 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
 
     // End the demo at the bottom of the first screen
     useEffect(() => {
+        if (docs) return
         const fitHeight = () => {
             const top =
                 (frame.current?.getBoundingClientRect().top ?? 0) +
@@ -535,17 +564,34 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
         fitHeight()
         window.addEventListener("resize", fitHeight)
         return () => window.removeEventListener("resize", fitHeight)
-    }, [])
+    }, [docs])
 
     useEffect(() => {
+        const stop = () => {
+            runId.current++
+        }
+        if (scene !== undefined) {
+            // A page of docs can hold several demos: each starts when seen
+            const seen = new IntersectionObserver(
+                ([entry]) => {
+                    if (!entry.isIntersecting) return
+                    seen.disconnect()
+                    play(scene, scene)
+                },
+                { threshold: 0.4 },
+            )
+            if (frame.current) seen.observe(frame.current)
+            return () => {
+                seen.disconnect()
+                stop()
+            }
+        }
         const reduced = window.matchMedia(
             "(prefers-reduced-motion: reduce)",
         ).matches
         play(reduced ? texts.steps.length - 1 : 0)
-        return () => {
-            runId.current++
-        }
-    }, [play, texts.steps.length])
+        return stop
+    }, [play, scene, texts.steps.length])
 
     const versions = messages.flatMap((m) =>
         m.role === "ai" && m.version ? [m.version] : [],
@@ -567,7 +613,11 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
             {/* What the demo shows, step by step; a step can be replayed */}
             <div
                 ref={head}
-                className="grid grid-cols-4 border-b border-border bg-canvas"
+                className={
+                    docs
+                        ? "hidden"
+                        : "grid grid-cols-4 border-b border-border bg-canvas"
+                }
             >
                 {texts.steps.map((s, i) => {
                     const state =
@@ -626,11 +676,23 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                 and the diagram shrinks with it (the SVG is 731 x 402) */}
             <div
                 ref={body}
-                className="relative grid grid-cols-[minmax(0,1fr)_320px]"
+                className={`relative grid ${docs ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-[minmax(0,1fr)_320px]"}`}
                 style={{ height }}
             >
                 {/* Canvas */}
-                <div className="lp-grid relative flex items-center justify-center border-r border-border px-8">
+                <div
+                    className={`lp-grid relative flex items-center justify-center border-r border-border ${docs ? "px-5" : "px-8"}`}
+                >
+                    {docs && finished && (
+                        <button
+                            type="button"
+                            onClick={() => play(scene, scene)}
+                            className="absolute top-2.5 left-2.5 z-[3] flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[12.5px] font-medium shadow-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                            <RotateCcw className="size-3.5" />
+                            {texts.replay}
+                        </button>
+                    )}
                     <div
                         ref={stage}
                         className="lp-demo relative w-full"
@@ -638,7 +700,9 @@ export function DemoPlayer({ svg, texts }: { svg: string; texts: DemoTexts }) {
                             maxWidth: `min(780px, calc((${height} - 56px) * 1.82))`,
                         }}
                     >
-                        <div dangerouslySetInnerHTML={{ __html: svg }} />
+                        <div
+                            dangerouslySetInnerHTML={{ __html: SERVERLESS_SVG }}
+                        />
                         {selection && (
                             <div
                                 className="lp-select pointer-events-none absolute"

@@ -10,12 +10,6 @@ export type LandingTexts = {
     lede: string
     primary: string
     secondary: string
-    /** The demo's steps and conversation; its other texts are the editor's */
-    demo: {
-        steps: { title: string; text: string }[]
-        prompts: { draw: string; cache: string }
-        replies: { draw: string; cache: string }
-    }
     waysHeading: string
     ways: {
         browser: { title: string; text: string; action: string }
@@ -53,28 +47,6 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         lede: "Describe a diagram and the AI draws it on a real draw.io canvas. Every change it makes is outlined and saved as a version you can restore.",
         primary: "Open the editor",
         secondary: "Use it from Claude Code",
-        demo: {
-            steps: [
-                { title: "Generate", text: "The AI draws what you describe" },
-                { title: "Edit by hand", text: "Drag shapes as in draw.io" },
-                {
-                    title: "Edit with AI",
-                    text: "Select a shape, ask for a change",
-                },
-                {
-                    title: "Version history",
-                    text: "Go back to any earlier version",
-                },
-            ],
-            prompts: {
-                draw: "Draw a serverless REST API on AWS",
-                cache: "Add a cache in front of this",
-            },
-            replies: {
-                draw: "A serverless REST API: API Gateway in front of Lambda, Cognito for sign-in, DynamoDB for data and S3 for files.",
-                cache: "Added ElastiCache between Lambda and DynamoDB for reads, and kept S3 where you moved it.",
-            },
-        },
         waysHeading: "Three ways to use it",
         ways: {
             browser: {
@@ -164,22 +136,6 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         lede: "描述您想要的图表，AI 会在真正的 draw.io 画布上画出来。它的每次修改都会被框出来，并保存为可以恢复的版本。",
         primary: "打开编辑器",
         secondary: "在 Claude Code 里使用",
-        demo: {
-            steps: [
-                { title: "生成", text: "AI 按您的描述画图" },
-                { title: "手动编辑", text: "像在 draw.io 里一样拖动图形" },
-                { title: "让 AI 修改", text: "选中图形，告诉 AI 怎么改" },
-                { title: "版本历史", text: "随时恢复到之前的版本" },
-            ],
-            prompts: {
-                draw: "在 AWS 上画一个无服务器 REST API",
-                cache: "在它前面加一层缓存",
-            },
-            replies: {
-                draw: "一个无服务器 REST API：API Gateway 在 Lambda 前面，Cognito 负责登录，DynamoDB 存数据，S3 存文件。",
-                cache: "在 Lambda 和 DynamoDB 之间加了用于读取的 ElastiCache，S3 保持在您移动后的位置。",
-            },
-        },
         waysHeading: "三种使用方式",
         ways: {
             browser: {
@@ -260,28 +216,6 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         lede: "描きたい図を伝えると、AI が本物の draw.io キャンバスに描きます。AI の変更はすべて枠で示され、元に戻せるバージョンとして保存されます。",
         primary: "エディタを開く",
         secondary: "Claude Code から使う",
-        demo: {
-            steps: [
-                { title: "生成", text: "伝えた内容を AI が図にします" },
-                { title: "手で編集", text: "draw.io と同じように図形を移動" },
-                {
-                    title: "AI に修正を頼む",
-                    text: "図形を選んで変更を頼みます",
-                },
-                {
-                    title: "バージョン履歴",
-                    text: "以前のバージョンにいつでも戻せます",
-                },
-            ],
-            prompts: {
-                draw: "AWS でサーバーレスの REST API を描いて",
-                cache: "この前にキャッシュを追加して",
-            },
-            replies: {
-                draw: "サーバーレスの REST API です。Lambda の前に API Gateway、サインインに Cognito、データに DynamoDB、ファイルに S3 を置きました。",
-                cache: "Lambda と DynamoDB の間に読み取り用の ElastiCache を追加し、S3 は移動された位置のままにしました。",
-            },
-        },
         waysHeading: "3 つの使い方",
         ways: {
             browser: {
@@ -374,22 +308,6 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         lede: "描述您想要的圖表，AI 會在真正的 draw.io 畫布上畫出來。它的每次修改都會被框出來，並儲存為可以還原的版本。",
         primary: "開啟編輯器",
         secondary: "在 Claude Code 裡使用",
-        demo: {
-            steps: [
-                { title: "產生", text: "AI 依照您的描述畫圖" },
-                { title: "手動編輯", text: "像在 draw.io 裡一樣拖曳圖形" },
-                { title: "讓 AI 修改", text: "選取圖形，告訴 AI 怎麼改" },
-                { title: "版本紀錄", text: "隨時還原到之前的版本" },
-            ],
-            prompts: {
-                draw: "在 AWS 上畫一個無伺服器 REST API",
-                cache: "在它前面加一層快取",
-            },
-            replies: {
-                draw: "一個無伺服器 REST API：API Gateway 在 Lambda 前面，Cognito 負責登入，DynamoDB 存資料，S3 存檔案。",
-                cache: "在 Lambda 和 DynamoDB 之間加了用於讀取的 ElastiCache，S3 維持在您移動後的位置。",
-            },
-        },
         waysHeading: "三種使用方式",
         ways: {
             browser: {

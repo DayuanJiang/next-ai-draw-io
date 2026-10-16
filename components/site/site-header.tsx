@@ -3,6 +3,7 @@ import { GitHubIcon } from "@/components/icons/github"
 import { BrandMark } from "@/components/workspace/brand-mark"
 import type { Locale } from "@/lib/i18n/config"
 import { githubStars } from "./github-stars"
+import { LanguageMenu } from "./language-menu"
 import { GITHUB_URL, SITE_TEXTS } from "./site-texts"
 import { ThemeToggle } from "./theme-toggle"
 
@@ -65,6 +66,7 @@ export async function SiteHeader({
                             </span>
                         )}
                     </a>
+                    <LanguageMenu lang={lang} label={t.language} />
                     <ThemeToggle />
                 </div>
                 <Link
