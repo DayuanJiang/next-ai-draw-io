@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { CopyCommand } from "@/components/site/copy-command"
 import { Inline } from "@/components/site/inline"
+import { JsonLd } from "@/components/site/json-ld"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import {
@@ -14,7 +15,7 @@ import {
 import { getAssetUrl } from "@/lib/base-path"
 import type { Locale } from "@/lib/i18n/config"
 import { hasLocale } from "@/lib/i18n/dictionaries"
-import { localeAlternates, OG_IMAGE, OG_LOCALE } from "@/lib/seo"
+import { localeAlternates, OG_IMAGE, OG_LOCALE, SITE_URL } from "@/lib/seo"
 import { type InstallTab, InstallTabs } from "./install-tabs"
 import { TEXTS } from "./texts"
 
@@ -146,6 +147,29 @@ export default async function Mcp({ params }: Props) {
 
     return (
         <div className="site min-h-screen bg-canvas text-foreground">
+            <JsonLd
+                data={{
+                    "@context": "https://schema.org",
+                    "@type": "SoftwareApplication",
+                    name: "Next AI Draw.io MCP Server",
+                    alternateName: "@next-ai-drawio/mcp-server",
+                    applicationCategory: "DeveloperApplication",
+                    operatingSystem: "Windows, macOS, Linux",
+                    softwareRequirements: "Node.js 18 or later",
+                    description: t.description,
+                    url: `${SITE_URL}/${lang}/mcp`,
+                    downloadUrl: NPM_URL,
+                    license: "https://www.apache.org/licenses/LICENSE-2.0",
+                    isAccessibleForFree: true,
+                    offers: {
+                        "@type": "Offer",
+                        price: "0",
+                        priceCurrency: "USD",
+                    },
+                    sameAs: [README_URL, NPM_URL],
+                    inLanguage: lang,
+                }}
+            />
             <div className="lp-grid border-b border-border">
                 <SiteHeader lang={lang} current="mcp" />
                 <section className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] items-center gap-12 px-8 pt-8 pb-16">

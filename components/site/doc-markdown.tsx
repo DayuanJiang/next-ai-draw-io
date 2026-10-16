@@ -98,7 +98,13 @@ export function DocMarkdown({
                             ? demoNamed(textOf(children).trim())
                             : null
                     if (demo) {
-                        return <div className="not-prose my-7">{demo}</div>
+                        // On wide screens a demo takes the room beside the
+                        // column too, so its diagram is larger
+                        return (
+                            <div className="not-prose my-7 min-[1400px]:-mx-10">
+                                {demo}
+                            </div>
+                        )
                     }
                     return (
                         <div className="not-prose my-5">

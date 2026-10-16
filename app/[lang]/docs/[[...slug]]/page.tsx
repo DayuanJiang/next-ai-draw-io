@@ -5,13 +5,15 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { docsDemos } from "@/components/site/demo-texts"
 import { DocMarkdown } from "@/components/site/doc-markdown"
+import { DocsToc } from "@/components/site/docs-toc"
+import { JsonLd } from "@/components/site/json-ld"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import { GITHUB_URL, SITE_TEXTS } from "@/components/site/site-texts"
 import { DOCS_NAV, DOCS_SLUGS, docsPath, fileOfSlug, loadDoc } from "@/lib/docs"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { hasLocale } from "@/lib/i18n/dictionaries"
-import { OG_IMAGE, OG_LOCALE } from "@/lib/seo"
+import { OG_IMAGE, OG_LOCALE, SITE_URL } from "@/lib/seo"
 
 const TEXTS: Record<
     Locale,
@@ -70,8 +72,7 @@ const ORDER = DOCS_NAV.flatMap((group) => group.files)
 
 type Props = { params: Promise<{ lang: string; slug?: string[] }> }
 
-export const dynamicParams = false
-
+// Unknown pages are not prebuilt: resolve() answers them with the site's 404
 export function generateStaticParams() {
     return DOCS_SLUGS.map((slug) => ({ slug: slug ? [slug] : [] }))
 }
@@ -134,8 +135,49 @@ export default async function DocsPage({ params }: Props) {
               ? t.inEnglish
               : t.inSimplified
 
+    const url = `${SITE_URL}/${doc.locale}${docsPath(file)}`
+    const docsHome = `${SITE_URL}/${lang}/docs`
     return (
         <div className="site min-h-screen bg-canvas text-foreground">
+            <JsonLd
+                data={[
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "TechArticle",
+                        headline: doc.title,
+                        description: doc.summary,
+                        inLanguage: doc.locale,
+                        url,
+                        isPartOf: {
+                            "@type": "WebSite",
+                            name: "Next AI Draw.io",
+                            url: SITE_URL,
+                        },
+                    },
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "BreadcrumbList",
+                        itemListElement: [
+                            {
+                                "@type": "ListItem",
+                                position: 1,
+                                name: t.docs,
+                                item: docsHome,
+                            },
+                            ...(file === "introduction"
+                                ? []
+                                : [
+                                      {
+                                          "@type": "ListItem",
+                                          position: 2,
+                                          name: doc.title,
+                                          item: url,
+                                      },
+                                  ]),
+                        ],
+                    },
+                ]}
+            />
             <div className="border-b border-border">
                 <SiteHeader lang={lang} current="docs" wide />
             </div>
@@ -227,25 +269,7 @@ export default async function DocsPage({ params }: Props) {
 
                 {/* Headings of the page */}
                 <aside className="sticky top-0 max-h-screen self-start overflow-y-auto py-10 text-[13px]">
-                    {doc.headings.length > 0 && (
-                        <>
-                            <h2 className="mb-2 font-semibold">
-                                {t.onThisPage}
-                            </h2>
-                            <ul className="space-y-1.5 border-l border-border">
-                                {doc.headings.map((h) => (
-                                    <li key={h.id}>
-                                        <a
-                                            href={`#${h.id}`}
-                                            className={`-ml-px block border-l border-transparent text-muted-foreground hover:border-foreground hover:text-foreground ${h.depth === 3 ? "pl-6" : "pl-3"}`}
-                                        >
-                                            {h.text}
-                                        </a>
-                                    </li>
-                                ))}
-                            </ul>
-                        </>
-                    )}
+                    <DocsToc title={t.onThisPage} headings={doc.headings} />
                 </aside>
             </div>
             <SiteFooter lang={lang} path={docsPath(file)} />
