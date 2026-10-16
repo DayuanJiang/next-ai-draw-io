@@ -4,7 +4,10 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { i18n } from "./lib/i18n/config"
 
-function getLocale(request: NextRequest): string | undefined {
+// Taiwan, Hong Kong and Macau write Traditional Chinese
+const TRADITIONAL_CHINESE = /^zh-(hant|tw|hk|mo)\b/i
+
+function getLocale(request: NextRequest): string {
     // Negotiator expects plain object so we need to transform headers
     const negotiatorHeaders: Record<string, string> = {}
     request.headers.forEach((value, key) => {
@@ -14,14 +17,27 @@ function getLocale(request: NextRequest): string | undefined {
     // @ts-expect-error locales are readonly
     const locales: string[] = i18n.locales
 
-    // Use negotiator and intl-localematcher to get best locale
-    const languages = new Negotiator({ headers: negotiatorHeaders }).languages(
-        locales,
-    )
+    // The browser's languages in order of preference. Negotiator would match
+    // zh-TW to zh if given the locales, so map Traditional Chinese first and
+    // let intl-localematcher pick the locale.
+    const languages = new Negotiator({ headers: negotiatorHeaders })
+        .languages()
+        .filter(isLanguageTag)
+        .map((language) =>
+            TRADITIONAL_CHINESE.test(language) ? "zh-Hant" : language,
+        )
 
-    const locale = matchLocale(languages, locales, i18n.defaultLocale)
+    return matchLocale(languages, locales, i18n.defaultLocale)
+}
 
-    return locale
+// intl-localematcher throws on a malformed tag, and "*" is not a tag
+function isLanguageTag(language: string): boolean {
+    try {
+        Intl.getCanonicalLocales(language)
+        return true
+    } catch {
+        return false
+    }
 }
 
 export function proxy(request: NextRequest) {
