@@ -181,7 +181,8 @@ export default async function DocsPage({ params }: Props) {
             <div className="border-b border-border">
                 <SiteHeader lang={lang} current="docs" wide />
             </div>
-            <div className="mx-auto grid max-w-[1440px] grid-cols-[232px_minmax(0,1fr)_208px] gap-12 px-8">
+            {/* Below 1280 px the page's headings give their room to the text */}
+            <div className="mx-auto grid max-w-[1440px] grid-cols-[232px_minmax(0,1fr)] gap-12 px-8 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
                 {/* Pages */}
                 <nav className="sticky top-0 max-h-screen self-start overflow-y-auto py-8 text-[14px]">
                     {DOCS_NAV.map((g) => (
@@ -268,7 +269,7 @@ export default async function DocsPage({ params }: Props) {
                 </main>
 
                 {/* Headings of the page */}
-                <aside className="sticky top-0 max-h-screen self-start overflow-y-auto py-10 text-[13px]">
+                <aside className="sticky top-0 hidden max-h-screen self-start overflow-y-auto py-10 text-[13px] xl:block">
                     <DocsToc title={t.onThisPage} headings={doc.headings} />
                 </aside>
             </div>
