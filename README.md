@@ -11,7 +11,7 @@ English | [中文](./docs/cn/README_CN.md) | [日本語](./docs/ja/README_JA.md)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[**Live Demo**](https://next-ai-drawio.jiang.jp/) · [**Desktop App**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP Server**](#in-your-ai-agent-mcp)
+[**Live Demo**](https://next-ai-drawio.jiang.jp/) · [**Docs**](https://next-ai-drawio.jiang.jp/en/docs) · [**Desktop App**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP Server**](#in-your-ai-agent-mcp)
 
 </div>
 
