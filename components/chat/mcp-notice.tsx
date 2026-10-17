@@ -75,6 +75,8 @@ function NoticeLink({ className }: { className?: string }) {
         <Link
             href={`/${lang}/mcp`}
             target="_blank"
+            // A new tab loads the page itself: nothing to prefetch
+            prefetch={false}
             className={cn("group flex min-w-0 items-center gap-3", className)}
         >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/20">

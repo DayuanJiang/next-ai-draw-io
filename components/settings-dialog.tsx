@@ -530,6 +530,7 @@ function AboutTab() {
                 <Link
                     href={`/${lang}/mcp`}
                     target="_blank"
+                    prefetch={false}
                     className="flex items-center gap-3 rounded-xl border border-border p-3.5 transition-colors hover:border-foreground/25"
                 >
                     <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">

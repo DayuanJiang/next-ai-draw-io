@@ -18,6 +18,8 @@ export function DocsButton() {
             <Link
                 href={`/${lang}/docs`}
                 target="_blank"
+                // A new tab loads the page itself: nothing to prefetch
+                prefetch={false}
                 aria-label={label}
                 className={iconButtonClass}
                 data-testid="docs-button"
