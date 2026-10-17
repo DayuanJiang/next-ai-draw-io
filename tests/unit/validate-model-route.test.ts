@@ -119,6 +119,33 @@ describe("POST /api/validate-model", () => {
         }
     })
 
+    it("refuses a key that is not text", async () => {
+        // An object is truthy: it would pass as the user's own key while
+        // the gateway SDK ignores it and falls back to the server's OIDC
+        // token
+        const fetchMock = vi.fn()
+        vi.stubGlobal("fetch", fetchMock)
+        for (const extra of [
+            { apiKey: {} },
+            { apiKey: ["key"] },
+            { apiKey: "key", baseUrl: { href: "https://a.example" } },
+        ]) {
+            const res = await validateModel(
+                new Request("http://localhost/api/validate-model", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider: "gateway",
+                        modelId: "openai/gpt-4o",
+                        ...extra,
+                    }),
+                }),
+            )
+            expect(res.status).toBe(400)
+        }
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+
     it("does not run on the server's keys", async () => {
         vi.stubEnv("OLLAMA_API_KEY", "server-ollama-key")
         const res = await validateModel(
