@@ -362,6 +362,16 @@
         "bedrockAuthAccessKey": "存取金鑰",
         "moreOptions": "更多選項：Base URL、顯示名稱",
         "moreOptionsName": "更多選項：顯示名稱",
+        "moreOptionsHeaders": "更多選項：Base URL、請求標頭、顯示名稱",
+        "customHeaders": "請求標頭（選填）",
+        "customHeadersHint": "每行一個，寫成 名稱: 值。用於除了 API Key 還要求其他身分資訊的閘道，只隨您自己的 Key 傳送。",
+        "customHeadersErrors": {
+            "format": "第 {line} 行：請寫成 名稱: 值",
+            "name": "第 {line} 行：標頭名稱裡有不允許的字元",
+            "value": "第 {line} 行：值只能用英文字母、數字和符號（最多 1000 個）",
+            "reserved": "第 {line} 行：這個標頭由請求本身設定",
+            "tooMany": "第 {line} 行：最多 20 個標頭"
+        },
         "keyRejected": "服務商拒絕了這個 API Key。它可能輸錯了、已過期、已被撤銷，或屬於另一個帳號。需要新 Key 可以點「取得 API Key」。",
         "keyRejectedNoLink": "服務商拒絕了這個 API Key。它可能輸錯了、已過期、已被撤銷，或屬於另一個帳號。",
         "modelNotFound": "服務商找不到這個模型 ID，請檢查拼寫。",

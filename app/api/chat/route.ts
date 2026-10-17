@@ -28,6 +28,7 @@ import {
 } from "@/lib/chat-helpers"
 import { addReplyUsage, type ChatUIMessage } from "@/lib/chat-message"
 import { chatTools } from "@/lib/chat-tools"
+import { customHeadersOf } from "@/lib/custom-headers"
 import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
 import {
     checkAndIncrementRequest,
@@ -207,6 +208,24 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Get cookie header for EdgeOne authentication (eo_token, eo_time)
     const cookieHeader = req.headers.get("cookie")
 
+    // The user's own extra headers; getAIModel sends them only with the
+    // user's own key
+    let customHeadersText: string | null = null
+    try {
+        customHeadersText = decodeURIComponent(
+            req.headers.get("x-ai-custom-headers") ?? "",
+        )
+    } catch {
+        return Response.json(
+            { error: "Invalid custom headers." },
+            { status: 400 },
+        )
+    }
+    const customHeaders = customHeadersOf(customHeadersText)
+    if (!customHeaders.ok) {
+        return Response.json({ error: customHeaders.message }, { status: 400 })
+    }
+
     const clientOverrides = {
         // Server model provider takes precedence over client header; the
         // site's function named only in AI_PROVIDER is named here, for its
@@ -228,6 +247,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         ...serverModelConfig,
         // Vertex AI credentials (Express Mode)
         vertexApiKey: req.headers.get("x-vertex-api-key"),
+        customHeaders: customHeaders.headers,
         // Pass cookies for EdgeOne Pages authentication, and the access code,
         // which the EdgeOne function checks too
         ...(onSiteFunction && {

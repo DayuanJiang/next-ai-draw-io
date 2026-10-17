@@ -391,6 +391,8 @@ SGLANG_BASE_URL=https://your-custom-endpoint/v1
 
 上面没有列出的服务，例如 vLLM、LM Studio、LiteLLM 或 API 网关，请在“设置”里选择 OpenAI-compatible，填入它的基础 URL 和 Key。服务端不校验 Key 时，填任意非空内容即可。
 
+除了 Key 还要求其他身份信息（例如用户 ID）的网关，可以加自定义请求头：在“设置”里展开“更多选项”，每行写一个 `名称: 值`。请求头只随您自己的 Key 发送。设置里其他 OpenAI 格式的服务商也有这一项。
+
 应用会把多条 system 消息合并成一条，开源模型的对话模板通常要求这样；`<think>` 里的推理内容会从回复里分离出来。
 
 ```bash

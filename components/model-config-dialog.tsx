@@ -306,6 +306,7 @@ export function ModelConfigDialog({
             p?.awsRegion,
             p?.awsSessionToken,
             p?.vertexApiKey,
+            p?.customHeaders,
         ])
     }
 
@@ -428,6 +429,7 @@ export function ModelConfigDialog({
                         provider: selectedProvider.provider,
                         apiKey: selectedProvider.apiKey,
                         baseUrl: selectedProvider.baseUrl,
+                        customHeaders: selectedProvider.customHeaders,
                     }),
                 },
             )
@@ -739,6 +741,7 @@ export function ModelConfigDialog({
                                     selectedProvider.awsSessionToken,
                                 // Vertex AI credentials (Express Mode)
                                 vertexApiKey: selectedProvider.vertexApiKey,
+                                customHeaders: selectedProvider.customHeaders,
                             }),
                         },
                     )
@@ -1165,6 +1168,7 @@ export function ModelConfigDialog({
                                     name={provider.name}
                                     baseUrl={provider.baseUrl}
                                     awsRegion={provider.awsRegion}
+                                    customHeaders={provider.customHeaders}
                                     settingsLayout
                                     bedrockFilled={{
                                         apiKey: !!provider.apiKey,

@@ -7,6 +7,7 @@ import {
     usesServerCredentials,
     usesServerEndpoint,
 } from "@/lib/ai-providers"
+import { customHeadersOf } from "@/lib/custom-headers"
 import {
     checkAndIncrementRequest,
     isQuotaEnabled,
@@ -29,6 +30,8 @@ export interface TestModelRequest {
     awsSessionToken?: string
     // Vertex AI specific
     vertexApiKey?: string // Express Mode API key
+    // Extra request headers, "Name: value" per line (lib/custom-headers.ts)
+    customHeaders?: string
 }
 
 const TEST_TIMEOUT_MS = 15_000
@@ -188,6 +191,14 @@ export async function testModelConnection(
             }
         }
 
+        const customHeaders = customHeadersOf(body.customHeaders)
+        if (!customHeaders.ok) {
+            return NextResponse.json(
+                { valid: false, error: customHeaders.message },
+                { status: 400 },
+            )
+        }
+
         // The same model the chat would use. A client base URL makes it
         // refuse redirects to internal hosts.
         const { model } = getAIModel({
@@ -202,6 +213,7 @@ export async function testModelConnection(
             // Temporary AWS credentials need it, as in the chat
             awsSessionToken,
             vertexApiKey,
+            customHeaders: customHeaders.headers,
             // The site's function (EdgeOne) checks the Pages cookies and
             // the access code
             ...(onSiteFunction && {

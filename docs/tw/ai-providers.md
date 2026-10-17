@@ -391,6 +391,8 @@ SGLANG_BASE_URL=https://your-custom-endpoint/v1
 
 上面沒有列出的服務，例如 vLLM、LM Studio、LiteLLM 或 API 閘道，請在「設定」裡選擇 OpenAI-compatible，填入它的基礎 URL 和 Key。伺服器不驗證 Key 時，填任意非空內容即可。
 
+除了 Key 還要求其他身分資訊（例如使用者 ID）的閘道，可以加自訂請求標頭：在「設定」裡展開「更多選項」，每行寫一個 `名稱: 值`。標頭只隨您自己的 Key 傳送。設定裡其他 OpenAI 格式的服務商也有這一項。
+
 應用程式會把多則 system 訊息合併成一則，開放原始碼模型的對話範本通常要求這樣；`<think>` 裡的推理內容會從回覆裡分離出來。
 
 ```bash

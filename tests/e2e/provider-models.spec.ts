@@ -511,3 +511,77 @@ test("Bedrock can be tested and used with an API key alone", async ({
     expect(headers["x-ai-provider"]).toBe("bedrock")
     expect(headers["x-aws-region"]).toBe("us-east-1")
 })
+
+test("custom headers are checked as typed and go with the test and the chat", async ({
+    page,
+}) => {
+    const bodies: any[] = []
+    await page.route("**/api/validate-model", async (route) => {
+        bodies.push(route.request().postDataJSON())
+        await route.fulfill({
+            status: 200,
+            json: { valid: true, responseTime: 900 },
+        })
+    })
+    const dialog = await openQwenSettings(page, {
+        version: 1,
+        selectedModelId: "m1",
+        providers: [
+            {
+                id: "p1",
+                provider: "custom",
+                apiKey: "user-key",
+                baseUrl: "https://gateway.example.com/v1",
+                models: [{ id: "m1", modelId: "gw-model" }],
+            },
+        ],
+    })
+    const field = dialog.getByLabel("Request headers (optional)")
+    await field.fill("username myApiID")
+    await expect(
+        dialog.getByText("Line 1: write it as Name: value"),
+    ).toBeVisible()
+    const text = "username: myApiID\nplatform: myPlatform"
+    await field.fill(text)
+    await expect(dialog.getByText("Line 1:")).toHaveCount(0)
+
+    await testButton(dialog).click()
+    await expect.poll(() => bodies.length).toBe(1)
+    expect(bodies[0]).toMatchObject({ provider: "custom", customHeaders: text })
+
+    let headers: Record<string, string> = {}
+    await page.route("**/api/chat", async (route) => {
+        headers = route.request().headers()
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: 'data: {"type":"start"}\n\ndata: {"type":"finish"}\n\ndata: [DONE]\n\n',
+        })
+    })
+    await page.keyboard.press("Escape")
+    const input = page.getByTestId("chat-input")
+    await input.fill("Hello")
+    await input.press("ControlOrMeta+Enter")
+    await expect
+        .poll(() => headers["x-ai-custom-headers"])
+        .toBe(encodeURIComponent(text))
+})
+
+test("providers outside the OpenAI style have no custom headers", async ({
+    page,
+}) => {
+    const dialog = await openQwenSettings(page, {
+        version: 1,
+        providers: [
+            {
+                id: "p1",
+                provider: "anthropic",
+                apiKey: "k",
+                models: [{ id: "m1", modelId: "claude-sonnet-4-5" }],
+            },
+        ],
+    })
+    await dialog.getByRole("button", { name: /^More options/ }).click()
+    await expect(dialog.getByLabel("Display Name")).toBeVisible()
+    await expect(dialog.getByLabel("Request headers (optional)")).toHaveCount(0)
+})

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
+import { customHeadersOf } from "@/lib/custom-headers"
 import { classifyLLMError } from "@/lib/llm-errors"
 import {
     canListModels,
@@ -28,10 +29,11 @@ export async function POST(req: Request) {
     const accessError = checkAccessCode(req)
     if (accessError) return accessError
 
-    const { provider, apiKey, baseUrl } = (await req.json()) as {
+    const { provider, apiKey, baseUrl, customHeaders } = (await req.json()) as {
         provider: ProviderName
         apiKey?: string
         baseUrl?: string
+        customHeaders?: string
     }
     if (!canListModels(provider)) {
         return NextResponse.json({ models: null })
@@ -39,6 +41,13 @@ export async function POST(req: Request) {
     // SECURITY: Block SSRF attacks via custom baseUrl
     if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
         return NextResponse.json({ error: "Invalid base URL" }, { status: 400 })
+    }
+    const extraHeaders = customHeadersOf(customHeaders)
+    if (!extraHeaders.ok) {
+        return NextResponse.json(
+            { error: extraHeaders.message },
+            { status: 400 },
+        )
     }
     // Public and local lists need no key
     if (!apiKey && !PROVIDERS[provider].listNeedsNoKey) {
@@ -51,7 +60,8 @@ export async function POST(req: Request) {
     try {
         const models = await listProviderModels(
             provider,
-            { apiKey, baseUrl },
+            // Only the client's key is used, so the headers go with it
+            { apiKey, baseUrl, customHeaders: extraHeaders.headers },
             (baseUrl && redirectGuardedFetch()) || fetch,
         )
         return NextResponse.json({ models })

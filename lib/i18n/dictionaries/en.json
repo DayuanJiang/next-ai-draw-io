@@ -362,6 +362,16 @@
         "bedrockAuthAccessKey": "Access keys",
         "moreOptions": "More options: base URL, display name",
         "moreOptionsName": "More options: display name",
+        "moreOptionsHeaders": "More options: base URL, request headers, display name",
+        "customHeaders": "Request headers (optional)",
+        "customHeadersHint": "One per line as Name: value, for a gateway that asks for more than the API key. Sent only with your own key.",
+        "customHeadersErrors": {
+            "format": "Line {line}: write it as Name: value",
+            "name": "Line {line}: the header name has a character that is not allowed",
+            "value": "Line {line}: the value can only use English letters, digits and symbols (at most 1000)",
+            "reserved": "Line {line}: this header is set by the request itself",
+            "tooMany": "Line {line}: at most 20 headers"
+        },
         "keyRejected": "The provider rejected this API key. It may be mistyped, expired, revoked, or from another account. To make a new one, use Get API key.",
         "keyRejectedNoLink": "The provider rejected this API key. It may be mistyped, expired, revoked, or from another account.",
         "modelNotFound": "The provider can't find this model ID. Check its spelling.",

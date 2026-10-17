@@ -28,6 +28,8 @@ export interface ProviderConfig {
     awsSessionToken?: string // Optional, for temporary credentials
     // Vertex AI specific fields
     vertexApiKey?: string // Express Mode API key
+    // Extra request headers, "Name: value" per line (lib/custom-headers.ts)
+    customHeaders?: string
 
     models: ModelConfig[]
 }
@@ -54,6 +56,7 @@ export interface FlattenedModel {
     awsSessionToken?: string
     // Vertex AI specific fields
     vertexApiKey?: string // Express Mode API key
+    customHeaders?: string
 
     validated?: boolean // Has this model been validated
     // Source of this model config: user-defined (client) or server-defined
@@ -119,6 +122,7 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 awsSessionToken: provider.awsSessionToken,
                 // Vertex AI fields
                 vertexApiKey: provider.vertexApiKey,
+                customHeaders: provider.customHeaders,
 
                 validated: model.validated,
                 source: "user",

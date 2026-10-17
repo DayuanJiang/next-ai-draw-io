@@ -391,6 +391,8 @@ SGLANG_BASE_URL=https://your-custom-endpoint/v1
 
 For a server not listed above, such as vLLM, LM Studio, LiteLLM or an API gateway, pick OpenAI-compatible in Settings and enter its base URL and a key. If the server ignores keys, any non-empty value works.
 
+A gateway that asks for more than the key, such as a user id, can get extra request headers: in Settings, open More options and write one per line as `Name: value`. They are sent only with your own key. The other OpenAI-style providers in Settings have the same field.
+
 The app merges several system messages into one, as open-source chat templates expect, and splits `<think>` reasoning from the reply.
 
 ```bash

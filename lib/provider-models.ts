@@ -142,7 +142,16 @@ function listFallbackUrl(provider: ProviderName, apiKey?: string): string {
  */
 export async function listProviderModels(
     provider: ProviderName,
-    { apiKey, baseUrl }: { apiKey?: string; baseUrl?: string },
+    {
+        apiKey,
+        baseUrl,
+        customHeaders,
+    }: {
+        apiKey?: string
+        baseUrl?: string
+        // The user's own headers (lib/custom-headers.ts), for OpenAI-style lists
+        customHeaders?: Record<string, string> | null
+    },
     unlimitedFetch: typeof fetch = fetch,
 ): Promise<ListedModel[]> {
     const fetchFn = sizeLimitedFetch(unlimitedFetch)
@@ -237,7 +246,17 @@ export async function listProviderModels(
                     `${PROVIDERS[provider].label} needs a base URL to list its models.`,
                 )
             }
-            const data = await getJson(`${base}/models`, bearer, fetchFn)
+            // Set one by one, so the user's own Authorization replaces the
+            // bearer one instead of joining it
+            let headers = bearer
+            if (customHeaders) {
+                const merged = new Headers(bearer)
+                for (const [name, value] of Object.entries(customHeaders)) {
+                    merged.set(name, value)
+                }
+                headers = Object.fromEntries(merged)
+            }
+            const data = await getJson(`${base}/models`, headers, fetchFn)
             models = (data.data ?? [])
                 .map((m: { id: string }) => ({ id: m.id }))
                 .filter((m: ListedModel) => !NON_CHAT.test(m.id))

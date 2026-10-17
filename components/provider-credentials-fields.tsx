@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, Key, Link2, Tag } from "lucide-react"
+import { ChevronRight, FileCode2, Key, Link2, Tag } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { useLocale } from "@/components/canvas/locale-context"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { parseCustomHeaders, supportsCustomHeaders } from "@/lib/custom-headers"
 import { formatMessage } from "@/lib/i18n/utils"
 import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import { chatRequestUrl, normalizeBaseUrl } from "@/lib/types/model-config"
@@ -54,9 +56,14 @@ interface ProviderCredentialsFieldsProps {
     name?: string
     baseUrl?: string
     awsRegion?: string
+    // Extra request headers, "Name: value" per line (settings layout only)
+    customHeaders?: string
     disabled?: boolean
     // Update a plain text field
-    onChange: (field: "name" | "baseUrl" | "awsRegion", value: string) => void
+    onChange: (
+        field: "name" | "baseUrl" | "awsRegion" | "customHeaders",
+        value: string,
+    ) => void
     // Render the control for a secret field. The caller may include trailing
     // UI (e.g. the user dialog's inline Test button + validation error); the
     // shared component only supplies the label above it.
@@ -81,6 +88,7 @@ export function ProviderCredentialsFields({
     name,
     baseUrl,
     awsRegion,
+    customHeaders,
     disabled,
     onChange,
     renderSecret,
@@ -106,8 +114,11 @@ export function ProviderCredentialsFields({
         () =>
             !!name ||
             (!!baseUrl && baseUrl !== info.defaultBaseUrl) ||
+            !!customHeaders?.trim() ||
             !!info.optionsOpen,
     )
+    const withHeaders = !!settingsLayout && supportsCustomHeaders(provider)
+    const headersCheck = parseCustomHeaders(customHeaders ?? "")
     // Bedrock: the way that is filled in (an API key is used first when both
     // are, as the server does), else the one shown last, so emptying the
     // fields to type new keys keeps them on screen
@@ -188,6 +199,43 @@ export function ProviderCredentialsFields({
                 placeholder={dict.modelConfig.customEndpoint}
                 className="h-9 font-mono text-xs"
             />
+        </div>
+    )
+    // Extra headers for a gateway that asks for more than the key (#763)
+    const headersField = (
+        <div className="space-y-2">
+            <Label
+                htmlFor="custom-headers"
+                className="text-xs font-medium flex items-center gap-1.5"
+            >
+                <FileCode2 className="h-3.5 w-3.5 text-muted-foreground" />
+                {dict.modelConfig.customHeaders}
+            </Label>
+            <Textarea
+                id="custom-headers"
+                value={customHeaders ?? ""}
+                disabled={disabled}
+                onChange={(e) => onChange("customHeaders", e.target.value)}
+                placeholder={"X-User-Id: alice\nX-Platform: internal"}
+                aria-invalid={!headersCheck.ok}
+                spellCheck={false}
+                rows={2}
+                className="min-h-0 rounded-xl border-border-subtle bg-surface-1 px-3.5 font-mono text-xs md:text-xs"
+            />
+            {headersCheck.ok ? (
+                <p className="text-xs text-muted-foreground">
+                    {dict.modelConfig.customHeadersHint}
+                </p>
+            ) : (
+                <p className="text-xs text-destructive">
+                    {formatMessage(
+                        dict.modelConfig.customHeadersErrors[
+                            headersCheck.error
+                        ],
+                        { line: headersCheck.line },
+                    )}
+                </p>
+            )}
         </div>
     )
     // API key, with a link to where the provider issues keys
@@ -422,7 +470,9 @@ export function ProviderCredentialsFields({
                         />
                         {info.credential === "aws"
                             ? dict.modelConfig.moreOptionsName
-                            : dict.modelConfig.moreOptions}
+                            : withHeaders
+                              ? dict.modelConfig.moreOptionsHeaders
+                              : dict.modelConfig.moreOptions}
                     </button>
                     {optionsOpen && (
                         <>
@@ -430,6 +480,7 @@ export function ProviderCredentialsFields({
                                 (info.credential === "vertexKey"
                                     ? vertexBaseUrlField
                                     : baseUrlField)}
+                            {withHeaders && headersField}
                             {nameField}
                         </>
                     )}

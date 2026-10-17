@@ -362,6 +362,16 @@
         "bedrockAuthAccessKey": "访问密钥",
         "moreOptions": "更多选项：Base URL、显示名称",
         "moreOptionsName": "更多选项：显示名称",
+        "moreOptionsHeaders": "更多选项：Base URL、请求头、显示名称",
+        "customHeaders": "请求头（可选）",
+        "customHeadersHint": "每行一个，写成 名称: 值。用于除了 API Key 还要求其他身份信息的网关，只随您自己的 Key 发送。",
+        "customHeadersErrors": {
+            "format": "第 {line} 行：请写成 名称: 值",
+            "name": "第 {line} 行：请求头名称里有不允许的字符",
+            "value": "第 {line} 行：值只能用英文字母、数字和符号（最多 1000 个）",
+            "reserved": "第 {line} 行：这个请求头由请求本身设置",
+            "tooMany": "第 {line} 行：最多 20 个请求头"
+        },
         "keyRejected": "服务商拒绝了这个 API Key。它可能输错了、已过期、已被撤销，或属于另一个账号。需要新 Key 可以点“获取 API Key”。",
         "keyRejectedNoLink": "服务商拒绝了这个 API Key。它可能输错了、已过期、已被撤销，或属于另一个账号。",
         "modelNotFound": "服务商找不到这个模型 ID，请检查拼写。",

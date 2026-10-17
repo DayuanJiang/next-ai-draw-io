@@ -28,6 +28,11 @@ export function buildChatHeaders(
         set("x-aws-session-token", config.awsSessionToken)
         // Vertex AI credentials (Express Mode)
         set("x-vertex-api-key", config.vertexApiKey)
+        // Several lines, so encoded (lib/custom-headers.ts)
+        set(
+            "x-ai-custom-headers",
+            config.customHeaders && encodeURIComponent(config.customHeaders),
+        )
     }
     // Selected model ID for server model lookup (apiKeyEnv/baseUrlEnv)
     set("x-selected-model-id", config.selectedModelId)

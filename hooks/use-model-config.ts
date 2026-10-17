@@ -386,6 +386,8 @@ export function getSelectedAIConfig(): {
     selectedModelId: string
     // Vertex AI credentials (Express Mode)
     vertexApiKey: string
+    // Extra request headers, "Name: value" per line
+    customHeaders: string
     // The user's provider of the selected model ("" for a server model)
     providerId: string
 } {
@@ -401,6 +403,7 @@ export function getSelectedAIConfig(): {
         awsSessionToken: "",
         selectedModelId: "",
         vertexApiKey: "",
+        customHeaders: "",
         providerId: "",
     }
 
@@ -462,6 +465,7 @@ export function getSelectedAIConfig(): {
         selectedModelId: config.selectedModelId,
         // Vertex AI credentials (Express Mode)
         vertexApiKey: model.vertexApiKey || "",
+        customHeaders: model.customHeaders || "",
         providerId:
             config.providers.find((p) =>
                 p.models.some((m) => m.id === config.selectedModelId),

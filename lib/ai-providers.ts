@@ -96,6 +96,9 @@ export interface ClientOverrides {
     trustedBaseUrl?: boolean
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
+    // The user's own extra headers (lib/custom-headers.ts), sent only with
+    // the user's own key
+    customHeaders?: Record<string, string> | null
     // Custom env var name(s) for server models
     // Can be a single string or array of strings for load balancing
     apiKeyEnv?: string | string[]
@@ -882,6 +885,7 @@ function createModel(
     const opts = {
         apiKey: e.apiKey,
         ...(e.baseURL && { baseURL: e.baseURL }),
+        ...(e.headers && { headers: e.headers }),
         ...(e.fetch && { fetch: e.fetch }),
     }
     switch (PROVIDERS[provider].sdk) {
@@ -1142,8 +1146,15 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                 `${def.label} needs a base URL. Add it in the model settings.`,
             )
         }
+        // The user's own headers go only with the user's own key, never
+        // with the server's (issue #763)
+        const headers =
+            e.keySource === "client" && overrides?.customHeaders
+                ? { ...e.headers, ...overrides.customHeaders }
+                : e.headers
         model = createModel(provider, modelId, {
             ...e,
+            headers,
             fetch: e.guarded ? redirectGuardedFetch() : undefined,
         })
     }
