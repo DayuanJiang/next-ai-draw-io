@@ -803,7 +803,7 @@ registerTool(
             "- add: Add a new cell. Provide cell_id (new unique id within the page) and new_xml. One cell per operation.\n" +
             "- update: Replace an existing cell by its id. Provide cell_id and complete new_xml.\n" +
             "- delete: Remove a cell by its id. Only cell_id is needed. Its children and connected edges are deleted too, so give only a container's id.\n\n" +
-            "For add/update, new_xml is the complete mxCell in the compact form (a shape with x, y, w, h; an edge with source and target). No XML comments. " +
+            "For add/update, new_xml is the complete mxCell (inside its <object> wrapper when it has custom data, see the drawing guide) in the compact form (a shape with x, y, w, h; an edge with source and target). No XML comments. " +
             'Every " inside new_xml must be escaped as \\" in the JSON.\n\n' +
             "Example - Add a rectangle on the default (first) page:\n" +
             '{"operations": [{"operation": "add", "cell_id": "rect-1", "new_xml": "<mxCell id=\\"rect-1\\" value=\\"Hello\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}\n\n' +

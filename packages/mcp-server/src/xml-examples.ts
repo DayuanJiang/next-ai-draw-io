@@ -21,6 +21,14 @@ export const WAYPOINT_EXAMPLE = `<mxCell id="hotfix_to_main" style="edgeStyle=or
   </mxGeometry>
 </mxCell>`
 
+/**
+ * Custom data that draw.io shows in Edit Data: the id, the text and the
+ * properties sit on an <object> wrapper around the cell (issue #822)
+ */
+export const CUSTOM_DATA_RULE = `Custom data: when the user's data gives a shape or an edge properties besides its text (an IP address, an owner, a status), keep them where draw.io's Edit Data shows them. Wrap the cell in <object> with the id, the text as label (not value) and one attribute per property; the mxCell inside keeps style and position, without id or value. Property names use letters, digits and underscores. Other cells stay plain mxCell. In edit_diagram, send the whole <object> with its id as cell_id.`
+
+export const CUSTOM_DATA_EXAMPLE = `<object id="2" label="Web server" ip="10.0.0.5" owner="Ops"><mxCell style="rounded=1;" x="40" y="40" w="120" h="60"/></object>`
+
 /** Named styles defined once and used by name, like CSS classes */
 export const STYLE_CLASS_EXAMPLE = `<mxStyle name="step" value="fillColor=#dae8fc;strokeColor=#6c8ebf;"/>
 <mxStyle name="down" value="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.5;entryY=0;"/>

@@ -9,6 +9,8 @@
  */
 
 import {
+    CUSTOM_DATA_EXAMPLE,
+    CUSTOM_DATA_RULE,
     indent,
     STYLE_CLASS_EXAMPLE,
     SWIMLANE_EXAMPLE,
@@ -53,6 +55,10 @@ Rules (XML that breaks them is rejected):
 5. Escape special characters in attribute values: &lt; for <, &gt; for >, &amp; for &, &quot; for ".
 6. NEVER include XML comments (<!-- -->). draw.io strips them.
 7. In tool arguments (JSON), every " inside the XML must be escaped as \\".
+
+${CUSTOM_DATA_RULE}
+
+${indent(CUSTOM_DATA_EXAMPLE)}
 
 Containers and swimlanes: children use the container id as parent and coordinates relative to the container.
 
