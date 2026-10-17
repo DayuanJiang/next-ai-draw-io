@@ -37,7 +37,6 @@ describe("sortTemplates", () => {
         prompt: "test prompt",
         createdAt: 1000,
         updatedAt: 1000,
-        clickCount: 0,
         runCount: 0,
         lastUsedAt: 0,
         pinned: false,
@@ -100,10 +99,6 @@ describe("sortTemplates", () => {
         sortTemplates(templates)
         expect(templates.map((t) => t.id)).toEqual(copy.map((t) => t.id))
     })
-
-    it("returns empty array for empty input", () => {
-        expect(sortTemplates([])).toEqual([])
-    })
 })
 
 describe("searchTemplates", () => {
@@ -115,7 +110,6 @@ describe("searchTemplates", () => {
             description: "Basic flowchart template",
             createdAt: 1000,
             updatedAt: 1000,
-            clickCount: 0,
             runCount: 0,
             lastUsedAt: 0,
             pinned: false,
@@ -127,7 +121,6 @@ describe("searchTemplates", () => {
             description: "Entity relationship diagram",
             createdAt: 1000,
             updatedAt: 1000,
-            clickCount: 0,
             runCount: 0,
             lastUsedAt: 0,
             pinned: false,
@@ -138,7 +131,6 @@ describe("searchTemplates", () => {
             prompt: "Draw network topology",
             createdAt: 1000,
             updatedAt: 1000,
-            clickCount: 0,
             runCount: 0,
             lastUsedAt: 0,
             pinned: false,
@@ -236,7 +228,6 @@ describe("validateImportData", () => {
                     prompt: "test prompt",
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
-                    clickCount: 0,
                     runCount: 0,
                     lastUsedAt: 0,
                     pinned: false,

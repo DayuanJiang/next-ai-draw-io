@@ -14,7 +14,8 @@ export const log = {
         console.error(`[MCP-DrawIO] [ERROR] ${msg}`, ...args)
     },
     debug: (msg: string, ...args: unknown[]) => {
-        if (process.env.DEBUG === "true") {
+        // process is missing when the web app runs this code in the browser
+        if (typeof process !== "undefined" && process.env.DEBUG === "true") {
             console.error(`[MCP-DrawIO] [DEBUG] ${msg}`, ...args)
         }
     },

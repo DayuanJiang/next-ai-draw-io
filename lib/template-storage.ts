@@ -1,5 +1,6 @@
 import { type DBSchema, type IDBPDatabase, openDB } from "idb"
 import { nanoid } from "nanoid"
+import { isIndexedDBAvailable } from "./session-storage"
 
 // Constants
 const DB_NAME = "next-ai-drawio-templates"
@@ -14,7 +15,6 @@ export interface Template {
     description?: string
     createdAt: number
     updatedAt: number
-    clickCount: number
     runCount: number
     lastUsedAt: number
     pinned: boolean
@@ -24,12 +24,7 @@ export type TemplateCreateInput = Pick<Template, "prompt"> &
     Partial<
         Omit<
             Template,
-            | "id"
-            | "createdAt"
-            | "updatedAt"
-            | "clickCount"
-            | "runCount"
-            | "lastUsedAt"
+            "id" | "createdAt" | "updatedAt" | "runCount" | "lastUsedAt"
         >
     >
 
@@ -37,12 +32,6 @@ interface TemplateDB extends DBSchema {
     templates: {
         key: string
         value: Template
-        indexes: {
-            "by-updated": number
-            "by-pinned": number
-            "by-run-count": number
-            "by-last-used": number
-        }
     }
 }
 
@@ -63,30 +52,12 @@ async function getDB(): Promise<IDBPDatabase<TemplateDB>> {
         dbPromise = openDB<TemplateDB>(DB_NAME, DB_VERSION, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
-                    if (!db.objectStoreNames.contains(STORE_NAME)) {
-                        const templateStore = db.createObjectStore(STORE_NAME, {
-                            keyPath: "id",
-                        })
-                        templateStore.createIndex("by-updated", "updatedAt")
-                        templateStore.createIndex("by-pinned", "pinned")
-                        templateStore.createIndex("by-run-count", "runCount")
-                        templateStore.createIndex("by-last-used", "lastUsedAt")
-                    }
+                    db.createObjectStore(STORE_NAME, { keyPath: "id" })
                 }
             },
         })
     }
     return dbPromise
-}
-
-// Check if IndexedDB is available
-export function isIndexedDBAvailable(): boolean {
-    if (typeof window === "undefined") return false
-    try {
-        return "indexedDB" in window && window.indexedDB !== null
-    } catch {
-        return false
-    }
 }
 
 // CRUD Operations
@@ -100,17 +71,6 @@ export async function getAllTemplates(): Promise<Template[]> {
     } catch (error) {
         console.error("Failed to get templates:", error)
         return []
-    }
-}
-
-export async function getTemplate(id: string): Promise<Template | null> {
-    if (!isIndexedDBAvailable()) return null
-    try {
-        const db = await getDB()
-        return (await db.get(STORE_NAME, id)) || null
-    } catch (error) {
-        console.error("Failed to get template:", error)
-        return null
     }
 }
 
@@ -130,7 +90,6 @@ export async function createTemplate(
         description: input.description?.trim() || undefined,
         createdAt: now,
         updatedAt: now,
-        clickCount: 0,
         runCount: 0,
         lastUsedAt: 0,
         pinned: input.pinned ?? false,
@@ -200,7 +159,6 @@ export async function duplicateTemplate(
             title: `${existing.title} ${copySuffix}`,
             createdAt: now,
             updatedAt: now,
-            clickCount: 0,
             runCount: 0,
             lastUsedAt: 0,
             pinned: false,
@@ -214,20 +172,6 @@ export async function duplicateTemplate(
 }
 
 // Usage tracking
-
-export async function incrementClickCount(id: string): Promise<void> {
-    if (!isIndexedDBAvailable()) return
-    try {
-        const db = await getDB()
-        const template = await db.get(STORE_NAME, id)
-        if (!template) return
-        template.clickCount += 1
-        template.updatedAt = Date.now()
-        await db.put(STORE_NAME, template)
-    } catch (error) {
-        console.error("Failed to increment click count:", error)
-    }
-}
 
 export async function incrementRunCount(id: string): Promise<void> {
     if (!isIndexedDBAvailable()) return
@@ -359,14 +303,11 @@ export async function importTemplates(
         const now = Date.now()
         const newTemplate: Template = {
             id: nanoid(),
-            title:
-                String(t.title || "").trim() ||
-                generateDefaultTitle(String(t.prompt || "")),
-            prompt: String(t.prompt || "").trim(),
+            title: t.title.trim(),
+            prompt: t.prompt.trim(),
             description: t.description ? String(t.description) : undefined,
             createdAt: typeof t.createdAt === "number" ? t.createdAt : now,
             updatedAt: now,
-            clickCount: typeof t.clickCount === "number" ? t.clickCount : 0,
             runCount: typeof t.runCount === "number" ? t.runCount : 0,
             lastUsedAt: typeof t.lastUsedAt === "number" ? t.lastUsedAt : 0,
             pinned: typeof t.pinned === "boolean" ? t.pinned : false,

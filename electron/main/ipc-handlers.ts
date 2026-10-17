@@ -1,244 +1,79 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron"
-import { rebuildAppMenu } from "./app-menu"
-import {
-    applyPresetToEnv,
-    type ConfigPreset,
-    createPreset,
-    deletePreset,
-    getAllPresets,
-    getCurrentPreset,
-    getCurrentPresetId,
-    getUserLocale,
-    setCurrentPreset,
-    setUserLocale,
-    updatePreset,
-} from "./config-manager"
+import { app, type IpcMainInvokeEvent, ipcMain } from "electron"
+import { buildAppMenu } from "./app-menu"
+import { setUserLocale, USER_LOCALES, type UserLocale } from "./config-manager"
 import { restartNextServer } from "./next-server"
+import { noteNoChats, rememberChatPort } from "./port-manager"
 import {
     applyProxyToEnv,
     getProxyConfig,
     type ProxyConfig,
     saveProxyConfig,
 } from "./proxy-manager"
+import { isAppUrl } from "./window-manager"
 
 /**
- * Allowed configuration keys for presets
- * This whitelist prevents arbitrary environment variable injection
+ * Register an IPC handler that only answers the app's own pages (on the app
+ * server). A main window that somehow ends up on an external site still
+ * gets the preload API, so its calls must be rejected here.
  */
-const ALLOWED_CONFIG_KEYS = new Set([
-    "AI_PROVIDER",
-    "AI_MODEL",
-    "AI_API_KEY",
-    "AI_BASE_URL",
-    "TEMPERATURE",
-])
-
-/**
- * Sanitize preset config to only include allowed keys
- */
-function sanitizePresetConfig(
-    config: Record<string, string | undefined>,
-): Record<string, string | undefined> {
-    const sanitized: Record<string, string | undefined> = {}
-    for (const key of ALLOWED_CONFIG_KEYS) {
-        if (key in config && typeof config[key] === "string") {
-            sanitized[key] = config[key]
+function handle<Args extends unknown[]>(
+    channel: string,
+    listener: (event: IpcMainInvokeEvent, ...args: Args) => unknown,
+): void {
+    ipcMain.handle(channel, (event, ...args) => {
+        const url = event.senderFrame?.url
+        if (!isAppUrl(url)) {
+            throw new Error(`Blocked "${channel}" from untrusted page: ${url}`)
         }
-    }
-    return sanitized
+        return listener(event, ...(args as Args))
+    })
 }
 
 /**
  * Register all IPC handlers
  */
 export function registerIpcHandlers(): void {
-    // ==================== App Info ====================
+    // ==================== Where the chats are ====================
 
-    ipcMain.handle("get-version", () => {
-        return app.getVersion()
+    // The page saved a chat, or loaded without any: decides which port
+    // (and so which origin's chats) the next launch opens
+    handle("chat-saved", () => rememberChatPort())
+    handle("chats-loaded", (_event, count: unknown) => {
+        if (count === 0) noteNoChats()
     })
-
-    // ==================== Window Controls ====================
-
-    ipcMain.on("window-minimize", (event) => {
-        const win = BrowserWindow.fromWebContents(event.sender)
-        win?.minimize()
-    })
-
-    ipcMain.on("window-maximize", (event) => {
-        const win = BrowserWindow.fromWebContents(event.sender)
-        if (win?.isMaximized()) {
-            win.unmaximize()
-        } else {
-            win?.maximize()
-        }
-    })
-
-    ipcMain.on("window-close", (event) => {
-        const win = BrowserWindow.fromWebContents(event.sender)
-        win?.close()
-    })
-
-    // ==================== File Dialogs ====================
-
-    ipcMain.handle("dialog-open-file", async (event) => {
-        const win = BrowserWindow.fromWebContents(event.sender)
-        if (!win) return null
-
-        const result = await dialog.showOpenDialog(win, {
-            properties: ["openFile"],
-            filters: [
-                { name: "Draw.io Files", extensions: ["drawio", "xml"] },
-                { name: "All Files", extensions: ["*"] },
-            ],
-        })
-
-        if (result.canceled || result.filePaths.length === 0) {
-            return null
-        }
-
-        // Read the file content
-        const fs = await import("node:fs/promises")
-        try {
-            const content = await fs.readFile(result.filePaths[0], "utf-8")
-            return content
-        } catch (error) {
-            console.error("Failed to read file:", error)
-            return null
-        }
-    })
-
-    ipcMain.handle("dialog-save-file", async (event, data: string) => {
-        const win = BrowserWindow.fromWebContents(event.sender)
-        if (!win) return false
-
-        const result = await dialog.showSaveDialog(win, {
-            filters: [
-                { name: "Draw.io Files", extensions: ["drawio"] },
-                { name: "XML Files", extensions: ["xml"] },
-            ],
-        })
-
-        if (result.canceled || !result.filePath) {
-            return false
-        }
-
-        const fs = await import("node:fs/promises")
-        try {
-            await fs.writeFile(result.filePath, data, "utf-8")
-            return true
-        } catch (error) {
-            console.error("Failed to save file:", error)
-            return false
-        }
-    })
-
-    // ==================== Config Presets ====================
-
-    ipcMain.handle("config-presets:get-all", () => {
-        return getAllPresets()
-    })
-
-    ipcMain.handle("config-presets:get-current", () => {
-        return getCurrentPreset()
-    })
-
-    ipcMain.handle("config-presets:get-current-id", () => {
-        return getCurrentPresetId()
-    })
-
-    ipcMain.handle(
-        "config-presets:save",
-        (
-            _event,
-            preset: Omit<ConfigPreset, "id" | "createdAt" | "updatedAt"> & {
-                id?: string
-            },
-        ) => {
-            // Validate preset name
-            if (typeof preset.name !== "string" || !preset.name.trim()) {
-                throw new Error("Invalid preset name")
-            }
-
-            // Sanitize config to only allow whitelisted keys
-            const sanitizedConfig = sanitizePresetConfig(preset.config ?? {})
-
-            if (preset.id) {
-                // Update existing preset
-                return updatePreset(preset.id, {
-                    name: preset.name.trim(),
-                    config: sanitizedConfig,
-                })
-            }
-            // Create new preset
-            return createPreset({
-                name: preset.name.trim(),
-                config: sanitizedConfig,
-            })
-        },
-    )
-
-    ipcMain.handle("config-presets:delete", (_event, id: string) => {
-        return deletePreset(id)
-    })
-
-    ipcMain.handle("config-presets:apply", async (_event, id: string) => {
-        const env = applyPresetToEnv(id)
-        if (!env) {
-            return { success: false, error: "Preset not found" }
-        }
-
-        const isDev = process.env.NODE_ENV === "development"
-
-        if (isDev) {
-            // In development mode, the config file change will trigger
-            // the file watcher in electron-dev.mjs to restart Next.js
-            // We just need to save the preset (already done in applyPresetToEnv)
-            return { success: true, env, devMode: true }
-        }
-
-        // Production mode: restart the Next.js server to apply new environment variables
-        try {
-            await restartNextServer()
-            return { success: true, env }
-        } catch (error) {
-            return {
-                success: false,
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to restart server",
-            }
-        }
-    })
-
-    ipcMain.handle(
-        "config-presets:set-current",
-        (_event, id: string | null) => {
-            return setCurrentPreset(id)
-        },
-    )
 
     // ==================== Proxy Settings ====================
 
-    ipcMain.handle("get-proxy", () => {
+    handle("get-proxy", () => {
         return getProxyConfig()
     })
 
-    ipcMain.handle("set-proxy", async (_event, config: ProxyConfig) => {
+    handle("set-proxy", async (_event, config: ProxyConfig) => {
+        const isOptionalString = (value: unknown) =>
+            value === undefined || typeof value === "string"
+        if (
+            typeof config !== "object" ||
+            config === null ||
+            !isOptionalString(config.httpProxy) ||
+            !isOptionalString(config.httpsProxy)
+        ) {
+            return { success: false, error: "Invalid proxy settings" }
+        }
+
         try {
             // Save config to file
-            saveProxyConfig(config)
+            saveProxyConfig({
+                httpProxy: config.httpProxy,
+                httpsProxy: config.httpsProxy,
+            })
 
             // Apply to current process environment
             applyProxyToEnv()
 
-            const isDev = process.env.NODE_ENV === "development"
-
-            if (isDev) {
+            if (!app.isPackaged) {
                 // In development, env vars are already applied
                 // Next.js dev server may need manual restart
-                return { success: true, devMode: true }
+                return { success: true }
             }
 
             // Production: restart Next.js server to pick up new env vars
@@ -257,20 +92,15 @@ export function registerIpcHandlers(): void {
 
     // ==================== User Locale ====================
 
-    ipcMain.handle("get-user-locale", () => {
-        return getUserLocale()
-    })
-
-    ipcMain.handle("set-user-locale", (_event, locale: string) => {
-        // Validate locale is one of the supported values
-        if (!["en", "zh", "ja", "zh-Hant"].includes(locale)) {
+    handle("set-user-locale", (_event, locale: string) => {
+        if (!(USER_LOCALES as readonly string[]).includes(locale)) {
             return { success: false, error: "Invalid locale" }
         }
 
         try {
-            setUserLocale(locale as "en" | "zh" | "ja" | "zh-Hant")
+            setUserLocale(locale as UserLocale)
             // Rebuild the menu to reflect the new locale
-            rebuildAppMenu()
+            buildAppMenu()
             return { success: true }
         } catch (error) {
             return {

@@ -16,7 +16,6 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import type { ValidationResult } from "@/lib/diagram-validator"
 
 export type ValidationStatus =
-    | "idle"
     | "capturing"
     | "validating"
     | "success"
@@ -36,7 +35,7 @@ export interface ValidationState {
 
 interface ValidationCardProps {
     state: ValidationState
-    onImproveWithSuggestions?: (feedback: string) => void
+    onImproveWithSuggestions: (feedback: string) => void
 }
 
 export function ValidationCard({
@@ -51,18 +50,16 @@ export function ValidationCard({
         useState(false)
 
     // Generate improvement feedback from validation result
-    const generateImprovementFeedback = (): string => {
-        if (!state.result) return ""
-
+    const generateImprovementFeedback = (result: ValidationResult): string => {
         const lines: string[] = []
         lines.push(
             "Please improve the diagram based on the following visual analysis feedback:",
         )
         lines.push("")
 
-        if (state.result.issues.length > 0) {
+        if (result.issues.length > 0) {
             lines.push("Issues to address:")
-            for (const issue of state.result.issues) {
+            for (const issue of result.issues) {
                 lines.push(
                     `  - [${issue.severity}] ${issue.type}: ${issue.description}`,
                 )
@@ -70,9 +67,9 @@ export function ValidationCard({
             lines.push("")
         }
 
-        if (state.result.suggestions.length > 0) {
+        if (result.suggestions.length > 0) {
             lines.push("Suggestions for improvement:")
-            for (const suggestion of state.result.suggestions) {
+            for (const suggestion of result.suggestions) {
                 lines.push(`  - ${suggestion}`)
             }
             lines.push("")
@@ -83,20 +80,13 @@ export function ValidationCard({
     }
 
     const handleImproveClick = () => {
-        if (
-            !onImproveWithSuggestions ||
-            !state.result ||
-            hasRequestedImprovement
-        )
-            return
+        if (!state.result) return
         setHasRequestedImprovement(true)
-        const feedback = generateImprovementFeedback()
-        onImproveWithSuggestions(feedback)
+        onImproveWithSuggestions(generateImprovementFeedback(state.result))
     }
 
     // Check if we should show the improve button
     const showImproveButton =
-        onImproveWithSuggestions &&
         state.result &&
         (state.status === "success" ||
             state.status === "success_with_warnings" ||
@@ -115,11 +105,9 @@ export function ValidationCard({
                 }
             case "validating":
                 return {
-                    label: state.attempt
-                        ? dict.validation.validatingWithAttempt
-                              .replace("{attempt}", String(state.attempt))
-                              .replace("{max}", String(state.maxAttempts || 3))
-                        : dict.validation.validating,
+                    label: dict.validation.validatingWithAttempt
+                        .replace("{attempt}", String(state.attempt))
+                        .replace("{max}", String(state.maxAttempts)),
                     color: "text-blue-600 bg-blue-50",
                     icon: (
                         <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -159,13 +147,10 @@ export function ValidationCard({
                     color: "text-gray-600 bg-gray-50",
                     icon: <Check className="h-4 w-4" aria-hidden="true" />,
                 }
-            default:
-                return null
         }
     }
 
     const statusDisplay = getStatusDisplay()
-    if (!statusDisplay || state.status === "idle") return null
 
     return (
         <div className="my-3 rounded-xl border border-border/60 bg-muted/30 overflow-hidden">

@@ -1,8 +1,10 @@
 import { Cloud, Server, Sparkles } from "lucide-react"
-import { PROVIDER_LOGO_MAP, type ProviderName } from "@/lib/types/model-config"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import { cn } from "@/lib/utils"
 
-// Provider logo from models.dev, with Lucide fallbacks for providers
+const ICONS = { cloud: Cloud, server: Server, sparkles: Sparkles }
+
+// Provider logo from models.dev, or the record's Lucide icon for providers
 // that have no logo there
 export function ProviderLogo({
     provider,
@@ -11,17 +13,11 @@ export function ProviderLogo({
     provider: ProviderName
     className?: string
 }) {
-    if (provider === "bedrock") {
-        return <Cloud className={cn("size-4", className)} />
+    const { icon, logo } = PROVIDERS[provider]
+    if (icon) {
+        const Icon = ICONS[icon]
+        return <Icon className={cn("size-4", className)} />
     }
-    if (provider === "sglang") {
-        return <Server className={cn("size-4", className)} />
-    }
-    if (provider === "doubao") {
-        return <Sparkles className={cn("size-4", className)} />
-    }
-
-    const logoName = PROVIDER_LOGO_MAP[provider] || provider
     return (
         // biome-ignore lint/performance/noImgElement: External URL from models.dev
         <img
@@ -29,7 +25,7 @@ export function ProviderLogo({
             aria-hidden="true"
             className={cn("size-4 dark:invert", className)}
             height={16}
-            src={`https://models.dev/logos/${logoName}.svg`}
+            src={`https://models.dev/logos/${logo ?? provider}.svg`}
             width={16}
         />
     )

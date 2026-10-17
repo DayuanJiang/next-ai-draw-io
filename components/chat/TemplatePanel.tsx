@@ -11,6 +11,7 @@ import {
     Trash2,
     Upload,
 } from "lucide-react"
+import { useParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
     AlertDialog,
@@ -23,62 +24,33 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { formatRelativeTime } from "@/lib/relative-time"
 import {
     deleteTemplate,
     duplicateTemplate,
     exportTemplates,
     getAllTemplates,
     importTemplates,
-    incrementClickCount,
     incrementRunCount,
     searchTemplates,
     type Template,
     updateTemplate,
     validateImportData,
 } from "@/lib/template-storage"
-import { TemplateCreateDialog } from "./TemplateCreateDialog"
-import { TemplateEditDialog } from "./TemplateEditDialog"
+import { TemplateFormDialog } from "./TemplateFormDialog"
 
 interface TemplatePanelProps {
-    setInput: (input: string) => void
-    onSendTemplate?: (template: Template) => void
+    /** Whether it was sent */
+    onSendTemplate: (template: Template) => Promise<boolean>
     currentInput?: string
 }
 
-function formatLastUsed(timestamp: number, neverUsedText: string): string {
-    if (!timestamp) return neverUsedText
-    const now = Date.now()
-    const diffMs = now - timestamp
-    const diffMins = Math.floor(diffMs / (1000 * 60))
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    try {
-        const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
-        if (diffMins < 1) return rtf.format(0, "minute")
-        if (diffMins < 60) return rtf.format(-diffMins, "minute")
-        if (diffHours < 24) return rtf.format(-diffHours, "hour")
-        if (diffDays < 7) return rtf.format(-diffDays, "day")
-    } catch {
-        // Fallback if Intl.RelativeTimeFormat is not available
-        if (diffMins < 1) return "<1m ago"
-        if (diffMins < 60) return `${diffMins}m ago`
-        if (diffHours < 24) return `${diffHours}h ago`
-        if (diffDays < 7) return `${diffDays}d ago`
-    }
-
-    return new Date(timestamp).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-    })
-}
-
 export function TemplatePanel({
-    setInput,
     onSendTemplate,
     currentInput = "",
 }: TemplatePanelProps) {
     const dict = useDictionary()
+    const params = useParams<{ lang: string }>()
     const [templates, setTemplates] = useState<Template[]>([])
     const [loading, setLoading] = useState(true)
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -128,7 +100,7 @@ export function TemplatePanel({
     const handleDuplicate = async (template: Template) => {
         const duplicated = await duplicateTemplate(
             template.id,
-            dict.templates.copySuffix || "(copy)",
+            dict.templates.copySuffix,
         )
         if (duplicated) {
             loadTemplates()
@@ -174,18 +146,13 @@ export function TemplatePanel({
 
     // Actually send the template
     const sendTemplate = async (template: Template) => {
-        // Increment click count only when actually sending
-        await incrementClickCount(template.id)
-        if (onSendTemplate) {
+        // A run only when it was sent (not while a message is still being
+        // sent, or attachments read)
+        if (await onSendTemplate(template)) {
             // Increment run count and update lastUsedAt
             await incrementRunCount(template.id)
             // Reload to show updated stats
             loadTemplates()
-            // Call the send callback
-            onSendTemplate(template)
-        } else {
-            // Fallback: just fill the input if no send callback provided
-            setInput(template.prompt)
         }
         setConfirmSendDialogOpen(false)
         setTemplateToSend(null)
@@ -208,39 +175,32 @@ export function TemplatePanel({
         if (templates.length === 0) {
             setImportMessage({
                 type: "error",
-                text: dict.templates.exportEmpty || "No templates to export",
+                text: dict.templates.exportEmpty,
             })
             return
         }
 
-        try {
-            const exportData = exportTemplates(templates)
-            const json = JSON.stringify(exportData, null, 2)
-            const blob = new Blob([json], { type: "application/json" })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement("a")
-            a.href = url
-            a.download = `templates-${new Date().toISOString().split("T")[0]}.json`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
+        const exportData = exportTemplates(templates)
+        const json = JSON.stringify(exportData, null, 2)
+        const blob = new Blob([json], { type: "application/json" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        // Local date as YYYY-MM-DD (toISOString would give UTC)
+        a.download = `templates-${new Date().toLocaleDateString("sv-SE")}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
 
-            setImportMessage({
-                type: "success",
-                text: dict.templates.exportSuccess.replace(
-                    "{count}",
-                    String(templates.length),
-                ),
-            })
-            setTimeout(() => setImportMessage(null), 3000)
-        } catch (error) {
-            console.error("Failed to export templates:", error)
-            setImportMessage({
-                type: "error",
-                text: `Export failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-            })
-        }
+        setImportMessage({
+            type: "success",
+            text: dict.templates.exportSuccess.replace(
+                "{count}",
+                String(templates.length),
+            ),
+        })
+        setTimeout(() => setImportMessage(null), 3000)
     }
 
     // Import templates from JSON file
@@ -249,8 +209,7 @@ export function TemplatePanel({
         if (!file) {
             setImportMessage({
                 type: "error",
-                text:
-                    dict.templates.importNoFile || "Please select a JSON file",
+                text: dict.templates.importNoFile,
             })
             return
         }
@@ -302,18 +261,32 @@ export function TemplatePanel({
         }
     }
 
+    // Shared by the empty state and the list, so import works in both
+    const importInput = (
+        <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleImport}
+            className="hidden"
+        />
+    )
+    const importMessageBox = importMessage && (
+        <div
+            className={`text-xs px-3 py-2 rounded-lg ${
+                importMessage.type === "success"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+            }`}
+        >
+            {importMessage.text}
+        </div>
+    )
+
     // Empty state: no templates at all
     if (!loading && templates.length === 0) {
         return (
             <div className="py-6 px-2 animate-fade-in">
-                <div className="text-center mb-6">
-                    <h2 className="text-lg font-semibold text-foreground mb-2">
-                        {dict.templates.title}
-                    </h2>
-                    <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                        {dict.templates.subtitle}
-                    </p>
-                </div>
                 <div className="flex flex-col items-center justify-center py-8 px-4">
                     <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                         <FileText className="w-8 h-8 text-primary/60" />
@@ -332,8 +305,20 @@ export function TemplatePanel({
                         <Plus className="w-4 h-4" />
                         {dict.templates.createFirst}
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                        <Upload className="w-3.5 h-3.5" />
+                        {dict.templates.importTemplates}
+                    </button>
+                    {importInput}
+                    {importMessageBox && (
+                        <div className="mt-3">{importMessageBox}</div>
+                    )}
 
-                    <TemplateCreateDialog
+                    <TemplateFormDialog
                         open={createDialogOpen}
                         onOpenChange={setCreateDialogOpen}
                         onSuccess={handleCreateSuccess}
@@ -389,27 +374,11 @@ export function TemplatePanel({
                         <Upload className="w-3.5 h-3.5" />
                         {dict.templates.importTemplates}
                     </button>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="application/json,.json"
-                        onChange={handleImport}
-                        className="hidden"
-                    />
+                    {importInput}
                 </div>
 
                 {/* Import message */}
-                {importMessage && (
-                    <div
-                        className={`text-xs px-3 py-2 rounded-lg ${
-                            importMessage.type === "success"
-                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                        }`}
-                    >
-                        {importMessage.text}
-                    </div>
-                )}
+                {importMessageBox}
 
                 <div className="space-y-2">
                     {loading
@@ -447,6 +416,8 @@ export function TemplatePanel({
                                         handleTemplateClick(template)
                                     }
                                     onKeyDown={(e) => {
+                                        // Ignore keys bubbling up from the action buttons
+                                        if (e.target !== e.currentTarget) return
                                         if (
                                             e.key === "Enter" ||
                                             e.key === " "
@@ -477,7 +448,7 @@ export function TemplatePanel({
                                     <div className="relative shrink-0">
                                         <div className="text-[11px] text-muted-foreground whitespace-nowrap group-hover:invisible">
                                             {template.runCount > 0
-                                                ? `${dict.templates.usedCount.replace("{count}", String(template.runCount))} · ${formatLastUsed(template.lastUsedAt, dict.templates.neverUsed)}`
+                                                ? `${dict.templates.usedCount.replace("{count}", String(template.runCount))} · ${template.lastUsedAt ? formatRelativeTime(template.lastUsedAt, params.lang, dict.sessionHistory.justNow) : dict.templates.neverUsed}`
                                                 : dict.templates.neverUsed}
                                         </div>
                                         <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -494,10 +465,8 @@ export function TemplatePanel({
                                                 }`}
                                                 title={
                                                     template.pinned
-                                                        ? dict.templates
-                                                              .unpin || "Unpin"
-                                                        : dict.templates.pin ||
-                                                          "Pin"
+                                                        ? dict.templates.unpin
+                                                        : dict.templates.pin
                                                 }
                                             >
                                                 <Bookmark
@@ -522,10 +491,7 @@ export function TemplatePanel({
                                                     handleDuplicate(template)
                                                 }}
                                                 className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                                                title={
-                                                    dict.templates.duplicate ||
-                                                    "Duplicate"
-                                                }
+                                                title={dict.templates.duplicate}
                                             >
                                                 <Copy className="w-4 h-4" />
                                             </button>
@@ -547,13 +513,13 @@ export function TemplatePanel({
                 </div>
             </div>
 
-            <TemplateCreateDialog
+            <TemplateFormDialog
                 open={createDialogOpen}
                 onOpenChange={setCreateDialogOpen}
                 onSuccess={handleCreateSuccess}
             />
 
-            <TemplateEditDialog
+            <TemplateFormDialog
                 open={editDialogOpen}
                 onOpenChange={setEditDialogOpen}
                 template={templateToEdit}
@@ -568,12 +534,10 @@ export function TemplatePanel({
                 <AlertDialogContent className="max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {dict.templates.deleteTitle ||
-                                "Delete this template?"}
+                            {dict.templates.deleteTitle}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            {dict.templates.deleteDescription ||
-                                "This will permanently delete this template. This action cannot be undone."}
+                            {dict.templates.deleteDescription}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -598,12 +562,10 @@ export function TemplatePanel({
                 <AlertDialogContent className="max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {dict.templates.confirmSendTitle ||
-                                "Replace current input?"}
+                            {dict.templates.confirmSendTitle}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            {dict.templates.confirmSendDescription ||
-                                "You have unsent content in the input. Sending this template will replace it."}
+                            {dict.templates.confirmSendDescription}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -611,8 +573,7 @@ export function TemplatePanel({
                             {dict.common.cancel}
                         </AlertDialogCancel>
                         <AlertDialogAction onClick={handleConfirmSend}>
-                            {dict.templates.confirmSendButton ||
-                                "Send Template"}
+                            {dict.templates.confirmSendButton}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

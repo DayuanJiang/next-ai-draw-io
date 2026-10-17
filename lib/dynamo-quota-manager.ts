@@ -1,7 +1,6 @@
 import {
     ConditionalCheckFailedException,
     DynamoDBClient,
-    GetItemCommand,
     UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb"
 
@@ -64,13 +63,16 @@ interface QuotaCheckResult {
  * Check all quotas and increment request count atomically.
  * Uses composite key (PK=user, SK=date) for per-day tracking.
  * Each day automatically gets a new item - no explicit reset needed.
+ * A request limit of 0 means none; increment 0 checks the limits without
+ * counting a request (the screenshot check).
  */
 export async function checkAndIncrementRequest(
     ip: string,
     limits: QuotaLimits,
+    increment = 1,
 ): Promise<QuotaCheckResult> {
     // Skip if quota tracking not enabled
-    if (!client || !TABLE) {
+    if (!client) {
         return { allowed: true }
     }
 
@@ -99,82 +101,67 @@ export async function checkAndIncrementRequest(
                      attribute_not_exists(tpmCount) OR tpmCount < :tpmLimit)
                 `,
                 ExpressionAttributeValues: {
-                    ":one": { N: "1" },
+                    ":one": { N: String(increment) },
                     ":minute": { S: currentMinute },
                     ":reqLimit": { N: String(limits.requests || 999999) },
                     ":tokenLimit": { N: String(limits.tokens || 999999) },
                     ":tpmLimit": { N: String(limits.tpm || 999999) },
                 },
+                // On a failed condition the exception carries the item as it
+                // was, so no second read is needed to tell which limit was hit
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD",
             }),
         )
 
         return { allowed: true }
     } catch (e: any) {
-        // Condition failed - need to determine which limit was exceeded
+        // Condition failed - the exception's Item holds the current counts
         if (e instanceof ConditionalCheckFailedException) {
-            // Get current counts to determine which limit was hit
-            try {
-                const getResult = await client.send(
-                    new GetItemCommand({
-                        TableName: TABLE,
-                        Key: {
-                            PK: { S: pk },
-                            SK: { S: sk },
-                        },
-                    }),
-                )
+            const item = e.Item
+            const storedMinute = item?.lastMinute?.S
 
-                const item = getResult.Item
-                const storedMinute = item?.lastMinute?.S
+            const reqCount = Number(item?.reqCount?.N || 0)
+            const tokenCount = Number(item?.tokenCount?.N || 0)
+            const tpmCount =
+                storedMinute !== currentMinute
+                    ? 0
+                    : Number(item?.tpmCount?.N || 0)
 
-                const reqCount = Number(item?.reqCount?.N || 0)
-                const tokenCount = Number(item?.tokenCount?.N || 0)
-                const tpmCount =
-                    storedMinute !== currentMinute
-                        ? 0
-                        : Number(item?.tpmCount?.N || 0)
-
-                // Determine which limit was exceeded
-                if (limits.requests > 0 && reqCount >= limits.requests) {
-                    return {
-                        allowed: false,
-                        type: "request",
-                        error: "Daily request limit exceeded",
-                        used: reqCount,
-                        limit: limits.requests,
-                    }
+            // Determine which limit was exceeded
+            if (limits.requests > 0 && reqCount >= limits.requests) {
+                return {
+                    allowed: false,
+                    type: "request",
+                    error: "Daily request limit exceeded",
+                    used: reqCount,
+                    limit: limits.requests,
                 }
-                if (limits.tokens > 0 && tokenCount >= limits.tokens) {
-                    return {
-                        allowed: false,
-                        type: "token",
-                        error: "Daily token limit exceeded",
-                        used: tokenCount,
-                        limit: limits.tokens,
-                    }
-                }
-                if (limits.tpm > 0 && tpmCount >= limits.tpm) {
-                    return {
-                        allowed: false,
-                        type: "tpm",
-                        error: "Rate limit exceeded (tokens per minute)",
-                        used: tpmCount,
-                        limit: limits.tpm,
-                    }
-                }
-
-                // Condition failed but no limit clearly exceeded - race condition edge case
-                // Fail safe by allowing (could be a TPM reset race)
-                console.warn(
-                    `[quota] Condition failed but no limit exceeded for IP prefix: ${ip.slice(0, 8)}...`,
-                )
-                return { allowed: true }
-            } catch (getError: any) {
-                console.error(
-                    `[quota] Failed to get quota details after condition failure, IP prefix: ${ip.slice(0, 8)}..., error: ${getError.message}`,
-                )
-                return { allowed: true } // Fail open
             }
+            if (limits.tokens > 0 && tokenCount >= limits.tokens) {
+                return {
+                    allowed: false,
+                    type: "token",
+                    error: "Daily token limit exceeded",
+                    used: tokenCount,
+                    limit: limits.tokens,
+                }
+            }
+            if (limits.tpm > 0 && tpmCount >= limits.tpm) {
+                return {
+                    allowed: false,
+                    type: "tpm",
+                    error: "Rate limit exceeded (tokens per minute)",
+                    used: tpmCount,
+                    limit: limits.tpm,
+                }
+            }
+
+            // Condition failed but no limit clearly exceeded - race condition edge case
+            // Fail safe by allowing (could be a TPM reset race)
+            console.warn(
+                `[quota] Condition failed but no limit exceeded for IP prefix: ${ip.slice(0, 8)}...`,
+            )
+            return { allowed: true }
         }
 
         // Other DynamoDB errors - fail open
@@ -195,7 +182,7 @@ export async function recordTokenUsage(
     tokens: number,
 ): Promise<void> {
     // Skip if quota tracking not enabled
-    if (!client || !TABLE) return
+    if (!client) return
     if (!Number.isFinite(tokens) || tokens <= 0) return
 
     const pk = ip // User identifier (base64 IP)

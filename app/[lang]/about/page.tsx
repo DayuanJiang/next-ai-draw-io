@@ -1,418 +1,375 @@
+import "@/components/site/site.css"
+import { Globe, Monitor, SquareTerminal } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
-import { FaGithub } from "react-icons/fa"
 import Image from "@/components/image-with-basepath"
+import { ProviderLogo } from "@/components/provider-logo"
+import { CopyCommand } from "@/components/site/copy-command"
+import { DemoPlayer } from "@/components/site/demo-player"
+import { demoTexts } from "@/components/site/demo-texts"
+import {
+    GALLERY_ITEMS,
+    type GalleryItem,
+} from "@/components/site/gallery-items"
+import { SiteFooter } from "@/components/site/site-footer"
+import { SiteHeader } from "@/components/site/site-header"
+import {
+    GITHUB_URL,
+    MCP_INSTALL,
+    RELEASES_URL,
+    SITE_TEXTS,
+} from "@/components/site/site-texts"
+import type { Locale } from "@/lib/i18n/config"
+import { hasLocale } from "@/lib/i18n/dictionaries"
+import { PROVIDER_NAMES, PROVIDERS } from "@/lib/providers"
+import { localeAlternates, OG_IMAGE, OG_LOCALE } from "@/lib/seo"
+import { TEXTS } from "./texts"
 
-export const metadata: Metadata = {
-    title: "About - Next AI Draw.io",
-    description:
-        "AI-Powered Diagram Creation Tool - Chat, Draw, Visualize. Create AWS, GCP, and Azure architecture diagrams with natural language.",
-    keywords: [
-        "AI diagram",
-        "draw.io",
-        "AWS architecture",
-        "GCP diagram",
-        "Azure diagram",
-        "LLM",
-    ],
+// Five of the gallery's diagrams; the first spans both columns. Their
+// prompts stay in English in every language.
+const EXAMPLES = [
+    "aws-ha",
+    "transformer",
+    "er-shop",
+    "bpmn-expense",
+    "journey-map",
+].flatMap((id) => GALLERY_ITEMS.filter((item) => item.id === id))
+
+type Props = { params: Promise<{ lang: string }> }
+
+function localeOf(lang: string): Locale {
+    return hasLocale(lang) ? lang : "en"
 }
 
-export default function About() {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+    const locale = localeOf((await params).lang)
+    const t = TEXTS[locale]
+    // openGraph and twitter replace the layout's whole objects, so the
+    // shared fields are repeated here
+    return {
+        title: t.title,
+        description: t.description,
+        keywords: t.keywords,
+        alternates: localeAlternates(locale, "/about"),
+        openGraph: {
+            title: t.title,
+            description: t.description,
+            type: "website",
+            url: `/${locale}/about`,
+            siteName: "Next AI Draw.io",
+            locale: OG_LOCALE[locale],
+            images: [{ ...OG_IMAGE, alt: t.title }],
+        },
+        twitter: {
+            card: "summary_large_image",
+            title: t.title,
+            description: t.description,
+            images: [OG_IMAGE.url],
+        },
+    }
+}
+
+export default async function About({ params }: Props) {
+    const lang = localeOf((await params).lang)
+    const t = TEXTS[lang]
+    const site = SITE_TEXTS[lang]
+    const demo = await demoTexts(lang)
+    const ways = [
+        {
+            icon: Globe,
+            ...t.ways.browser,
+            href: `/${lang}`,
+        },
+        {
+            icon: Monitor,
+            ...t.ways.desktop,
+            href: RELEASES_URL,
+        },
+        {
+            icon: SquareTerminal,
+            ...t.ways.agent,
+            href: `/${lang}/mcp`,
+            command: MCP_INSTALL,
+        },
+    ]
+    const [hero, ...grid] = EXAMPLES
+
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Navigation */}
-            <header className="bg-white border-b border-gray-200">
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <div className="flex items-center justify-between">
-                        <Link
-                            href="/"
-                            className="text-xl font-bold text-gray-900 hover:text-gray-700"
-                        >
-                            Next AI Draw.io
-                        </Link>
-                        <nav className="flex items-center gap-6 text-sm">
-                            <Link
-                                href="/"
-                                className="text-gray-600 hover:text-gray-900 transition-colors"
-                            >
-                                Editor
-                            </Link>
-                            <Link
-                                href="/about"
-                                className="text-blue-600 font-semibold"
-                            >
-                                About
-                            </Link>
-                            <a
-                                href="https://github.com/DayuanJiang/next-ai-draw-io"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-gray-600 hover:text-gray-900 transition-colors"
-                                aria-label="View on GitHub"
-                            >
-                                <FaGithub className="w-5 h-5" />
-                            </a>
-                        </nav>
-                    </div>
-                </div>
-            </header>
+        <div className="site min-h-screen bg-canvas text-foreground">
+            <noscript>
+                <style
+                    dangerouslySetInnerHTML={{
+                        __html: ".lp-demo [data-cell-id] { opacity: 1 !important; }",
+                    }}
+                />
+            </noscript>
 
-            {/* Main Content */}
-            <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <article className="prose prose-lg max-w-none">
-                    {/* Title */}
-                    <div className="text-center mb-8">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                            Next AI Draw.io
+            <div className="lp-grid border-b border-border">
+                <SiteHeader lang={lang} />
+                <section className="mx-auto max-w-7xl px-4 pt-6 pb-10 md:px-8 md:pt-4 md:pb-12">
+                    <div className="grid items-end gap-5 px-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12 md:px-0">
+                        <h1 className="text-[clamp(32px,3.6vw,48px)] leading-[1.08] font-semibold tracking-[-0.035em] [text-wrap:balance]">
+                            {/* A Chinese headline breaks only after its comma */}
+                            {t.h1.split(/(?<=，)/).map((part) => (
+                                <span key={part} className="inline-block">
+                                    {part}
+                                </span>
+                            ))}
                         </h1>
-                        <p className="text-xl text-gray-600 font-medium">
-                            AI-Powered Diagram Creation Tool - Chat, Draw,
-                            Visualize
-                        </p>
-                    </div>
-
-                    <div className="relative mb-8 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-[1px] shadow-lg">
-                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 opacity-20" />
-                        <div className="relative rounded-2xl bg-white/80 backdrop-blur-sm p-6">
-                            {/* Header */}
-                            <div className="mb-4">
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">
-                                    Sponsored by ByteDance Doubao
-                                </h3>
-                            </div>
-
-                            {/* Story */}
-                            <div className="space-y-3 text-sm text-gray-700 leading-relaxed mb-5">
-                                <p>
-                                    Great news! Thanks to the generous
-                                    sponsorship from{" "}
-                                    <a
-                                        href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="font-semibold text-blue-600 hover:underline"
-                                    >
-                                        ByteDance Doubao
-                                    </a>
-                                    , the demo site now uses the powerful{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        glm-4.7
-                                    </span>{" "}
-                                    model for better diagram generation! Sign up
-                                    via the link to get{" "}
-                                    <span className="font-semibold text-amber-700">
-                                        500K free tokens
-                                    </span>{" "}
-                                    for all models!
-                                </p>
-                            </div>
-
-                            {/* Bring Your Own Key */}
-                            <div className="text-center">
-                                <h4 className="text-base font-bold text-gray-900 mb-2">
-                                    Bring Your Own API Key
-                                </h4>
-                                <p className="text-sm text-gray-600 mb-2 max-w-md mx-auto">
-                                    You can also use your own API key with any
-                                    supported provider. Click the Settings icon
-                                    in the chat panel to configure your provider
-                                    and API key.
-                                </p>
-                                <p className="text-xs text-gray-500 max-w-md mx-auto">
-                                    Your key is stored locally in your browser
-                                    and is never stored on the server.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <p className="text-gray-700">
-                        A Next.js web application that integrates AI
-                        capabilities with draw.io diagrams. Create, modify, and
-                        enhance diagrams through natural language commands and
-                        AI-assisted visualization.
-                    </p>
-
-                    {/* Features */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
-                        Features
-                    </h2>
-                    <ul className="list-disc pl-6 text-gray-700 space-y-2">
-                        <li>
-                            <strong>LLM-Powered Diagram Creation</strong>:
-                            Leverage Large Language Models to create and
-                            manipulate draw.io diagrams directly through natural
-                            language commands
-                        </li>
-                        <li>
-                            <strong>Image-Based Diagram Replication</strong>:
-                            Upload existing diagrams or images and have the AI
-                            replicate and enhance them automatically
-                        </li>
-                        <li>
-                            <strong>Diagram History</strong>: Comprehensive
-                            version control that tracks all changes, allowing
-                            you to view and restore previous versions of your
-                            diagrams before the AI editing
-                        </li>
-                        <li>
-                            <strong>Interactive Chat Interface</strong>:
-                            Communicate with AI to refine your diagrams in
-                            real-time
-                        </li>
-                        <li>
-                            <strong>AWS Architecture Diagram Support</strong>:
-                            Specialized support for generating AWS architecture
-                            diagrams
-                        </li>
-                        <li>
-                            <strong>Animated Connectors</strong>: Create dynamic
-                            and animated connectors between diagram elements for
-                            better visualization
-                        </li>
-                    </ul>
-
-                    {/* Examples */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
-                        Examples
-                    </h2>
-                    <p className="text-gray-700 mb-6">
-                        Here are some example prompts and their generated
-                        diagrams:
-                    </p>
-
-                    <div className="space-y-8">
-                        {/* ResNet50 Architecture */}
-                        <div className="text-center">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                Animated ResNet50 Model Architecture
-                            </h3>
-                            <p className="text-gray-600 mb-4">
-                                <strong>Prompt:</strong> Give me an{" "}
-                                <strong>animated</strong> architecture diagram
-                                of the ResNet50 model.
+                        <div>
+                            <p className="max-w-[34em] text-[15.5px] leading-relaxed text-muted-foreground">
+                                {t.lede}
                             </p>
-                            <div className="bg-neutral-950 rounded-lg p-4 inline-block">
-                                <Image
-                                    src="/resnet50.svg"
-                                    alt="Architecture diagram for ResNet50 model"
-                                    width={480}
-                                    height={360}
-                                    className="mx-auto"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Diagram Grid */}
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    RAG Technique Diagram
-                                </h3>
-                                <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Generate a RAG
-                                    architecture diagram for{" "}
-                                    <strong>chat application</strong>. Use
-                                    connected diagram for data ingestion
-                                </p>
-                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
-                                    <Image
-                                        src="/rag_prod.svg"
-                                        alt="RAG Architecture Diagram"
-                                        width={480}
-                                        height={360}
-                                        className="max-w-full max-h-full object-contain"
-                                    />
-                                </div>
-                            </div>
-                            <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Authentication using React and AWS
-                                </h3>
-                                <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Generate
-                                    authentication process using React with{" "}
-                                    <strong>AWS</strong>. Use Serverless
-                                    architecture.
-                                </p>
-                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
-                                    <Image
-                                        src="/auth.svg"
-                                        alt="Authentication Architecture Diagram"
-                                        width={480}
-                                        height={360}
-                                        className="max-w-full max-h-full object-contain"
-                                    />
-                                </div>
-                            </div>
-                            <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Agile Scrum Process
-                                </h3>
-                                <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Generate agile
-                                    scrum workflow diagram for software
-                                    development team.
-                                </p>
-                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
-                                    <Image
-                                        src="/agile_scrum.svg"
-                                        alt="Agile Scrum Diagram"
-                                        width={480}
-                                        height={360}
-                                        className="max-w-full max-h-full object-contain"
-                                    />
-                                </div>
-                            </div>
-                            <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Open Innovation
-                                </h3>
-                                <p className="text-gray-600 text-sm mb-4">
-                                    <strong>Prompt:</strong> Create
-                                    visualization of Henry Chesbrough&apos;s
-                                    Open Innovation model.
-                                </p>
-                                <div className="bg-neutral-950 rounded-lg p-4 flex items-center justify-center w-full h-[400px]">
-                                    <Image
-                                        src="/inno.svg"
-                                        alt="Open Innovation Diagram"
-                                        width={480}
-                                        height={360}
-                                        className="max-w-full max-h-full object-contain"
-                                    />
-                                </div>
+                            <div className="mt-5 flex flex-wrap items-center gap-3">
+                                {/* The editor has no phone layout: a phone
+                                    gets the docs first */}
+                                <Link
+                                    href={`/${lang}`}
+                                    className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background max-md:hidden"
+                                >
+                                    {t.primary}
+                                </Link>
+                                <Link
+                                    href={`/${lang}/docs`}
+                                    className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background md:hidden"
+                                >
+                                    {t.phonePrimary}
+                                </Link>
+                                <Link
+                                    href={`/${lang}/mcp`}
+                                    className="rounded-lg border border-border bg-card px-4.5 py-2.5 text-[14.5px] font-medium hover:bg-muted"
+                                >
+                                    {t.secondary}
+                                </Link>
                             </div>
                         </div>
                     </div>
+                    <div className="mt-8 md:mt-7">
+                        <DemoPlayer texts={demo} />
+                    </div>
+                </section>
+            </div>
 
-                    {/* How It Works */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
-                        How It Works
-                    </h2>
-                    <p className="text-gray-700 mb-4">
-                        The application uses the following technologies:
-                    </p>
-                    <ul className="list-disc pl-6 text-gray-700 space-y-2">
-                        <li>
-                            <strong>Next.js</strong>: For the frontend framework
-                            and routing
-                        </li>
-                        <li>
-                            <strong>Vercel AI SDK</strong> (<code>ai</code> +{" "}
-                            <code>@ai-sdk/*</code>): For streaming AI responses
-                            and multi-provider support
-                        </li>
-                        <li>
-                            <strong>react-drawio</strong>: For diagram
-                            representation and manipulation
-                        </li>
-                    </ul>
-                    <p className="text-gray-700 mt-4">
-                        Diagrams are represented as XML that can be rendered in
-                        draw.io. The AI processes your commands and generates or
-                        modifies this XML accordingly.
-                    </p>
-
-                    {/* Multi-Provider Support */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
-                        Multi-Provider Support
-                    </h2>
-                    <ul className="list-disc pl-6 text-gray-700 space-y-1">
-                        <li>
-                            <a
-                                href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
+            <main>
+                {/* Three ways to use it */}
+                <section className="border-b border-border bg-card">
+                    <div className="mx-auto max-w-7xl px-5 pt-12 md:px-8">
+                        <h2 className="text-[22px] font-semibold tracking-[-0.02em]">
+                            {t.waysHeading}
+                        </h2>
+                    </div>
+                    <div className="mx-auto grid max-w-7xl divide-border px-5 max-lg:divide-y md:px-8 lg:grid-cols-3 lg:divide-x">
+                        {ways.map((way) => (
+                            <div
+                                key={way.title}
+                                className="py-8 first:pt-7 lg:px-8 lg:pt-7 lg:pb-12 lg:first:pl-0 lg:last:pr-0"
                             >
-                                ByteDance Doubao
-                            </a>
-                        </li>
-                        <li>AWS Bedrock (default)</li>
-                        <li>
-                            OpenAI / OpenAI-compatible APIs (via{" "}
-                            <code>OPENAI_BASE_URL</code>)
-                        </li>
-                        <li>Anthropic</li>
-                        <li>Google AI</li>
-                        <li>Google Vertex AI</li>
-                        <li>Azure OpenAI</li>
-                        <li>Ollama</li>
-                        <li>OpenRouter</li>
-                        <li>DeepSeek</li>
-                        <li>SiliconFlow</li>
-                        <li>ModelScope</li>
-                    </ul>
-                    <p className="text-gray-700 mt-4">
-                        Note that <code>claude-sonnet-4-5</code> has trained on
-                        draw.io diagrams with AWS logos, so if you want to
-                        create AWS architecture diagrams, this is the best
-                        choice.
-                    </p>
-
-                    {/* Support */}
-                    <h2 className="text-2xl font-semibold text-gray-900 mt-10 mb-4">
-                        Support &amp; Contact
-                    </h2>
-                    <p className="text-gray-700 mb-4 font-semibold">
-                        Special thanks to{" "}
-                        <a
-                            href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                        >
-                            ByteDance Doubao
-                        </a>{" "}
-                        for sponsoring the API token usage of the demo site!
-                    </p>
-                    <p className="text-gray-700">
-                        If you find this project useful, please consider{" "}
-                        <a
-                            href="https://github.com/sponsors/DayuanJiang"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                        >
-                            sponsoring
-                        </a>{" "}
-                        to help host the live demo site!
-                    </p>
-                    <p className="text-gray-700 mt-2">
-                        For support or inquiries, please open an issue on the{" "}
-                        <a
-                            href="https://github.com/DayuanJiang/next-ai-draw-io"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                        >
-                            GitHub repository
-                        </a>{" "}
-                        or contact: me[at]jiang.jp
-                    </p>
-
-                    {/* CTA */}
-                    <div className="mt-12 text-center">
-                        <Link
-                            href="/"
-                            className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                        >
-                            Open Editor
-                        </Link>
+                                <span className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-canvas">
+                                    <way.icon className="size-[18px]" />
+                                </span>
+                                <h3 className="mt-4 text-[17px] font-semibold tracking-[-0.01em]">
+                                    {way.title}
+                                </h3>
+                                <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
+                                    {way.text}
+                                </p>
+                                <div className="mt-5 space-y-3">
+                                    {"command" in way && (
+                                        <CopyCommand
+                                            command={way.command}
+                                            labels={site.copy}
+                                        />
+                                    )}
+                                    {/* Link adds the base path to the
+                                        site's own pages */}
+                                    {way.href.startsWith("/") ? (
+                                        <Link
+                                            href={way.href}
+                                            className="inline-block text-[15px] font-medium underline decoration-border underline-offset-4 hover:decoration-foreground"
+                                        >
+                                            {way.action}
+                                        </Link>
+                                    ) : (
+                                        <a
+                                            href={way.href}
+                                            className="inline-block text-[15px] font-medium underline decoration-border underline-offset-4 hover:decoration-foreground"
+                                        >
+                                            {way.action}
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                </article>
+                </section>
+
+                {/* Examples */}
+                <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
+                    <h2 className="text-[22px] font-semibold tracking-[-0.02em]">
+                        {t.examplesHeading}
+                    </h2>
+                    <p className="mt-2 text-[15px] text-muted-foreground">
+                        {t.examplesIntro}{" "}
+                        <Link
+                            href={`/${lang}/gallery`}
+                            className="font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+                        >
+                            {t.examplesMore}
+                        </Link>
+                    </p>
+                    <div className="mt-8 grid gap-5 md:grid-cols-2">
+                        <Example example={hero} lang={lang} labels={t} wide />
+                        {grid.map((example) => (
+                            <Example
+                                key={example.id}
+                                example={example}
+                                lang={lang}
+                                labels={t}
+                            />
+                        ))}
+                    </div>
+                </section>
+
+                {/* Other features */}
+                <section className="border-y border-border bg-card">
+                    <div className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
+                        <h2 className="text-[22px] font-semibold tracking-[-0.02em]">
+                            {t.moreHeading}
+                        </h2>
+                        <div className="mt-8 grid gap-x-12 gap-y-7 sm:grid-cols-2 md:grid-cols-3 md:gap-y-9">
+                            {t.more.map((item, i) => (
+                                <div key={item.title}>
+                                    <h3 className="text-[15.5px] font-semibold">
+                                        {item.title}
+                                    </h3>
+                                    <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">
+                                        {item.text}
+                                        {i === t.more.length - 1 && (
+                                            <>
+                                                {" "}
+                                                <Link
+                                                    href={`/${lang}/docs/docker`}
+                                                    className="font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+                                                >
+                                                    {t.selfHostLink}
+                                                </Link>
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                {/* AI providers */}
+                <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
+                    <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] md:gap-12">
+                        <div>
+                            <h2 className="text-[22px] font-semibold tracking-[-0.02em] [text-wrap:balance]">
+                                {t.providersHeading}
+                            </h2>
+                            <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+                                {t.providersText}
+                            </p>
+                        </div>
+                        <ul className="flex flex-wrap content-start gap-2">
+                            {PROVIDER_NAMES.map((name) => (
+                                <li
+                                    key={name}
+                                    className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[13.5px]"
+                                >
+                                    <ProviderLogo provider={name} />
+                                    {PROVIDERS[name].label}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </section>
+
+                {/* Closing call to action */}
+                <section className="lp-grid border-t border-border">
+                    <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-5 px-5 py-12 md:flex-row md:items-center md:gap-8 md:px-8 md:py-14">
+                        <h2 className="text-[24px] font-semibold tracking-[-0.025em] md:text-[26px]">
+                            {t.ctaHeading}
+                        </h2>
+                        <div className="flex items-center gap-3">
+                            <Link
+                                href={`/${lang}`}
+                                className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background max-md:hidden"
+                            >
+                                {t.primary}
+                            </Link>
+                            <Link
+                                href={`/${lang}/docs`}
+                                className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background md:hidden"
+                            >
+                                {t.phonePrimary}
+                            </Link>
+                            <a
+                                href={GITHUB_URL}
+                                className="rounded-lg border border-border bg-card px-4.5 py-2.5 text-[14.5px] font-medium hover:bg-muted"
+                            >
+                                GitHub
+                            </a>
+                        </div>
+                    </div>
+                </section>
             </main>
 
-            {/* Footer */}
-            <footer className="bg-white border-t border-gray-200 mt-16">
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                    <p className="text-center text-gray-600 text-sm">
-                        Next AI Draw.io - Open Source AI-Powered Diagram
-                        Generator
-                    </p>
-                </div>
-            </footer>
+            <SiteFooter lang={lang} path="/about" />
         </div>
+    )
+}
+
+function Example({
+    example,
+    lang,
+    labels,
+    wide,
+}: {
+    example: GalleryItem
+    lang: Locale
+    labels: { promptLabel: string; modelLabel: string }
+    /** The first example spans both columns */
+    wide?: boolean
+}) {
+    return (
+        <figure
+            className={`overflow-hidden rounded-xl border border-border bg-card ${wide ? "md:col-span-2 md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]" : ""}`}
+        >
+            <div
+                className={`lp-grid flex items-center justify-center border-border p-5 md:p-6 ${wide ? "h-[280px] border-b md:h-[420px] md:border-r md:border-b-0" : "h-[240px] border-b md:h-[320px]"}`}
+            >
+                <Image
+                    src={example.src}
+                    alt={example.title[lang]}
+                    width={480}
+                    height={360}
+                    className="max-h-full w-auto max-w-full object-contain"
+                />
+            </div>
+            <figcaption
+                className={
+                    wide ? "self-center px-5 py-4 md:px-8 md:py-6" : "px-5 py-4"
+                }
+            >
+                <h3 className="text-[15.5px] font-semibold">
+                    {example.title[lang]}
+                </h3>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                        {labels.promptLabel}
+                    </span>{" "}
+                    <span lang="en">{example.prompt}</span>
+                </p>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                        {labels.modelLabel}
+                    </span>{" "}
+                    {example.model}
+                </p>
+            </figcaption>
+        </figure>
     )
 }

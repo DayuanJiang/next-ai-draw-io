@@ -6,7 +6,14 @@
         "useIgnoreFile": true
     },
     "files": {
-        "ignoreUnknown": false
+        "ignoreUnknown": false,
+        "includes": [
+            "**",
+            "!public",
+            "!packages/mcp-server/src/preview",
+            "!packages/mcp-server/shell/index.html",
+            "!lib/model-catalog.json"
+        ]
     },
     "formatter": {
         "enabled": true,

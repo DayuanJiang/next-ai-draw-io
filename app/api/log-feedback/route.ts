@@ -1,6 +1,5 @@
-import { randomUUID } from "crypto"
 import { z } from "zod"
-import { getLangfuseClient } from "@/lib/langfuse"
+import { getLangfuseClient, scoreLatestTrace } from "@/lib/langfuse"
 import { getUserIdFromRequest } from "@/lib/user-id"
 
 const feedbackSchema = z.object({
@@ -37,74 +36,23 @@ export async function POST(req: Request) {
     const userId = getUserIdFromRequest(req)
 
     try {
-        // Find the most recent chat trace for this session to attach the score to
-        const tracesResponse = await langfuse.api.trace.list({
+        // Score the session's latest chat trace; without one, a standalone
+        // feedback trace carries the score
+        await scoreLatestTrace(langfuse, {
             sessionId,
-            limit: 1,
+            name: "user-feedback",
+            value: feedback === "good" ? 1 : 0,
+            comment: `User gave ${feedback} feedback`,
+            fallbackTrace: {
+                name: "user-feedback",
+                userId,
+                input: { messageId, feedback },
+                metadata: {
+                    source: "feedback-button",
+                    note: "standalone - no chat trace found",
+                },
+            },
         })
-
-        const traces = tracesResponse.data || []
-        const latestTrace = traces[0]
-
-        if (!latestTrace) {
-            // No trace found for this session - create a standalone feedback trace
-            const traceId = randomUUID()
-            const timestamp = new Date().toISOString()
-
-            await langfuse.api.ingestion.batch({
-                batch: [
-                    {
-                        type: "trace-create",
-                        id: randomUUID(),
-                        timestamp,
-                        body: {
-                            id: traceId,
-                            name: "user-feedback",
-                            sessionId,
-                            userId,
-                            input: { messageId, feedback },
-                            metadata: {
-                                source: "feedback-button",
-                                note: "standalone - no chat trace found",
-                            },
-                            timestamp,
-                        },
-                    },
-                    {
-                        type: "score-create",
-                        id: randomUUID(),
-                        timestamp,
-                        body: {
-                            id: randomUUID(),
-                            traceId,
-                            name: "user-feedback",
-                            value: feedback === "good" ? 1 : 0,
-                            comment: `User gave ${feedback} feedback`,
-                        },
-                    },
-                ],
-            })
-        } else {
-            // Attach score to the existing chat trace
-            const timestamp = new Date().toISOString()
-
-            await langfuse.api.ingestion.batch({
-                batch: [
-                    {
-                        type: "score-create",
-                        id: randomUUID(),
-                        timestamp,
-                        body: {
-                            id: randomUUID(),
-                            traceId: latestTrace.id,
-                            name: "user-feedback",
-                            value: feedback === "good" ? 1 : 0,
-                            comment: `User gave ${feedback} feedback`,
-                        },
-                    },
-                ],
-            })
-        }
 
         return Response.json({ success: true, logged: true })
     } catch (error) {

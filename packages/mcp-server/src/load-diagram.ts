@@ -7,18 +7,18 @@
  * diagram's text content. The rest of the server assumes plain XML inside
  * every <diagram>, so loading decompresses all pages up front.
  */
-import { inflateRawSync } from "node:zlib"
-import { DOMParser } from "linkedom"
+import { inflateRaw } from "pako"
 import {
     isMxFile,
     isMxGraphModel,
     normalizeToMxfile,
     parseMxfile,
     serializeMxfile,
-} from "./pages.js"
+} from "./pages.ts"
+import { getXmlSyntaxError } from "./xml-syntax.ts"
 
 export type LoadResult =
-    | { ok: true; xml: string }
+    | { ok: true; xml: string; hadCompressedPages: boolean }
     | { ok: false; error: string }
 
 /**
@@ -27,9 +27,11 @@ export type LoadResult =
  */
 export function decompressPageContent(compressed: string): string | null {
     try {
-        const inflated = inflateRawSync(
-            Buffer.from(compressed.trim(), "base64"),
-        ).toString("utf-8")
+        // atob and pako work in Node and in the browser
+        const bytes = Uint8Array.from(atob(compressed.trim()), (c) =>
+            c.charCodeAt(0),
+        )
+        const inflated = inflateRaw(bytes, { to: "string" })
         try {
             return decodeURIComponent(inflated)
         } catch {
@@ -42,25 +44,63 @@ export function decompressPageContent(compressed: string): string | null {
 }
 
 /**
+ * Read the diagram XML a .drawio.svg (Editable SVG) carries in its root
+ * element's content attribute. Returns undefined when the text is not an
+ * SVG, and "" when the SVG has no embedded diagram. The root may carry a
+ * namespace prefix (<svg:svg>).
+ *
+ * Uses getAttributeNode().value rather than getAttribute(): linkedom's
+ * getAttribute re-escapes <, > and & in XML documents, which would turn
+ * the embedded "<mxfile" into "&lt;mxfile".
+ */
+export function extractSvgEmbeddedXml(text: string): string | undefined {
+    const doc = new DOMParser().parseFromString(text, "text/xml")
+    const root = doc.documentElement
+    // (linkedom keeps the prefix in localName too)
+    if (root?.tagName.split(":").pop() !== "svg") return undefined
+    return (root.getAttributeNode("content")?.value ?? "").trim()
+}
+
+// What XML allows before the root element: the declaration, comments, a
+// DOCTYPE (the root checks below expect the root first)
+const XML_PROLOG =
+    /^(?:\s|<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>[]*(?:\[[\s\S]*?\])?\s*>)*/i
+
+/**
  * Parse the content of a .drawio file into the canonical session shape:
  * an <mxfile> whose every page holds plain <mxGraphModel> XML. Accepts a
- * bare <mxGraphModel> (wrapped into a one-page mxfile) and decompresses
- * any compressed pages.
+ * bare <mxGraphModel> (wrapped into a one-page mxfile), a .drawio.svg with
+ * the diagram embedded, and decompresses any compressed pages.
  */
 export function parseDrawioFileContent(content: string): LoadResult {
-    const trimmed = content.trim()
+    let trimmed = content.replace(XML_PROLOG, "").trim()
     if (!trimmed) return { ok: false, error: "File is empty." }
 
     if (isMxGraphModel(trimmed)) {
-        const normalized = normalizeToMxfile(trimmed)
-        return normalized
-            ? { ok: true, xml: normalized }
-            : { ok: false, error: "Failed to parse <mxGraphModel> XML." }
+        // Parsed below like any <mxfile>, so a broken model is an error
+        trimmed = normalizeToMxfile(trimmed) as string
     }
     if (!isMxFile(trimmed)) {
+        // Parsed whole: the SVG's DOCTYPE may define entities its content uses
+        const embedded = extractSvgEmbeddedXml(content)
+        if (embedded === undefined) {
+            return {
+                ok: false,
+                error: "Not a draw.io file: expected an <mxfile> or <mxGraphModel> root element, or a .drawio.svg with the diagram embedded.",
+            }
+        }
+        if (!embedded) {
+            return {
+                ok: false,
+                error: "This SVG has no embedded diagram. Only .drawio.svg (Editable SVG) files can be loaded; ask for the .drawio file or redraw from the image.",
+            }
+        }
+        if (isMxFile(embedded) || isMxGraphModel(embedded)) {
+            return parseDrawioFileContent(embedded)
+        }
         return {
             ok: false,
-            error: "Not a draw.io file: expected an <mxfile> or <mxGraphModel> root element.",
+            error: "The SVG's embedded content is not draw.io XML.",
         }
     }
     const doc = parseMxfile(trimmed)
@@ -82,7 +122,7 @@ export function parseDrawioFileContent(content: string): LoadResult {
         }
         const inner = new DOMParser().parseFromString(xml, "text/xml")
         if (
-            inner.querySelector("parsererror") ||
+            getXmlSyntaxError(xml) ||
             inner.documentElement?.tagName !== "mxGraphModel"
         ) {
             return {
@@ -97,5 +137,9 @@ export function parseDrawioFileContent(content: string): LoadResult {
         decompressedAny = true
     }
     // Nothing changed — keep the file's own serialisation.
-    return { ok: true, xml: decompressedAny ? serializeMxfile(doc) : trimmed }
+    return {
+        ok: true,
+        xml: decompressedAny ? serializeMxfile(doc) : trimmed,
+        hadCompressedPages: decompressedAny,
+    }
 }

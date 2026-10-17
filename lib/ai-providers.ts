@@ -1,46 +1,51 @@
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
-import { azure, createAzure } from "@ai-sdk/azure"
-import { createDeepSeek, deepseek } from "@ai-sdk/deepseek"
-import { createGateway, gateway } from "@ai-sdk/gateway"
-import { createGoogleGenerativeAI, google } from "@ai-sdk/google"
+import { createAzure } from "@ai-sdk/azure"
+import { createDeepSeek } from "@ai-sdk/deepseek"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createVertex } from "@ai-sdk/google-vertex"
-import { createOpenAI, openai } from "@ai-sdk/openai"
-import { aihubmix, createAihubmix } from "@aihubmix/ai-sdk-provider"
+import { createOpenAI } from "@ai-sdk/openai"
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
+import { createAihubmix } from "@aihubmix/ai-sdk-provider"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { createOllama, ollama } from "ollama-ai-provider-v2"
-import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
-import { PROVIDER_INFO, type ProviderName } from "@/lib/types/model-config"
+import {
+    createGateway,
+    defaultSettingsMiddleware,
+    extractReasoningMiddleware,
+    type LanguageModel,
+    wrapLanguageModel,
+} from "ai"
+import { createOllama } from "ollama-ai-provider-v2"
+import {
+    adminProvidersToConfig,
+    loadAdminProviders,
+} from "@/lib/admin/providers"
+import { getEnvFallback } from "@/lib/admin/settings"
+import {
+    PROVIDER_NAMES,
+    PROVIDERS,
+    type ProviderDef,
+    type ProviderName,
+    publicDefaultUrl,
+} from "@/lib/providers"
+import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
+import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
 
-export type { ProviderName }
-
-export const AIHUBMIX_APP_CODE = "MSBS9675"
+const AIHUBMIX_APP_CODE = "MSBS9675"
 
 interface ModelConfig {
     model: any
     providerOptions?: any
-    headers?: Record<string, string>
     modelId: string
     provider: ProviderName
 }
-
-// Providers that only support a single system message
-export const SINGLE_SYSTEM_PROVIDERS = new Set<ProviderName>([
-    "minimax",
-    "glm",
-    "qwen",
-    "kimi",
-    "qiniu",
-    "novita",
-    "mimo",
-])
 
 /**
  * Normalize MiniMax base URL for AI SDK compatibility.
  * MiniMax supports Anthropic-compatible and OpenAI-compatible endpoints.
  */
-export function normalizeMiniMaxBaseURL(rawUrl: string): {
+function normalizeMiniMaxBaseURL(rawUrl: string): {
     baseURL: string
     isAnthropicCompatible: boolean
 } {
@@ -86,53 +91,22 @@ export interface ClientOverrides {
     awsSessionToken?: string | null
     // Vertex AI config
     vertexApiKey?: string | null // Express Mode API key
+    // baseUrl is the server's own <P>_BASE_URL (the admin panel's Test),
+    // not one a user chose: no redirect guard
+    trustedBaseUrl?: boolean
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
     // Custom env var name(s) for server models
     // Can be a single string or array of strings for load balancing
     apiKeyEnv?: string | string[]
     baseUrlEnv?: string
-    thinkingEnabled?: boolean
 }
-
-// Providers that can be selected from client settings
-const ALLOWED_CLIENT_PROVIDERS: ProviderName[] = [
-    "openai",
-    "anthropic",
-    "google",
-    "vertexai",
-    "azure",
-    "bedrock",
-    "openrouter",
-    "aihubmix",
-    "deepseek",
-    "siliconflow",
-    "sglang",
-    "gateway",
-    "edgeone",
-    "ollama",
-    "doubao",
-    "modelscope",
-    "glm",
-    "qwen",
-    "qiniu",
-    "kimi",
-    "minimax",
-    "novita",
-    "mimo",
-    "atlascloud",
-]
 
 // Bedrock provider options for Anthropic beta features
 const BEDROCK_ANTHROPIC_BETA = {
     bedrock: {
         anthropicBeta: ["fine-grained-tool-streaming-2025-05-14"],
     },
-}
-
-// Direct Anthropic API headers for beta features
-const ANTHROPIC_BETA_HEADERS = {
-    "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
 }
 
 /**
@@ -144,21 +118,37 @@ const ANTHROPIC_BETA_HEADERS = {
  * @param userApiKey - User-provided API key (if any)
  * @param userBaseUrl - User-provided base URL (if any)
  * @param serverBaseUrl - Server's base URL from environment variable
- * @param defaultBaseUrl - Provider's official/default base URL (optional)
  * @returns The resolved base URL to use
  */
 export function resolveBaseURL(
     userApiKey: string | null | undefined,
     userBaseUrl: string | null | undefined,
     serverBaseUrl: string | undefined,
-    defaultBaseUrl?: string,
 ): string | undefined {
     if (userApiKey) {
-        // User provides their own API key - only use user's baseUrl or default
-        return userBaseUrl || defaultBaseUrl || undefined
+        // User provides their own API key - only use user's baseUrl
+        return userBaseUrl || undefined
     }
     // No user API key - fall back to server config
-    return userBaseUrl || serverBaseUrl || defaultBaseUrl || undefined
+    return userBaseUrl || serverBaseUrl || undefined
+}
+
+/** The provider record of a name that may not be one */
+function providerDef(name: string): ProviderDef | undefined {
+    return Object.hasOwn(PROVIDERS, name)
+        ? PROVIDERS[name as ProviderName]
+        : undefined
+}
+
+/**
+ * A key and whose it is: the client's own, or the server's. "server" also
+ * when the variable turns out empty, which the credential check reports.
+ */
+interface ResolvedKey {
+    value?: string
+    source: "client" | "server"
+    /** The apiKeyEnv entry drawn, when there were several */
+    selectedKeyEnv?: string
 }
 
 /**
@@ -174,9 +164,9 @@ export function resolveBaseURL(
  */
 function resolveApiKey(
     overrides: ClientOverrides | undefined,
-    defaultEnvVar: string,
-): string | undefined {
-    if (overrides?.apiKey) return overrides.apiKey
+    defaultEnvVar: string | undefined,
+): ResolvedKey {
+    if (overrides?.apiKey) return { value: overrides.apiKey, source: "client" }
 
     if (overrides?.apiKeyEnv) {
         // Handle array of env var names - randomly select one
@@ -191,23 +181,24 @@ function resolveApiKey(
                     validEnvVars[
                         Math.floor(Math.random() * validEnvVars.length)
                     ]
-                console.log(
-                    `[API Key Routing] Selected ${selectedEnvVar} from ${validEnvVars.length} available keys`,
-                )
-                return process.env[selectedEnvVar]
+                return {
+                    value: process.env[selectedEnvVar],
+                    source: "server",
+                    selectedKeyEnv: selectedEnvVar,
+                }
             }
         } else {
-            return process.env[overrides.apiKeyEnv]
+            return { value: process.env[overrides.apiKeyEnv], source: "server" }
         }
     }
 
-    return process.env[defaultEnvVar]
+    return {
+        value: defaultEnvVar ? process.env[defaultEnvVar] : undefined,
+        source: "server",
+    }
 }
 
-/**
- * Resolve base URL from custom env var name or default env var.
- * Supports multiple base URLs per provider via ai-models.json baseUrlEnv config.
- */
+/** The server's base URL: a server model's own variable (baseUrlEnv) or the default one */
 function resolveBaseUrlEnv(
     overrides: ClientOverrides | undefined,
     defaultEnvVar: string,
@@ -240,12 +231,65 @@ function parseIntSafe(
 }
 
 /**
+ * GOOGLE_TOP_K and GOOGLE_TOP_P. They are call settings, so they go on the
+ * model through a middleware: as Google provider options they were dropped.
+ */
+function googleSamplingSettings(): { topK?: number; topP?: number } {
+    const settings: { topK?: number; topP?: number } = {}
+    const topK = parseIntSafe(process.env.GOOGLE_TOP_K, "GOOGLE_TOP_K", 1, 100)
+    if (topK) settings.topK = topK
+    if (process.env.GOOGLE_TOP_P) {
+        const topP = Number.parseFloat(process.env.GOOGLE_TOP_P)
+        if (Number.isNaN(topP) || topP < 0 || topP > 1) {
+            throw new Error(
+                `GOOGLE_TOP_P must be a number between 0 and 1, got: ${process.env.GOOGLE_TOP_P}`,
+            )
+        }
+        settings.topP = topP
+    }
+    return settings
+}
+
+/**
+ * Gemini 2.5/3 models think by default, but need includeThoughts: true to
+ * return the reasoning. The budget applies to Gemini 2.5, the level to
+ * Gemini 3. Shared by Google AI and Vertex AI, which read different variables.
+ */
+function geminiThinkingOptions(
+    modelId: string | undefined,
+    budgetEnvName: string,
+    levelEnvName: string,
+): { thinkingConfig: Record<string, any> } | undefined {
+    if (!modelId || !/gemini-?[23]/.test(modelId)) return undefined
+
+    const thinkingConfig: Record<string, any> = { includeThoughts: true }
+    const budget = parseIntSafe(
+        process.env[budgetEnvName],
+        budgetEnvName,
+        1024,
+        100000,
+    )
+    const level = process.env[levelEnvName] as
+        | "minimal"
+        | "low"
+        | "medium"
+        | "high"
+        | undefined
+    if (budget && (modelId.includes("2.5") || modelId.includes("2-5"))) {
+        thinkingConfig.thinkingBudget = budget
+    } else if (level && /gemini-?3/.test(modelId)) {
+        thinkingConfig.thinkingLevel = level
+    }
+    return { thinkingConfig }
+}
+
+/**
  * Build provider-specific options from environment variables
  * Supports various AI SDK providers with their unique configuration options
  *
  * Environment variables:
- * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (minimal/low/medium/high) - for o1/o3/o4/gpt-5
- * - OPENAI_REASONING_SUMMARY: OpenAI reasoning summary (auto/detailed) - auto-enabled for o1/o3/o4/gpt-5
+ * - OPENAI_REASONING_EFFORT: OpenAI reasoning effort level (minimal/low/medium/high) - for the o-series and gpt-5 or later
+ * - OPENAI_REASONING_SUMMARY: OpenAI reasoning summary (auto/detailed) - auto-enabled for the o-series and gpt-5 or later
  * - ANTHROPIC_THINKING_BUDGET_TOKENS: Anthropic thinking budget in tokens (1024-64000)
  * - ANTHROPIC_THINKING_TYPE: Anthropic thinking type (enabled)
  * - GOOGLE_THINKING_BUDGET: Google Gemini 2.5 thinking budget in tokens (1024-100000)
@@ -261,64 +305,32 @@ function parseIntSafe(
 function buildProviderOptions(
     provider: ProviderName,
     modelId?: string,
-    thinkingEnabled?: boolean,
 ): Record<string, any> | undefined {
     const options: Record<string, any> = {}
 
     switch (provider) {
         case "openai": {
-            const reasoningEffort = process.env.OPENAI_REASONING_EFFORT
-            const reasoningSummary = process.env.OPENAI_REASONING_SUMMARY
+            const reasoningEffort = process.env.OPENAI_REASONING_EFFORT as
+                | "minimal"
+                | "low"
+                | "medium"
+                | "high"
+                | undefined
+            // Reasoning models (the o-series, gpt-5 and later) need
+            // reasoningSummary to return thoughts; 'auto' as the default
+            // since not all models support 'detailed'
+            const isReasoning =
+                !!modelId && /^(o\d|gpt-([5-9]|[1-9]\d))/.test(modelId)
+            const reasoningSummary =
+                (process.env.OPENAI_REASONING_SUMMARY as
+                    | "auto"
+                    | "detailed"
+                    | undefined) || (isReasoning ? "auto" : undefined)
 
-            // OpenAI reasoning models (o1, o3, o4, gpt-5) need reasoningSummary to return thoughts
-            if (
-                modelId &&
-                (modelId.includes("o1") ||
-                    modelId.includes("o3") ||
-                    modelId.includes("o4") ||
-                    modelId.includes("gpt-5"))
-            ) {
+            if (reasoningSummary || reasoningEffort) {
                 options.openai = {
-                    // Auto-enable reasoning summary for reasoning models
-                    // Use 'auto' as default since not all models support 'detailed'
-                    reasoningSummary:
-                        (reasoningSummary as "auto" | "detailed") || "auto",
-                }
-
-                // Optionally configure reasoning effort
-                if (reasoningEffort) {
-                    options.openai.reasoningEffort = reasoningEffort as
-                        | "minimal"
-                        | "low"
-                        | "medium"
-                        | "high"
-                }
-            } else if (reasoningEffort || reasoningSummary) {
-                // Non-reasoning models: only apply if explicitly configured
-                options.openai = {}
-                if (reasoningEffort) {
-                    options.openai.reasoningEffort = reasoningEffort as
-                        | "minimal"
-                        | "low"
-                        | "medium"
-                        | "high"
-                }
-                if (reasoningSummary) {
-                    options.openai.reasoningSummary = reasoningSummary as
-                        | "auto"
-                        | "detailed"
-                }
-            }
-            if (
-                modelId &&
-                thinkingEnabled !== undefined &&
-                supportsThinkingToggle(provider, modelId)
-            ) {
-                options.openai = {
-                    ...options.openai,
-                    reasoningEffort: thinkingEnabled
-                        ? process.env.OPENAI_REASONING_EFFORT || "medium"
-                        : "none",
+                    ...(reasoningSummary && { reasoningSummary }),
+                    ...(reasoningEffort && { reasoningEffort }),
                 }
             }
             break
@@ -342,175 +354,25 @@ function buildProviderOptions(
                     },
                 }
             }
-            if (
-                modelId &&
-                thinkingEnabled !== undefined &&
-                supportsThinkingToggle(provider, modelId)
-            ) {
-                // Anthropic turns manual extended thinking off by omitting
-                // `thinking`; `type: "disabled"` is not a Messages API mode.
-                if (thinkingEnabled) {
-                    options.anthropic = {
-                        thinking: {
-                            type: "enabled",
-                            budgetTokens: thinkingBudget || 1024,
-                        },
-                    }
-                } else {
-                    delete options.anthropic
-                }
-            }
             break
         }
 
         case "google": {
-            const reasoningEffort = process.env.GOOGLE_REASONING_EFFORT
-            const thinkingBudgetVal = parseIntSafe(
-                process.env.GOOGLE_THINKING_BUDGET,
+            const google = geminiThinkingOptions(
+                modelId,
                 "GOOGLE_THINKING_BUDGET",
-                1024,
-                100000,
+                "GOOGLE_THINKING_LEVEL",
             )
-            const thinkingLevel = process.env.GOOGLE_THINKING_LEVEL
-
-            // Google Gemini 2.5/3 models think by default, but need includeThoughts: true
-            // to return the reasoning in the response
-            if (
-                modelId &&
-                (modelId.includes("gemini-2") ||
-                    modelId.includes("gemini-3") ||
-                    modelId.includes("gemini2") ||
-                    modelId.includes("gemini3"))
-            ) {
-                const thinkingConfig: Record<string, any> = {
-                    includeThoughts: true,
-                }
-
-                // Optionally configure thinking budget or level
-                if (
-                    thinkingBudgetVal &&
-                    (modelId.includes("2.5") || modelId.includes("2-5"))
-                ) {
-                    thinkingConfig.thinkingBudget = thinkingBudgetVal
-                } else if (
-                    thinkingLevel &&
-                    (modelId.includes("gemini-3") ||
-                        modelId.includes("gemini3"))
-                ) {
-                    thinkingConfig.thinkingLevel = thinkingLevel as
-                        | "low"
-                        | "high"
-                }
-
-                options.google = { thinkingConfig }
-            } else if (reasoningEffort) {
-                options.google = {
-                    reasoningEffort: reasoningEffort as
-                        | "low"
-                        | "medium"
-                        | "high",
-                }
-            }
-
-            // Keep existing Google options
-            const options_obj: Record<string, any> = {}
-            const candidateCount = parseIntSafe(
-                process.env.GOOGLE_CANDIDATE_COUNT,
-                "GOOGLE_CANDIDATE_COUNT",
-                1,
-                8,
-            )
-            if (candidateCount) {
-                options_obj.candidateCount = candidateCount
-            }
-            const topK = parseIntSafe(
-                process.env.GOOGLE_TOP_K,
-                "GOOGLE_TOP_K",
-                1,
-                100,
-            )
-            if (topK) {
-                options_obj.topK = topK
-            }
-            if (process.env.GOOGLE_TOP_P) {
-                const topP = Number.parseFloat(process.env.GOOGLE_TOP_P)
-                if (Number.isNaN(topP) || topP < 0 || topP > 1) {
-                    throw new Error(
-                        `GOOGLE_TOP_P must be a number between 0 and 1, got: ${process.env.GOOGLE_TOP_P}`,
-                    )
-                }
-                options_obj.topP = topP
-            }
-
-            if (Object.keys(options_obj).length > 0) {
-                options.google = { ...options.google, ...options_obj }
-            }
-            if (
-                modelId &&
-                thinkingEnabled !== undefined &&
-                supportsThinkingToggle(provider, modelId)
-            ) {
-                options.google = {
-                    ...options.google,
-                    thinkingConfig: {
-                        ...(options.google?.thinkingConfig || {}),
-                        thinkingBudget: thinkingEnabled ? -1 : 0,
-                    },
-                }
-            }
+            if (google) options.google = google
             break
         }
         case "vertexai": {
-            const thinkingBudget = parseIntSafe(
-                process.env.GOOGLE_VERTEX_THINKING_BUDGET,
+            const google = geminiThinkingOptions(
+                modelId,
                 "GOOGLE_VERTEX_THINKING_BUDGET",
-                1024,
-                100000,
+                "GOOGLE_VERTEX_THINKING_LEVEL",
             )
-            const thinkingLevel = process.env.GOOGLE_VERTEX_THINKING_LEVEL
-
-            if (
-                modelId &&
-                (modelId.includes("gemini-2") ||
-                    modelId.includes("gemini-3") ||
-                    modelId.includes("gemini2") ||
-                    modelId.includes("gemini3"))
-            ) {
-                const thinkingConfig: Record<string, any> = {
-                    includeThoughts: true,
-                }
-
-                const isGemini3 =
-                    modelId?.includes("gemini-3") ||
-                    modelId?.includes("gemini3")
-                const isGemini25 =
-                    modelId?.includes("2.5") || modelId?.includes("2-5")
-
-                if (isGemini3 && thinkingLevel) {
-                    // Vertex AI provider in AI SDK supports more granular levels (minimal/low/medium/high)
-                    thinkingConfig.thinkingLevel = thinkingLevel as
-                        | "minimal"
-                        | "low"
-                        | "medium"
-                        | "high"
-                } else if (isGemini25 && thinkingBudget) {
-                    thinkingConfig.thinkingBudget = thinkingBudget
-                }
-                options.google = { thinkingConfig }
-            }
-            if (
-                modelId &&
-                thinkingEnabled !== undefined &&
-                supportsThinkingToggle(provider, modelId)
-            ) {
-                options.google = {
-                    ...options.google,
-                    thinkingConfig: {
-                        ...(options.google?.thinkingConfig || {}),
-                        thinkingBudget: thinkingEnabled ? -1 : 0,
-                    },
-                }
-            }
+            if (google) options.google = google
             break
         }
         case "azure": {
@@ -530,18 +392,6 @@ function buildProviderOptions(
                         | "none"
                         | "brief"
                         | "detailed"
-                }
-            }
-            if (
-                modelId &&
-                thinkingEnabled !== undefined &&
-                supportsThinkingToggle(provider, modelId)
-            ) {
-                options.azure = {
-                    ...options.azure,
-                    reasoningEffort: thinkingEnabled
-                        ? process.env.AZURE_REASONING_EFFORT || "medium"
-                        : "none",
                 }
             }
             break
@@ -589,41 +439,6 @@ function buildProviderOptions(
 
                 options.bedrock = { reasoningConfig }
             }
-            if (
-                modelId &&
-                thinkingEnabled !== undefined &&
-                supportsThinkingToggle(provider, modelId)
-            ) {
-                const isClaude =
-                    modelId.includes("claude") || modelId.includes("anthropic")
-                if (!thinkingEnabled && isClaude) {
-                    // Claude extended thinking is disabled by omitting the
-                    // `thinking` object; it has no `type: "disabled"` mode.
-                    delete options.bedrock
-                } else if (!thinkingEnabled) {
-                    // Nova 2 Lite exposes an explicit binary switch.
-                    options.bedrock = {
-                        ...options.bedrock,
-                        reasoningConfig: { type: "disabled" },
-                    }
-                } else {
-                    options.bedrock = {
-                        ...options.bedrock,
-                        reasoningConfig: {
-                            ...(options.bedrock?.reasoningConfig || {}),
-                            type: "enabled",
-                            ...(isClaude
-                                ? { budgetTokens: budgetTokens || 1024 }
-                                : {
-                                      maxReasoningEffort:
-                                          process.env
-                                              .BEDROCK_REASONING_EFFORT ||
-                                          "medium",
-                                  }),
-                        },
-                    }
-                }
-            }
             break
         }
 
@@ -636,45 +451,6 @@ function buildProviderOptions(
             break
         }
 
-        case "deepseek": {
-            // DeepSeek V4 models enable thinking by default. This application
-            // needs predictable, compact tool-call output because diagrams
-            // are returned as draw.io XML. Keep thinking disabled for all
-            // DeepSeek requests unless this is explicitly changed later.
-            options.deepseek = {
-                thinking: {
-                    type:
-                        thinkingEnabled !== undefined &&
-                        supportsThinkingToggle(provider, modelId || "")
-                            ? thinkingEnabled
-                                ? "enabled"
-                                : "disabled"
-                            : "disabled",
-                },
-            }
-            break
-        }
-
-        case "openrouter":
-        case "aihubmix":
-        case "siliconflow":
-        case "sglang":
-        case "gateway":
-        case "modelscope":
-        case "doubao":
-        case "minimax":
-        case "glm":
-        case "qwen":
-        case "kimi":
-        case "qiniu":
-        case "novita":
-        case "atlascloud":
-        case "mimo": {
-            // These providers don't have reasoning configs in AI SDK yet
-            // Gateway passes through to underlying providers which handle their own configs
-            break
-        }
-
         default:
             break
     }
@@ -682,32 +458,102 @@ function buildProviderOptions(
     return Object.keys(options).length > 0 ? options : undefined
 }
 
-// Map of provider to required environment variable
-export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
-    bedrock: null, // AWS SDK auto-uses IAM role on AWS, or env vars locally
-    openai: "OPENAI_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
-    google: "GOOGLE_GENERATIVE_AI_API_KEY",
-    vertexai: "GOOGLE_VERTEX_API_KEY",
-    azure: "AZURE_API_KEY",
-    ollama: null, // No credentials needed for local Ollama
-    openrouter: "OPENROUTER_API_KEY",
-    aihubmix: "AIHUBMIX_API_KEY",
-    deepseek: "DEEPSEEK_API_KEY",
-    siliconflow: "SILICONFLOW_API_KEY",
-    sglang: "SGLANG_API_KEY",
-    gateway: "AI_GATEWAY_API_KEY",
-    edgeone: null, // No credentials needed - uses EdgeOne Edge AI
-    doubao: "DOUBAO_API_KEY",
-    modelscope: "MODELSCOPE_API_KEY",
-    glm: "GLM_API_KEY",
-    qwen: "QWEN_API_KEY",
-    qiniu: "QINIU_API_KEY",
-    kimi: "KIMI_API_KEY",
-    minimax: "MINIMAX_API_KEY",
-    novita: "NOVITA_API_KEY",
-    mimo: "MIMO_API_KEY",
-    atlascloud: "ATLASCLOUD_API_KEY",
+/**
+ * The names of a provider's server key and base URL variables, from the
+ * record: <PREFIX>_API_KEY (or the record's own keyEnv) and <PREFIX>_BASE_URL.
+ * Empty for Bedrock and EdgeOne. Always the spelling; whether the server
+ * must have the key is serverCredentialError's question.
+ */
+export function envVarsOf(provider: ProviderName): {
+    apiKey?: string
+    baseUrl?: string
+} {
+    const { envPrefix, keyEnv } = PROVIDERS[provider]
+    if (envPrefix === null) return {}
+    return {
+        apiKey: keyEnv ?? `${envPrefix}_API_KEY`,
+        baseUrl: `${envPrefix}_BASE_URL`,
+    }
+}
+
+// The key variable the server must have for each provider; null where it
+// needs none of this kind: Bedrock (the AWS SDK uses an IAM role or the
+// AWS_* variables), local Ollama, EdgeOne (the site's own function)
+const REQUIRED_KEY_VARS = Object.fromEntries(
+    PROVIDER_NAMES.map((p) => {
+        const { credential } = PROVIDERS[p]
+        const required = credential === "apiKey" || credential === "vertexKey"
+        return [p, required ? (envVarsOf(p).apiKey ?? null) : null]
+    }),
+) as Record<ProviderName, string | null>
+
+/**
+ * Why the server lacks this provider's credentials, or null when it has
+ * them. detectProvider asks for null; validateProviderCredentials throws
+ * the text. In order: an array apiKeyEnv passes when any of its variables
+ * has a value, and nothing else is checked; without a custom variable a
+ * provider with an altKeyEnv (Anthropic's ANTHROPIC_AUTH_TOKEN) accepts
+ * either variable; a custom variable without a value fails, with no fall
+ * back to the default one; a provider with a resourceNameEnv (Azure) then
+ * needs its base URL variable, the server model's own URL variable or the
+ * resource name. Providers with no required key variable pass unless a
+ * custom variable was given.
+ */
+function serverCredentialError(
+    provider: ProviderName,
+    customApiKeyEnv?: string | string[],
+    customBaseUrlEnv?: string,
+): string | null {
+    if (Array.isArray(customApiKeyEnv)) {
+        const hasAnyKey = customApiKeyEnv.some((envVar) => process.env[envVar])
+        if (!hasAnyKey) {
+            return (
+                `At least one of [${customApiKeyEnv.join(", ")}] environment variables is required for ${provider} provider. ` +
+                `Please set at least one in your .env.local file.`
+            )
+        }
+        return null
+    }
+
+    const { altKeyEnv, resourceNameEnv } = PROVIDERS[provider]
+    const requiredKeyEnv = REQUIRED_KEY_VARS[provider]
+    if (altKeyEnv && !customApiKeyEnv) {
+        const hasCredential = !!(
+            (requiredKeyEnv && process.env[requiredKeyEnv]) ||
+            process.env[altKeyEnv]
+        )
+        if (!hasCredential) {
+            return (
+                `Either ${requiredKeyEnv} or ${altKeyEnv} environment variable is required for ${provider} provider. ` +
+                `Please set one in your .env.local file.`
+            )
+        }
+    } else {
+        const requiredVar = customApiKeyEnv || requiredKeyEnv
+        if (requiredVar && !process.env[requiredVar]) {
+            return (
+                `${requiredVar} environment variable is required for ${provider} provider. ` +
+                `Please set it in your .env.local file.`
+            )
+        }
+    }
+
+    // The SDK builds the URL from the resource name when there is no URL.
+    // Only Azure has one, and the text stays as it was (tests freeze it)
+    if (resourceNameEnv) {
+        const baseUrlEnv = envVarsOf(provider).baseUrl as string
+        const hasBaseUrl =
+            !!process.env[baseUrlEnv] ||
+            !!(customBaseUrlEnv && process.env[customBaseUrlEnv])
+        const hasResourceName = !!process.env[resourceNameEnv]
+        if (!hasBaseUrl && !hasResourceName) {
+            return (
+                `Azure requires either ${baseUrlEnv} or ${resourceNameEnv} to be set. ` +
+                `Please set one in your .env.local file.`
+            )
+        }
+    }
+    return null
 }
 
 /**
@@ -715,40 +561,11 @@ export const PROVIDER_ENV_VARS: Record<ProviderName, string | null> = {
  * Returns the provider if exactly one is configured, otherwise null
  */
 function detectProvider(): ProviderName | null {
-    const configuredProviders: ProviderName[] = []
-
-    for (const [provider, envVar] of Object.entries(PROVIDER_ENV_VARS)) {
-        if (envVar === null) {
-            // Skip ollama - it doesn't require credentials
-            continue
-        }
-        // Anthropic accepts ANTHROPIC_AUTH_TOKEN (Bearer auth) as alternative to ANTHROPIC_API_KEY
-        const hasCredential =
-            provider === "anthropic"
-                ? !!(
-                      process.env.ANTHROPIC_API_KEY ||
-                      process.env.ANTHROPIC_AUTH_TOKEN
-                  )
-                : !!process.env[envVar]
-        if (hasCredential) {
-            // Azure requires additional config (baseURL or resourceName)
-            if (provider === "azure") {
-                const hasBaseUrl = !!process.env.AZURE_BASE_URL
-                const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
-                if (hasBaseUrl || hasResourceName) {
-                    configuredProviders.push(provider as ProviderName)
-                }
-            } else {
-                configuredProviders.push(provider as ProviderName)
-            }
-        }
-    }
-
-    if (configuredProviders.length === 1) {
-        return configuredProviders[0]
-    }
-
-    return null
+    const configuredProviders = PROVIDER_NAMES.filter(
+        (p) =>
+            REQUIRED_KEY_VARS[p] !== null && serverCredentialError(p) === null,
+    )
+    return configuredProviders.length === 1 ? configuredProviders[0] : null
 }
 
 /**
@@ -759,93 +576,444 @@ function detectProvider(): ProviderName | null {
 function validateProviderCredentials(
     provider: ProviderName,
     customApiKeyEnv?: string | string[],
+    customBaseUrlEnv?: string,
 ): void {
-    // Handle array of env var names - at least one must be set
-    if (Array.isArray(customApiKeyEnv)) {
-        const hasAnyKey = customApiKeyEnv.some((envVar) => process.env[envVar])
-        if (!hasAnyKey) {
-            throw new Error(
-                `At least one of [${customApiKeyEnv.join(", ")}] environment variables is required for ${provider} provider. ` +
-                    `Please set at least one in your .env.local file.`,
-            )
-        }
-        return
-    }
+    const error = serverCredentialError(
+        provider,
+        customApiKeyEnv,
+        customBaseUrlEnv,
+    )
+    if (error) throw new Error(error)
+}
 
-    // Anthropic accepts ANTHROPIC_AUTH_TOKEN (Bearer auth) as alternative to ANTHROPIC_API_KEY
-    if (provider === "anthropic" && !customApiKeyEnv) {
-        const hasCredential = !!(
-            process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN
-        )
-        if (!hasCredential) {
-            throw new Error(
-                `Either ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable is required for anthropic provider. ` +
-                    `Please set one in your .env.local file.`,
-            )
-        }
-    } else {
-        // Use custom env var name if provided, otherwise use default
-        const requiredVar = customApiKeyEnv || PROVIDER_ENV_VARS[provider]
-        if (requiredVar && !process.env[requiredVar]) {
-            throw new Error(
-                `${requiredVar} environment variable is required for ${provider} provider. ` +
-                    `Please set it in your .env.local file.`,
-            )
-        }
-    }
+/** AWS's Bedrock endpoint for a region, as the Bedrock SDK builds it */
+function bedrockRuntimeUrl(region: string): string {
+    const suffix =
+        [
+            ["cn-", "amazonaws.com.cn"],
+            ["us-iso-", "c2s.ic.gov"],
+            ["us-isob-", "sc2s.sgov.gov"],
+            ["eu-isoe-", "cloud.adc-e.uk"],
+            ["us-isof-", "csp.hci.ic.gov"],
+            ["eusc-", "amazonaws.eu"],
+        ].find(([prefix]) => region.startsWith(prefix))?.[1] ?? "amazonaws.com"
+    return `https://bedrock-runtime.${region}.${suffix}`
+}
 
-    // Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME in addition to API key
-    if (provider === "azure") {
-        const hasBaseUrl = !!process.env.AZURE_BASE_URL
-        const hasResourceName = !!process.env.AZURE_RESOURCE_NAME
-        if (!hasBaseUrl && !hasResourceName) {
-            throw new Error(
-                `Azure requires either AZURE_BASE_URL or AZURE_RESOURCE_NAME to be set. ` +
-                    `Please set one in your .env.local file.`,
+type KeySource = "client" | "server" | "none"
+
+/** Where and how to call a provider, once credentials are resolved */
+interface Endpoint {
+    apiKey?: string
+    /** Anthropic Bearer auth (ANTHROPIC_AUTH_TOKEN), server only */
+    authToken?: string
+    /** Azure, the server's resource only */
+    resourceName?: string
+    /** undefined: the SDK's built-in endpoint */
+    baseURL?: string
+    /** The URL came from the client or a server variable, not the record */
+    configuredBaseURL: boolean
+    /** A client-chosen, untrusted URL: wrap fetch in redirectGuardedFetch */
+    guarded: boolean
+    /** "server" is what usesServerCredentials answers true for */
+    keySource: KeySource
+    /** The apiKeyEnv entry drawn (array case); getAIModel logs it */
+    selectedKeyEnv?: string
+    headers?: Record<string, string>
+    /** Set by getAIModel from guarded; resolveEndpoint never fills it */
+    fetch?: typeof fetch
+}
+
+/**
+ * Whose key a call uses and where it goes, by the provider's credential
+ * kind. Reads its arguments and process.env, draws one key with Math.random
+ * when apiKeyEnv is an array, and never throws, fetches or logs: getAIModel
+ * decides what a missing key or URL means, usesServerCredentials reads
+ * keySource. overrides.baseUrl must already be normalized (normalizeBaseUrl
+ * drops one pasted endpoint path per call, so it runs once, in the caller).
+ * Bedrock gets only keySource: bedrockModel() builds its SDK parameters.
+ */
+function resolveEndpoint(
+    provider: ProviderName,
+    overrides?: ClientOverrides,
+): Endpoint {
+    const def = PROVIDERS[provider]
+    const vars = envVarsOf(provider)
+    const clientUrl = overrides?.baseUrl || undefined
+    // Requests to a base URL the client chose must not follow redirects. A
+    // trusted URL is the server's own (the admin Test of an entry without
+    // one), not a user's
+    const guarded = !!clientUrl && !overrides?.trustedBaseUrl
+
+    switch (def.credential) {
+        case "aws": {
+            // The client's own Bedrock API key or access key pair, else the
+            // server's (the admin panel's ADMIN_AWS_* keys or an IAM role)
+            const clientKeys = !!(
+                overrides?.apiKey ||
+                (overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey)
             )
+            return {
+                configuredBaseURL: false,
+                guarded,
+                keySource: clientKeys ? "client" : "server",
+            }
+        }
+        case "vertexKey": {
+            // SECURITY: a client base URL only ever gets the client's key, so
+            // the server's key is never sent to a client-chosen host. A client
+            // key only goes to the client's URL or the official one.
+            const apiKey = clientUrl
+                ? overrides?.vertexApiKey || undefined
+                : overrides?.vertexApiKey || process.env[vars.apiKey as string]
+            const baseURL = resolveBaseURL(
+                overrides?.vertexApiKey,
+                clientUrl,
+                process.env[vars.baseUrl as string],
+            )
+            return {
+                apiKey,
+                baseURL,
+                configuredBaseURL: !!baseURL,
+                guarded,
+                keySource: overrides?.vertexApiKey ? "client" : "server",
+            }
+        }
+        case "none":
+            // The site's own function (EdgeOne), an OpenAI-compatible API
+            // without a key. The route passes the site's absolute URL and the
+            // cookies and access code that authenticate the call.
+            return {
+                apiKey: "edgeone",
+                baseURL: clientUrl || "/api/edgeai",
+                headers: overrides?.headers,
+                configuredBaseURL: !!clientUrl,
+                guarded,
+                keySource: "none",
+            }
+        case "optionalKey": {
+            // SECURITY: with a client base URL only the client's key is used,
+            // never the server's (Ollama). A user's key never goes to the
+            // server's URL: without a URL of their own it goes to the
+            // provider's cloud. The server's key goes to the server's URL
+            // variable (or a server model's own), else to the SDK's local
+            // default.
+            const key: ResolvedKey = clientUrl
+                ? { value: overrides?.apiKey || undefined, source: "client" }
+                : resolveApiKey(overrides, vars.apiKey)
+            const baseURL =
+                clientUrl ||
+                (overrides?.apiKey
+                    ? def.defaultBaseUrl
+                    : resolveBaseUrlEnv(overrides, vars.baseUrl as string))
+            // Only a server key costs money; a keyless local server or the
+            // client's own server does not. Spelled out because resolveApiKey
+            // says "server" for an empty variable too.
+            const serverKey =
+                overrides?.apiKeyEnv || process.env[vars.apiKey as string]
+            const keySource: KeySource = overrides?.apiKey
+                ? "client"
+                : !clientUrl && serverKey
+                  ? "server"
+                  : "none"
+            return {
+                apiKey: key.value,
+                baseURL,
+                configuredBaseURL: !!baseURL,
+                guarded,
+                keySource,
+                selectedKeyEnv: key.selectedKeyEnv,
+            }
+        }
+        case "apiKey": {
+            // An API key and a base URL from <PREFIX>_API_KEY /
+            // <PREFIX>_BASE_URL, or a server model's apiKeyEnv / baseUrlEnv
+            const key = resolveApiKey(overrides, vars.apiKey)
+            const configuredUrl = resolveBaseURL(
+                overrides?.apiKey,
+                clientUrl,
+                resolveBaseUrlEnv(overrides, vars.baseUrl as string),
+            )
+            // Without a configured URL an SDK that knows its endpoint gets
+            // none, except OpenAI with a user's key: the SDK would read the
+            // server's OPENAI_BASE_URL, so the official endpoint is named.
+            // The others get the record's https default (a local default,
+            // SGLang's 127.0.0.1, only fills the settings form).
+            const baseURL =
+                configuredUrl ||
+                (def.sdkKnowsEndpoint &&
+                !(def.sdk === "openai" && overrides?.apiKey)
+                    ? undefined
+                    : publicDefaultUrl(provider))
+            return {
+                apiKey: key.value,
+                baseURL,
+                configuredBaseURL: !!configuredUrl,
+                guarded,
+                keySource: key.source,
+                selectedKeyEnv: key.selectedKeyEnv,
+                // Bearer auth when there is no API key (Anthropic)
+                authToken:
+                    def.altKeyEnv && !key.value
+                        ? process.env[def.altKeyEnv]
+                        : undefined,
+                // Only the server's own resource; a client key needs its URL
+                // (Azure)
+                resourceName:
+                    def.resourceNameEnv && !overrides?.apiKey
+                        ? process.env[def.resourceNameEnv]
+                        : undefined,
+            }
         }
     }
 }
 
 /**
- * Get the AI model based on environment variables
- *
- * Environment variables:
- * - AI_PROVIDER: The provider to use (bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, modelscope)
- * - AI_MODEL: The model ID/name for the selected provider
- *
- * Provider-specific env vars:
- * - OPENAI_API_KEY: OpenAI API key
- * - OPENAI_BASE_URL: Custom OpenAI-compatible endpoint (optional)
- * - ANTHROPIC_API_KEY: Anthropic API key
- * - GOOGLE_GENERATIVE_AI_API_KEY: Google API key
- * - AZURE_RESOURCE_NAME, AZURE_API_KEY: Azure OpenAI credentials
- * - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY: AWS Bedrock credentials
- * - OLLAMA_BASE_URL: Ollama server URL (optional, defaults to https://ollama.com/api)
- * - OPENROUTER_API_KEY: OpenRouter API key
- * - AIHUBMIX_API_KEY: AIHubMix API key
- * - DEEPSEEK_API_KEY: DeepSeek API key
- * - DEEPSEEK_BASE_URL: DeepSeek endpoint (optional)
- * - SILICONFLOW_API_KEY: SiliconFlow API key
- * - SILICONFLOW_BASE_URL: SiliconFlow endpoint (optional, defaults to https://api.siliconflow.cn/v1)
- * - SGLANG_API_KEY: SGLang API key
- * - SGLANG_BASE_URL: SGLang endpoint (optional)
- * - MODELSCOPE_API_KEY: ModelScope API key
- * - MODELSCOPE_BASE_URL: ModelScope endpoint (optional)
+ * A Bedrock model from the client's credentials if it sent any (a Bedrock
+ * API key, or an access key pair), else the admin panel's ADMIN_AWS_* keys,
+ * else the default AWS credential chain (an IAM role, the AWS_* variables).
  */
-export function getAIModel(overrides?: ClientOverrides): ModelConfig {
+function bedrockModel(
+    modelId: string,
+    overrides: ClientOverrides | undefined,
+): LanguageModel {
+    const clientApiKey = overrides?.apiKey
+    const hasClientCredentials =
+        overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey
+    // Keys from the admin panel. The ADMIN_ names keep them out of the
+    // default AWS credential chain, which other clients such as the
+    // DynamoDB quota manager use with their own credentials.
+    const adminAccessKeyId = process.env.ADMIN_AWS_ACCESS_KEY_ID
+    const adminSecretAccessKey = process.env.ADMIN_AWS_SECRET_ACCESS_KEY
+    // The region becomes part of the endpoint's host name, so a
+    // request's region must be a region name, or it could send the
+    // server's credentials to another host
+    if (
+        overrides?.awsRegion &&
+        !/^[a-z]{2,4}(-[a-z]+)+-\d{1,2}$/.test(overrides.awsRegion)
+    ) {
+        throw Object.assign(
+            new Error(`Invalid AWS region "${overrides.awsRegion}"`),
+            { statusCode: 400 },
+        )
+    }
+    const bedrockRegion =
+        overrides?.awsRegion ||
+        process.env.ADMIN_AWS_REGION ||
+        process.env.AWS_REGION ||
+        "us-west-2"
+
+    const bedrockProvider = clientApiKey
+        ? createAmazonBedrock({
+              region: bedrockRegion,
+              apiKey: clientApiKey,
+              // The SDK falls back to signing with AWS keys when it
+              // drops a key (one of spaces): never the server's
+              credentialProvider: async () => {
+                  throw new Error("The Bedrock API key is empty")
+              },
+              // Without a baseURL it reads the server's
+              // AWS_ENDPOINT_URL_BEDROCK_RUNTIME / AWS_ENDPOINT_URL
+              baseURL: bedrockRuntimeUrl(bedrockRegion),
+          })
+        : hasClientCredentials
+          ? createAmazonBedrock({
+                region: bedrockRegion,
+                accessKeyId: overrides.awsAccessKeyId as string,
+                secretAccessKey: overrides.awsSecretAccessKey as string,
+                ...(overrides?.awsSessionToken && {
+                    sessionToken: overrides.awsSessionToken,
+                }),
+                // Without an apiKey the SDK reads the server's
+                // AWS_BEARER_TOKEN_BEDROCK, which wins over the keys
+                apiKey: "",
+                // Without a baseURL it reads the server's
+                // AWS_ENDPOINT_URL_BEDROCK_RUNTIME / AWS_ENDPOINT_URL
+                baseURL: bedrockRuntimeUrl(bedrockRegion),
+            })
+          : adminAccessKeyId && adminSecretAccessKey
+            ? createAmazonBedrock({
+                  region: bedrockRegion,
+                  accessKeyId: adminAccessKeyId,
+                  secretAccessKey: adminSecretAccessKey,
+                  // The keys the admin panel's Test button checked
+                  apiKey: "",
+              })
+            : createAmazonBedrock({
+                  region: bedrockRegion,
+                  credentialProvider: fromNodeProviderChain(),
+              })
+    return bedrockProvider(modelId)
+}
+
+/**
+ * An OpenAI-compatible chat model. includeUsage asks for token usage in the
+ * stream, which quota tracking needs. Some of these models write their
+ * reasoning inside <think> tags; that text becomes reasoning, not reply.
+ */
+function compatibleModel(
+    provider: ProviderName,
+    modelId: string,
+    e: Endpoint,
+): LanguageModel {
+    const model = createOpenAICompatible({
+        name: provider,
+        apiKey: e.apiKey,
+        baseURL: e.baseURL ?? "",
+        ...(e.headers && { headers: e.headers }),
+        ...(e.fetch && { fetch: e.fetch }),
+        includeUsage: true,
+    })(modelId)
+    return wrapLanguageModel({
+        model,
+        middleware: extractReasoningMiddleware({ tagName: "think" }),
+    })
+}
+
+/**
+ * Create the model for a provider with its endpoint resolved, by the SDK
+ * the record names. Bedrock never comes here: getAIModel calls bedrockModel.
+ */
+function createModel(
+    provider: ProviderName,
+    modelId: string,
+    e: Endpoint,
+): LanguageModel {
+    const opts = {
+        apiKey: e.apiKey,
+        ...(e.baseURL && { baseURL: e.baseURL }),
+        ...(e.fetch && { fetch: e.fetch }),
+    }
+    switch (PROVIDERS[provider].sdk) {
+        case "openai": {
+            const openaiProvider = createOpenAI(opts)
+            // A configured base URL is usually a proxy that only has Chat
+            // Completions; without one the Responses API is used, which
+            // returns reasoning for the o-series and gpt-5 or later
+            return e.configuredBaseURL
+                ? openaiProvider.chat(modelId)
+                : openaiProvider(modelId)
+        }
+        case "anthropic":
+            // The provider streams tool input per tool (eager_input_streaming),
+            // which replaced the fine-grained-tool-streaming beta header
+            return createAnthropic({
+                ...(e.authToken
+                    ? { authToken: e.authToken }
+                    : { apiKey: e.apiKey }),
+                baseURL: e.baseURL,
+                ...(e.fetch && { fetch: e.fetch }),
+            })(modelId)
+        case "google": {
+            const model = createGoogleGenerativeAI(opts)(modelId)
+            const sampling = googleSamplingSettings()
+            return Object.keys(sampling).length > 0
+                ? wrapLanguageModel({
+                      model,
+                      middleware: defaultSettingsMiddleware({
+                          settings: sampling,
+                      }),
+                  })
+                : model
+        }
+        case "azure":
+            // baseURL takes precedence over resourceName per SDK behavior
+            return createAzure({
+                ...opts,
+                ...(!e.baseURL &&
+                    e.resourceName && { resourceName: e.resourceName }),
+            })(modelId)
+        case "openrouter":
+            return createOpenRouter(opts)(modelId)
+        case "gateway":
+            // Without a key or URL the SDK uses Vercel's endpoint and OIDC
+            return createGateway(opts)(modelId)
+        case "deepseek":
+            // Kimi and MiMo return reasoning_content like DeepSeek and need it
+            // passed back in multi-turn tool calls (MiMo answers 400 otherwise)
+            return createDeepSeek(opts)(modelId)
+        case "doubao": {
+            // DeepSeek and Kimi models on Doubao use reasoning_content too
+            const lower = modelId.toLowerCase()
+            return lower.includes("deepseek") || lower.includes("kimi")
+                ? createDeepSeek(opts)(modelId)
+                : compatibleModel(provider, modelId, e)
+        }
+        case "aihubmix":
+            return isAihubmixStandardBaseURL(e.baseURL)
+                ? createAihubmix({
+                      apiKey: e.apiKey,
+                      appCode: AIHUBMIX_APP_CODE,
+                  })(modelId)
+                : compatibleModel(provider, modelId, e)
+        case "minimax": {
+            const { baseURL, isAnthropicCompatible } = normalizeMiniMaxBaseURL(
+                e.baseURL as string,
+            )
+            return isAnthropicCompatible
+                ? createAnthropic({
+                      apiKey: e.apiKey,
+                      baseURL,
+                      ...(e.fetch && { fetch: e.fetch }),
+                  })(modelId)
+                : compatibleModel(provider, modelId, { ...e, baseURL })
+        }
+        case "vertex":
+            // Express Mode: an API key; the URL only when one is configured
+            return createVertex(opts)(modelId)
+        case "ollama":
+            return createOllama({
+                ...(e.baseURL && { baseURL: ollamaApiUrl(e.baseURL) }),
+                ...(e.apiKey && {
+                    headers: { Authorization: `Bearer ${e.apiKey}` },
+                }),
+                ...(e.fetch && { fetch: e.fetch }),
+            })(modelId)
+        case "openai-compatible":
+            return compatibleModel(provider, modelId, e)
+        case "bedrock":
+            throw new Error("Bedrock models come from bedrockModel()")
+    }
+}
+
+/**
+ * Get the AI model for a chat request: the client's own provider and
+ * credentials, or the server's (AI_PROVIDER, AI_MODEL and each provider's
+ * <NAME>_API_KEY / <NAME>_BASE_URL, see env.example). The settings test
+ * button uses the same function, so a passing test means the chat works.
+ */
+export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
+    // Drop an endpoint path pasted along with the client's base URL
+    const overrides = clientOverrides?.baseUrl
+        ? {
+              ...clientOverrides,
+              baseUrl: normalizeBaseUrl(clientOverrides.baseUrl),
+          }
+        : clientOverrides
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
-    // Exception: EdgeOne doesn't require API keys.
-    // Ollama is exempt only when no server OLLAMA_API_KEY is configured;
-    // when it IS configured, the outer guard also enforces client apiKey for custom baseUrls.
+    // Exceptions, by the provider's credential kind: a provider without keys
+    // (EdgeOne); a Vertex key; an optional key (Ollama) only when the server
+    // has no key of that provider, otherwise the client must send its own.
+    // A trusted URL is the server's own (the admin Test of an entry without
+    // one), not a user's. An unknown provider name has no kind and is
+    // refused here like any other, and named below.
+    const requested = overrides?.provider
+        ? providerDef(overrides.provider)
+        : undefined
     if (
         overrides?.baseUrl &&
+        !overrides?.trustedBaseUrl &&
         !overrides?.apiKey &&
-        !(overrides?.provider === "vertexai" && overrides?.vertexApiKey) &&
-        overrides?.provider !== "edgeone" &&
-        !(overrides?.provider === "ollama" && !process.env.OLLAMA_API_KEY)
+        !(requested?.credential === "vertexKey" && overrides?.vertexApiKey) &&
+        requested?.credential !== "none" &&
+        !(
+            requested?.credential === "optionalKey" &&
+            !process.env[
+                envVarsOf(overrides.provider as ProviderName).apiKey as string
+            ]
+        )
     ) {
         throw new Error(
             `API key is required when using a custom base URL. ` +
@@ -857,12 +1025,12 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     const isClientOverride = !!(
         overrides?.provider &&
         (overrides?.apiKey ||
-            (overrides?.provider === "vertexai" && overrides?.vertexApiKey))
+            (requested?.credential === "vertexKey" && overrides?.vertexApiKey))
     )
 
     // Use client override if provided, otherwise fall back to env vars.
     // AI_MODEL may be comma-separated (multi-model fallback); pick the first.
-    const envModel = process.env.AI_MODEL?.split(",")[0]?.trim() || undefined
+    const envModel = process.env.AI_MODEL?.split(",")[0].trim() || undefined
     const modelId = overrides?.modelId || envModel
 
     if (!modelId) {
@@ -880,17 +1048,18 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
     let provider: ProviderName
     if (overrides?.provider) {
         // Validate client-provided provider
-        if (
-            !ALLOWED_CLIENT_PROVIDERS.includes(
-                overrides.provider as ProviderName,
-            )
-        ) {
+        if (!Object.hasOwn(PROVIDERS, overrides.provider)) {
             throw new Error(
-                `Invalid provider: ${overrides.provider}. Allowed providers: ${ALLOWED_CLIENT_PROVIDERS.join(", ")}`,
+                `Invalid provider: ${overrides.provider}. Allowed providers: ${Object.keys(PROVIDERS).join(", ")}`,
             )
         }
         provider = overrides.provider as ProviderName
     } else if (process.env.AI_PROVIDER) {
+        if (!Object.hasOwn(PROVIDERS, process.env.AI_PROVIDER)) {
+            throw new Error(
+                `Unknown AI provider: ${process.env.AI_PROVIDER}. Supported providers: ${Object.keys(PROVIDERS).join(", ")}`,
+            )
+        }
         provider = process.env.AI_PROVIDER as ProviderName
     } else {
         const detected = detectProvider()
@@ -899,677 +1068,217 @@ export function getAIModel(overrides?: ClientOverrides): ModelConfig {
             console.log(`[AI Provider] Auto-detected provider: ${provider}`)
         } else {
             // List configured providers for better error message
-            const configured = Object.entries(PROVIDER_ENV_VARS)
+            const configured = Object.entries(REQUIRED_KEY_VARS)
                 .filter(([, envVar]) => envVar && process.env[envVar as string])
                 .map(([p]) => p)
 
             if (configured.length === 0) {
+                const keys = Object.entries(REQUIRED_KEY_VARS)
+                    .filter(([, envVar]) => envVar)
+                    .map(([p, envVar]) => `- ${envVar} for ${p}`)
                 throw new Error(
                     `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
-                        `- AI_GATEWAY_API_KEY for Vercel AI Gateway\n` +
-                        `- DEEPSEEK_API_KEY for DeepSeek\n` +
-                        `- OPENAI_API_KEY for OpenAI\n` +
-                        `- ANTHROPIC_API_KEY for Anthropic\n` +
-                        `- GOOGLE_GENERATIVE_AI_API_KEY for Google\n` +
-                        `- AWS_ACCESS_KEY_ID for Bedrock\n` +
-                        `- OPENROUTER_API_KEY for OpenRouter\n` +
-                        `- AIHUBMIX_API_KEY for AIHubMix\n` +
-                        `- AZURE_API_KEY for Azure\n` +
-                        `- SILICONFLOW_API_KEY for SiliconFlow\n` +
-                        `- SGLANG_API_KEY for SGLang\n` +
-                        `- MODELSCOPE_API_KEY for ModelScope\n` +
+                        `${keys.join("\n")}\n` +
+                        `- AWS_ACCESS_KEY_ID for bedrock\n` +
                         `Or set AI_PROVIDER=ollama for local Ollama.`,
                 )
-            } else {
-                throw new Error(
-                    `Multiple AI providers configured (${configured.join(", ")}). ` +
-                        `Please set AI_PROVIDER to specify which one to use.`,
-                )
             }
+            throw new Error(
+                `Multiple AI providers configured (${configured.join(", ")}). ` +
+                    `Please set AI_PROVIDER to specify which one to use.`,
+            )
         }
     }
 
     // Only validate server credentials if client isn't providing their own API key
     if (!isClientOverride) {
-        validateProviderCredentials(provider, overrides?.apiKeyEnv)
+        validateProviderCredentials(
+            provider,
+            overrides?.apiKeyEnv,
+            overrides?.baseUrlEnv,
+        )
     }
 
     console.log(`[AI Provider] Initializing ${provider} with model: ${modelId}`)
 
-    let model: any
-    let providerOptions: any
-    let headers: Record<string, string> | undefined
-
     // Build provider-specific options from environment variables
-    const customProviderOptions = buildProviderOptions(
-        provider,
-        modelId,
-        overrides?.thinkingEnabled,
-    )
+    let providerOptions = buildProviderOptions(provider, modelId)
+    let model: LanguageModel
+    const def = PROVIDERS[provider]
 
-    switch (provider) {
-        case "bedrock": {
-            // Use client-provided credentials if available, otherwise fall back to IAM/env vars
-            const hasClientCredentials =
-                overrides?.awsAccessKeyId && overrides?.awsSecretAccessKey
-            const bedrockRegion =
-                overrides?.awsRegion || process.env.AWS_REGION || "us-west-2"
-
-            const bedrockProvider = hasClientCredentials
-                ? createAmazonBedrock({
-                      region: bedrockRegion,
-                      accessKeyId: overrides.awsAccessKeyId as string,
-                      secretAccessKey: overrides.awsSecretAccessKey as string,
-                      ...(overrides?.awsSessionToken && {
-                          sessionToken: overrides.awsSessionToken,
-                      }),
-                  })
-                : createAmazonBedrock({
-                      region: bedrockRegion,
-                      credentialProvider: fromNodeProviderChain(),
-                  })
-            model = bedrockProvider(modelId)
-            // Add Anthropic beta options if using Claude models via Bedrock
-            if (modelId.includes("anthropic.claude")) {
-                // Deep merge to preserve both anthropicBeta and reasoningConfig
-                providerOptions = {
-                    bedrock: {
-                        ...BEDROCK_ANTHROPIC_BETA.bedrock,
-                        ...(customProviderOptions?.bedrock || {}),
-                    },
-                }
-            } else if (customProviderOptions) {
-                providerOptions = customProviderOptions
-            }
-            break
-        }
-
-        case "openai": {
-            const apiKey = resolveApiKey(overrides, "OPENAI_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "OPENAI_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-            )
-            if (baseURL) {
-                // Custom base URL = third-party proxy, use Chat Completions API
-                // for compatibility (most proxies don't support /responses endpoint)
-                const customOpenAI = createOpenAI({ apiKey, baseURL })
-                model = customOpenAI.chat(modelId)
-            } else if (overrides?.apiKey) {
-                // Custom API key but official OpenAI endpoint, use Responses API
-                // to support reasoning for gpt-5, o1, o3, o4 models
-                const customOpenAI = createOpenAI({ apiKey })
-                model = customOpenAI(modelId)
-            } else {
-                model = openai(modelId)
-            }
-            break
-        }
-
-        case "anthropic": {
-            const apiKey = resolveApiKey(overrides, "ANTHROPIC_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "ANTHROPIC_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-                "https://api.anthropic.com/v1",
-            )
-            // Anthropic supports two auth methods (mutually exclusive):
-            // - apiKey: sends as `x-api-key` header
-            // - authToken: sends as `Authorization: Bearer <token>` header
-            // Prefer apiKey if present (including client overrides); fall back
-            // to ANTHROPIC_AUTH_TOKEN env var only when no apiKey is available.
-            const authToken = !apiKey
-                ? process.env.ANTHROPIC_AUTH_TOKEN
-                : undefined
-            const customProvider = createAnthropic({
-                ...(authToken ? { authToken } : { apiKey }),
-                baseURL,
-                headers: ANTHROPIC_BETA_HEADERS,
-            })
-            model = customProvider(modelId)
-            // Add beta headers for fine-grained tool streaming
-            headers = ANTHROPIC_BETA_HEADERS
-            break
-        }
-
-        case "google": {
-            const apiKey = resolveApiKey(
-                overrides,
-                "GOOGLE_GENERATIVE_AI_API_KEY",
-            )
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "GOOGLE_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-            )
-            if (baseURL || overrides?.apiKey) {
-                const customGoogle = createGoogleGenerativeAI({
-                    apiKey,
-                    ...(baseURL && { baseURL }),
-                })
-                model = customGoogle(modelId)
-            } else {
-                model = google(modelId)
-            }
-            break
-        }
-        case "vertexai": {
-            // Express Mode: Use API key for authentication
-            const vertexApiKey =
-                overrides?.vertexApiKey || process.env.GOOGLE_VERTEX_API_KEY
-
-            if (!vertexApiKey) {
-                throw new Error(
-                    "Vertex AI requires an API key for Express Mode. " +
-                        "Get one from Google Cloud Console or set GOOGLE_VERTEX_API_KEY environment variable.",
-                )
-            }
-
-            // Support custom base URL from env or client override
-            const baseURL =
-                overrides?.baseUrl || process.env.GOOGLE_VERTEX_BASE_URL
-
-            const vertexProvider = createVertex({
-                apiKey: vertexApiKey,
-                ...(baseURL && { baseURL }),
-            })
-            model = vertexProvider(modelId)
-            break
-        }
-
-        case "azure": {
-            const apiKey = resolveApiKey(overrides, "AZURE_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(overrides, "AZURE_BASE_URL")
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-            )
-            // Only use server's resourceName if user is NOT providing their own API key
-            const resourceName = overrides?.apiKey
-                ? undefined
-                : process.env.AZURE_RESOURCE_NAME
-            // Azure requires either baseURL or resourceName to construct the endpoint
-            // resourceName constructs: https://{resourceName}.openai.azure.com/openai/v1{path}
-            if (baseURL || resourceName || overrides?.apiKey) {
-                const customAzure = createAzure({
-                    apiKey,
-                    // baseURL takes precedence over resourceName per SDK behavior
-                    ...(baseURL && { baseURL }),
-                    ...(!baseURL && resourceName && { resourceName }),
-                })
-                model = customAzure(modelId)
-            } else {
-                model = azure(modelId)
-            }
-            break
-        }
-
-        case "ollama": {
-            const baseURL = overrides?.baseUrl || process.env.OLLAMA_BASE_URL
-            // SECURITY: When client provides a custom base URL, only use
-            // client-provided API key. Never fall back to server OLLAMA_API_KEY
-            // to prevent leaking server credentials to user-controlled endpoints.
-            const apiKey = overrides?.baseUrl
-                ? overrides?.apiKey || undefined
-                : resolveApiKey(overrides, "OLLAMA_API_KEY")
-            if (baseURL || apiKey) {
-                const customOllama = createOllama({
-                    ...(baseURL && { baseURL }),
-                    ...(apiKey && {
-                        headers: { Authorization: `Bearer ${apiKey}` },
-                    }),
-                })
-                model = customOllama(modelId)
-            } else {
-                model = ollama(modelId)
-            }
-            break
-        }
-
-        case "openrouter": {
-            const apiKey = resolveApiKey(overrides, "OPENROUTER_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "OPENROUTER_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-            )
-            const openrouter = createOpenRouter({
-                apiKey,
-                ...(baseURL && { baseURL }),
-            })
-            model = openrouter(modelId)
-            break
-        }
-
-        case "aihubmix": {
-            const apiKey = resolveApiKey(overrides, "AIHUBMIX_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "AIHUBMIX_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-                PROVIDER_INFO.aihubmix.defaultBaseUrl,
-            )
-            const defaultBaseURL = PROVIDER_INFO.aihubmix.defaultBaseUrl
-
-            if (
-                isAihubmixStandardBaseURL(baseURL) ||
-                baseURL === defaultBaseURL
-            ) {
-                const aihubmixProvider =
-                    overrides?.apiKey || apiKey
-                        ? createAihubmix({
-                              apiKey,
-                              appCode: AIHUBMIX_APP_CODE,
-                          })
-                        : aihubmix
-                model = aihubmixProvider(modelId)
-            } else {
-                const aihubmixCompatibleProvider = createOpenAI({
-                    apiKey,
-                    baseURL,
-                })
-                model = aihubmixCompatibleProvider.chat(modelId)
-            }
-            break
-        }
-
-        case "deepseek": {
-            const apiKey = resolveApiKey(overrides, "DEEPSEEK_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "DEEPSEEK_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-            )
-            if (baseURL || overrides?.apiKey) {
-                const customDeepSeek = createDeepSeek({
-                    apiKey,
-                    ...(baseURL && { baseURL }),
-                })
-                model = customDeepSeek(modelId)
-            } else {
-                model = deepseek(modelId)
-            }
-            break
-        }
-
-        case "siliconflow": {
-            const apiKey = resolveApiKey(overrides, "SILICONFLOW_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "SILICONFLOW_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-                "https://api.siliconflow.cn/v1",
-            )
-            const siliconflowProvider = createOpenAI({
-                apiKey,
-                baseURL,
-            })
-            model = siliconflowProvider.chat(modelId)
-            break
-        }
-
-        case "sglang": {
-            const apiKey = resolveApiKey(overrides, "SGLANG_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "SGLANG_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-            )
-
-            const sglangProvider = createOpenAI({
-                apiKey,
-                ...(baseURL && { baseURL }),
-                // Add a custom fetch wrapper to intercept and fix the stream from sglang
-                fetch: async (url, options) => {
-                    const response = await fetch(url, options)
-                    if (!response.body) {
-                        return response
-                    }
-
-                    // Create a transform stream to fix the non-compliant sglang stream
-                    let buffer = ""
-                    const decoder = new TextDecoder()
-
-                    const transformStream = new TransformStream({
-                        transform(chunk, controller) {
-                            buffer += decoder.decode(chunk, { stream: true })
-                            // Process all complete messages in the buffer
-                            let messageEndPos
-                            while (
-                                (messageEndPos = buffer.indexOf("\n\n")) !== -1
-                            ) {
-                                const message = buffer.substring(
-                                    0,
-                                    messageEndPos,
-                                )
-                                buffer = buffer.substring(messageEndPos + 2) // Move past the '\n\n'
-
-                                if (message.startsWith("data: ")) {
-                                    const jsonStr = message.substring(6).trim()
-                                    if (jsonStr === "[DONE]") {
-                                        controller.enqueue(
-                                            new TextEncoder().encode(
-                                                message + "\n\n",
-                                            ),
-                                        )
-                                        continue
-                                    }
-                                    try {
-                                        const data = JSON.parse(jsonStr)
-                                        const delta = data.choices?.[0]?.delta
-
-                                        if (delta) {
-                                            // Fix 1: remove invalid empty role
-                                            if (delta.role === "") {
-                                                delete delta.role
-                                            }
-                                            // Fix 2: remove non-standard reasoning_content field
-                                            if ("reasoning_content" in delta) {
-                                                delete delta.reasoning_content
-                                            }
-                                        }
-
-                                        // Re-serialize and forward the corrected data with the correct SSE format
-                                        controller.enqueue(
-                                            new TextEncoder().encode(
-                                                `data: ${JSON.stringify(data)}\n\n`,
-                                            ),
-                                        )
-                                    } catch (_e) {
-                                        // If parsing fails, forward the original message to avoid breaking the stream.
-                                        controller.enqueue(
-                                            new TextEncoder().encode(
-                                                message + "\n\n",
-                                            ),
-                                        )
-                                    }
-                                } else if (message.trim() !== "") {
-                                    // Pass through other message types (e.g., 'event: ...')
-                                    controller.enqueue(
-                                        new TextEncoder().encode(
-                                            message + "\n\n",
-                                        ),
-                                    )
-                                }
-                            }
-                        },
-                        flush(controller) {
-                            // If there's anything left in the buffer, forward it.
-                            if (buffer.trim()) {
-                                controller.enqueue(
-                                    new TextEncoder().encode(buffer),
-                                )
-                            }
-                        },
-                    })
-
-                    const transformedBody =
-                        response.body.pipeThrough(transformStream)
-
-                    // Return a new response with the transformed body
-                    return new Response(transformedBody, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: response.headers,
-                    })
+    if (def.sdk === "bedrock") {
+        model = bedrockModel(modelId, overrides)
+        // Add Anthropic beta options if using Claude models via Bedrock
+        if (modelId.includes("anthropic.claude")) {
+            // Deep merge to preserve both anthropicBeta and reasoningConfig
+            providerOptions = {
+                bedrock: {
+                    ...BEDROCK_ANTHROPIC_BETA.bedrock,
+                    ...(providerOptions?.bedrock || {}),
                 },
-            })
-            model = sglangProvider.chat(modelId)
-            break
-        }
-
-        case "gateway": {
-            // Vercel AI Gateway - unified access to multiple AI providers
-            // Model format: "provider/model" e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-5"
-            // See: https://vercel.com/ai-gateway
-            const apiKey = resolveApiKey(overrides, "AI_GATEWAY_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "AI_GATEWAY_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-            )
-            // Only use custom configuration if explicitly set (local dev or custom Gateway)
-            // Otherwise undefined → AI SDK uses Vercel default (https://ai-gateway.vercel.sh/v1/ai) + OIDC
-            if (baseURL || overrides?.apiKey) {
-                const customGateway = createGateway({
-                    apiKey,
-                    ...(baseURL && { baseURL }),
-                })
-                model = customGateway(modelId)
-            } else {
-                model = gateway(modelId)
             }
-            break
         }
-
-        case "edgeone": {
-            // EdgeOne Pages Edge AI - uses OpenAI-compatible API
-            // AI SDK appends /chat/completions to baseURL
-            // /api/edgeai + /chat/completions = /api/edgeai/chat/completions
-            const baseURL = overrides?.baseUrl || "/api/edgeai"
-            const edgeoneProvider = createOpenAI({
-                apiKey: "edgeone", // Dummy key - EdgeOne doesn't require API key
-                baseURL,
-                // Pass cookies for EdgeOne Pages authentication (eo_token, eo_time)
-                ...(overrides?.headers && { headers: overrides.headers }),
-            })
-            model = edgeoneProvider.chat(modelId)
-            break
+    } else {
+        const e = resolveEndpoint(provider, overrides)
+        if (e.selectedKeyEnv) {
+            console.log(`[API Key Routing] Selected ${e.selectedKeyEnv}`)
         }
-
-        case "doubao": {
-            const apiKey = resolveApiKey(overrides, "DOUBAO_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "DOUBAO_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-                "https://ark.cn-beijing.volces.com/api/v3",
-            )
-            const lowerModelId = modelId.toLowerCase()
-            // Use DeepSeek provider for DeepSeek/Kimi models, OpenAI for others (multimodal support)
-            if (
-                lowerModelId.includes("deepseek") ||
-                lowerModelId.includes("kimi")
-            ) {
-                const doubaoProvider = createDeepSeek({
-                    apiKey,
-                    baseURL,
-                })
-                model = doubaoProvider(modelId)
-            } else {
-                const doubaoProvider = createOpenAI({
-                    apiKey,
-                    baseURL,
-                })
-                model = doubaoProvider.chat(modelId)
-            }
-            break
-        }
-
-        case "modelscope": {
-            const apiKey = resolveApiKey(overrides, "MODELSCOPE_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "MODELSCOPE_BASE_URL",
-            )
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-                "https://api-inference.modelscope.cn/v1",
-            )
-            const modelscopeProvider = createOpenAI({
-                apiKey,
-                baseURL,
-            })
-            model = modelscopeProvider.chat(modelId)
-            break
-        }
-
-        case "minimax": {
-            const apiKey = resolveApiKey(overrides, "MINIMAX_API_KEY")
-            const serverBaseUrl = resolveBaseUrlEnv(
-                overrides,
-                "MINIMAX_BASE_URL",
-            )
-            const rawBaseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                serverBaseUrl,
-                PROVIDER_INFO.minimax.defaultBaseUrl,
-            )
-
-            if (!rawBaseURL) {
-                throw new Error(
-                    "MiniMax base URL could not be resolved. Set MINIMAX_BASE_URL or configure a base URL in settings.",
-                )
-            }
-
-            const { baseURL, isAnthropicCompatible } =
-                normalizeMiniMaxBaseURL(rawBaseURL)
-
-            if (isAnthropicCompatible) {
-                const minimax = createAnthropic({ apiKey, baseURL })
-                model = minimax.chat(modelId)
-            } else {
-                const minimax = createOpenAI({ apiKey, baseURL })
-                model = minimax.chat(modelId)
-            }
-            break
-        }
-
-        case "mimo": {
-            const apiKey = resolveApiKey(overrides, "MIMO_API_KEY")
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                resolveBaseUrlEnv(overrides, "MIMO_BASE_URL"),
-                PROVIDER_INFO.mimo?.defaultBaseUrl,
-            )
-            // Use createDeepSeek to properly handle reasoning_content for MiMo
-            // thinking models (e.g., mimo-v2.5-pro). MiMo's API requires
-            // reasoning_content to be passed back during multi-turn tool calls
-            // (returns 400 otherwise), same convention as DeepSeek and Kimi.
-            const mimoProvider = createDeepSeek({ apiKey, baseURL })
-            model = mimoProvider(modelId)
-            break
-        }
-
-        case "glm":
-        case "qwen":
-        case "qiniu":
-        case "novita":
-        case "atlascloud": {
-            const envVar = PROVIDER_ENV_VARS[provider]
-            if (!envVar) {
-                throw new Error(
-                    `API key environment variable not defined for provider: ${provider}`,
-                )
-            }
-            const apiKey = resolveApiKey(overrides, envVar)
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                resolveBaseUrlEnv(
-                    overrides,
-                    `${provider.toUpperCase()}_BASE_URL`,
-                ),
-                PROVIDER_INFO[provider]?.defaultBaseUrl,
-            )
-            const customProvider = createOpenAI({
-                apiKey,
-                baseURL,
-            })
-            model = customProvider.chat(modelId)
-            break
-        }
-
-        case "kimi": {
-            const apiKey = resolveApiKey(overrides, "KIMI_API_KEY")
-            const baseURL = resolveBaseURL(
-                overrides?.apiKey,
-                overrides?.baseUrl,
-                resolveBaseUrlEnv(overrides, "KIMI_BASE_URL"),
-                PROVIDER_INFO.kimi?.defaultBaseUrl,
-            )
-            // Use createDeepSeek to properly handle reasoning_content for Kimi
-            // thinking models (e.g., kimi-k2.6). Kimi's API uses the same
-            // reasoning_content field as DeepSeek, so this provider correctly
-            // captures and replays reasoning in multi-turn conversations.
-            const customProvider = createDeepSeek({ apiKey, baseURL })
-            model = customProvider(modelId)
-            break
-        }
-
-        default:
+        if (def.credential === "vertexKey" && !e.apiKey) {
             throw new Error(
-                `Unknown AI provider: ${provider}. Supported providers: bedrock, openai, anthropic, google, azure, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud`,
+                "Vertex AI requires an API key for Express Mode. " +
+                    "Get one from Google Cloud Console or set GOOGLE_VERTEX_API_KEY environment variable.",
             )
+        }
+        // A key-only provider needs a URL unless its SDK knows the endpoint;
+        // with a user's key an SDK that builds the URL from the server's
+        // resource name (Azure) would read AZURE_RESOURCE_NAME, so it needs one too
+        if (
+            def.credential === "apiKey" &&
+            !e.baseURL &&
+            (!def.sdkKnowsEndpoint ||
+                (def.resourceNameEnv && overrides?.apiKey))
+        ) {
+            throw new Error(
+                `${def.label} needs a base URL. Add it in the model settings.`,
+            )
+        }
+        model = createModel(provider, modelId, {
+            ...e,
+            fetch: e.guarded ? redirectGuardedFetch() : undefined,
+        })
     }
 
-    // Apply provider-specific options for all providers except bedrock (which has special handling)
-    if (customProviderOptions && provider !== "bedrock" && !providerOptions) {
-        providerOptions = customProviderOptions
-    }
-
-    return { model, providerOptions, headers, modelId, provider }
+    return { model, providerOptions, modelId, provider }
 }
 
 /**
- * Check if a model supports prompt caching.
- * Currently only Claude models on Bedrock support prompt caching.
+ * The deployment's EdgeOne Pages function, as an absolute URL (the SDK
+ * needs one). EdgeOne serves functions by their folder from the site root,
+ * so Next's base path does not apply. Behind a proxy req.url is the internal
+ * address and the browser's Origin header is the site's, so Origin wins,
+ * but only for the host the request was addressed to: another site's page
+ * sends its own Origin, and the request's cookies must not go there.
+ */
+export function edgeOneEndpoint(req: Request): string {
+    const own = new URL(req.url)
+    const origin = req.headers.get("origin")
+    const originHost = origin ? hostOf(origin) : undefined
+    const addressed = [
+        req.headers.get("x-forwarded-host"),
+        req.headers.get("host"),
+    ].filter((h): h is string => !!h)
+    // Without Host headers (tests, odd runtimes) Origin is all there is
+    const trusted =
+        !!originHost &&
+        (addressed.length === 0 ||
+            addressed.includes(originHost) ||
+            originHost === own.host)
+    return `${trusted ? origin : own.origin}/api/edgeai`
+}
+
+function hostOf(url: string): string | undefined {
+    try {
+        return new URL(url).host
+    } catch {
+        return undefined
+    }
+}
+
+/**
+ * The server's <P>_BASE_URL for a provider, which getAIModel uses for a
+ * server model without a URL variable of its own (an admin panel entry
+ * without a URL). None for Bedrock and EdgeOne. Ollama and Vertex AI share
+ * one variable with the panel, which writes an entry's URL into it: an
+ * entry without a URL gets the environment's value once saved (before a
+ * save the variable may still hold the entry's previous URL), and Ollama
+ * without one goes to the SDK's local default.
+ */
+export function globalBaseUrl(provider: ProviderName): string | undefined {
+    if (provider === "ollama") {
+        return getEnvFallback("OLLAMA_BASE_URL") || "http://127.0.0.1:11434/api"
+    }
+    if (provider === "vertexai") {
+        return getEnvFallback("GOOGLE_VERTEX_BASE_URL") || undefined
+    }
+    if (provider === "bedrock" || provider === "edgeone") return undefined
+    // Azure set up by resource name only: the URL the SDK builds from it
+    if (
+        provider === "azure" &&
+        !process.env.AZURE_BASE_URL &&
+        process.env.AZURE_RESOURCE_NAME
+    ) {
+        return `https://${process.env.AZURE_RESOURCE_NAME}.openai.azure.com/openai`
+    }
+    const name = envVarsOf(provider).baseUrl as string
+    return process.env[name] || undefined
+}
+
+/** The provider of the server's own config: AI_PROVIDER, or the one with a key */
+export function getServerProvider(): ProviderName | null {
+    return (process.env.AI_PROVIDER as ProviderName) || detectProvider()
+}
+
+/**
+ * Whether a call made with the caller's own settings runs on an endpoint of
+ * the deployment: the site's own function (EdgeOne, credential "none"), the
+ * server's keyless local provider (Ollama, credential "optionalKey"), or an
+ * address on the server's network (which ignores a dummy key header).
+ * Bedrock never uses a client base URL. Never in the desktop app, where
+ * every endpoint is the user's. clientBaseUrl: normalized.
+ */
+export async function usesServerEndpoint(
+    provider: ProviderName,
+    clientBaseUrl: string,
+    apiKey: string | null | undefined,
+): Promise<boolean> {
+    if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
+    const def = PROVIDERS[provider]
+    if (def.credential === "none") return true
+    if (def.credential === "optionalKey" && !clientBaseUrl && !apiKey) {
+        return true
+    }
+    return (
+        def.sdk !== "bedrock" &&
+        !!clientBaseUrl &&
+        (await isPrivateUrl(clientBaseUrl))
+    )
+}
+
+/**
+ * Whether the call is paid for by the server's own credentials (env keys or
+ * IAM role) rather than credentials sent with the request: the key
+ * resolveEndpoint picks for getAIModel is the server's.
+ */
+export function usesServerCredentials(
+    provider: ProviderName,
+    overrides?: ClientOverrides,
+): boolean {
+    // The desktop app's local server only has the user's own keys (its .env)
+    if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
+    // Cleaned like getAIModel does: "/" means no base URL
+    const baseUrl = normalizeBaseUrl(overrides?.baseUrl ?? "")
+    return (
+        resolveEndpoint(provider, { ...overrides, baseUrl }).keySource ===
+        "server"
+    )
+}
+
+/**
+ * Prompt cache breakpoint for Claude, set on a message's providerOptions.
+ * Each provider reads only its own key; OpenRouter also reads the
+ * anthropic one.
+ */
+export const CACHE_POINT = {
+    bedrock: { cachePoint: { type: "default" } },
+    anthropic: { cacheControl: { type: "ephemeral" } },
+}
+
+/**
+ * Check if a model supports prompt caching: Claude models, on Bedrock,
+ * the Anthropic API or OpenRouter (see CACHE_POINT).
  */
 export function supportsPromptCaching(modelId: string): boolean {
-    // Bedrock prompt caching is supported for Claude models
-    return (
-        modelId.includes("claude") ||
-        modelId.includes("anthropic") ||
-        modelId.startsWith("us.anthropic") ||
-        modelId.startsWith("eu.anthropic")
-    )
+    return modelId.includes("claude") || modelId.includes("anthropic")
 }
 
 /**
@@ -1583,7 +1292,7 @@ export function supportsPromptCaching(modelId: string): boolean {
  */
 export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
     // AI_MODEL may be comma-separated (multi-model fallback); pick the first.
-    const envFallback = process.env.AI_MODEL?.split(",")[0]?.trim() || undefined
+    const envFallback = process.env.AI_MODEL?.split(",")[0].trim() || undefined
     const modelId = process.env.VALIDATION_MODEL || envFallback
 
     if (!modelId) {
@@ -1592,6 +1301,17 @@ export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
         )
     }
 
-    const { model } = getAIModel({ modelId })
+    // A default set in the admin panel becomes AI_PROVIDER/AI_MODEL, but its key
+    // lives in an ADMIN_-prefixed env var. Point at it the way the chat route
+    // does for server models, or the standard env var is required instead.
+    const panelDefault = adminProvidersToConfig(
+        loadAdminProviders(),
+    ).providers.find((p) => p.default && p.provider === process.env.AI_PROVIDER)
+
+    const { model } = getAIModel({
+        modelId,
+        apiKeyEnv: panelDefault?.apiKeyEnv,
+        baseUrlEnv: panelDefault?.baseUrlEnv,
+    })
     return model
 }

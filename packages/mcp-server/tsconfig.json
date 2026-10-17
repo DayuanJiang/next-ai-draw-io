@@ -9,10 +9,9 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "declaration": true,
-        "declarationMap": true,
         "sourceMap": true,
         "resolveJsonModule": true,
+        "rewriteRelativeImportExtensions": true,
         "types": ["node"]
     },
     "include": ["src/**/*"],

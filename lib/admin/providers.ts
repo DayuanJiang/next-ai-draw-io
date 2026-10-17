@@ -1,13 +1,10 @@
 import { z } from "zod"
+import { PROVIDER_NAMES, PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     ProviderNameSchema,
     type ServerModelsConfig,
+    slugify,
 } from "@/lib/server-model-config"
-import {
-    FIXED_CRED_PROVIDERS,
-    PROVIDER_INFO,
-    type ProviderName,
-} from "@/lib/types/model-config"
 import { type MaskedSecret, maskSecret } from "./auth"
 import { loadSettings } from "./settings"
 
@@ -79,20 +76,19 @@ const SECRET_FIELDS = [
     "vertexApiKey",
 ] as const
 
-// ADMIN_-prefixed env var names for instance `index` (0-based) of a provider
-function credEnvNames(
+// ADMIN_-prefixed env var names for instance `index` (0-based) of a
+// provider. None for providers whose credentials live in fixed variables
+// (Bedrock, Vertex AI, Ollama) or that have none (EdgeOne).
+export function credEnvNames(
     provider: ProviderName,
     index: number,
 ): { key?: string; url?: string } {
-    if (FIXED_CRED_PROVIDERS.includes(provider) || provider === "edgeone") {
-        return {}
-    }
-    const prefix =
-        provider === "gateway" ? "AI_GATEWAY" : provider.toUpperCase()
+    const { fixedCredentials, envPrefix } = PROVIDERS[provider]
+    if (fixedCredentials || envPrefix === null) return {}
     const suffix = index === 0 ? "" : `_${index + 1}`
     return {
-        key: `ADMIN_${prefix}_API_KEY${suffix}`,
-        url: `ADMIN_${prefix}_BASE_URL${suffix}`,
+        key: `ADMIN_${envPrefix}_API_KEY${suffix}`,
+        url: `ADMIN_${envPrefix}_BASE_URL${suffix}`,
     }
 }
 
@@ -114,7 +110,7 @@ export function loadAdminProviders(): StoredAdminProvider[] {
     }
 }
 
-export type MaskedAdminProvider = Omit<
+type MaskedAdminProvider = Omit<
     StoredAdminProvider,
     (typeof SECRET_FIELDS)[number]
 > & {
@@ -161,7 +157,7 @@ export function mergeSecrets(
 }
 
 function displayName(p: StoredAdminProvider): string {
-    return p.name?.trim() || PROVIDER_INFO[p.provider].label
+    return p.name?.trim() || PROVIDERS[p.provider].label
 }
 
 export function validateAdminProviders(
@@ -169,9 +165,11 @@ export function validateAdminProviders(
     envConfig: ServerModelsConfig | null = null,
 ): string | null {
     const envProviders = envConfig?.providers ?? []
-    for (const single of FIXED_CRED_PROVIDERS) {
+    // Providers whose credentials live in fixed variables can have one entry
+    const fixed = PROVIDER_NAMES.filter((p) => PROVIDERS[p].fixedCredentials)
+    for (const single of fixed) {
         if (list.filter((p) => p.provider === single).length > 1) {
-            return `Only one ${PROVIDER_INFO[single].label} provider is supported (its credentials use fixed environment variables).`
+            return `Only one ${PROVIDERS[single].label} provider is supported (its credentials use fixed environment variables).`
         }
         // Its credentials are global; a panel instance would silently
         // override the credentials env-configured models rely on
@@ -179,15 +177,18 @@ export function validateAdminProviders(
             list.some((p) => p.provider === single) &&
             envProviders.some((p) => p.provider === single)
         ) {
-            return `${PROVIDER_INFO[single].label} is already configured in AI_MODELS_CONFIG / ai-models.json and shares global credentials. Manage it via the environment configuration instead.`
+            return `${PROVIDERS[single].label} is already configured in AI_MODELS_CONFIG / ai-models.json and shares global credentials. Manage it via the environment configuration instead.`
         }
     }
+    // Server model ids are built from the slugified name, so names must
+    // stay distinct after slugifying ("OpenAI" and "openai" would collide)
     const names = list.map((p) => displayName(p))
-    if (new Set(names).size !== names.length) {
-        return "Provider display names must be unique."
+    const slugs = names.map(slugify)
+    if (new Set(slugs).size !== slugs.length) {
+        return "Provider display names must be unique (ignoring case and punctuation)."
     }
-    const envNames = new Set(envProviders.map((p) => p.name))
-    const clash = names.find((n) => envNames.has(n))
+    const envSlugs = new Set(envProviders.map((p) => slugify(p.name)))
+    const clash = names.find((_, i) => envSlugs.has(slugs[i]))
     if (clash) {
         return `"${clash}" is already defined in AI_MODELS_CONFIG / ai-models.json. Use a different display name.`
     }
@@ -240,10 +241,14 @@ export function deriveEnvUpdates(
         indexByProvider.set(p.provider, index + 1)
 
         if (p.provider === "bedrock") {
-            if (p.awsAccessKeyId) updates.AWS_ACCESS_KEY_ID = p.awsAccessKeyId
+            // ADMIN_ names keep the standard AWS_* vars untouched, so other
+            // AWS clients (e.g. the DynamoDB quota table) keep their own
+            // credentials instead of picking up the panel's Bedrock keys
+            if (p.awsAccessKeyId)
+                updates.ADMIN_AWS_ACCESS_KEY_ID = p.awsAccessKeyId
             if (p.awsSecretAccessKey)
-                updates.AWS_SECRET_ACCESS_KEY = p.awsSecretAccessKey
-            if (p.awsRegion) updates.AWS_REGION = p.awsRegion
+                updates.ADMIN_AWS_SECRET_ACCESS_KEY = p.awsSecretAccessKey
+            if (p.awsRegion) updates.ADMIN_AWS_REGION = p.awsRegion
         } else if (p.provider === "vertexai") {
             if (p.vertexApiKey) updates.GOOGLE_VERTEX_API_KEY = p.vertexApiKey
             if (p.baseUrl) updates.GOOGLE_VERTEX_BASE_URL = p.baseUrl
@@ -270,20 +275,18 @@ export function deriveEnvUpdates(
     return updates
 }
 
-// Every settings key the panel may have written for a given list.
-// AI_MODELS_CONFIG is included to clean up values written by older
-// versions of the panel (it is no longer written).
+// Every settings key the panel may have written for a given list
 function derivedEnvKeys(list: StoredAdminProvider[]): string[] {
-    const keys = new Set<string>([
-        "AI_MODELS_CONFIG",
-        "AI_PROVIDER",
-        "AI_MODEL",
-    ])
+    const keys = new Set<string>(["AI_PROVIDER", "AI_MODEL"])
     const indexByProvider = new Map<ProviderName, number>()
     for (const p of list) {
         const index = indexByProvider.get(p.provider) ?? 0
         indexByProvider.set(p.provider, index + 1)
         if (p.provider === "bedrock") {
+            keys.add("ADMIN_AWS_ACCESS_KEY_ID")
+            keys.add("ADMIN_AWS_SECRET_ACCESS_KEY")
+            keys.add("ADMIN_AWS_REGION")
+            // Written by older versions; listed so the next save clears them
             keys.add("AWS_ACCESS_KEY_ID")
             keys.add("AWS_SECRET_ACCESS_KEY")
             keys.add("AWS_REGION")

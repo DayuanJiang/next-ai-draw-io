@@ -25,7 +25,7 @@ jobs:
       - name: Run Biome format
         # Pin to the version in package.json so CI matches local/pre-commit
         # (npx @latest drifts — e.g. 2.5.0 broke this job on unrelated PRs).
-        run: npx @biomejs/biome@2.4.13 check --write --no-errors-on-unmatched .
+        run: npx @biomejs/biome@2.5.7 check --write --no-errors-on-unmatched .
 
       - name: Check for changes
         id: changes

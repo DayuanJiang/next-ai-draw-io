@@ -7,8 +7,5 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
     const models = await loadFlattenedServerModels()
-    return NextResponse.json({
-        models,
-        hasConfig: models.length > 0,
-    })
+    return NextResponse.json({ models })
 }

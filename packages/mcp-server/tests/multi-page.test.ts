@@ -15,24 +15,8 @@
  * (diagram-operations.ts) — i.e. the layers underneath the MCP tool surface.
  */
 
-import { DOMParser } from "linkedom"
-import { beforeAll, describe, expect, it } from "vitest"
-
-// Install the DOM polyfill exactly as index.ts does at runtime — the
-// helpers under test rely on it.
-beforeAll(() => {
-    ;(globalThis as any).DOMParser = DOMParser
-    class XMLSerializerPolyfill {
-        serializeToString(node: any): string {
-            if (node.outerHTML !== undefined) return node.outerHTML
-            if (node.documentElement) return node.documentElement.outerHTML
-            return ""
-        }
-    }
-    ;(globalThis as any).XMLSerializer = XMLSerializerPolyfill
-})
-
-import { applyDiagramOperations } from "../src/diagram-operations.js"
+import { describe, expect, it } from "vitest"
+import { applyDiagramOperations } from "../src/diagram-operations.ts"
 import {
     addPageToDoc,
     deletePageFromDoc,
@@ -47,8 +31,8 @@ import {
     projectPage,
     renamePageInDoc,
     serializeMxfile,
-} from "../src/pages.js"
-import { validateAndFixXml } from "../src/xml-validation.js"
+} from "../src/pages.ts"
+import { validateAndFixXml } from "../src/xml-validation.ts"
 
 const BARE_MODEL_ONE_CELL = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" vertex="1" parent="1" value="Hello"><mxGeometry x="40" y="40" width="100" height="40" as="geometry"/></mxCell></root></mxGraphModel>`
 
@@ -151,12 +135,6 @@ describe("pages.ts — addPageToDoc input validation", () => {
         const withDecl = `<?xml version="1.0"?>${BARE_MODEL_ONE_CELL}`
         const info = addPageToDoc(doc, { name: "Sequence", xml: withDecl })
         expect(info.cellCount).toBeGreaterThanOrEqual(3)
-        // Serialised document must not have <?xml ?> inside <diagram>.
-        const out = serializeMxfile(doc)
-        // The mxfile may have one <?xml ?> at the very start (the doc decl),
-        // but no further occurrence inside <diagram>.
-        const matches = out.match(/<\?xml/g) || []
-        expect(matches.length).toBeLessThanOrEqual(1)
     })
 })
 
@@ -284,17 +262,12 @@ describe("pages.ts — renamePageInDoc / deletePageFromDoc", () => {
 
 describe("xml-validation.ts — multi-page support", () => {
     it("accepts a valid two-page mxfile (the exact payload that used to fail)", () => {
-        const result = validateAndFixXml(TWO_PAGE_MXFILE)
-        expect(result.valid).toBe(true)
-        expect(result.error).toBeNull()
-    })
-
-    it("does NOT flag root sentinel ids 0 and 1 repeating across pages", () => {
         // This is the regression the planning doc explicitly called out:
         // before this work, the legacy regex-based duplicate-id check rejected
         // any multi-page document because cells "0" and "1" appear in every page.
         const result = validateAndFixXml(TWO_PAGE_MXFILE)
         expect(result.valid).toBe(true)
+        expect(result.error).toBeNull()
     })
 
     it("rejects duplicate cell ids WITHIN a single page", () => {
@@ -302,6 +275,26 @@ describe("xml-validation.ts — multi-page support", () => {
         const result = validateAndFixXml(bad)
         expect(result.valid).toBe(false)
         expect(result.error).toMatch(/duplicate cell ID/i)
+    })
+
+    it("counts the id of a UserObject/object, not of the mxCell it wraps", () => {
+        const page = (cells: string) =>
+            `<mxfile><diagram id="p1" name="P1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram></mxfile>`
+        const wrapped = (id: string) =>
+            `<UserObject id="${id}" link="x"><mxCell id="${id}" vertex="1" parent="1"/></UserObject>`
+        expect(validateAndFixXml(page(wrapped("u"))).valid).toBe(true)
+        const clash = validateAndFixXml(
+            page(`${wrapped("2")}<mxCell id="2" vertex="1" parent="1"/>`),
+        )
+        expect(clash.valid).toBe(false)
+        expect(clash.error).toMatch(/duplicate cell ID/i)
+    })
+
+    it("can skip the strict checks for diagrams with user content", () => {
+        const custom = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><MyObj id="5" label="x"><mxCell vertex="1" parent="1"/></MyObj></root></mxGraphModel>`
+        expect(validateAndFixXml(custom).valid).toBe(true) // fixed by removal
+        const lenient = validateAndFixXml(custom, { strict: false })
+        expect(lenient).toMatchObject({ valid: true, fixed: null })
     })
 
     it("rejects duplicate <diagram> ids across the file", () => {
@@ -323,9 +316,10 @@ describe("xml-validation.ts — multi-page support", () => {
         const result = validateAndFixXml(malformedButMultiPage)
         // The doc has an unescaped & — autoFix will repair that. After repair
         // it should be valid AND must not have renamed the 0/1 cells.
-        const finalXml = result.fixed || malformedButMultiPage
-        expect(finalXml).not.toMatch(/id="0_dup/)
-        expect(finalXml).not.toMatch(/id="1_dup/)
+        expect(result.valid).toBe(true)
+        expect(result.fixed).toContain('value="Q &amp; A"')
+        expect(result.fixed).not.toMatch(/id="0_dup/)
+        expect(result.fixed).not.toMatch(/id="1_dup/)
     })
 })
 

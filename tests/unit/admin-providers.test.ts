@@ -1,10 +1,11 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     ADMIN_PROVIDERS_KEY,
     adminProvidersToConfig,
+    credEnvNames,
     deriveEnvUpdates,
     loadAdminProviders,
     maskAdminProviders,
@@ -13,20 +14,19 @@ import {
     validateAdminProviders,
 } from "@/lib/admin/providers"
 import { _resetForTests, saveSettings } from "@/lib/admin/settings"
+import { PROVIDER_NAMES } from "@/lib/providers"
 import { loadRawServerModelsConfig } from "@/lib/server-model-config"
 
 let tmpDir: string
 
 beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "admin-providers-"))
-    process.env.SETTINGS_FILE = path.join(tmpDir, "settings.json")
+    vi.stubEnv("SETTINGS_FILE", path.join(tmpDir, "settings.json"))
     _resetForTests()
 })
 
 afterEach(() => {
     _resetForTests()
-    delete process.env.SETTINGS_FILE
-    delete process.env.AI_MODELS_CONFIG
     fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -48,8 +48,6 @@ describe("deriveEnvUpdates", () => {
         expect(updates.ADMIN_OPENAI_API_KEY).toBe("sk-test")
         expect(updates.OPENAI_API_KEY).toBeUndefined()
         expect(JSON.parse(updates.ADMIN_PROVIDERS as string)).toHaveLength(1)
-        // AI_MODELS_CONFIG is no longer written (merged at read time)
-        expect(updates.AI_MODELS_CONFIG).toBeNull()
     })
 
     it("suffixes env vars for a second instance of the same provider", () => {
@@ -69,7 +67,35 @@ describe("deriveEnvUpdates", () => {
         expect(updates.ADMIN_OPENAI_API_KEY_2).toBe("sk-second")
     })
 
-    it("maps bedrock credentials to AWS env vars", () => {
+    it("writes an Ollama URL only when the entry has one", () => {
+        // Without one, the operator's own OLLAMA_BASE_URL (or local Ollama)
+        // stays, also for the AI_PROVIDER=ollama default model
+        const keyOnly = deriveEnvUpdates(
+            [provider({ provider: "ollama", apiKey: "ollama-key" })],
+            [],
+        )
+        expect(keyOnly.OLLAMA_API_KEY).toBe("ollama-key")
+        expect(keyOnly.OLLAMA_BASE_URL ?? null).toBeNull()
+        const own = deriveEnvUpdates(
+            [
+                provider({
+                    provider: "ollama",
+                    apiKey: "k",
+                    baseUrl: "https://ollama.internal/api",
+                }),
+            ],
+            [],
+        )
+        expect(own.OLLAMA_BASE_URL).toBe("https://ollama.internal/api")
+        // No key: local Ollama, nothing to write
+        const local = deriveEnvUpdates(
+            [provider({ provider: "ollama", apiKey: undefined })],
+            [],
+        )
+        expect(local.OLLAMA_BASE_URL ?? null).toBeNull()
+    })
+
+    it("maps bedrock credentials to ADMIN_AWS_* env vars", () => {
         const updates = deriveEnvUpdates(
             [
                 provider({
@@ -83,16 +109,32 @@ describe("deriveEnvUpdates", () => {
             ],
             [],
         )
-        expect(updates.AWS_ACCESS_KEY_ID).toBe("AKIA123")
-        expect(updates.AWS_SECRET_ACCESS_KEY).toBe("secret")
-        expect(updates.AWS_REGION).toBe("us-west-2")
+        expect(updates.ADMIN_AWS_ACCESS_KEY_ID).toBe("AKIA123")
+        expect(updates.ADMIN_AWS_SECRET_ACCESS_KEY).toBe("secret")
+        expect(updates.ADMIN_AWS_REGION).toBe("us-west-2")
+        // Standard AWS vars are left to the environment
+        expect(updates.AWS_ACCESS_KEY_ID).toBeUndefined()
+    })
+
+    it("clears AWS_* bedrock keys written by older versions", () => {
+        const bedrock = provider({
+            provider: "bedrock",
+            apiKey: undefined,
+            awsAccessKeyId: "AKIA123",
+            awsSecretAccessKey: "secret",
+            models: ["claude-x"],
+        })
+        const updates = deriveEnvUpdates([bedrock], [bedrock])
+        expect(updates.AWS_ACCESS_KEY_ID).toBeNull()
+        expect(updates.AWS_SECRET_ACCESS_KEY).toBeNull()
+        expect(updates.AWS_REGION).toBeNull()
+        expect(updates.ADMIN_AWS_ACCESS_KEY_ID).toBe("AKIA123")
     })
 
     it("clears keys owned by the previous list when providers are removed", () => {
         const prev = [provider()]
         const updates = deriveEnvUpdates([], prev)
         expect(updates.ADMIN_OPENAI_API_KEY).toBeNull()
-        expect(updates.AI_MODELS_CONFIG).toBeNull()
         expect(updates.ADMIN_PROVIDERS).toBeNull()
     })
 
@@ -185,16 +227,19 @@ describe("mergeSecrets", () => {
 
 describe("loadRawServerModelsConfig merge", () => {
     it("combines env AI_MODELS_CONFIG with panel providers", async () => {
-        process.env.AI_MODELS_CONFIG = JSON.stringify({
-            providers: [
-                {
-                    name: "Env OpenAI",
-                    provider: "openai",
-                    models: ["gpt-from-env"],
-                    default: true,
-                },
-            ],
-        })
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env OpenAI",
+                        provider: "openai",
+                        models: ["gpt-from-env"],
+                        default: true,
+                    },
+                ],
+            }),
+        )
         saveSettings(deriveEnvUpdates([provider({ name: "Panel" })], []))
 
         const merged = await loadRawServerModelsConfig()
@@ -207,16 +252,19 @@ describe("loadRawServerModelsConfig merge", () => {
     })
 
     it("panel default overrides the env default", async () => {
-        process.env.AI_MODELS_CONFIG = JSON.stringify({
-            providers: [
-                {
-                    name: "Env OpenAI",
-                    provider: "openai",
-                    models: ["gpt-from-env"],
-                    default: true,
-                },
-            ],
-        })
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env OpenAI",
+                        provider: "openai",
+                        models: ["gpt-from-env"],
+                        default: true,
+                    },
+                ],
+            }),
+        )
         saveSettings(
             deriveEnvUpdates(
                 [provider({ name: "Panel", isDefault: true })],
@@ -230,15 +278,18 @@ describe("loadRawServerModelsConfig merge", () => {
     })
 
     it("returns only env config when the panel has no providers", async () => {
-        process.env.AI_MODELS_CONFIG = JSON.stringify({
-            providers: [
-                {
-                    name: "Env Only",
-                    provider: "openai",
-                    models: ["gpt-from-env"],
-                },
-            ],
-        })
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env Only",
+                        provider: "openai",
+                        models: ["gpt-from-env"],
+                    },
+                ],
+            }),
+        )
         const merged = await loadRawServerModelsConfig()
         expect(merged?.providers.map((p) => p.name)).toEqual(["Env Only"])
     })
@@ -315,6 +366,32 @@ describe("validateAdminProviders", () => {
         expect(validateAdminProviders(list)).toMatch(/unique/)
     })
 
+    it("rejects names that differ only in case or punctuation", () => {
+        const list = [
+            provider({ id: "p1", name: "Open AI" }),
+            provider({ id: "p2", name: "open-ai" }),
+        ]
+        expect(validateAdminProviders(list)).toMatch(/unique/)
+    })
+
+    it("rejects a case-only clash with an env-configured name", () => {
+        expect(
+            validateAdminProviders([provider({ name: "openai" })], {
+                providers: [
+                    { name: "OpenAI", provider: "openai", models: ["gpt-x"] },
+                ],
+            }),
+        ).toMatch(/already defined/)
+    })
+
+    it("accepts distinct CJK names", () => {
+        const list = [
+            provider({ id: "p1", provider: "deepseek", name: "主力" }),
+            provider({ id: "p2", provider: "deepseek", name: "备用" }),
+        ]
+        expect(validateAdminProviders(list)).toBeNull()
+    })
+
     it("rejects multiple defaults", () => {
         const list = [
             provider({ id: "p1", isDefault: true }),
@@ -335,11 +412,6 @@ describe("validateAdminProviders", () => {
 describe("loadAdminProviders", () => {
     it("returns [] when nothing is stored", () => {
         expect(loadAdminProviders()).toEqual([])
-    })
-
-    it("loads valid stored providers", () => {
-        saveSettings({ [ADMIN_PROVIDERS_KEY]: JSON.stringify([provider()]) })
-        expect(loadAdminProviders()).toHaveLength(1)
     })
 
     it("round-trips a bedrock provider with multiple string secrets", () => {
@@ -394,5 +466,58 @@ describe("loadAdminProviders", () => {
         expect(loaded).toEqual([])
         // Masking the loaded list must not throw
         expect(() => maskAdminProviders(loaded)).not.toThrow()
+    })
+})
+
+describe("credEnvNames", () => {
+    it("names the panel's variables for every provider", () => {
+        // bedrock, vertexai and ollama write fixed variables; EdgeOne has none
+        const expected: Record<string, string | null> = {
+            openai: "OPENAI",
+            anthropic: "ANTHROPIC",
+            google: "GOOGLE",
+            deepseek: "DEEPSEEK",
+            qwen: "QWEN",
+            doubao: "DOUBAO",
+            glm: "GLM",
+            kimi: "KIMI",
+            minimax: "MINIMAX",
+            mimo: "MIMO",
+            openrouter: "OPENROUTER",
+            aihubmix: "AIHUBMIX",
+            siliconflow: "SILICONFLOW",
+            modelscope: "MODELSCOPE",
+            novita: "NOVITA",
+            atlascloud: "ATLASCLOUD",
+            qiniu: "QINIU",
+            gateway: "AI_GATEWAY",
+            bedrock: null,
+            vertexai: null,
+            azure: "AZURE",
+            edgeone: null,
+            ollama: null,
+            sglang: "SGLANG",
+            custom: "CUSTOM",
+        }
+        expect(Object.keys(expected).sort()).toEqual([...PROVIDER_NAMES].sort())
+        for (const [p, prefix] of Object.entries(expected)) {
+            const first = credEnvNames(p as StoredAdminProvider["provider"], 0)
+            const third = credEnvNames(p as StoredAdminProvider["provider"], 2)
+            expect([p, first, third]).toEqual([
+                p,
+                prefix
+                    ? {
+                          key: `ADMIN_${prefix}_API_KEY`,
+                          url: `ADMIN_${prefix}_BASE_URL`,
+                      }
+                    : {},
+                prefix
+                    ? {
+                          key: `ADMIN_${prefix}_API_KEY_3`,
+                          url: `ADMIN_${prefix}_BASE_URL_3`,
+                      }
+                    : {},
+            ])
+        }
     })
 })

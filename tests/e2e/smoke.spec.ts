@@ -1,4 +1,4 @@
-import { expect, getIframe, openSettings, test } from "./lib/fixtures"
+import { expect, getIframe, test } from "./lib/fixtures"
 
 test.describe("Smoke Tests", () => {
     test("homepage loads without errors", async ({ page }) => {
@@ -25,12 +25,5 @@ test.describe("Smoke Tests", () => {
         await expect(iframe).toBeVisible({ timeout: 30000 })
 
         expect(errors).toEqual([])
-    })
-
-    test("settings dialog opens", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await openSettings(page)
     })
 })

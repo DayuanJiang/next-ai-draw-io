@@ -33,12 +33,9 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
-import {
-    FIXED_CRED_PROVIDERS,
-    PROVIDER_INFO,
-    type ProviderName,
-    SUGGESTED_MODELS,
-} from "@/lib/types/model-config"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
+import { STORAGE_KEYS } from "@/lib/storage"
+import { generateId } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 import {
     type AdminProvider,
@@ -70,8 +67,10 @@ function ProviderDetail({
         Record<string, { ok: boolean; message: string }>
     >({})
 
-    const info = PROVIDER_INFO[provider.provider]
-    const suggestions = (SUGGESTED_MODELS[provider.provider] || []).filter(
+    const info = PROVIDERS[provider.provider]
+    // Only providers that cannot list their models have a list here; for
+    // the others the admin types the model id
+    const suggestions = (info.models ?? []).filter(
         (m) => !provider.models.includes(m),
     )
 
@@ -87,6 +86,11 @@ function ProviderDetail({
         try {
             const data = await adminFetch("/api/admin/test-model", password, {
                 method: "POST",
+                // EdgeOne's function also checks the access code
+                headers: {
+                    "x-access-code":
+                        localStorage.getItem(STORAGE_KEYS.accessCode) || "",
+                },
                 body: JSON.stringify({ provider, modelId }),
             })
             setTestResults((prev) => ({
@@ -225,6 +229,7 @@ function ProviderDetail({
                         </Button>
                         {suggestions.length > 0 && (
                             <Select
+                                value=""
                                 disabled={disabled}
                                 onValueChange={(v) => addModel(v)}
                             >
@@ -390,12 +395,14 @@ function ProviderDetail({
 export function ModelsSection({
     providers,
     envProviders,
+    envHasDefaultModel,
     disabled,
     password,
     onChange,
 }: {
     providers: AdminProvider[]
     envProviders: EnvProvider[]
+    envHasDefaultModel: boolean
     disabled: boolean
     password: string
     onChange: (providers: AdminProvider[]) => void
@@ -409,10 +416,16 @@ export function ModelsSection({
 
     const addProvider = (provider: ProviderName) => {
         const newProvider: AdminProvider = {
-            id: crypto.randomUUID(),
+            // generateId works over plain HTTP; crypto.randomUUID needs HTTPS
+            id: generateId(),
             provider,
             models: [],
-            isDefault: providers.length === 0,
+            // Only the very first provider becomes the default, and only when
+            // the env config has no default that it would replace on save
+            isDefault:
+                providers.length === 0 &&
+                !envProviders.some((p) => p.isDefault) &&
+                !envHasDefaultModel,
         }
         onChange([...providers, newProvider])
         setSelectedId(newProvider.id)
@@ -484,7 +497,7 @@ export function ModelsSection({
                         >
                             <ProviderLogo provider={p.provider} />
                             <span className="min-w-0 flex-1 truncate">
-                                {p.name || PROVIDER_INFO[p.provider].label}
+                                {p.name || PROVIDERS[p.provider].label}
                             </span>
                             {p.isDefault && (
                                 <Star
@@ -496,7 +509,9 @@ export function ModelsSection({
                     ))}
                 </div>
                 <div className="border-t p-2">
+                    {/* Always empty so picking the same type again still fires */}
                     <Select
+                        value=""
                         disabled={disabled}
                         onValueChange={(v) => addProvider(v as ProviderName)}
                     >
@@ -508,13 +523,13 @@ export function ModelsSection({
                             {dict.modelConfig.addProvider}
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
-                            {(Object.keys(PROVIDER_INFO) as ProviderName[]).map(
+                            {(Object.keys(PROVIDERS) as ProviderName[]).map(
                                 (p) => {
                                     // Global-credential providers already in
                                     // the env config can't be added here —
                                     // panel credentials would override theirs
                                     const envBlocked =
-                                        FIXED_CRED_PROVIDERS.includes(p) &&
+                                        !!PROVIDERS[p].fixedCredentials &&
                                         envProviders.some(
                                             (e) => e.provider === p,
                                         )
@@ -526,7 +541,7 @@ export function ModelsSection({
                                         >
                                             <div className="flex items-center gap-2">
                                                 <ProviderLogo provider={p} />
-                                                {PROVIDER_INFO[p].label}
+                                                {PROVIDERS[p].label}
                                                 {envBlocked && (
                                                     <span className="text-xs text-muted-foreground">
                                                         {

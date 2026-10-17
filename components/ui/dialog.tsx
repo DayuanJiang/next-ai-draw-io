@@ -4,6 +4,7 @@ import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
+import { useDictionary } from "@/hooks/use-dictionary"
 import { cn } from "@/lib/utils"
 
 function Dialog({
@@ -22,12 +23,6 @@ function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
-}
-
-function DialogClose({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
 function DialogOverlay({
@@ -54,6 +49,7 @@ function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const dict = useDictionary()
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -65,7 +61,7 @@ function DialogContent({
           "max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
           "grid gap-4 p-6",
           // Refined visual treatment
-          "bg-surface-0 rounded-2xl border border-border-subtle shadow-dialog",
+          "bg-surface-0 rounded-2xl border border-border-subtle shadow-pop",
           // Entry/exit animations
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -87,7 +83,7 @@ function DialogContent({
           "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4"
         )}>
           <XIcon />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{dict.common.close}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -151,13 +147,10 @@ function DialogDescription({
 
 export {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
   DialogTrigger,
 }

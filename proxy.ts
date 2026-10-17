@@ -4,7 +4,10 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { i18n } from "./lib/i18n/config"
 
-function getLocale(request: NextRequest): string | undefined {
+// Taiwan, Hong Kong and Macau write Traditional Chinese
+const TRADITIONAL_CHINESE = /^zh-(hant|tw|hk|mo)\b/i
+
+function getLocale(request: NextRequest): string {
     // Negotiator expects plain object so we need to transform headers
     const negotiatorHeaders: Record<string, string> = {}
     request.headers.forEach((value, key) => {
@@ -14,22 +17,45 @@ function getLocale(request: NextRequest): string | undefined {
     // @ts-expect-error locales are readonly
     const locales: string[] = i18n.locales
 
-    // Use negotiator and intl-localematcher to get best locale
-    const languages = new Negotiator({ headers: negotiatorHeaders }).languages(
-        locales,
-    )
+    // The browser's languages in order of preference. Negotiator would match
+    // zh-TW to zh if given the locales, so map Traditional Chinese first and
+    // let intl-localematcher pick the locale.
+    const languages = new Negotiator({ headers: negotiatorHeaders })
+        .languages()
+        .filter(isLanguageTag)
+        .map((language) =>
+            TRADITIONAL_CHINESE.test(language) ? "zh-Hant" : language,
+        )
 
-    const locale = matchLocale(languages, locales, i18n.defaultLocale)
+    return matchLocale(languages, locales, i18n.defaultLocale)
+}
 
-    return locale
+// intl-localematcher throws on a malformed tag, and "*" is not a tag
+function isLanguageTag(language: string): boolean {
+    try {
+        Intl.getCanonicalLocales(language)
+        return true
+    } catch {
+        return false
+    }
 }
 
 export function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
-    // Skip API routes, static files, and Next.js internals
+    if (pathname.startsWith("/api/")) {
+        // With ORIGIN_SECRET set, API calls must come through the CDN that
+        // adds this header. A call straight to the origin could fake the
+        // CLIENT_IP_HEADER and get a fresh quota for every made-up IP.
+        const secret = process.env.ORIGIN_SECRET
+        if (secret && request.headers.get("x-origin-secret") !== secret) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        }
+        return
+    }
+
+    // Skip static files and Next.js internals
     if (
-        pathname.startsWith("/api/") ||
         pathname.startsWith("/_next/") ||
         pathname.startsWith("/drawio") ||
         pathname.includes("/favicon") ||
@@ -48,17 +74,19 @@ export function proxy(request: NextRequest) {
     if (pathnameIsMissingLocale) {
         const locale = getLocale(request)
 
-        // Redirect to localized path
-        return NextResponse.redirect(
-            new URL(
-                `/${locale}${pathname.startsWith("/") ? "" : "/"}${pathname}`,
-                request.url,
-            ),
-        )
+        // Redirect to localized path. Cloning nextUrl keeps the basePath
+        // (NEXT_PUBLIC_BASE_PATH) and query string, which
+        // new URL("/...", request.url) would drop.
+        const url = request.nextUrl.clone()
+        url.pathname = `/${locale}${pathname}`
+        return NextResponse.redirect(url)
     }
 }
 
 export const config = {
-    // Matcher ignoring `/_next/` and `/api/`
-    matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+    // API routes (for ORIGIN_SECRET), and pages without `/_next/` assets
+    matcher: [
+        "/api/:path*",
+        "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    ],
 }

@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
+import { parse } from "dotenv"
 import { app } from "electron"
 
 /**
@@ -33,29 +34,8 @@ export function loadEnvFile(): void {
  */
 function loadEnvFromFile(filePath: string): void {
     try {
-        const content = fs.readFileSync(filePath, "utf-8")
-        const lines = content.split("\n")
-
-        for (const line of lines) {
-            const trimmed = line.trim()
-
-            // Skip comments and empty lines
-            if (!trimmed || trimmed.startsWith("#")) continue
-
-            const equalIndex = trimmed.indexOf("=")
-            if (equalIndex === -1) continue
-
-            const key = trimmed.slice(0, equalIndex).trim()
-            let value = trimmed.slice(equalIndex + 1).trim()
-
-            // Remove surrounding quotes
-            if (
-                (value.startsWith('"') && value.endsWith('"')) ||
-                (value.startsWith("'") && value.endsWith("'"))
-            ) {
-                value = value.slice(1, -1)
-            }
-
+        const parsed = parse(fs.readFileSync(filePath, "utf-8"))
+        for (const [key, value] of Object.entries(parsed)) {
             // Don't override existing environment variables
             if (!(key in process.env)) {
                 process.env[key] = value

@@ -4,22 +4,20 @@ import { app, type UtilityProcess, utilityProcess } from "electron"
 import {
     findAvailablePort,
     getAllocatedPort,
-    getServerUrl,
     isPortAvailable,
 } from "./port-manager"
+import { setAppUrl } from "./window-manager"
 
 let serverProcess: UtilityProcess | null = null
 
-/**
- * Get the path to the standalone server resources
- * In packaged app: resources/standalone
- * In development: .next/standalone
- */
-function getResourcePath(): string {
-    if (app.isPackaged) {
-        return path.join(process.resourcesPath, "standalone")
-    }
-    return path.join(app.getAppPath(), ".next", "standalone")
+// Start and restart run one at a time, so overlapping calls (e.g. two quick
+// proxy changes) can't leave two servers running
+let serverQueue: Promise<unknown> = Promise.resolve()
+
+function runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    const result = serverQueue.then(task)
+    serverQueue = result.catch(() => {})
+    return result
 }
 
 /**
@@ -30,7 +28,7 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
     while (Date.now() - start < timeout) {
         try {
             const response = await fetch(url)
-            if (response.ok || response.status < 500) {
+            if (response.status < 500) {
                 return
             }
         } catch {
@@ -45,8 +43,13 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
  * Start the Next.js standalone server using Electron's utilityProcess
  * This API is designed for running Node.js code in the background
  */
-export async function startNextServer(): Promise<string> {
-    const resourcePath = getResourcePath()
+export function startNextServer(): Promise<string> {
+    return runExclusive(startServer)
+}
+
+async function startServer(): Promise<string> {
+    // The standalone server shipped in the packaged app's resources
+    const resourcePath = path.join(process.resourcesPath, "standalone")
     const serverPath = path.join(resourcePath, "server.js")
 
     console.log(`Starting Next.js server from: ${resourcePath}`)
@@ -60,7 +63,7 @@ export async function startNextServer(): Promise<string> {
         )
     }
 
-    // Find an available port (random in production, fixed in development)
+    // Find an available port (the fixed ports 61337 / 13370, then fallbacks)
     const port = await findAvailablePort()
     console.log(`Using port: ${port}`)
 
@@ -71,14 +74,18 @@ export async function startNextServer(): Promise<string> {
         HOSTNAME: "127.0.0.1",
         // Enable Node.js built-in proxy support for fetch (Node.js 24+)
         NODE_USE_ENV_PROXY: "1",
+        // The local server's env keys are the user's own, not a shared server's
+        NEXT_AI_DRAWIO_DESKTOP: "1",
+    }
+
+    // Keep requests to local model servers (e.g. Ollama) off the proxy
+    if (!process.env.NO_PROXY && !process.env.no_proxy) {
+        env.NO_PROXY = "localhost,127.0.0.1,[::1]"
     }
 
     // Set cache directory to a writable location (user's app data folder)
     // This is necessary because the packaged app might be on a read-only volume
-    if (app.isPackaged) {
-        const cacheDir = path.join(app.getPath("userData"), "cache")
-        env.NEXT_CACHE_DIR = cacheDir
-    }
+    env.NEXT_CACHE_DIR = path.join(app.getPath("userData"), "cache")
 
     // Copy existing environment variables
     for (const [key, value] of Object.entries(process.env)) {
@@ -96,26 +103,30 @@ export async function startNextServer(): Promise<string> {
 
     // Use Electron's utilityProcess API for running Node.js in background
     // This is the recommended way to run Node.js code in Electron
-    serverProcess = utilityProcess.fork(serverPath, [], {
+    const proc = utilityProcess.fork(serverPath, [], {
         cwd: resourcePath,
         env,
         stdio: "pipe",
     })
+    serverProcess = proc
 
-    serverProcess.stdout?.on("data", (data) => {
+    proc.stdout?.on("data", (data) => {
         console.log(`[Next.js] ${data.toString().trim()}`)
     })
 
-    serverProcess.stderr?.on("data", (data) => {
+    proc.stderr?.on("data", (data) => {
         console.error(`[Next.js Error] ${data.toString().trim()}`)
     })
 
-    serverProcess.on("exit", (code) => {
+    proc.on("exit", (code) => {
         console.log(`Next.js server exited with code ${code}`)
-        serverProcess = null
+        // An old server can exit after a new one started; keep the new one
+        if (serverProcess === proc) {
+            serverProcess = null
+        }
     })
 
-    const url = getServerUrl()
+    const url = `http://127.0.0.1:${port}`
     await waitForServer(url)
     console.log(`Next.js server started at ${url}`)
 
@@ -126,39 +137,36 @@ export async function startNextServer(): Promise<string> {
  * Stop the Next.js server process and wait for it to exit
  */
 export async function stopNextServer(): Promise<void> {
-    if (serverProcess) {
-        console.log("Stopping Next.js server...")
+    const proc = serverProcess
+    if (!proc) {
+        return
+    }
+    console.log("Stopping Next.js server...")
+    serverProcess = null
 
-        // Create a promise that resolves when the process exits
-        const exitPromise = new Promise<void>((resolve) => {
-            const proc = serverProcess
-            if (!proc) {
-                resolve()
-                return
-            }
-
-            const onExit = () => {
-                resolve()
-            }
-
-            proc.once("exit", onExit)
-
-            // Timeout after 5 seconds
-            setTimeout(() => {
-                proc.removeListener("exit", onExit)
-                resolve()
-            }, 5000)
+    // Resolves true when the process exits, false after the timeout
+    const waitForExit = (ms: number) =>
+        new Promise<boolean>((resolve) => {
+            proc.once("exit", () => resolve(true))
+            setTimeout(() => resolve(false), ms)
         })
 
-        serverProcess.kill()
-        serverProcess = null
+    proc.kill()
 
-        // Wait for process to exit
-        await exitPromise
-
-        // Additional wait for OS to release port
-        await new Promise((resolve) => setTimeout(resolve, 500))
+    // Next.js waits for open requests (e.g. a streaming reply) before it
+    // exits, so force kill it if it is still running after 5 seconds
+    if (!(await waitForExit(5000)) && proc.pid) {
+        console.warn("Next.js server did not exit in time, force killing it")
+        try {
+            process.kill(proc.pid, "SIGKILL")
+        } catch (error) {
+            console.error("Failed to force kill Next.js server:", error)
+        }
+        await waitForExit(2000)
     }
+
+    // Additional wait for OS to release port
+    await new Promise((resolve) => setTimeout(resolve, 500))
 }
 
 /**
@@ -184,15 +192,19 @@ async function waitForServerStop(timeout = 5000): Promise<void> {
 /**
  * Restart the Next.js server with new environment variables
  */
-export async function restartNextServer(): Promise<string> {
-    console.log("Restarting Next.js server...")
+export function restartNextServer(): Promise<string> {
+    return runExclusive(async () => {
+        console.log("Restarting Next.js server...")
 
-    // Stop the current server and wait for it to exit
-    await stopNextServer()
+        // Stop the current server and wait for it to exit
+        await stopNextServer()
 
-    // Wait for the port to be released
-    await waitForServerStop()
+        // Wait for the port to be released
+        await waitForServerStop()
 
-    // Start the server again
-    return startNextServer()
+        // Start the server again, and follow it if it moved to another port
+        const url = await startServer()
+        setAppUrl(url)
+        return url
+    })
 }

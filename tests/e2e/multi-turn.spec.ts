@@ -3,6 +3,8 @@ import {
     createMixedMock,
     createMultiTurnMock,
     expect,
+    getIframeContent,
+    openApp,
     sendMessage,
     test,
     waitForComplete,
@@ -26,10 +28,7 @@ test.describe("Multi-turn Conversation", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         // First request
         await sendMessage(page, "Draw first box")
@@ -63,10 +62,7 @@ test.describe("Multi-turn Conversation", () => {
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         // First message
         await sendMessage(page, "Hello")
@@ -93,10 +89,7 @@ test.describe("Multi-turn Conversation", () => {
             ]),
         )
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await page
-            .locator("iframe")
-            .waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         // Ask for explanation first
         await sendMessage(page, "Explain the architecture")
@@ -108,5 +101,9 @@ test.describe("Multi-turn Conversation", () => {
         // Then ask for diagram
         await sendMessage(page, "Now show it as a diagram")
         await waitForComplete(page)
+        // The diagram is on the canvas
+        await expect(
+            getIframeContent(page).getByText("Architecture", { exact: true }),
+        ).toBeVisible({ timeout: 15000 })
     })
 })

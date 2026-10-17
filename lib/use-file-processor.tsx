@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { formatMessage } from "@/lib/i18n/utils"
 import {
     extractPdfText,
     extractTextFileContent,
@@ -16,89 +17,94 @@ export interface FileData {
     isExtracting: boolean
 }
 
+/** Toast texts; {name}, {limit} and {size} are filled in */
+export interface FileProcessorMessages {
+    tooLong: string
+    readFailed: string
+}
+
 /**
  * Hook for processing file uploads, especially PDFs and text files.
  * Handles text extraction, character limit validation, and cleanup.
  */
-export function useFileProcessor() {
+export function useFileProcessor(messages: FileProcessorMessages) {
     const [files, setFiles] = useState<File[]>([])
     const [pdfData, setPdfData] = useState<Map<File, FileData>>(new Map())
 
     const handleFileChange = async (newFiles: File[]) => {
         setFiles(newFiles)
 
-        // Extract text immediately for new PDF/text files
-        for (const file of newFiles) {
-            const needsExtraction =
-                (isPdfFile(file) || isTextFile(file)) && !pdfData.has(file)
-            if (needsExtraction) {
-                // Mark as extracting
-                setPdfData((prev) => {
-                    const next = new Map(prev)
-                    next.set(file, {
-                        text: "",
-                        charCount: 0,
-                        isExtracting: true,
-                    })
-                    return next
-                })
+        const pending = newFiles.filter(
+            (file) =>
+                (isPdfFile(file) || isTextFile(file)) && !pdfData.has(file),
+        )
 
-                // Extract text asynchronously
-                try {
-                    let text: string
-                    if (isPdfFile(file)) {
-                        text = await extractPdfText(file)
-                    } else {
-                        text = await extractTextFileContent(file)
-                    }
+        // Before any await: drop data for removed files and mark every new
+        // file as extracting, so queued files also block sending
+        setPdfData((prev) => {
+            const next = new Map<File, FileData>()
+            for (const file of newFiles) {
+                const existing = prev.get(file)
+                if (existing) next.set(file, existing)
+            }
+            for (const file of pending) {
+                next.set(file, { text: "", charCount: 0, isExtracting: true })
+            }
+            return next
+        })
 
-                    // Check character limit
-                    if (text.length > MAX_EXTRACTED_CHARS) {
-                        const limitK = MAX_EXTRACTED_CHARS / 1000
-                        toast.error(
-                            `${file.name}: Content exceeds ${limitK}k character limit (${(text.length / 1000).toFixed(1)}k chars)`,
-                        )
-                        setPdfData((prev) => {
-                            const next = new Map(prev)
-                            next.delete(file)
-                            return next
-                        })
-                        // Remove the file from the list
-                        setFiles((prev) => prev.filter((f) => f !== file))
-                        continue
-                    }
+        // Extract one file at a time
+        for (const file of pending) {
+            try {
+                let text: string
+                if (isPdfFile(file)) {
+                    text = await extractPdfText(file)
+                } else {
+                    text = await extractTextFileContent(file)
+                }
 
-                    setPdfData((prev) => {
-                        const next = new Map(prev)
-                        next.set(file, {
-                            text,
-                            charCount: text.length,
-                            isExtracting: false,
-                        })
-                        return next
-                    })
-                } catch (error) {
-                    console.error("Failed to extract text:", error)
-                    toast.error(`Failed to read file: ${file.name}`)
+                // Check character limit
+                if (text.length > MAX_EXTRACTED_CHARS) {
+                    toast.error(
+                        formatMessage(messages.tooLong, {
+                            name: file.name,
+                            limit: MAX_EXTRACTED_CHARS / 1000,
+                            size: (text.length / 1000).toFixed(1),
+                        }),
+                    )
                     setPdfData((prev) => {
                         const next = new Map(prev)
                         next.delete(file)
                         return next
                     })
+                    // Remove the file from the list
+                    setFiles((prev) => prev.filter((f) => f !== file))
+                    continue
                 }
+
+                setPdfData((prev) => {
+                    // The file was removed while extracting
+                    if (!prev.has(file)) return prev
+                    const next = new Map(prev)
+                    next.set(file, {
+                        text,
+                        charCount: text.length,
+                        isExtracting: false,
+                    })
+                    return next
+                })
+            } catch (error) {
+                console.error("Failed to extract text:", error)
+                toast.error(
+                    formatMessage(messages.readFailed, { name: file.name }),
+                )
+                setPdfData((prev) => {
+                    const next = new Map(prev)
+                    next.delete(file)
+                    return next
+                })
             }
         }
-
-        // Clean up pdfData for removed files
-        setPdfData((prev) => {
-            const next = new Map(prev)
-            for (const key of prev.keys()) {
-                if (!newFiles.includes(key)) {
-                    next.delete(key)
-                }
-            }
-            return next
-        })
     }
 
     return {

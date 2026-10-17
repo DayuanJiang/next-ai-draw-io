@@ -1,10 +1,11 @@
-import { POST as validateModel } from "@/app/api/validate-model/route"
 import { checkAdminAuth } from "@/lib/admin/auth"
 import {
     AdminProviderSchema,
     loadAdminProviders,
     mergeSecrets,
 } from "@/lib/admin/providers"
+import { globalBaseUrl } from "@/lib/ai-providers"
+import { testModelConnection } from "@/lib/test-model-connection"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -47,20 +48,24 @@ export async function POST(req: Request) {
         sameEndpoint && stored ? [stored] : [],
     )
 
-    return validateModel(
-        new Request(new URL("/api/validate-model", req.url), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                provider: resolved.provider,
-                apiKey: resolved.apiKey,
-                baseUrl: resolved.baseUrl,
-                modelId: body.modelId,
-                awsAccessKeyId: resolved.awsAccessKeyId,
-                awsSecretAccessKey: resolved.awsSecretAccessKey,
-                awsRegion: resolved.awsRegion,
-                vertexApiKey: resolved.vertexApiKey,
-            }),
-        }),
+    // Without a URL of its own, chat sends the entry's key to the server's
+    // <P>_BASE_URL: test that endpoint, not another one. It is the server's
+    // own, which chat uses without the checks for a URL a user typed.
+    // The admin's own request supplies the EdgeOne endpoint, cookies and
+    // access code, as a chat request would.
+    const serverUrl = globalBaseUrl(resolved.provider)
+    return testModelConnection(
+        req,
+        {
+            provider: resolved.provider,
+            apiKey: resolved.apiKey,
+            baseUrl: resolved.baseUrl || serverUrl,
+            modelId: body.modelId,
+            awsAccessKeyId: resolved.awsAccessKeyId,
+            awsSecretAccessKey: resolved.awsSecretAccessKey,
+            awsRegion: resolved.awsRegion,
+            vertexApiKey: resolved.vertexApiKey,
+        },
+        !resolved.baseUrl && !!serverUrl,
     )
 }

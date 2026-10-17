@@ -20,9 +20,7 @@ function serializeSettings() {
     return SETTINGS_REGISTRY.map((def) => {
         const source = getValueSource(def.key)
         const raw =
-            source === "file"
-                ? fileValues[def.key]
-                : (getEnvFallback(def.key) ?? null)
+            source === "file" ? fileValues[def.key] : getEnvFallback(def.key)
         const value = def.type === "secret" && raw ? maskSecret(raw) : raw
         return { key: def.key, source, value }
     })
@@ -53,10 +51,6 @@ function validateValue(def: SettingDef, value: string): string | null {
             return value === "true" || value === "false"
                 ? null
                 : 'Must be "true" or "false"'
-        case "enum":
-            return def.options?.includes(value)
-                ? null
-                : `Must be one of: ${def.options?.join(", ")}`
         default:
             return null
     }
