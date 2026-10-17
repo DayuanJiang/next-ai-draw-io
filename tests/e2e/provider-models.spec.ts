@@ -68,6 +68,46 @@ test("fetches the provider's models and adds one from the picker", async ({
     await expect(dialog.locator('input[title="qwen-new-max"]')).toBeVisible()
 })
 
+test("marks models that cannot read images", async ({ page }) => {
+    await page.route("**/api/provider-models", async (route) => {
+        await route.fulfill({
+            json: {
+                models: [
+                    { id: "glm-4.7", tools: true },
+                    { id: "glm-5.3-flash", tools: true },
+                ],
+            },
+        })
+    })
+    // models.dev lists glm-4.6 as text only, glm-4.6v and glm-5.3-flash with images
+    const dialog = await openQwenSettings(page, {
+        version: 1,
+        providers: [
+            {
+                id: "p1",
+                provider: "glm",
+                apiKey: "test-key",
+                models: [
+                    { id: "m1", modelId: "glm-4.6" },
+                    { id: "m2", modelId: "glm-4.6v" },
+                ],
+            },
+        ],
+    })
+    await expect(
+        dialog.getByText("a message with an image will fail"),
+    ).toHaveCount(1)
+
+    await fetchButton(dialog).click()
+    const picker = page.locator('[role="listbox"]')
+    await expect(
+        picker.getByRole("option", { name: /glm-4\.7/ }),
+    ).toContainText("no images")
+    await expect(
+        picker.getByRole("option", { name: /glm-5\.3-flash/ }),
+    ).not.toContainText("no images")
+})
+
 test("the model picker scrolls with the mouse wheel", async ({ page }) => {
     // The picker sits in a popover above the settings dialog, which blocks
     // wheel events outside itself
