@@ -536,7 +536,7 @@ TEMPERATURE=0  # より決定論的な出力（ダイアグラムに推奨）
 
     ベース URL 欄の下にヒントを表示したいプロバイダーや、プロバイダー選択に注記を表示したいプロバイダーには、`baseUrlHint` または `note` オブジェクトを追加します。4 つの UI 言語（`en`、`zh`、`ja`、`zh-Hant`）をすべて書きます。モデル一覧をオンラインで取得できないプロバイダーは、`modelList` の代わりに短い `models` リストを持ちます。
 2. `env.example` に `ACME_API_KEY` と `ACME_BASE_URL` を追加します。各レコードの変数がそこにあることを、ユニットテストが確認します。
-3. `docs/en`、`docs/cn`、`docs/ja` のこのページに、それぞれセクションを追加します。
+3. `docs/en`、`docs/cn`、`docs/tw`、`docs/ja` のこのページに、それぞれセクションを追加します。
 4. `tests/unit/provider-matrix.test.ts` の先頭にある 2 つのリスト（`MATRIX_PROVIDERS` と `MATRIX_MODEL_IDS`）に追加します。次に `npx vitest run tests/unit/provider-matrix.test.ts -u` で動作のスナップショットを作り直します。新しく増える行はこのプロバイダーのものです。既存の行は変わってはいけません。
 5. `tests/unit/providers.test.ts` にも追加します。このファイルには、プロバイダー選択のグループと、サーバーの動作を変えるプロバイダーの集合（自動検出、system メッセージが 1 つだけ）が書き出されています。
 6. 3 つの README のプロバイダー数と、このページの `AI_PROVIDER` の選択肢一覧を更新します。

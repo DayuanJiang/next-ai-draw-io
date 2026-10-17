@@ -20,8 +20,14 @@ const nextConfig: NextConfig = {
             "./docs/en/*.md",
             "./docs/cn/*.md",
             "./docs/ja/*.md",
+            "./docs/tw/*.md",
         ],
-        "/sitemap.xml": ["./docs/en/*.md", "./docs/cn/*.md", "./docs/ja/*.md"],
+        "/sitemap.xml": [
+            "./docs/en/*.md",
+            "./docs/cn/*.md",
+            "./docs/ja/*.md",
+            "./docs/tw/*.md",
+        ],
     },
     // The Chinese and Japanese About pages used to be separate routes
     async redirects() {

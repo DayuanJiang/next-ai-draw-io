@@ -87,7 +87,7 @@ export function LobbyHero({
             key: "paper",
             title: dict.examples.paperToDiagram,
             description: dict.examples.paperDescription,
-            image: "/paper_demo.svg",
+            image: "/gallery/paper-cot.svg",
             prompt: "Summarize this paper as a diagram",
             file: {
                 path: "/chain-of-thought.txt",
@@ -99,7 +99,7 @@ export function LobbyHero({
             key: "animated",
             title: dict.examples.animatedDiagram,
             description: dict.examples.animatedDescription,
-            image: "/animated_connectors.svg",
+            image: "/gallery/transformer.svg",
             prompt: "Give me a **animated connector** diagram of transformer's architecture",
         },
         {
@@ -130,7 +130,7 @@ export function LobbyHero({
             key: "cat",
             title: dict.examples.creativeDrawing,
             description: dict.examples.creativeDescription,
-            image: "/cat_demo.svg",
+            image: "/gallery/cat.svg",
             prompt: "Draw a cat for me",
         },
     ]

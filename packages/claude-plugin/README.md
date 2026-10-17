@@ -133,6 +133,9 @@ Claude Code <--stdio--> MCP Server <--http--> Browser (draw.io)
 ## Links
 
 - [Homepage](https://next-ai-drawio.jiang.jp)
+- [MCP server page](https://next-ai-drawio.jiang.jp/en/mcp): every client's setup and how it compares with other draw.io MCP servers
+- [Use it from Claude Code](https://next-ai-drawio.jiang.jp/en/docs/claude-code): the docs page for this plugin
+- [Gallery](https://next-ai-drawio.jiang.jp/en/gallery): diagrams Claude drew with this server, with their prompts
 - [GitHub Repository](https://github.com/DayuanJiang/next-ai-draw-io)
 - [MCP Server Documentation](https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server)
 

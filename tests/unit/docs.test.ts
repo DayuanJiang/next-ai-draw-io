@@ -17,6 +17,9 @@ describe("resolveDocLink", () => {
         expect(
             resolveDocLink("./FAQ.md#install", "docs/cn/docker.md", "zh"),
         ).toBe("/zh/docs/faq#install")
+        expect(
+            resolveDocLink("./editor.md", "docs/tw/versions.md", "zh-Hant"),
+        ).toBe("/zh-Hant/docs/editor")
     })
 
     it("sends other repository files to GitHub", () => {
@@ -88,12 +91,11 @@ describe("docs files", () => {
         expect(doc.summary).toMatch(/^The MCP server lets Claude Code/)
     })
 
-    it("has every page in English, Chinese and Japanese", () => {
+    it("has every page in every language", () => {
         for (const file of DOCS_NAV.flatMap((group) => group.files)) {
             expect(loadDoc("zh", file).locale).toBe("zh")
             expect(loadDoc("ja", file).locale).toBe("ja")
-            // Traditional Chinese shows the Simplified page
-            expect(loadDoc("zh-Hant", file).locale).toBe("zh")
+            expect(loadDoc("zh-Hant", file).locale).toBe("zh-Hant")
         }
     })
 })

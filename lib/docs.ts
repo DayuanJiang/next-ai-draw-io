@@ -10,15 +10,21 @@ import type { Locale } from "@/lib/i18n/config"
  * back to English.
  */
 
-// The folder of each language; Traditional Chinese reads the Simplified one
+// The folder of each language; a page missing in Traditional Chinese falls
+// back to the Simplified one
 const FOLDERS: Record<Locale, string[]> = {
     en: ["en"],
     zh: ["cn", "en"],
     ja: ["ja", "en"],
-    "zh-Hant": ["cn", "en"],
+    "zh-Hant": ["tw", "cn", "en"],
 }
 
-const FOLDER_LOCALE: Record<string, Locale> = { en: "en", cn: "zh", ja: "ja" }
+const FOLDER_LOCALE: Record<string, Locale> = {
+    en: "en",
+    cn: "zh",
+    ja: "ja",
+    tw: "zh-Hant",
+}
 
 export const DOCS_NAV: { group: Record<Locale, string>; files: string[] }[] = [
     {
@@ -200,7 +206,7 @@ export function resolveDocLink(
     if (image && target.startsWith("public/")) {
         return getAssetUrl(`/${target.slice("public/".length)}`)
     }
-    const docs = target.match(/^docs\/(?:en|cn|ja)\/([^/]+)\.md$/)
+    const docs = target.match(/^docs\/(?:en|cn|ja|tw)\/([^/]+)\.md$/)
     const file = docs && FILES.find((f) => f === docs[1])
     if (file) return `/${lang}${docsPath(file)}${hash ? `#${hash}` : ""}`
     return `${image ? RAW : BLOB}/${target}${hash ? `#${hash}` : ""}`

@@ -536,7 +536,7 @@ TEMPERATURE=0  # 输出更具确定性（推荐用于图表）
 
     如果服务商需要在基础 URL 输入框下方显示提示，或在选择器里显示说明，就在记录里加 `baseUrlHint` 或 `note` 对象，四种界面语言（`en`、`zh`、`ja`、`zh-Hant`）都要写。不能在线列出模型的服务商，用一个简短的 `models` 列表代替 `modelList`。
 2. 在 `env.example` 里加上 `ACME_API_KEY` 和 `ACME_BASE_URL`。有一个单元测试会检查每条记录的变量都出现在这个文件里。
-3. 在 `docs/en`、`docs/cn` 和 `docs/ja` 的本页里各加一节说明。
+3. 在 `docs/en`、`docs/cn`、`docs/tw` 和 `docs/ja` 的本页里各加一节说明。
 4. 把它加进 `tests/unit/provider-matrix.test.ts` 开头的两个清单（`MATRIX_PROVIDERS` 和 `MATRIX_MODEL_IDS`）。然后用 `npx vitest run tests/unit/provider-matrix.test.ts -u` 重新生成行为快照。新增的行都属于这家服务商，已有的行不能变。
 5. 也把它加进 `tests/unit/providers.test.ts`。这个文件写明了选择器的分组，以及会改变服务端行为的服务商集合（自动检测、只接受一条 system 消息）。
 6. 更新三份 README 里的服务商数量，以及本页的 `AI_PROVIDER` 可选值清单。
