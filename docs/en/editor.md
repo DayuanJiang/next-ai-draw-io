@@ -25,7 +25,7 @@ Ask for a change in the chat, for example "make the database a cluster of three 
 
 To change only part of the diagram, select those shapes on the canvas first. An "Ask AI to change this" button appears next to them; click it, or just type in the chat. The selection goes with your message, so "make these blue" changes only the selected shapes.
 
-While an answer is coming, Stop ends it. Under an answer you can regenerate it, and a message you sent can be edited and sent again.
+While an answer is coming, Stop ends it. Under an answer you can regenerate it, and a message you sent can be edited and sent again. Pointing at an answer also shows its input and output tokens and how long it took; point at those numbers for the details, such as tokens read from the prompt cache.
 
 <!-- demo: ai-edit -->
 

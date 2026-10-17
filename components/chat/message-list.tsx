@@ -38,6 +38,7 @@ import {
     splitTextIntoFileSections,
     type TextSection,
 } from "./message-text"
+import { ReplyUsageNote } from "./reply-usage"
 import { ToolActivity } from "./tool-activity"
 
 function ActionButton({
@@ -374,6 +375,8 @@ function AssistantMessage({
         p.toolCallId?.startsWith("cached-"),
     )
     const text = getMessageTextContent(message)
+    // None on cached examples and on answers saved before it was recorded
+    const usage = (message.metadata as ChatMessageMetadata | undefined)?.usage
 
     const submitFeedback = async (value: "good" | "bad") => {
         if (feedback === value) {
@@ -523,6 +526,7 @@ function AssistantMessage({
                             className={cn(feedback === "bad" && "fill-current")}
                         />
                     </ActionButton>
+                    {usage && <ReplyUsageNote usage={usage} />}
                 </div>
             )}
         </div>

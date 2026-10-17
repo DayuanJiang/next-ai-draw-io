@@ -1,4 +1,4 @@
-import type { InferUITools, UIMessage } from "ai"
+import type { InferUITools, LanguageModelUsage, UIMessage } from "ai"
 import type { chatTools } from "@/lib/chat-tools"
 import type { SelectedCell } from "@/stores/canvas-store"
 
@@ -7,8 +7,44 @@ import type { SelectedCell } from "@/stores/canvas-store"
 export type MessageSelection = (Pick<SelectedCell, "id" | "label"> &
     Partial<Pick<SelectedCell, "isEdge">>)[]
 
+/** Tokens and model time of an answer, over all the requests of its turn */
+export interface ReplyUsage {
+    inputTokens: number
+    outputTokens: number
+    /** Of the input, read from the provider's prompt cache */
+    cacheReadTokens: number
+    /** Of the output, spent thinking */
+    reasoningTokens: number
+    durationMs: number
+}
+
 export interface ChatMessageMetadata {
     selectedCells?: MessageSelection
+    usage?: ReplyUsage
+}
+
+/**
+ * The answer's usage with one more request added. A request whose provider
+ * reported no usage adds nothing.
+ */
+export function addReplyUsage(
+    before: ReplyUsage | undefined,
+    usage: LanguageModelUsage,
+    durationMs: number,
+): ReplyUsage | undefined {
+    if (usage.inputTokens === undefined && usage.outputTokens === undefined)
+        return before
+    return {
+        inputTokens: (before?.inputTokens ?? 0) + (usage.inputTokens ?? 0),
+        outputTokens: (before?.outputTokens ?? 0) + (usage.outputTokens ?? 0),
+        cacheReadTokens:
+            (before?.cacheReadTokens ?? 0) +
+            (usage.inputTokenDetails.cacheReadTokens ?? 0),
+        reasoningTokens:
+            (before?.reasoningTokens ?? 0) +
+            (usage.outputTokenDetails.reasoningTokens ?? 0),
+        durationMs: (before?.durationMs ?? 0) + durationMs,
+    }
 }
 
 /**
