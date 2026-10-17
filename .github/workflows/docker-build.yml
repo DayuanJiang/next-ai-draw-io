@@ -13,6 +13,14 @@ on:
   # event now and then); it then pushes to ECR like a push to main
   workflow_dispatch:
 
+# One run per branch at a time. On main, deploys that overlapped replaced
+# each other and the earlier ones failed ("rolled back"); now a new run waits
+# for the one in progress, and of several waiting only the newest runs. A new
+# push to a pull request cancels its older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
