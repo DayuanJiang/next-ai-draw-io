@@ -32,7 +32,7 @@ export const TEXTS: Record<Locale, GalleryPageTexts> = {
         ],
         h1: "Example diagrams and the prompts behind them",
         lede: "Each diagram here came from one prompt. Open one to see it larger, copy its prompt, or open the editor with the prompt already in the chat input and change it before you send it.",
-        note: "Diagrams marked “Claude Code with the MCP server” were drawn by Claude Code through the MCP server, which looked at a screenshot of its result and fixed overlaps, as the server asks it to. The others were drawn in the web app. The same prompt gives a somewhat different diagram each time, and each model draws in its own way.",
+        note: "Every diagram was drawn by Claude Code through the MCP server, with the model named on its card. As the server asks it to, Claude Code looked at a screenshot of each result and fixed overlaps. The same prompt gives a somewhat different diagram each time, and other models draw in their own way.",
         tipsHeading: "Write your own prompt",
         tips: [
             {
@@ -74,7 +74,7 @@ export const TEXTS: Record<Locale, GalleryPageTexts> = {
         ],
         h1: "示例图库：每张图和它的提示词",
         lede: "这里的每张图都是根据一句提示词画出来的。点开一张可以放大查看；也可以复制它的提示词，或者打开编辑器，提示词会预先填好在聊天输入框里，您可以修改后再发送。",
-        note: "标有“Claude Code 与 MCP 服务器”的图，是 Claude Code 通过 MCP 服务器画的：按照服务器的要求，它看了自己画出来的截图，并修正了重叠的地方。其余的图是在网页版里画的。同一句提示词每次画出来的图都会有些不同，不同的模型画法也不一样。",
+        note: "每张图都是 Claude Code 通过 MCP 服务器画的，用的模型写在卡片上。按照服务器的要求，Claude Code 看了每张图画出来的截图，并修正了重叠的地方。同一句提示词每次画出来的图都会有些不同，换用其他模型，画法也会不一样。",
         tipsHeading: "自己写提示词",
         tips: [
             {
@@ -116,7 +116,7 @@ export const TEXTS: Record<Locale, GalleryPageTexts> = {
         ],
         h1: "サンプル図とそのプロンプト",
         lede: "ここにある図は、どれも 1 つのプロンプトから描かれました。図を開いて拡大したり、プロンプトをコピーしたりできます。エディタを開くと、そのプロンプトがチャットの入力欄に入った状態になるので、手を加えてから送信できます。",
-        note: "「Claude Code と MCP サーバー」と書かれた図は、Claude Code が MCP サーバーを通して描いたものです。サーバーの指示に従って、描いた結果のスクリーンショットを確認し、重なりを直しています。それ以外の図は Web アプリで描きました。同じプロンプトでも描くたびに少しずつ違う図になり、モデルによっても描き方が変わります。",
+        note: "どの図も Claude Code が MCP サーバーを通して描きました。使ったモデルはカードに書いてあります。サーバーの指示に従って、Claude Code は描いた結果のスクリーンショットを確認し、重なりを直しています。同じプロンプトでも描くたびに少しずつ違う図になり、ほかのモデルでは描き方も変わります。",
         tipsHeading: "自分でプロンプトを書く",
         tips: [
             {
@@ -158,7 +158,7 @@ export const TEXTS: Record<Locale, GalleryPageTexts> = {
         ],
         h1: "範例圖庫：每張圖和它的提示詞",
         lede: "這裡的每張圖都是根據一句提示詞畫出來的。點開一張可以放大查看；也可以複製它的提示詞，或者開啟編輯器，提示詞會預先填好在聊天輸入框裡，您可以修改後再送出。",
-        note: "標有「Claude Code 與 MCP 伺服器」的圖，是 Claude Code 透過 MCP 伺服器畫的：依照伺服器的要求，它看了自己畫出來的截圖，並修正了重疊的地方。其餘的圖是在網頁版裡畫的。同一句提示詞每次畫出來的圖都會有些不同，不同的模型畫法也不一樣。",
+        note: "每張圖都是 Claude Code 透過 MCP 伺服器畫的，用的模型寫在卡片上。依照伺服器的要求，Claude Code 看了每張圖畫出來的截圖，並修正了重疊的地方。同一句提示詞每次畫出來的圖都會有些不同，換用其他模型，畫法也會不一樣。",
         tipsHeading: "自己寫提示詞",
         tips: [
             {

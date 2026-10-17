@@ -105,10 +105,8 @@ function Card({
                     <span className="rounded-md bg-muted px-1.5 py-0.5">
                         {category?.label[lang]}
                     </span>
-                    <span
-                        className={`rounded-md px-1.5 py-0.5 ${item.via === "mcp" ? "bg-marker-soft text-marker-ink" : "bg-muted"}`}
-                    >
-                        {item.via === "mcp" ? t.byMcp : t.byWeb}
+                    <span className="rounded-md bg-marker-soft px-1.5 py-0.5 text-marker-ink">
+                        {item.model}
                     </span>
                 </span>
                 <h3 className="mt-2 text-[15px] leading-snug font-semibold">
@@ -119,7 +117,7 @@ function Card({
                     <span lang="en">{item.prompt}</span>
                     {item.attachment && (
                         <span className="mt-1 block text-[12.5px]">
-                            {t.fromPdf}
+                            {t.fromFile}
                         </span>
                     )}
                 </p>

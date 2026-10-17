@@ -1,7 +1,7 @@
 import type { Locale } from "@/lib/i18n/config"
 
-// The docs gallery: diagrams the AI drew, each from one prompt. A plain
-// module, so the server and the gallery component can both read it.
+// The gallery: diagrams the AI drew, each from one prompt. A plain module,
+// so the server and the gallery component can both read it.
 
 export type GalleryCategory =
     | "cloud"
@@ -16,15 +16,12 @@ export type GalleryItem = {
     /** The exported SVG, under public/ */
     src: string
     category: GalleryCategory
-    /**
-     * "mcp": Claude Code through the MCP server, which checked a screenshot
-     * of its result; "web": the web app
-     */
-    via: "mcp" | "web"
+    /** The model that drew it, through Claude Code and the MCP server */
+    model: string
     /** As typed; prompts stay in English in every language */
     prompt: string
     /** The prompt came with a file, so it cannot be tried alone */
-    attachment?: "pdf"
+    attachment?: "file"
     title: Record<Locale, string>
 }
 
@@ -94,7 +91,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "kubernetes",
         src: "/gallery/kubernetes.svg",
         category: "cloud",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a Kubernetes deployment for a web shop: an ingress, web and API deployments with their services and pods, a Redis StatefulSet with a persistent volume, a ConfigMap, a Secret, and an autoscaler on the API.",
         title: {
             en: "Kubernetes deployment for a web shop",
@@ -107,7 +104,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "er-shop",
         src: "/gallery/er-shop.svg",
         category: "software",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw an ER diagram for an online shop: customers, addresses, orders, order items, products, categories and payments, with primary and foreign keys and the cardinality of each relationship.",
         title: {
             en: "ER diagram of an online shop",
@@ -118,9 +115,9 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     },
     {
         id: "transformer",
-        src: "/animated_connectors.svg",
+        src: "/gallery/transformer.svg",
         category: "ai",
-        via: "web",
+        model: "Claude Opus 5.5",
         prompt: "Give me an animated connector diagram of transformer's architecture.",
         title: {
             en: "Transformer architecture with animated connectors",
@@ -133,7 +130,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "bpmn-expense",
         src: "/gallery/bpmn-expense.svg",
         category: "process",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a BPMN process for an expense claim: an employee submits it, the manager approves or rejects it, finance checks the receipts and pays, and the claim goes back to the employee when receipts are missing.",
         title: {
             en: "BPMN expense claim process",
@@ -146,7 +143,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "aws-ha",
         src: "/gallery/aws-ha.svg",
         category: "cloud",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw an AWS architecture for a highly available web app across two Availability Zones with AWS icons: Route 53, CloudFront with AWS WAF, an Application Load Balancer, ECS Fargate services in private subnets, Aurora PostgreSQL with a writer and a reader, ElastiCache for Redis, S3 for static assets, NAT gateways, and CloudWatch for monitoring.",
         title: {
             en: "Highly available web app on AWS",
@@ -159,7 +156,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "mindmap-launch",
         src: "/gallery/mindmap-launch.svg",
         category: "business",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a mind map for planning a product launch: goals, audience, messaging, channels, timeline, budget and metrics, each with a few ideas.",
         title: {
             en: "Product launch mind map",
@@ -172,7 +169,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "oauth-sequence",
         src: "/gallery/oauth-sequence.svg",
         category: "software",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a sequence diagram of an OAuth 2.0 login with PKCE between the user, a browser app, the identity provider and an API.",
         title: {
             en: "OAuth 2.0 login with PKCE",
@@ -185,7 +182,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "journey-map",
         src: "/gallery/journey-map.svg",
         category: "business",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a customer journey map for a mobile banking app across five stages (discover, sign up, first payment, everyday use, get help), with the customer's actions, touchpoints, feelings and pain points in each stage, and an opportunity for each pain point.",
         title: {
             en: "Customer journey map of a banking app",
@@ -198,7 +195,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "org-chart",
         src: "/gallery/org-chart.svg",
         category: "business",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw an org chart for a 25-person startup: the CEO, a CTO with two engineering teams, a head of product with designers, a head of sales with account executives, and operations.",
         title: {
             en: "Org chart of a startup",
@@ -208,10 +205,10 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         },
     },
     {
-        id: "rag",
-        src: "/rag_prod.svg",
+        id: "rag-chat",
+        src: "/gallery/rag-chat.svg",
         category: "ai",
-        via: "web",
+        model: "Claude Opus 5.5",
         prompt: "Generate a RAG architecture diagram for chat application. Use connected diagram for data ingestion",
         title: {
             en: "RAG for a chat application",
@@ -224,7 +221,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "gcp-analytics",
         src: "/gallery/gcp-analytics.svg",
         category: "cloud",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a Google Cloud analytics pipeline with GCP icons: apps send events to Pub/Sub, Dataflow processes the stream, raw data lands in Cloud Storage, BigQuery is the warehouse, Vertex AI trains a model on it, Looker shows dashboards, and Cloud Composer runs the nightly batch jobs.",
         title: {
             en: "Analytics pipeline on Google Cloud",
@@ -237,7 +234,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "swimlane-hiring",
         src: "/gallery/swimlane-hiring.svg",
         category: "process",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a swimlane diagram of a hiring process across the candidate, the recruiter, the hiring manager and the interview panel, from application to offer.",
         title: {
             en: "Hiring process in swimlanes",
@@ -250,7 +247,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "uml-library",
         src: "/gallery/uml-library.svg",
         category: "software",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a UML class diagram for a library system: Book, Copy, Member, Loan, Reservation, Librarian and Fine, with their main attributes, methods and the relationships between them.",
         title: {
             en: "UML class diagram of a library",
@@ -263,7 +260,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "gantt-app",
         src: "/gallery/gantt-app.svg",
         category: "business",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a Gantt chart for a 12-week mobile app launch: discovery, design, three development sprints, beta testing, app store review and launch, with milestones.",
         title: {
             en: "12-week app launch plan",
@@ -276,7 +273,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "azure-multiregion",
         src: "/gallery/azure-multiregion.svg",
         category: "cloud",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw an Azure architecture for a web app that runs in two regions, with Azure icons: Azure Front Door, App Service in each region, Azure SQL Database with geo-replication, Azure Cache for Redis, Blob Storage, Key Vault, sign-in with Microsoft Entra ID, and Application Insights.",
         title: {
             en: "Web app in two Azure regions",
@@ -289,7 +286,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "cicd-github",
         src: "/gallery/cicd-github.svg",
         category: "cloud",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a CI/CD pipeline with GitHub Actions: on a pull request run lint, unit tests and a security scan in parallel, build a Docker image, deploy to staging, wait for approval, then deploy to production on AWS, with a rollback path.",
         title: {
             en: "CI/CD with GitHub Actions",
@@ -302,7 +299,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "order-states",
         src: "/gallery/order-states.svg",
         category: "software",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a state machine for an e-commerce order: created, payment pending, paid, packed, shipped, delivered, cancelled, refund requested and refunded, with the events between them.",
         title: {
             en: "Order state machine",
@@ -315,7 +312,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         id: "office-network",
         src: "/gallery/office-network.svg",
         category: "cloud",
-        via: "mcp",
+        model: "Claude Opus 5.5",
         prompt: "Draw a network diagram of a small office with Cisco icons: the internet, a firewall, a router, a core switch, Wi-Fi access points, laptops, a file server, a printer and a separate guest VLAN.",
         title: {
             en: "Small office network",
@@ -326,9 +323,9 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     },
     {
         id: "resnet50",
-        src: "/resnet50.svg",
+        src: "/gallery/resnet50.svg",
         category: "ai",
-        via: "web",
+        model: "Claude Opus 5.5",
         prompt: "Give me an animated architecture diagram of the ResNet50 model.",
         title: {
             en: "ResNet50 model architecture",
@@ -339,9 +336,9 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     },
     {
         id: "scrum",
-        src: "/agile_scrum.svg",
+        src: "/gallery/scrum.svg",
         category: "process",
-        via: "web",
+        model: "Claude Opus 5.5",
         prompt: "Generate agile scrum workflow diagram for software development team.",
         title: {
             en: "Agile Scrum workflow",
@@ -351,10 +348,10 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         },
     },
     {
-        id: "auth",
-        src: "/auth.svg",
+        id: "auth-serverless",
+        src: "/gallery/auth-serverless.svg",
         category: "cloud",
-        via: "web",
+        model: "Claude Opus 5.5",
         prompt: "Generate authentication process using React with AWS. Use Serverless architecture.",
         title: {
             en: "Serverless sign-in with React and AWS",
@@ -364,12 +361,12 @@ export const GALLERY_ITEMS: GalleryItem[] = [
         },
     },
     {
-        id: "paper",
-        src: "/paper_demo.svg",
+        id: "paper-cot",
+        src: "/gallery/paper-cot.svg",
         category: "ai",
-        via: "web",
+        model: "Claude Opus 5.5",
         prompt: "Summarize this paper as a diagram",
-        attachment: "pdf",
+        attachment: "file",
         title: {
             en: "A research paper as a diagram",
             zh: "把论文画成图",
@@ -379,9 +376,9 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     },
     {
         id: "cat",
-        src: "/cat_demo.svg",
+        src: "/gallery/cat.svg",
         category: "drawing",
-        via: "web",
+        model: "Claude Opus 5.5",
         prompt: "Draw a cute cat for me.",
         title: {
             en: "A cat drawn with shapes",
@@ -398,9 +395,7 @@ export type GalleryTexts = {
     tryPrompt: string
     copy: string
     copied: string
-    byMcp: string
-    byWeb: string
-    fromPdf: string
+    fromFile: string
     enlarge: string
     close: string
 }
@@ -412,9 +407,7 @@ export const GALLERY_TEXTS: Record<Locale, GalleryTexts> = {
         tryPrompt: "Try this prompt",
         copy: "Copy the prompt",
         copied: "Copied",
-        byMcp: "Claude Code with the MCP server",
-        byWeb: "Web app",
-        fromPdf: "With the paper attached as a PDF",
+        fromFile: "With the paper attached as a file",
         enlarge: "Enlarge",
         close: "Close",
     },
@@ -424,9 +417,7 @@ export const GALLERY_TEXTS: Record<Locale, GalleryTexts> = {
         tryPrompt: "试试这个提示词",
         copy: "复制提示词",
         copied: "已复制",
-        byMcp: "Claude Code 与 MCP 服务器",
-        byWeb: "网页版",
-        fromPdf: "同时附上了论文的 PDF",
+        fromFile: "同时附上了论文文件",
         enlarge: "放大",
         close: "关闭",
     },
@@ -436,9 +427,7 @@ export const GALLERY_TEXTS: Record<Locale, GalleryTexts> = {
         tryPrompt: "このプロンプトを試す",
         copy: "プロンプトをコピー",
         copied: "コピーしました",
-        byMcp: "Claude Code と MCP サーバー",
-        byWeb: "Web アプリ",
-        fromPdf: "論文の PDF を添付",
+        fromFile: "論文のファイルを添付",
         enlarge: "拡大",
         close: "閉じる",
     },
@@ -448,9 +437,7 @@ export const GALLERY_TEXTS: Record<Locale, GalleryTexts> = {
         tryPrompt: "試試這個提示詞",
         copy: "複製提示詞",
         copied: "已複製",
-        byMcp: "Claude Code 與 MCP 伺服器",
-        byWeb: "網頁版",
-        fromPdf: "同時附上了論文的 PDF",
+        fromFile: "同時附上了論文檔案",
         enlarge: "放大",
         close: "關閉",
     },
