@@ -110,6 +110,13 @@ jobs:
           container-name: app
           image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com/next-ai-draw-io:sha-${{ github.sha }}
 
+      # The live pages before the deploy, to tell IndexNow afterwards which
+      # ones changed. Never blocks the deploy.
+      - name: Snapshot the site's pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: node scripts/indexnow.mjs snapshot "$RUNNER_TEMP/pages-before.json"
+
       # Waits until the new task serves, so a failed deploy fails this run
       # (ECS also rolls it back)
       - name: Deploy to ECS
@@ -120,3 +127,15 @@ jobs:
           cluster: default
           service: next-ai-draw-io
           wait-for-service-stability: true
+
+      # Bing and the other IndexNow engines recrawl the pages whose text or
+      # head tags changed
+      - name: Tell IndexNow which pages changed
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          if [ -f "$RUNNER_TEMP/pages-before.json" ]; then
+            node scripts/indexnow.mjs submit "$RUNNER_TEMP/pages-before.json"
+          else
+            echo "No snapshot from before the deploy"
+          fi
