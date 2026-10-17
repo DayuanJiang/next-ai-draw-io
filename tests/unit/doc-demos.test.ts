@@ -19,7 +19,7 @@ const files = readdirSync(join(process.cwd(), "docs/en")).filter((f) =>
 
 describe("docs demos", () => {
     it("names only demos the site can show", () => {
-        for (const folder of ["en", "cn", "ja"]) {
+        for (const folder of ["en", "cn", "ja", "tw"]) {
             for (const file of files) {
                 for (const name of demosIn(folder, file)) {
                     expect(DOC_DEMOS, `${folder}/${file}`).toContain(name)
@@ -32,6 +32,7 @@ describe("docs demos", () => {
         for (const file of files) {
             const en = demosIn("en", file)
             expect(demosIn("cn", file), `cn/${file}`).toEqual(en)
+            expect(demosIn("tw", file), `tw/${file}`).toEqual(en)
             expect(demosIn("ja", file), `ja/${file}`).toEqual(en)
         }
     })

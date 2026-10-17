@@ -536,7 +536,7 @@ The settings screen, the connection test, the chat route and the admin panel all
 
     If the provider needs a hint under its base URL field, or a note in the picker, give it a `baseUrlHint` or `note` object with all four UI languages (`en`, `zh`, `ja`, `zh-Hant`). A provider that cannot list its models online gets a short `models` list in place of `modelList`.
 2. Add `ACME_API_KEY` and `ACME_BASE_URL` to `env.example`. A unit test checks that the variables of every record appear there.
-3. Add a section for it to this page in `docs/en`, `docs/cn` and `docs/ja`.
+3. Add a section for it to this page in `docs/en`, `docs/cn`, `docs/tw` and `docs/ja`.
 4. Add it to the two lists at the top of `tests/unit/provider-matrix.test.ts` (`MATRIX_PROVIDERS` and `MATRIX_MODEL_IDS`). Then regenerate the behavior snapshot with `npx vitest run tests/unit/provider-matrix.test.ts -u`. The new rows belong to the new provider, and the existing rows must not change.
 5. Add it to `tests/unit/providers.test.ts` too. That file spells out the groups of the picker and the sets of providers that change what the server does (auto-detection, single system message).
 6. Update the provider count in the three READMEs and the `AI_PROVIDER` list on this page.
