@@ -142,7 +142,7 @@ Environment variables, set in the client's `env` for the server:
 docker run -d -p 8080:8080 jgraph/drawio
 ```
 
-Then set `DRAWIO_BASE_URL=http://localhost:8080`. The preview cannot reach into a draw.io from another origin, so the AI's changes are not outlined, Ctrl+Z does not take them back (use the version cards) and `get_selection` does not work. The bundled copy has no image proxy and leaves out a few features that load code on demand; see [Offline deployment](https://github.com/DayuanJiang/next-ai-draw-io/blob/main/docs/en/offline-deployment.md).
+Then set `DRAWIO_BASE_URL=http://localhost:8080`. The preview cannot reach into a draw.io from another origin, so the AI's changes are not outlined, Ctrl+Z does not take them back (use the version cards) and `get_selection` does not work. The bundled copy leaves out a few features that load code on demand, such as the org chart layout. It also has no image proxy, so exported images leave out pictures inserted by their web address; see [Offline deployment](https://github.com/DayuanJiang/next-ai-draw-io/blob/main/docs/en/offline-deployment.md#insert-images-from-other-websites).
 
 ## Troubleshooting
 

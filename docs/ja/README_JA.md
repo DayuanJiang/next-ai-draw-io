@@ -11,7 +11,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[**オンラインデモ**](https://next-ai-drawio.jiang.jp/) · [**ドキュメント**](https://next-ai-drawio.jiang.jp/ja/docs) · [**デスクトップアプリ**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP サーバー**](#ai-エージェントから使うmcp)
+[**オンラインデモ**](https://next-ai-drawio.jiang.jp/) · [**ドキュメント**](https://next-ai-drawio.jiang.jp/ja/docs) · [**ギャラリー**](https://next-ai-drawio.jiang.jp/ja/gallery) · [**デスクトップアプリ**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP サーバー**](https://next-ai-drawio.jiang.jp/ja/mcp)
 
 </div>
 
@@ -47,38 +47,51 @@ Web アプリ、Windows / macOS / Linux 向けデスクトップアプリ、そ�
 <div align="center">
 <table width="100%">
   <tr>
-    <td colspan="2" valign="top" align="center">
-      <strong>アニメーションコネクタ付き Transformer アーキテクチャ</strong><br />
-      <p><strong>Prompt:</strong> Give me a <strong>animated connector</strong> diagram of transformer's architecture.</p>
-      <img src="../../public/animated_connectors.svg" alt="アニメーションコネクタ付き Transformer アーキテクチャ" width="440" />
+    <td width="50%" valign="top">
+      <strong>AWS の高可用性 Web アプリ</strong><br />
+      <p><strong>プロンプト：</strong> Draw an AWS architecture for a highly available web app across two Availability Zones with AWS icons: Route 53, CloudFront with AWS WAF, an Application Load Balancer, ECS Fargate services in private subnets, Aurora PostgreSQL with a writer and a reader, ElastiCache for Redis, S3 for static assets, NAT gateways, and CloudWatch for monitoring.</p>
+      <p><strong>モデル：</strong> Claude Opus 5.5（Claude Code から MCP サーバー経由）</p>
+      <img src="../../public/gallery/aws-ha.svg" alt="AWS の高可用性 Web アプリ" width="400" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Web ショップの Kubernetes デプロイ</strong><br />
+      <p><strong>プロンプト：</strong> Draw a Kubernetes deployment for a web shop: an ingress, web and API deployments with their services and pods, a Redis StatefulSet with a persistent volume, a ConfigMap, a Secret, and an autoscaler on the API.</p>
+      <p><strong>モデル：</strong> Claude Opus 5.5（Claude Code から MCP サーバー経由）</p>
+      <img src="../../public/gallery/kubernetes.svg" alt="Web ショップの Kubernetes デプロイ" width="400" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>RAG アーキテクチャ</strong><br />
-      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for <strong>chat application</strong>. Use connected diagram for data ingestion</p>
-      <img src="../../public/rag_prod.svg" alt="RAG アーキテクチャ図" width="400" />
+      <strong>オンラインショップの ER 図</strong><br />
+      <p><strong>プロンプト：</strong> Draw an ER diagram for an online shop: customers, addresses, orders, order items, products, categories and payments, with primary and foreign keys and the cardinality of each relationship.</p>
+      <p><strong>モデル：</strong> Claude Opus 5.5（Claude Code から MCP サーバー経由）</p>
+      <img src="../../public/gallery/er-shop.svg" alt="オンラインショップの ER 図" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>React と AWS による認証フロー</strong><br />
-      <p><strong>Prompt:</strong> Generate authentication process using React with <strong>AWS</strong>. Use Serverless architecture.</p>
-      <img src="../../public/auth.svg" alt="認証アーキテクチャ図" width="400" />
+      <strong>BPMN の経費精算プロセス</strong><br />
+      <p><strong>プロンプト：</strong> Draw a BPMN process for an expense claim: an employee submits it, the manager approves or rejects it, finance checks the receipts and pays, and the claim goes back to the employee when receipts are missing.</p>
+      <p><strong>モデル：</strong> Claude Opus 5.5（Claude Code から MCP サーバー経由）</p>
+      <img src="../../public/gallery/bpmn-expense.svg" alt="BPMN の経費精算プロセス" width="400" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>オープンイノベーションモデル</strong><br />
-      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
-      <img src="../../public/inno.svg" alt="オープンイノベーション図" width="400" />
+      <strong>アニメーション付きの Transformer 構成</strong><br />
+      <p><strong>プロンプト：</strong> Give me an animated connector diagram of transformer's architecture.</p>
+      <p><strong>モデル：</strong> Claude Opus 5.5（Claude Code から MCP サーバー経由）</p>
+      <img src="../../public/gallery/transformer.svg" alt="アニメーション付きの Transformer 構成" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>猫のスケッチ</strong><br />
-      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
-      <img src="../../public/cat_demo.svg" alt="猫の絵" width="200" />
+      <strong>モバイルバンキングのカスタマージャーニーマップ</strong><br />
+      <p><strong>プロンプト：</strong> Draw a customer journey map for a mobile banking app across five stages (discover, sign up, first payment, everyday use, get help), with the customer's actions, touchpoints, feelings and pain points in each stage, and an opportunity for each pain point.</p>
+      <p><strong>モデル：</strong> Claude Opus 5.5（Claude Code から MCP サーバー経由）</p>
+      <img src="../../public/gallery/journey-map.svg" alt="モバイルバンキングのカスタマージャーニーマップ" width="400" />
     </td>
   </tr>
 </table>
 </div>
+
+ほかの例と、それぞれのプロンプトやモデルは **[ギャラリー](https://next-ai-drawio.jiang.jp/ja/gallery)** にあります。
 
 ## 使い方
 
@@ -121,15 +134,11 @@ Claude Code のコミュニティプラグインマーケットプレイスに�
 
 あとは AI に「ログイン、MFA、セッション管理を含むユーザー認証のフローチャートを描いて」と頼めば、描かれていく様子がブラウザに表示されます。MCP サーバーには Web アプリの作図機能のほとんどが入っています。
 
--   同じ作図ルールとアイコンライブラリ（AWS、Azure、GCP、Kubernetes など）
--   プレビューは Web アプリと同じキャンバス。AI の変更には印が付き、Ctrl+Z 一回で元に戻せ、選択中の図形を AI が読み取れる
--   draw.io エディターはパッケージに同梱されているので、インストール後はオフラインでもプレビューが動く（外部の draw.io を使うなら `DRAWIO_BASE_URL` を設定する）
+-   Web アプリと同じ作図ルール、アイコンライブラリ（AWS、Azure、GCP、Kubernetes など）、キャンバス。AI の変更には印が付き、Ctrl+Z 一回で元に戻せ、選択中の図形を AI が読み取れる
 -   スクリーンショットツール。AI が描いた結果を確認して自分で直せる
--   バージョン履歴、複数ページのダイアグラム、`.drawio`、`.png`、`.svg`、`.drawio.svg` でのダウンロード
--   `~/.next-ai-drawio/` への自動保存。再起動後も続きから描ける
--   AI に元に戻す操作を頼める。独自の作図ルールは `~/.next-ai-drawio/instructions.md` に書ける
+-   バージョン履歴、複数ページ、`.drawio`、`.png`、`.svg`、`.drawio.svg` での書き出し、`~/.next-ai-drawio/` への自動保存。draw.io エディターはパッケージに同梱されているので、プレビューはオフラインでも動く
 
-VS Code、Cursor などの設定と[ほかの draw.io MCP サーバーとの比較](../../packages/mcp-server/README.md#choosing-a-drawio-mcp-server)は、[MCP サーバーの README](../../packages/mcp-server/README.md) を参照してください。
+Codex、VS Code、Cursor などの設定、すべてのツール、ほかの draw.io MCP サーバーとの比較は、[MCP サーバーのページ](https://next-ai-drawio.jiang.jp/ja/mcp)を参照してください。
 
 ### draw.io 標準の AI との違い
 

@@ -23,6 +23,10 @@ export function SiteFooter({ lang, path }: { lang: Locale; path: string }) {
                 { label: t.editor, href: `/${lang}` },
                 { label: t.desktop, href: RELEASES_URL },
                 { label: t.mcp, href: `/${lang}/mcp` },
+                {
+                    label: SITE_TEXTS[lang].nav.gallery,
+                    href: `/${lang}/gallery`,
+                },
                 { label: t.docs, href: `/${lang}/docs` },
             ],
         },

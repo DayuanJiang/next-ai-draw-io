@@ -223,3 +223,12 @@
 .docs-body :where(a):not(:where(h2 a, h3 a)):hover {
     text-decoration-color: var(--foreground);
 }
+
+/* draw.io exports change colors with the system's light or dark mode; make
+   them follow the site's theme instead, which can differ from the system */
+.site img {
+    color-scheme: light;
+}
+.dark .site img {
+    color-scheme: dark;
+}

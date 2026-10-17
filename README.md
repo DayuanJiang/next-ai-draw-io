@@ -11,7 +11,7 @@ English | [中文](./docs/cn/README_CN.md) | [日本語](./docs/ja/README_JA.md)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[**Live Demo**](https://next-ai-drawio.jiang.jp/) · [**Docs**](https://next-ai-drawio.jiang.jp/en/docs) · [**Desktop App**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP Server**](#in-your-ai-agent-mcp)
+[**Live Demo**](https://next-ai-drawio.jiang.jp/) · [**Docs**](https://next-ai-drawio.jiang.jp/en/docs) · [**Gallery**](https://next-ai-drawio.jiang.jp/en/gallery) · [**Desktop App**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP Server**](https://next-ai-drawio.jiang.jp/en/mcp)
 
 </div>
 
@@ -47,38 +47,51 @@ Available as a web app, a desktop app for Windows, macOS and Linux, and an MCP s
 <div align="center">
 <table width="100%">
   <tr>
-    <td colspan="2" valign="top" align="center">
+    <td width="50%" valign="top">
+      <strong>Highly available web app on AWS</strong><br />
+      <p><strong>Prompt:</strong> Draw an AWS architecture for a highly available web app across two Availability Zones with AWS icons: Route 53, CloudFront with AWS WAF, an Application Load Balancer, ECS Fargate services in private subnets, Aurora PostgreSQL with a writer and a reader, ElastiCache for Redis, S3 for static assets, NAT gateways, and CloudWatch for monitoring.</p>
+      <p><strong>Model:</strong> Claude Opus 5.5, in Claude Code with the MCP server</p>
+      <img src="./public/gallery/aws-ha.svg" alt="Highly available web app on AWS" width="400" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Kubernetes deployment for a web shop</strong><br />
+      <p><strong>Prompt:</strong> Draw a Kubernetes deployment for a web shop: an ingress, web and API deployments with their services and pods, a Redis StatefulSet with a persistent volume, a ConfigMap, a Secret, and an autoscaler on the API.</p>
+      <p><strong>Model:</strong> Claude Opus 5.5, in Claude Code with the MCP server</p>
+      <img src="./public/gallery/kubernetes.svg" alt="Kubernetes deployment for a web shop" width="400" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>ER diagram of an online shop</strong><br />
+      <p><strong>Prompt:</strong> Draw an ER diagram for an online shop: customers, addresses, orders, order items, products, categories and payments, with primary and foreign keys and the cardinality of each relationship.</p>
+      <p><strong>Model:</strong> Claude Opus 5.5, in Claude Code with the MCP server</p>
+      <img src="./public/gallery/er-shop.svg" alt="ER diagram of an online shop" width="400" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>BPMN expense claim process</strong><br />
+      <p><strong>Prompt:</strong> Draw a BPMN process for an expense claim: an employee submits it, the manager approves or rejects it, finance checks the receipts and pays, and the claim goes back to the employee when receipts are missing.</p>
+      <p><strong>Model:</strong> Claude Opus 5.5, in Claude Code with the MCP server</p>
+      <img src="./public/gallery/bpmn-expense.svg" alt="BPMN expense claim process" width="400" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
       <strong>Transformer architecture with animated connectors</strong><br />
-      <p><strong>Prompt:</strong> Give me a <strong>animated connector</strong> diagram of transformer's architecture.</p>
-      <img src="./public/animated_connectors.svg" alt="Transformer architecture with animated connectors" width="440" />
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>RAG architecture</strong><br />
-      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for <strong>chat application</strong>. Use connected diagram for data ingestion</p>
-      <img src="./public/rag_prod.svg" alt="RAG architecture diagram" width="400" />
+      <p><strong>Prompt:</strong> Give me an animated connector diagram of transformer's architecture.</p>
+      <p><strong>Model:</strong> Claude Opus 5.5, in Claude Code with the MCP server</p>
+      <img src="./public/gallery/transformer.svg" alt="Transformer architecture with animated connectors" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>Authentication with React and AWS</strong><br />
-      <p><strong>Prompt:</strong> Generate authentication process using React with <strong>AWS</strong>. Use Serverless architecture.</p>
-      <img src="./public/auth.svg" alt="Authentication architecture diagram" width="400" />
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>Open Innovation model</strong><br />
-      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
-      <img src="./public/inno.svg" alt="Open Innovation diagram" width="400" />
-    </td>
-    <td width="50%" valign="top">
-      <strong>Cat sketch</strong><br />
-      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
-      <img src="./public/cat_demo.svg" alt="Cat drawing" width="200" />
+      <strong>Customer journey map of a banking app</strong><br />
+      <p><strong>Prompt:</strong> Draw a customer journey map for a mobile banking app across five stages (discover, sign up, first payment, everyday use, get help), with the customer's actions, touchpoints, feelings and pain points in each stage, and an opportunity for each pain point.</p>
+      <p><strong>Model:</strong> Claude Opus 5.5, in Claude Code with the MCP server</p>
+      <img src="./public/gallery/journey-map.svg" alt="Customer journey map of a banking app" width="400" />
     </td>
   </tr>
 </table>
 </div>
+
+More examples, each with its prompt and model, are in the **[gallery](https://next-ai-drawio.jiang.jp/en/gallery)**.
 
 ## Use it
 
@@ -121,15 +134,11 @@ It is also a plugin in the Claude Code community marketplace (Claude Code 2.1.27
 
 Then ask the AI for "a flowchart of user authentication with login, MFA and session management" and the diagram appears in your browser as it is drawn. The MCP server has most of the web app's drawing features:
 
--   The same drawing rules and icon libraries (AWS, Azure, GCP, Kubernetes and more)
--   The preview is the same canvas as the web app: the AI's changes are outlined, one Ctrl+Z takes them back, and the AI can read the shapes you select
--   The draw.io editor ships inside the package, so after install the preview works offline (`DRAWIO_BASE_URL` points it at an external draw.io instead)
--   A screenshot tool, so the AI can look at the rendered diagram and fix it
--   Version history, multi-page diagrams, and download as `.drawio`, `.png`, `.svg` or `.drawio.svg`
--   Auto-save to `~/.next-ai-drawio/`, so a diagram survives a restart
--   Ask the AI to undo, and keep your own drawing rules in `~/.next-ai-drawio/instructions.md`
+-   The same drawing rules, icon libraries (AWS, Azure, GCP, Kubernetes and more) and canvas as the web app: the AI's changes are outlined, one Ctrl+Z takes them back, and the AI reads the shapes you select
+-   A screenshot tool, so the AI looks at the rendered diagram and fixes it
+-   Version history, several pages, export as `.drawio`, `.png`, `.svg` or `.drawio.svg`, and auto-save to `~/.next-ai-drawio/`; the draw.io editor ships inside the package, so the preview works offline
 
-See the [MCP server README](./packages/mcp-server/README.md) for VS Code, Cursor and other client configurations, and for [how it compares with other draw.io MCP servers](./packages/mcp-server/README.md#choosing-a-drawio-mcp-server).
+The [MCP server page](https://next-ai-drawio.jiang.jp/en/mcp) has the setup for Codex, VS Code, Cursor and other clients, every tool, and how it compares with other draw.io MCP servers.
 
 ### Compared with draw.io's built-in AI
 

@@ -198,6 +198,16 @@ test.describe("Workspace", () => {
         await expect(docs).toHaveCount(0)
     })
 
+    test("a prompt in the address fills the chat input and leaves the address", async ({
+        page,
+    }) => {
+        await openPage(page, { path: "/en?prompt=Draw%20a%20mind%20map" })
+        await expect(getChatInput(page)).toHaveValue("Draw a mind map")
+        await expect(page).not.toHaveURL(/prompt=/)
+        // Nothing was sent: the start screen is still there
+        await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
+    })
+
     test("each AI change becomes a version card; the latest undoes and redoes it", async ({
         page,
     }) => {

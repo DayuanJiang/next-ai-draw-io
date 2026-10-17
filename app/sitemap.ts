@@ -11,6 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { path: "", locales: i18n.locales },
         { path: "/about", locales: i18n.locales },
         { path: "/mcp", locales: i18n.locales },
+        { path: "/gallery", locales: i18n.locales },
         ...DOCS_NAV.flatMap((group) => group.files).map((file) => ({
             path: docsPath(file),
             locales: i18n.locales.filter(

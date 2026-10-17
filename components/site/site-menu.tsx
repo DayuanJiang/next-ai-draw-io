@@ -3,7 +3,7 @@
 import { Menu, X } from "lucide-react"
 import { type ReactNode, useEffect, useId, useRef, useState } from "react"
 
-/** The header's links on a phone, in a panel under the header */
+/** The header's links below 1024 px, in a panel under the header */
 export function SiteMenu({
     label,
     children,
@@ -40,7 +40,7 @@ export function SiteMenu({
     }, [open])
 
     return (
-        <div ref={menu} className="md:hidden">
+        <div ref={menu} className="lg:hidden">
             <button
                 ref={button}
                 type="button"

@@ -251,7 +251,13 @@ export default async function About({ params }: Props) {
                         {t.examplesHeading}
                     </h2>
                     <p className="mt-2 text-[15px] text-muted-foreground">
-                        {t.examplesIntro}
+                        {t.examplesIntro}{" "}
+                        <Link
+                            href={`/${lang}/gallery`}
+                            className="font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+                        >
+                            {t.examplesMore}
+                        </Link>
                     </p>
                     <div className="mt-8 grid gap-5 md:grid-cols-2">
                         <Example

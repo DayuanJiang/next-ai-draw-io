@@ -20,6 +20,7 @@ export type SiteTexts = {
     nav: {
         docs: string
         mcp: string
+        gallery: string
         openEditor: string
         language: string
         /** The button that opens the links on a phone */
@@ -52,6 +53,7 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
         nav: {
             docs: "Docs",
             mcp: "MCP server",
+            gallery: "Gallery",
             openEditor: "Open the editor",
             language: "Language",
             menu: "Menu",
@@ -81,6 +83,7 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
         nav: {
             docs: "文档",
             mcp: "MCP 服务器",
+            gallery: "图库",
             openEditor: "打开编辑器",
             language: "语言",
             menu: "菜单",
@@ -110,6 +113,7 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
         nav: {
             docs: "ドキュメント",
             mcp: "MCP サーバー",
+            gallery: "ギャラリー",
             openEditor: "エディタを開く",
             language: "言語",
             menu: "メニュー",
@@ -139,6 +143,7 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
         nav: {
             docs: "文件",
             mcp: "MCP 伺服器",
+            gallery: "圖庫",
             openEditor: "開啟編輯器",
             language: "語言",
             menu: "選單",
