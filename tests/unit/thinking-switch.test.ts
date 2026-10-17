@@ -104,6 +104,23 @@ describe("applyThinkingSwitch", () => {
         })
     })
 
+    // BEDROCK_REASONING_EFFORT alone (for Nova) gives Claude a config
+    // without a budget, which would not think at all
+    it("gives Claude a budget when the environment's config has none", () => {
+        expect(
+            applyThinkingSwitch(
+                { bedrock: { reasoningConfig: { type: "enabled" } } },
+                "bedrock",
+                "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                true,
+            ),
+        ).toEqual({
+            bedrock: {
+                reasoningConfig: { type: "enabled", budgetTokens: 1024 },
+            },
+        })
+    })
+
     it("asks newer Claude models for adaptive thinking", () => {
         expect(
             applyThinkingSwitch(

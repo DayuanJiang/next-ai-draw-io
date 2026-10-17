@@ -492,12 +492,14 @@ export function applyThinkingSwitch(
             const key = provider === "bedrock" ? "bedrock" : "anthropic"
             const field = key === "bedrock" ? "reasoningConfig" : "thinking"
             const { [field]: fromEnv, ...rest } = options[key] ?? {}
-            // Opus 4.7 and later return no thinking text unless asked to
-            const on =
-                fromEnv ??
-                (kind === "adaptive"
-                    ? { type: "adaptive", display: "summarized" }
-                    : { type: "enabled", budgetTokens: 1024 })
+            // The environment's budget if it set one (BEDROCK_REASONING_EFFORT
+            // alone gives Claude a config without one, which thinks not at
+            // all). Opus 4.7 and later return no thinking text unless asked to.
+            const on = fromEnv?.budgetTokens
+                ? fromEnv
+                : kind === "adaptive"
+                  ? { type: "adaptive", display: "summarized" }
+                  : { type: "enabled", budgetTokens: 1024 }
             // Claude Sonnet 5 and Opus 5 think when the request says
             // nothing, so off is said explicitly. Bedrock's SDK does not
             // send it for Claude, so it goes in the request fields.
