@@ -186,7 +186,7 @@ export default async function DocsPage({ params }: Props) {
                 ]}
             />
             <div className="border-b border-border">
-                <SiteHeader lang={lang} current="docs" wide />
+                <SiteHeader lang={lang} current="docs" />
             </div>
             {/* Below 1024 px the pages open from a bar under the header */}
             <details
@@ -208,7 +208,7 @@ export default async function DocsPage({ params }: Props) {
                 </nav>
             </details>
             {/* Below 1280 px the page's headings give their room to the text */}
-            <div className="mx-auto grid max-w-[1440px] px-5 md:px-8 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-12 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
+            <div className="mx-auto grid max-w-7xl px-5 md:px-8 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-12 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
                 {/* Pages */}
                 <nav className="sticky top-0 max-h-screen self-start overflow-y-auto py-8 text-[14px] max-lg:hidden">
                     <PageList lang={lang} file={file} />

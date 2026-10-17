@@ -8,16 +8,13 @@ import { SiteMenu } from "./site-menu"
 import { GITHUB_URL, SITE_TEXTS } from "./site-texts"
 import { ThemeToggle } from "./theme-toggle"
 
-/** The bar at the top of the landing, MCP and docs pages */
+/** The bar at the top of the landing, MCP and docs pages, the same on each */
 export async function SiteHeader({
     lang,
     current,
-    wide,
 }: {
     lang: Locale
     current?: "docs" | "mcp"
-    /** The docs use the whole width */
-    wide?: boolean
 }) {
     const t = SITE_TEXTS[lang].nav
     const stars = await githubStars()
@@ -34,9 +31,7 @@ export async function SiteHeader({
     const row = (page?: "docs" | "mcp") =>
         `flex items-center gap-2.5 border-b border-border py-3 ${current && current === page ? "font-medium" : ""}`
     return (
-        <header
-            className={`relative mx-auto flex items-center justify-between gap-6 px-5 py-3 md:px-8 ${wide ? "max-w-[1440px]" : "max-w-7xl"}`}
-        >
+        <header className="relative mx-auto flex max-w-7xl items-center justify-between gap-6 px-5 py-3 md:px-8">
             <Link
                 href={`/${lang}/about`}
                 className="flex shrink-0 items-center gap-2.5"
