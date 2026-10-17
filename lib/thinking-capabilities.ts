@@ -18,8 +18,9 @@ export type ThinkingSwitch =
     | "deepseek"
 
 /**
- * Claude 3.7 and 4 to 4.5 think with a budget, 4.6 and later and the 5
- * models adaptively. Later 5.x models always think, so they get no switch.
+ * Claude 3.7 and 4 to 4.5 think with a budget, 4.6 and later, Opus 5,
+ * Sonnet 5 and Haiku 5.5 adaptively. Opus 5.5, Sonnet 5.5 and Fable always
+ * think, so they get no switch.
  */
 function claudeSwitch(id: string): ThinkingSwitch | undefined {
     if (id.includes("claude-3-7-sonnet")) return "budget"
@@ -28,7 +29,8 @@ function claudeSwitch(id: string): ThinkingSwitch | undefined {
     if (!match) return undefined
     const [, family, major, minor = "0"] = match
     if (major === "4") return Number(minor) <= 5 ? "budget" : "adaptive"
-    if (major === "5" && minor === "0" && family !== "haiku") return "adaptive"
+    if (major === "5" && (minor === "0" || family === "haiku"))
+        return "adaptive"
     return undefined
 }
 
@@ -44,12 +46,15 @@ export function thinkingSwitchOf(
     const id = modelId.toLowerCase()
     switch (provider) {
         case "openai":
-        case "azure":
-            // GPT-5.1 and later 5.x accept "none"; GPT-5, the Pro and
-            // Codex models and the chat aliases do not
-            return /^gpt-5\.[1-9]/.test(id) && !/-(pro|codex|chat)/.test(id)
-                ? "effort"
-                : undefined
+        case "azure": {
+            // GPT-5.1 and later 5.x, GPT-6 Sol and Luna accept "none";
+            // GPT-5, the other GPT-6 models, the Pro and Codex models and
+            // the chat aliases do not
+            const gpt5 =
+                /^gpt-5\.[1-9]/.test(id) && !/-(pro|codex|chat)/.test(id)
+            const gpt6 = id === "gpt-6-sol" || id === "gpt-6-luna"
+            return gpt5 || gpt6 ? "effort" : undefined
+        }
         case "anthropic":
             return claudeSwitch(id)
         case "google":
