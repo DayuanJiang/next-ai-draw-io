@@ -39,12 +39,36 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isTextFile } from "@/lib/pdf-utils"
 import { modKey } from "@/lib/platform"
+import type { FlattenedModel } from "@/lib/types/model-config"
 import { extractUrlContent } from "@/lib/url-utils"
 import { cn } from "@/lib/utils"
 import { isSendKey, useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
 import { ATTACHMENT_ACCEPT, isDiagramFile, validateFiles } from "./attachments"
 import { useChatEngine } from "./chat-engine"
+
+/**
+ * An image sent to a model known not to read images fails with an error
+ * that often does not say why (issue #656): say so when one is attached,
+ * or when the model changes while one is
+ */
+async function warnIfNoImageInput(
+    attached: File[],
+    model: FlattenedModel | undefined,
+    dict: any,
+) {
+    if (!model) return
+    if (!attached.some((f) => f.type.startsWith("image/") && !isTextFile(f)))
+        return
+    const { getModelInfo } = await import("@/lib/model-catalog")
+    if (getModelInfo(model.provider, model.modelId)?.images !== false) return
+    toast.warning(
+        formatMessage(dict.errors.imagesUnsupportedModel, {
+            model: model.modelId,
+        }),
+        { id: "images-unsupported", duration: 8000 },
+    )
+}
 
 function showValidationErrors(errors: string[], dict: any) {
     if (errors.length === 0) return
@@ -226,28 +250,23 @@ export function Composer({
         )
         showValidationErrors(errors, dict)
         if (validFiles.length > 0) setFiles([...files, ...validFiles])
-        warnIfNoImageInput(validFiles)
+        warnIfNoImageInput(validFiles, selectedModel, dict)
     }
 
-    // An image sent to a model known not to read images fails with an
-    // error that often does not say why (issue #656): say so on attaching
-    const warnIfNoImageInput = async (added: File[]) => {
-        if (!added.some((f) => f.type.startsWith("image/") && !isTextFile(f)))
-            return
-        const model = modelConfig.models.find(
-            (m) => m.id === modelConfig.selectedModelId,
-        )
-        if (!model) return
-        const { getModelInfo } = await import("@/lib/model-catalog")
-        if (getModelInfo(model.provider, model.modelId)?.images !== false)
-            return
-        toast.warning(
-            formatMessage(dict.errors.imagesUnsupportedModel, {
-                model: model.modelId,
-            }),
-            { id: "images-unsupported", duration: 8000 },
-        )
-    }
+    // Switching to a model that cannot read images while one is attached
+    // warns too. The attached files are read from a ref, so attaching is
+    // not checked a second time here.
+    const selectedModel = modelConfig.models.find(
+        (m) => m.id === modelConfig.selectedModelId,
+    )
+    const filesRef = useRef(files)
+    filesRef.current = files
+    const checkedModelIdRef = useRef(modelConfig.selectedModelId)
+    useEffect(() => {
+        if (checkedModelIdRef.current === selectedModel?.id) return
+        checkedModelIdRef.current = selectedModel?.id
+        warnIfNoImageInput(filesRef.current, selectedModel, dict)
+    }, [selectedModel, dict])
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // Enter that confirms an IME candidate must not send the message

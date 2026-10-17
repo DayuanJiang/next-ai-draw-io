@@ -190,4 +190,47 @@ test.describe("File Upload", () => {
         await page.waitForTimeout(1000)
         await expect(page.getByText("can't read images")).toHaveCount(0)
     })
+
+    test("warns when the model changes to one that cannot read the attached image", async ({
+        page,
+    }) => {
+        await openApp(page, {
+            config: {
+                version: 1,
+                selectedModelId: "m2",
+                providers: [
+                    {
+                        id: "p1",
+                        provider: "glm",
+                        apiKey: "k1",
+                        models: [
+                            { id: "m1", modelId: "glm-4.7" },
+                            { id: "m2", modelId: "glm-4.6v" },
+                        ],
+                    },
+                ],
+            },
+        })
+        const warning = page.getByText("glm-4.7 can't read images")
+        // Without an image, switching says nothing
+        await page.getByTestId("model-selector").click()
+        await page.getByRole("option", { name: /glm-4\.7/ }).click()
+        await page.waitForTimeout(1000)
+        await expect(warning).toHaveCount(0)
+
+        await page.getByTestId("model-selector").click()
+        await page.getByRole("option", { name: /glm-4\.6v/ }).click()
+        await getAttachmentInput(page).setInputFiles({
+            name: "photo.png",
+            mimeType: "image/png",
+            buffer: ONE_PIXEL_PNG,
+        })
+        await expect(page.getByAltText("photo.png")).toBeVisible()
+        await page.waitForTimeout(1000)
+        await expect(warning).toHaveCount(0)
+
+        await page.getByTestId("model-selector").click()
+        await page.getByRole("option", { name: /glm-4\.7/ }).click()
+        await expect(warning).toBeVisible({ timeout: 5000 })
+    })
 })
