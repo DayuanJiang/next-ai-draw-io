@@ -186,6 +186,19 @@ describe("POST /api/provider-models", () => {
         expect(res.status).toBe(400)
     })
 
+    it("refuses a key or URL that is not text", async () => {
+        const fetchMock = vi.fn()
+        vi.stubGlobal("fetch", fetchMock)
+        for (const extra of [
+            { apiKey: {} },
+            { apiKey: "k", baseUrl: ["https://a.example"] },
+        ]) {
+            const res = await post({ provider: "gateway", ...extra })
+            expect(res.status).toBe(400)
+        }
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+
     it("explains a failure with the error hints", async () => {
         vi.stubGlobal("fetch", answer({}, 401).fn)
         const res = await post({ provider: "deepseek", apiKey: "k" })
