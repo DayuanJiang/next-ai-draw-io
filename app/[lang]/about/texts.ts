@@ -1,7 +1,5 @@
 import type { Locale } from "@/lib/i18n/config"
 
-export type ExampleId = "resnet50" | "rag" | "auth" | "scrum" | "inno"
-
 export type LandingTexts = {
     title: string
     description: string
@@ -24,7 +22,8 @@ export type LandingTexts = {
     examplesMore: string
     /** With its colon, which differs between Latin and CJK text */
     promptLabel: string
-    examples: Record<ExampleId, { title: string; alt: string }>
+    /** Before the name of the model that drew an example */
+    modelLabel: string
     moreHeading: string
     more: { title: string; text: string }[]
     /** The link after the last item, to the self-hosting docs */
@@ -74,25 +73,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         examplesIntro: "Prompts and the diagrams the AI drew from them.",
         examplesMore: "See all examples in the gallery",
         promptLabel: "Prompt:",
-        examples: {
-            resnet50: {
-                title: "Animated ResNet50 model architecture",
-                alt: "Architecture diagram of the ResNet50 model",
-            },
-            rag: {
-                title: "RAG for a chat application",
-                alt: "RAG architecture diagram",
-            },
-            auth: {
-                title: "Authentication with React and AWS",
-                alt: "Authentication architecture diagram",
-            },
-            scrum: {
-                title: "Agile Scrum process",
-                alt: "Agile Scrum diagram",
-            },
-            inno: { title: "Open innovation", alt: "Open innovation diagram" },
-        },
+        modelLabel: "Model:",
         moreHeading: "Also in the editor",
         more: [
             {
@@ -165,16 +146,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         examplesIntro: "提示词，以及 AI 根据它们画出的图表。",
         examplesMore: "在图库里查看全部示例",
         promptLabel: "提示词：",
-        examples: {
-            resnet50: {
-                title: "ResNet50 模型架构动画",
-                alt: "ResNet50 模型架构图",
-            },
-            rag: { title: "聊天应用的 RAG 架构", alt: "RAG 架构图" },
-            auth: { title: "React 和 AWS 认证流程", alt: "认证架构图" },
-            scrum: { title: "敏捷 Scrum 流程", alt: "敏捷 Scrum 流程图" },
-            inno: { title: "开放式创新", alt: "开放式创新图" },
-        },
+        modelLabel: "模型：",
         moreHeading: "编辑器里还有",
         more: [
             {
@@ -247,28 +219,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         examplesIntro: "プロンプトと、そこから AI が描いた図です。",
         examplesMore: "ギャラリーですべての例を見る",
         promptLabel: "プロンプト：",
-        examples: {
-            resnet50: {
-                title: "ResNet50 モデルアーキテクチャのアニメーション",
-                alt: "ResNet50 モデルのアーキテクチャ図",
-            },
-            rag: {
-                title: "チャットアプリの RAG 構成",
-                alt: "RAG アーキテクチャ図",
-            },
-            auth: {
-                title: "React と AWS による認証",
-                alt: "認証アーキテクチャ図",
-            },
-            scrum: {
-                title: "アジャイルスクラムのプロセス",
-                alt: "アジャイルスクラム図",
-            },
-            inno: {
-                title: "オープンイノベーション",
-                alt: "オープンイノベーション図",
-            },
-        },
+        modelLabel: "モデル：",
         moreHeading: "エディタのその他の機能",
         more: [
             {
@@ -341,16 +292,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         examplesIntro: "提示詞，以及 AI 根據它們畫出的圖表。",
         examplesMore: "在圖庫裡查看全部範例",
         promptLabel: "提示詞：",
-        examples: {
-            resnet50: {
-                title: "ResNet50 模型架構動畫",
-                alt: "ResNet50 模型架構圖",
-            },
-            rag: { title: "聊天應用的 RAG 架構", alt: "RAG 架構圖" },
-            auth: { title: "React 和 AWS 認證流程", alt: "認證架構圖" },
-            scrum: { title: "敏捷 Scrum 流程", alt: "敏捷 Scrum 流程圖" },
-            inno: { title: "開放式創新", alt: "開放式創新圖" },
-        },
+        modelLabel: "模型：",
         moreHeading: "編輯器裡還有",
         more: [
             {

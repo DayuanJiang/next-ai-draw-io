@@ -2,12 +2,15 @@ import "@/components/site/site.css"
 import { Globe, Monitor, SquareTerminal } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
-import type { ReactNode } from "react"
 import Image from "@/components/image-with-basepath"
 import { ProviderLogo } from "@/components/provider-logo"
 import { CopyCommand } from "@/components/site/copy-command"
 import { DemoPlayer } from "@/components/site/demo-player"
 import { demoTexts } from "@/components/site/demo-texts"
+import {
+    GALLERY_ITEMS,
+    type GalleryItem,
+} from "@/components/site/gallery-items"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import {
@@ -20,62 +23,17 @@ import type { Locale } from "@/lib/i18n/config"
 import { hasLocale } from "@/lib/i18n/dictionaries"
 import { PROVIDER_NAMES, PROVIDERS } from "@/lib/providers"
 import { localeAlternates, OG_IMAGE, OG_LOCALE } from "@/lib/seo"
-import { type ExampleId, TEXTS } from "./texts"
+import { TEXTS } from "./texts"
 
-// The example prompts stay in English in every language
-const EXAMPLES: { id: ExampleId; src: string; prompt: ReactNode }[] = [
-    {
-        id: "resnet50",
-        src: "/resnet50.svg",
-        prompt: (
-            <>
-                Give me an <strong>animated</strong> architecture diagram of the
-                ResNet50 model.
-            </>
-        ),
-    },
-    {
-        id: "rag",
-        src: "/rag_prod.svg",
-        prompt: (
-            <>
-                Generate a RAG architecture diagram for{" "}
-                <strong>chat application</strong>. Use connected diagram for
-                data ingestion
-            </>
-        ),
-    },
-    {
-        id: "auth",
-        src: "/auth.svg",
-        prompt: (
-            <>
-                Generate authentication process using React with{" "}
-                <strong>AWS</strong>. Use Serverless architecture.
-            </>
-        ),
-    },
-    {
-        id: "scrum",
-        src: "/agile_scrum.svg",
-        prompt: (
-            <>
-                Generate agile scrum workflow diagram for software development
-                team.
-            </>
-        ),
-    },
-    {
-        id: "inno",
-        src: "/inno.svg",
-        prompt: (
-            <>
-                Create visualization of Henry Chesbrough&apos;s Open Innovation
-                model.
-            </>
-        ),
-    },
-]
+// Five of the gallery's diagrams; the first spans both columns. Their
+// prompts stay in English in every language.
+const EXAMPLES = [
+    "aws-ha",
+    "transformer",
+    "er-shop",
+    "bpmn-expense",
+    "journey-map",
+].flatMap((id) => GALLERY_ITEMS.filter((item) => item.id === id))
 
 type Props = { params: Promise<{ lang: string }> }
 
@@ -260,18 +218,13 @@ export default async function About({ params }: Props) {
                         </Link>
                     </p>
                     <div className="mt-8 grid gap-5 md:grid-cols-2">
-                        <Example
-                            example={hero}
-                            texts={t.examples[hero.id]}
-                            promptLabel={t.promptLabel}
-                            wide
-                        />
+                        <Example example={hero} lang={lang} labels={t} wide />
                         {grid.map((example) => (
                             <Example
                                 key={example.id}
                                 example={example}
-                                texts={t.examples[example.id]}
-                                promptLabel={t.promptLabel}
+                                lang={lang}
+                                labels={t}
                             />
                         ))}
                     </div>
@@ -371,13 +324,13 @@ export default async function About({ params }: Props) {
 
 function Example({
     example,
-    texts,
-    promptLabel,
+    lang,
+    labels,
     wide,
 }: {
-    example: (typeof EXAMPLES)[number]
-    texts: { title: string; alt: string }
-    promptLabel: string
+    example: GalleryItem
+    lang: Locale
+    labels: { promptLabel: string; modelLabel: string }
     /** The first example spans both columns */
     wide?: boolean
 }) {
@@ -390,7 +343,7 @@ function Example({
             >
                 <Image
                     src={example.src}
-                    alt={texts.alt}
+                    alt={example.title[lang]}
                     width={480}
                     height={360}
                     className="max-h-full w-auto max-w-full object-contain"
@@ -401,12 +354,20 @@ function Example({
                     wide ? "self-center px-5 py-4 md:px-8 md:py-6" : "px-5 py-4"
                 }
             >
-                <h3 className="text-[15.5px] font-semibold">{texts.title}</h3>
+                <h3 className="text-[15.5px] font-semibold">
+                    {example.title[lang]}
+                </h3>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
                     <span className="font-medium text-foreground">
-                        {promptLabel}
+                        {labels.promptLabel}
                     </span>{" "}
-                    {example.prompt}
+                    <span lang="en">{example.prompt}</span>
+                </p>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                        {labels.modelLabel}
+                    </span>{" "}
+                    {example.model}
                 </p>
             </figcaption>
         </figure>
