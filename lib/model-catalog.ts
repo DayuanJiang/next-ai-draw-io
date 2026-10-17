@@ -114,15 +114,18 @@ export function estimateCost(
     // which have prices of their own
     const cacheRead = usage.inputTokenDetails.cacheReadTokens ?? 0
     const cacheWrite = usage.inputTokenDetails.cacheWriteTokens ?? 0
-    // A reasoning price is the output price of an answer that thought: Qwen
-    // bills its whole output at it
-    const thought = (usage.outputTokenDetails.reasoningTokens ?? 0) > 0
-    const output = thought ? (price.reasoning ?? price.output) : price.output
+    // A reasoning price covers the thinking tokens, except on Qwen's own API,
+    // which bills the whole output of an answer that thought at it
+    const output = usage.outputTokens ?? 0
+    const thinking = usage.outputTokenDetails.reasoningTokens ?? 0
+    const atReasoning =
+        provider === "qwen" ? (thinking > 0 ? output : 0) : thinking
     return (
         ((input - cacheRead - cacheWrite) * price.input +
             cacheRead * (price.cacheRead ?? price.input) +
             cacheWrite * (price.cacheWrite ?? price.input) +
-            (usage.outputTokens ?? 0) * output) /
+            (output - atReasoning) * price.output +
+            atReasoning * (price.reasoning ?? price.output)) /
         1_000_000
     )
 }

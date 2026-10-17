@@ -41,6 +41,12 @@ vi.mock("@/lib/model-catalog.json", () => {
                     cost: { input: 1, output: 2, reasoning: 8 },
                 },
             },
+            openrouter: {
+                "perplexity/sonar-deep-research": {
+                    ...info,
+                    cost: { input: 2, output: 8, reasoning: 3 },
+                },
+            },
             ollama: { "gpt-oss": { ...info, cost: { input: 1, output: 1 } } },
         },
     }
@@ -106,7 +112,18 @@ describe("estimateCost", () => {
         ).toBeCloseTo((20000 * 1 + 1000 * 2) / 1e6, 12)
     })
 
-    it("prices an answer that thought at the thinking price, all of it", () => {
+    it("prices the thinking tokens at their own price", () => {
+        expect(
+            estimateCost(
+                "openrouter",
+                "perplexity/sonar-deep-research",
+                usage(1000, 1000, { reasoning: 800 }),
+            ),
+        ).toBeCloseTo((1000 * 2 + 200 * 8 + 800 * 3) / 1e6, 12)
+    })
+
+    // Qwen's own API bills thinking mode's whole output at the higher price
+    it("prices a Qwen answer that thought at the thinking price, all of it", () => {
         expect(
             estimateCost(
                 "qwen",
