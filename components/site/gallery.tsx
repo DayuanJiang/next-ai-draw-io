@@ -14,7 +14,7 @@ import {
     type GalleryItem,
 } from "./gallery-items"
 
-/** The docs gallery: a filter by kind, the cards, and one diagram enlarged */
+/** The gallery page: a filter by kind, the cards, and one diagram enlarged */
 export function Gallery({ lang }: { lang: Locale }) {
     const t = GALLERY_TEXTS[lang]
     const [category, setCategory] = useState<GalleryCategory | null>(null)
@@ -48,7 +48,7 @@ export function Gallery({ lang }: { lang: Locale }) {
                     </button>
                 ))}
             </div>
-            <ul className="mt-5 grid gap-5 sm:grid-cols-2">
+            <ul className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {items.map((item) => (
                     <li key={item.id}>
                         <Card

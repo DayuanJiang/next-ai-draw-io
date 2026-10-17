@@ -37,16 +37,13 @@ export const DOCS_NAV: { group: Record<Locale, string>; files: string[] }[] = [
             ja: "エディタの使い方",
             "zh-Hant": "使用編輯器",
         },
-        files: ["editor", "versions", "settings"],
-    },
-    {
-        group: {
-            en: "Use cases",
-            zh: "使用场景",
-            ja: "ユースケース",
-            "zh-Hant": "使用情境",
-        },
-        files: ["gallery", "aws-architecture", "flowcharts"],
+        files: [
+            "editor",
+            "versions",
+            "settings",
+            "aws-architecture",
+            "flowcharts",
+        ],
     },
     {
         group: {

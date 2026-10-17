@@ -20,6 +20,8 @@ export type LandingTexts = {
     }
     examplesHeading: string
     examplesIntro: string
+    /** The link to the gallery page */
+    examplesMore: string
     /** With its colon, which differs between Latin and CJK text */
     promptLabel: string
     examples: Record<ExampleId, { title: string; alt: string }>
@@ -70,6 +72,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         },
         examplesHeading: "Examples",
         examplesIntro: "Prompts and the diagrams the AI drew from them.",
+        examplesMore: "See all examples in the gallery",
         promptLabel: "Prompt:",
         examples: {
             resnet50: {
@@ -160,6 +163,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         },
         examplesHeading: "示例",
         examplesIntro: "提示词，以及 AI 根据它们画出的图表。",
+        examplesMore: "在图库里查看全部示例",
         promptLabel: "提示词：",
         examples: {
             resnet50: {
@@ -241,6 +245,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         },
         examplesHeading: "例",
         examplesIntro: "プロンプトと、そこから AI が描いた図です。",
+        examplesMore: "ギャラリーですべての例を見る",
         promptLabel: "プロンプト：",
         examples: {
             resnet50: {
@@ -334,6 +339,7 @@ export const TEXTS: Record<Locale, LandingTexts> = {
         },
         examplesHeading: "範例",
         examplesIntro: "提示詞，以及 AI 根據它們畫出的圖表。",
+        examplesMore: "在圖庫裡查看全部範例",
         promptLabel: "提示詞：",
         examples: {
             resnet50: {
