@@ -4,7 +4,7 @@ When you host Next AI Draw.io yourself, environment variables choose the AI prov
 
 ## Get started
 
-1. Copy `.env.example` to `.env.local`.
+1. Copy `env.example` to `.env.local`.
 2. Set the API key of the provider you chose.
 3. Set `AI_MODEL` to the model you want.
 4. Run `npm run dev`.
@@ -30,14 +30,14 @@ LM Studio and other local OpenAI-compatible servers work the same way. Set the b
 
 ```bash
 ANTHROPIC_API_KEY=your_api_key
-AI_MODEL=claude-sonnet-4-5-20250514
+AI_MODEL=claude-sonnet-4-5-20250929
 ```
 
 You can also sign in with a Bearer token, for example when you go through a gateway that issues OAuth-style tokens:
 
 ```bash
 ANTHROPIC_AUTH_TOKEN=your_auth_token
-AI_MODEL=claude-sonnet-4-5-20250514
+AI_MODEL=claude-sonnet-4-5-20250929
 ```
 
 `ANTHROPIC_API_KEY` is sent as the `x-api-key` header, and `ANTHROPIC_AUTH_TOKEN` is sent as `Authorization: Bearer <token>`. The two cannot be used together, so set only one.
@@ -91,7 +91,7 @@ QWEN_BASE_URL=https://your-custom-endpoint
 
 ```bash
 DOUBAO_API_KEY=your_api_key
-AI_MODEL=doubao-seed-1-8-251215  # or other Doubao model
+AI_MODEL=doubao-seed-1-8-251228  # or other Doubao model
 ```
 
 ### GLM (Zhipu AI)
@@ -198,10 +198,10 @@ SILICONFLOW_API_KEY=your_api_key
 AI_MODEL=deepseek-ai/DeepSeek-V3  # example; use any SiliconFlow model id
 ```
 
-Optionally, set a custom endpoint. Without one, the recommended domain is used:
+Without a base URL, the app uses `https://api.siliconflow.cn/v1`, the endpoint for keys from cloud.siliconflow.cn. If your key comes from the international site, cloud.siliconflow.com, set the .com endpoint:
 
 ```bash
-SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # or https://api.siliconflow.cn/v1
+SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1
 ```
 
 ### ModelScope
@@ -215,6 +215,34 @@ Optionally, set a custom endpoint:
 
 ```bash
 MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
+### Novita AI
+
+```bash
+NOVITA_API_KEY=your_api_key
+AI_MODEL=deepseek/deepseek-v4-pro
+```
+
+Optionally, set a custom endpoint. Without one, `https://api.novita.ai/openai` is used:
+
+```bash
+NOVITA_BASE_URL=https://your-custom-endpoint
+```
+
+### Atlas Cloud
+
+```bash
+ATLASCLOUD_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+The app has no built-in model list for Atlas Cloud. In the Models tab of Settings, it loads the list from Atlas Cloud with your key.
+
+Optionally, set a custom endpoint. Without one, `https://api.atlascloud.ai/v1` is used:
+
+```bash
+ATLASCLOUD_BASE_URL=https://your-custom-endpoint
 ```
 
 ### Qiniu (Qiniu Cloud)
@@ -297,17 +325,21 @@ GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
 
 ### Azure OpenAI
 
+Azure needs either your resource name or your endpoint URL. Set one of the two. If you set both, `AZURE_BASE_URL` is used.
+
+With the resource name:
+
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_RESOURCE_NAME=your-resource-name  # Required: your Azure resource name
+AZURE_RESOURCE_NAME=your-resource-name  # Your Azure resource name
 AI_MODEL=your-deployment-name
 ```
 
-Or give a custom endpoint in place of the resource name:
+Or with the endpoint URL in place of the resource name:
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # Alternative to AZURE_RESOURCE_NAME
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # In place of AZURE_RESOURCE_NAME
 AI_MODEL=your-deployment-name
 ```
 
@@ -317,6 +349,17 @@ Optionally, set the reasoning options:
 AZURE_REASONING_EFFORT=low      # Optional: low, medium, high
 AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
 ```
+
+### EdgeOne Pages (Tencent Cloud)
+
+When you deploy the app on Tencent EdgeOne Pages, it can use the site's own Edge AI function at `/api/edgeai`. This needs no API key and no base URL. With no key to detect, the server cannot pick this provider by itself, so set `AI_PROVIDER`:
+
+```bash
+AI_PROVIDER=edgeone
+AI_MODEL=@tx/deepseek-ai/deepseek-v32
+```
+
+The function accepts `@tx/deepseek-ai/deepseek-v32`, `@tx/deepseek-ai/deepseek-r1-0528` and `@tx/deepseek-ai/deepseek-v3-0324`. If you set `ACCESS_CODE_LIST`, the function checks the access code too.
 
 ### Ollama (local)
 
@@ -390,7 +433,7 @@ This is a quick setup for a single provider. If you only need several models fro
 
 ```bash
 AI_PROVIDER=doubao
-AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+AI_MODEL=doubao-seed-1-8-251228,doubao-seed-1-6-flash-250828,doubao-seed-1-6-251015
 ```
 
 This is a short way to write the same `ai-models.json`. For several providers, or for your own `apiKeyEnv` and `baseUrlEnv`, use the environment variable or the config file.

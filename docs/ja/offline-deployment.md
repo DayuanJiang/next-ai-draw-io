@@ -47,8 +47,12 @@ services:
         - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
     ports: ["3000:3000"]
     env_file: .env
+    volumes:
+      - ./data:/app/data
     depends_on: [drawio]
 ```
+
+`volumes` の項目は、[管理パネル](./admin-panel.md)で保存した設定（`data/settings.json`）をコンテナの外に置くので、コンテナを入れ替えても設定は残ります。
 
 外部の draw.io を使うと、アプリは draw.io 自身のツールバーを使い、次の機能は使えなくなります。
 

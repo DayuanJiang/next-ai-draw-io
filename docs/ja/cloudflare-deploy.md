@@ -7,20 +7,8 @@ Worker は世界中にある Cloudflare のサーバーにデプロイされる�
 ## 必要なもの
 
 - Cloudflare アカウント。基本的なデプロイなら無料プランで十分です。
-- Node.js 18 以降。
-- Wrangler CLI。Cloudflare のコマンドラインツールです。
-
-Wrangler をインストールします。開発依存関係としてインストールして問題ありません。
-
-```bash
-npm install -D wrangler
-```
-
-次に Cloudflare にログインします。
-
-```bash
-npx wrangler login
-```
+- Node.js 22 以降。リポジトリがインストールする Wrangler のバージョンには Node.js 22 が必要で、Next.js 16 には 20.9 以降が必要です。
+- Wrangler CLI。Cloudflare のコマンドラインツールです。リポジトリの開発依存関係に入っているので、`npm install` でインストールされます。
 
 基本的な Workers へのデプロイは無料です。支払い方法の登録が必要なのは、ISR キャッシュのために R2 を有効にする場合だけです。
 
@@ -31,31 +19,39 @@ OpenNext と Wrangler は、Windows 上で直接動かすと完全には信頼�
 - GitHub Codespaces（完全に動作します）
 - WSL（Windows 上で Linux を使えます）
 
-## 依存関係をインストールする
+## 依存関係をインストールしてログインする
 
 ```bash
 npm install
 ```
 
-## 環境変数を設定する
-
-Cloudflare はローカルでのテストに別のファイルを使うので、2 つのファイルに同じ値を入れます。
-
-`.dev.vars` を作成します。Cloudflare がローカルでの実行とデプロイに使うファイルです。
+次に Wrangler で Cloudflare にログインします。
 
 ```bash
-cp env.example .dev.vars
+npx wrangler login
 ```
 
-API キーと設定を入力してください。
+## 環境変数を設定する
 
-`.env.local` もあることを確認します。通常の Next.js の開発で使うファイルです。
+設定を置ける場所は 3 つあり、それぞれ読み込まれるタイミングが違います。
+
+- `.env.local` は、通常の Next.js の開発（`npm run dev`）で使うファイルです。OpenNext のビルドは、`.env.local`、`.env` などの `.env` ファイルの値も Worker のコードにコピーします。これらのファイルの内容は、API キーも含めてすべて、デプロイのときに Worker と一緒にアップロードされます。
+- `.dev.vars` を読み込むのは、自分のコンピューター上の Wrangler だけです。`npm run preview` はその値を自分のコンピューターで動く Worker に渡します。`npm run deploy` はこのファイルをアップロードしません。
+- Cloudflare で Worker に追加したシークレット（Secret）は、デプロイした Worker が読み込みます。同じ名前の値が Cloudflare と `.env.local` の両方にある場合、Worker は Cloudflare の値を使います。
+
+`.env.local` を作成し、API キーと設定を入力してください。
 
 ```bash
 cp env.example .env.local
 ```
 
-こちらにも同じ値を入力してください。
+デプロイした Worker が使う API キーは、初回のデプロイの後に Cloudflare でシークレットとして追加してください。手順は [Worker に API キーを追加する](#worker-に-api-キーを追加する) で説明しています。API キーを Worker のコードに含めたくない場合は、`npm run deploy` を実行する前に `.env.local` から削除してください。`AI_PROVIDER` や `AI_MODEL` のような秘密ではない設定は、`.env.local` に残しておいてかまいません。
+
+`.env.local` に API キーがない状態で自分のコンピューターで Worker をプレビューしたい場合は、API キーを `.dev.vars` に入力してください。このファイルは自分のコンピューターの中だけに置かれます。
+
+```bash
+cp env.example .dev.vars
+```
 
 ## R2 を使うかどうかを選ぶ
 
@@ -154,7 +150,7 @@ npm run deploy
 スクリプトは次の処理を行います。
 
 1. Next.js アプリをビルドする
-2. OpenNext で Cloudflare Worker に変換する
+2. OpenNext で Cloudflare Worker に変換し、`.env.local` などの `.env` ファイルの値を Worker にコピーする
 3. 静的アセットをアップロードする
 4. Worker を公開する
 
@@ -163,6 +159,19 @@ npm run deploy
 ```
 https://<worker-name>.<your-subdomain>.workers.dev
 ```
+
+## Worker に API キーを追加する
+
+デプロイした Worker が使う API キーは、Worker のシークレットとして追加します。プロバイダーが必要とするキー（たとえば `OPENAI_API_KEY`）を、次のどちらかの方法で追加してください。
+
+- Cloudflare ダッシュボードで追加する：**Workers & Pages** を開いて Worker を選び、**Settings**、**Variables and Secrets** の順に開いて **Add** をクリックし、種類に **Secret** を選びます。
+- コマンドラインで追加する：次のコマンドを実行すると、Wrangler が値の入力を求めます。
+
+  ```bash
+  npx wrangler secret put OPENAI_API_KEY
+  ```
+
+ダッシュボードでこれらのキーを追加するときは、種類に Secret を選んでください。`npm run deploy` を実行するたびに、シークレットは残り、ダッシュボードで追加した Text 型の変数は削除されます。`wrangler.jsonc` で `"keep_vars": true` を設定すると、これらの変数も残ります。
 
 ## よくあるエラーを解決する
 

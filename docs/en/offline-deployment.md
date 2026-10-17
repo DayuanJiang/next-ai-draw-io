@@ -47,8 +47,12 @@ services:
         - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
     ports: ["3000:3000"]
     env_file: .env
+    volumes:
+      - ./data:/app/data
     depends_on: [drawio]
 ```
+
+The `volumes` entry keeps the settings you save in the [admin panel](./admin-panel.md) (`data/settings.json`) outside the container, so they stay when the container is replaced.
 
 With an external draw.io, the app uses draw.io's own toolbar, and these features are off:
 

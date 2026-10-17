@@ -7,20 +7,8 @@ Worker 会部署到 Cloudflare 遍布全球的服务器上，所以延迟极低�
 ## 需要准备什么
 
 - 一个 Cloudflare 账户。基本部署用免费版就够了。
-- Node.js 18 或更高版本。
-- Wrangler CLI，也就是 Cloudflare 的命令行工具。
-
-安装 Wrangler，作为开发依赖安装即可：
-
-```bash
-npm install -D wrangler
-```
-
-然后登录 Cloudflare：
-
-```bash
-npx wrangler login
-```
+- Node.js 22 或更高版本。仓库安装的 Wrangler 版本需要 Node.js 22，Next.js 16 需要 20.9 或更高版本。
+- Wrangler CLI，也就是 Cloudflare 的命令行工具。仓库已经把它列为开发依赖，运行 `npm install` 时会一起安装。
 
 基本的 Workers 部署是免费的。只有在您想启用 R2 进行 ISR 缓存时，才需要绑定支付方式。
 
@@ -31,31 +19,39 @@ OpenNext 和 Wrangler 直接在 Windows 上运行时并不完全可靠。在 Win
 - GitHub Codespaces，可以完美运行
 - WSL，让您在 Windows 上使用 Linux
 
-## 安装依赖
+## 安装依赖并登录
 
 ```bash
 npm install
 ```
 
-## 配置环境变量
-
-Cloudflare 在本地测试时使用另一个文件，所以您要在两个文件里填入相同的值。
-
-创建 `.dev.vars`。Cloudflare 在本地运行和部署时会用到它：
+然后用 Wrangler 登录 Cloudflare：
 
 ```bash
-cp env.example .dev.vars
+npx wrangler login
 ```
 
-填入您的 API Key 和配置信息。
+## 配置环境变量
 
-确保 `.env.local` 也存在。常规的 Next.js 开发会用到它：
+配置可以放在三个地方，它们在不同的时候被读取：
+
+- `.env.local` 是常规 Next.js 开发（`npm run dev`）使用的文件。OpenNext 构建时还会把 `.env.local`、`.env` 以及其他 `.env` 文件里的值复制进 Worker 的代码。这些文件里的所有内容，包括 API Key，都会在部署时随 Worker 一起上传。
+- `.dev.vars` 只由您电脑上的 Wrangler 读取。`npm run preview` 会把其中的值交给在您电脑上运行的 Worker，`npm run deploy` 不会上传这个文件。
+- 您在 Cloudflare 中为 Worker 添加的密钥（Secret）由部署后的 Worker 读取。同一个名称在 Cloudflare 和 `.env.local` 中都有值时，Worker 使用 Cloudflare 中的值。
+
+创建 `.env.local`，填入您的 API Key 和配置信息：
 
 ```bash
 cp env.example .env.local
 ```
 
-在这里填入相同的值。
+部署后的 Worker 所用的 API Key，请在首次部署之后作为密钥添加到 Cloudflare 中，步骤见[为 Worker 添加 API Key](#为-worker-添加-api-key)。如果您不希望 API Key 出现在 Worker 的代码里，请在运行 `npm run deploy` 之前把它们从 `.env.local` 中删掉。`AI_PROVIDER`、`AI_MODEL` 这类不含密钥的配置可以留在 `.env.local` 中。
+
+如果 `.env.local` 中没有 API Key，您又想在自己的电脑上预览 Worker，可以把 API Key 填进 `.dev.vars`。这个文件只留在您的电脑上：
+
+```bash
+cp env.example .dev.vars
+```
 
 ## 选择是否使用 R2
 
@@ -154,7 +150,7 @@ npm run deploy
 这个脚本会：
 
 1. 构建 Next.js 应用
-2. 通过 OpenNext 把它转换为 Cloudflare Worker
+2. 通过 OpenNext 把它转换为 Cloudflare Worker，并把 `.env.local` 等 `.env` 文件里的值复制进 Worker
 3. 上传静态资源
 4. 发布 Worker
 
@@ -163,6 +159,19 @@ npm run deploy
 ```
 https://<worker-name>.<your-subdomain>.workers.dev
 ```
+
+## 为 Worker 添加 API Key
+
+部署后的 Worker 所用的 API Key，请作为密钥添加到 Worker 中。您的服务商需要的每个 Key（例如 `OPENAI_API_KEY`）都可以用以下任一方式添加：
+
+- 在 Cloudflare 控制台中：打开 **Workers & Pages**，选择您的 Worker，打开 **Settings**，再打开 **Variables and Secrets**，点击 **Add**，类型选择 **Secret**。
+- 在命令行中运行下面的命令，Wrangler 会提示您输入值：
+
+  ```bash
+  npx wrangler secret put OPENAI_API_KEY
+  ```
+
+在控制台中添加这些 Key 时，请选择 Secret 类型。每次运行 `npm run deploy` 都会保留密钥，同时删除在控制台中添加的 Text 类型变量。在 `wrangler.jsonc` 中设置 `"keep_vars": true`，这些变量也会被保留。
 
 ## 解决常见错误
 

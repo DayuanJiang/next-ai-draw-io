@@ -4,7 +4,7 @@
 
 ## 快速开始
 
-1. 将 `.env.example` 复制为 `.env.local`。
+1. 将 `env.example` 复制为 `.env.local`。
 2. 设置所选服务商的 API Key。
 3. 把 `AI_MODEL` 设为您想用的模型。
 4. 运行 `npm run dev`。
@@ -30,14 +30,14 @@ LM Studio 等本地 OpenAI 兼容服务也用同样的方式。把基础 URL 设
 
 ```bash
 ANTHROPIC_API_KEY=your_api_key
-AI_MODEL=claude-sonnet-4-5-20250514
+AI_MODEL=claude-sonnet-4-5-20250929
 ```
 
 也可以用 Bearer 令牌登录，例如通过会下发 OAuth 风格令牌的网关时：
 
 ```bash
 ANTHROPIC_AUTH_TOKEN=your_auth_token
-AI_MODEL=claude-sonnet-4-5-20250514
+AI_MODEL=claude-sonnet-4-5-20250929
 ```
 
 `ANTHROPIC_API_KEY` 会作为 `x-api-key` 头发送，`ANTHROPIC_AUTH_TOKEN` 会作为 `Authorization: Bearer <token>` 发送。两者不能同时使用，只设置其中一个。
@@ -91,7 +91,7 @@ QWEN_BASE_URL=https://your-custom-endpoint
 
 ```bash
 DOUBAO_API_KEY=your_api_key
-AI_MODEL=doubao-seed-1-8-251215  # 或其他豆包模型
+AI_MODEL=doubao-seed-1-8-251228  # 或其他豆包模型
 ```
 
 ### GLM（智谱 AI）
@@ -198,10 +198,10 @@ SILICONFLOW_API_KEY=your_api_key
 AI_MODEL=deepseek-ai/DeepSeek-V3  # 示例；使用任何 SiliconFlow 模型 ID
 ```
 
-也可以设置自定义端点。不设置时使用推荐域名：
+不设置基础 URL 时，应用使用 `https://api.siliconflow.cn/v1`，这是 cloud.siliconflow.cn 上创建的 Key 对应的端点。如果您的 Key 来自国际站 cloud.siliconflow.com，请设置 .com 的端点：
 
 ```bash
-SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # 或 https://api.siliconflow.cn/v1
+SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1
 ```
 
 ### ModelScope
@@ -215,6 +215,34 @@ AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
 
 ```bash
 MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
+### Novita AI
+
+```bash
+NOVITA_API_KEY=your_api_key
+AI_MODEL=deepseek/deepseek-v4-pro
+```
+
+也可以设置自定义端点。不设置时使用 `https://api.novita.ai/openai`：
+
+```bash
+NOVITA_BASE_URL=https://your-custom-endpoint
+```
+
+### Atlas Cloud
+
+```bash
+ATLASCLOUD_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+应用没有内置 Atlas Cloud 的模型列表。在“设置”的“模型”标签页里，应用会用您的 Key 从 Atlas Cloud 读取模型列表。
+
+也可以设置自定义端点。不设置时使用 `https://api.atlascloud.ai/v1`：
+
+```bash
+ATLASCLOUD_BASE_URL=https://your-custom-endpoint
 ```
 
 ### Qiniu（七牛云）
@@ -297,17 +325,21 @@ GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
 
 ### Azure OpenAI
 
+Azure 需要资源名称或端点 URL，设置其中一个即可。两个都设置时，使用 `AZURE_BASE_URL`。
+
+使用资源名称：
+
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_RESOURCE_NAME=your-resource-name  # 必填：您的 Azure 资源名称
+AZURE_RESOURCE_NAME=your-resource-name  # 您的 Azure 资源名称
 AI_MODEL=your-deployment-name
 ```
 
-也可以用自定义端点代替资源名称：
+也可以用端点 URL 代替资源名称：
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME 的替代方案
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # 代替 AZURE_RESOURCE_NAME
 AI_MODEL=your-deployment-name
 ```
 
@@ -317,6 +349,17 @@ AI_MODEL=your-deployment-name
 AZURE_REASONING_EFFORT=low      # 可选：low, medium, high
 AZURE_REASONING_SUMMARY=detailed  # 可选：none, brief, detailed
 ```
+
+### EdgeOne Pages（腾讯云）
+
+把应用部署在腾讯云 EdgeOne Pages 上时，可以使用站点自带的 Edge AI 函数 `/api/edgeai`。它不需要 API Key，也不需要基础 URL。因为没有 Key 可供检测，服务端无法自动选中这家服务商，请设置 `AI_PROVIDER`：
+
+```bash
+AI_PROVIDER=edgeone
+AI_MODEL=@tx/deepseek-ai/deepseek-v32
+```
+
+这个函数支持 `@tx/deepseek-ai/deepseek-v32`、`@tx/deepseek-ai/deepseek-r1-0528` 和 `@tx/deepseek-ai/deepseek-v3-0324`。如果您设置了 `ACCESS_CODE_LIST`，函数也会检查访问码。
 
 ### Ollama（本地）
 
@@ -390,7 +433,7 @@ AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["
 
 ```bash
 AI_PROVIDER=doubao
-AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+AI_MODEL=doubao-seed-1-8-251228,doubao-seed-1-6-flash-250828,doubao-seed-1-6-251015
 ```
 
 这是等价的 `ai-models.json` 的简写。如果需要多家服务商，或者要自定义 `apiKeyEnv` 和 `baseUrlEnv`，请使用环境变量或配置文件。

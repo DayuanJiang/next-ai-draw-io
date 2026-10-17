@@ -4,11 +4,11 @@ This page covers problems people often run into with Next AI Draw.io. For each o
 
 ## Exporting a PDF does nothing
 
-In the web version, when you export a PDF, the page goes to `convert.diagrams.net/node/export` and then nothing happens.
+The app's Export dialog saves a draw.io file, a PNG image, an SVG image or an editable SVG. A PDF comes from draw.io's own menu (☰ at the top left of the canvas): choose **Export as**, then **PDF**. What you see next depends on which draw.io the app uses.
 
-The draw.io editor embedded in the app cannot export a PDF by itself. It relies on an outside conversion service, and that service does not work inside an iframe (a page embedded in another page).
+**The draw.io that comes with the app.** The web app, the Docker image and the desktop app use it, unless the app was built with `NEXT_PUBLIC_DRAWIO_BASE_URL`. This copy of draw.io makes a PDF by printing. It opens its PDF dialog, and **Print** in that dialog opens the print dialog of your browser or system. There, choose to save as a PDF, for example **Save as PDF** in Chrome or **Microsoft Print to PDF** on Windows.
 
-Export the diagram as a PNG image first, then print the image to a PDF.
+**An external draw.io**, set with `NEXT_PUBLIC_DRAWIO_BASE_URL`, such as `https://embed.diagrams.net`. The page goes to `convert.diagrams.net/node/export`, and then nothing happens. This draw.io sends the diagram to its conversion service at `convert.diagrams.net` to make the PDF, and that download fails inside the app. Choose **Print** in draw.io's menu instead, then save as a PDF in the print dialog. You can also rebuild the app without `NEXT_PUBLIC_DRAWIO_BASE_URL`, so it uses the draw.io that comes with it.
 
 Related GitHub issues: #539, #125
 
@@ -16,7 +16,9 @@ Related GitHub issues: #539, #125
 
 On an intranet, the browser says "Cannot find server IP address for embed.diagrams.net".
 
-The app now ships with its own copy of draw.io and serves it from `/drawio`, so the browser no longer needs `embed.diagrams.net`. If you still see this error, the image was built with `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net`, which was the default in the old Dockerfile. Rebuild the image without that build argument. See [Run it offline or on an intranet](./offline-deployment.md).
+The app ships with its own copy of draw.io and serves it from `/drawio`, so the browser does not need `embed.diagrams.net`. The current Dockerfile leaves `NEXT_PUBLIC_DRAWIO_BASE_URL` empty, so every image built from it uses this copy, the published image too. Only an image built with `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net` loads draw.io from `embed.diagrams.net`. That value was the default in the Dockerfile before v0.5.0.
+
+If you see this error, use an image of v0.5.0 or later, or rebuild your image without that build argument. You do not need to change the Dockerfile. The build downloads draw.io, so for an intranet, build the image on a machine with internet access and transfer it to the intranet. See [Build without internet access](./offline-deployment.md#build-without-internet-access).
 
 Environment variables named `NEXT_PUBLIC_*` are **build-time** variables: they are bundled into the JavaScript code. **Setting them at runtime does not work.**
 
@@ -36,8 +38,6 @@ services:
     ports: ["3000:3000"]
     env_file: .env
 ```
-
-If you are on an intranet, modify the Dockerfile and build the image on an outside network, then transfer the image to the intranet.
 
 Related GitHub issues: #295, #317
 
@@ -61,16 +61,19 @@ python -m vllm.entrypoints.openai.api_server \
 
 Related GitHub issues: #269, #75
 
-## Uploading an image gives a "No image provided" error
+## The model cannot read an image you upload
 
-After you upload an image, you see the error "No image provided".
+After you send an image, you see one of these:
 
-One possible cause is a model without vision support, that is, a model that cannot read images. Examples are Kimi K2, DeepSeek and the Qwen text models.
+- The chat shows "This model doesn't support image input.", with the provider's error below it.
+- The model answers as if there were no image, for example by saying that no image was provided.
+
+The model you chose has no vision support, that is, it cannot read images. Examples are Kimi K2, DeepSeek and the Qwen text models. The app sends the image to whichever model you chose, and the provider decides whether that model can take it. When the provider rejects the image, the app shows the message above. Some providers silently drop the image, and the model then answers without it.
 
 What to do:
 
-- Use a model that can read images, such as GPT-5.2, Claude 4.5 Sonnet or Gemini 3 Pro.
-- Models with `vision` or `vl` in their name can read images.
-- Update to the latest version (v0.4.9 or later).
+- In model settings, choose a model that can read images, such as GPT-5.2, Claude Sonnet 4.5 or Gemini 3 Pro.
+- For any other model, check the provider's page for that model to see whether it takes image input. Models with `vision` or `vl` in their name usually do.
+- If an image is refused for a model that reads images, update to v0.5.0 or later. Older versions guessed from the model name whether a model reads images, and the guess was sometimes wrong.
 
-Related GitHub issues: #324, #421, #469
+Related GitHub issues: #324, #421, #469, #874

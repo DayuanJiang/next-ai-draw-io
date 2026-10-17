@@ -7,20 +7,8 @@ The Worker is deployed to Cloudflare's servers around the world, so it answers w
 ## What you need
 
 - A Cloudflare account. The free plan works for a basic deployment.
-- Node.js 18 or later.
-- The Wrangler CLI, Cloudflare's command line tool.
-
-Install Wrangler. Installing it as a dev dependency is fine:
-
-```bash
-npm install -D wrangler
-```
-
-Then log in to Cloudflare:
-
-```bash
-npx wrangler login
-```
+- Node.js 22 or later. The Wrangler version that the repository installs needs Node.js 22, and Next.js 16 needs 20.9 or later.
+- The Wrangler CLI, Cloudflare's command line tool. The repository lists it as a dev dependency, so `npm install` installs it.
 
 A basic Workers deployment is free. You need a payment method only if you want to turn on R2 for ISR caching.
 
@@ -31,31 +19,39 @@ OpenNext and Wrangler are not fully reliable when they run directly on Windows. 
 - GitHub Codespaces, which works perfectly
 - WSL, which gives you Linux on Windows
 
-## Install the dependencies
+## Install the dependencies and log in
 
 ```bash
 npm install
 ```
 
-## Set the environment variables
-
-Cloudflare uses a different file for local testing, so you keep the same values in two files.
-
-Create `.dev.vars`. Cloudflare uses it locally and when you deploy:
+Then log in to Cloudflare with Wrangler:
 
 ```bash
-cp env.example .dev.vars
+npx wrangler login
 ```
 
-Fill in your API keys and configuration.
+## Set the environment variables
 
-Make sure `.env.local` also exists. Regular Next.js development uses it:
+The settings can be in three places, and each one is read at a different time:
+
+- `.env.local` is the file for regular Next.js development with `npm run dev`. The OpenNext build also copies the values of `.env.local`, `.env` and the other `.env` files into the code of the Worker. Everything in these files, API keys included, is uploaded inside the Worker when you deploy.
+- `.dev.vars` is read only by Wrangler on your computer. `npm run preview` gives its values to the Worker that runs on your computer, and `npm run deploy` does not upload the file.
+- Secrets that you add to the Worker in Cloudflare are read by the deployed Worker. When the same name is set in Cloudflare and in `.env.local`, the Worker uses the value from Cloudflare.
+
+Create `.env.local` and fill in your API keys and configuration:
 
 ```bash
 cp env.example .env.local
 ```
 
-Fill in the same values there.
+For the deployed Worker, add the API keys as secrets in Cloudflare after the first deploy, as described in [Add the API keys to the Worker](#add-the-api-keys-to-the-worker). If you don't want the keys inside the code of the Worker, take them out of `.env.local` before you run `npm run deploy`. Settings without secrets, such as `AI_PROVIDER` and `AI_MODEL`, can stay in `.env.local`.
+
+To preview the Worker on your computer when `.env.local` has no API keys, put the keys in `.dev.vars`. This file stays on your computer:
+
+```bash
+cp env.example .dev.vars
+```
 
 ## Choose whether to use R2
 
@@ -154,7 +150,7 @@ npm run deploy
 The script:
 
 1. Builds the Next.js app
-2. Converts it to a Cloudflare Worker with OpenNext
+2. Converts it to a Cloudflare Worker with OpenNext, and copies the values of `.env.local` and the other `.env` files into the Worker
 3. Uploads the static assets
 4. Publishes the Worker
 
@@ -163,6 +159,19 @@ Your app is then available at:
 ```
 https://<worker-name>.<your-subdomain>.workers.dev
 ```
+
+## Add the API keys to the Worker
+
+For the deployed Worker, put the API keys in secrets of the Worker. Add each key that your provider needs, for example `OPENAI_API_KEY`, in one of two ways:
+
+- In the Cloudflare dashboard: open **Workers & Pages**, choose your Worker, open **Settings**, then **Variables and Secrets**, click **Add**, and choose the type **Secret**.
+- On the command line, run the command below. Wrangler asks for the value.
+
+  ```bash
+  npx wrangler secret put OPENAI_API_KEY
+  ```
+
+Choose the type Secret when you add these keys in the dashboard. Every `npm run deploy` keeps the secrets and removes the variables of type Text that were added in the dashboard. Setting `"keep_vars": true` in `wrangler.jsonc` keeps those variables too.
 
 ## Fix common errors
 

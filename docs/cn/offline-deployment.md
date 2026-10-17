@@ -47,8 +47,12 @@ services:
         - NEXT_PUBLIC_DRAWIO_BASE_URL=http://localhost:8080
     ports: ["3000:3000"]
     env_file: .env
+    volumes:
+      - ./data:/app/data
     depends_on: [drawio]
 ```
+
+`volumes` 这一项把您在[管理面板](./admin-panel.md)里保存的设置（`data/settings.json`）放在容器之外，所以更换容器后，这些设置仍然保留。
 
 使用外部 draw.io 时，应用改用 draw.io 自己的工具栏，以下功能不可用：
 

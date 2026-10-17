@@ -4,7 +4,7 @@ Next AI Draw.io を自分でホストする場合は、環境変数で AI プロ
 
 ## はじめる
 
-1. `.env.example` を `.env.local` にコピーします。
+1. `env.example` を `.env.local` にコピーします。
 2. 選んだプロバイダーの API キーを設定します。
 3. `AI_MODEL` に使いたいモデルを設定します。
 4. `npm run dev` を実行します。
@@ -30,14 +30,14 @@ LM Studio などのローカルな OpenAI 互換サーバーも同じ方法で�
 
 ```bash
 ANTHROPIC_API_KEY=your_api_key
-AI_MODEL=claude-sonnet-4-5-20250514
+AI_MODEL=claude-sonnet-4-5-20250929
 ```
 
 Bearer トークンでサインインすることもできます。OAuth スタイルのトークンを発行するゲートウェイを経由する場合などです。
 
 ```bash
 ANTHROPIC_AUTH_TOKEN=your_auth_token
-AI_MODEL=claude-sonnet-4-5-20250514
+AI_MODEL=claude-sonnet-4-5-20250929
 ```
 
 `ANTHROPIC_API_KEY` は `x-api-key` ヘッダーで送信され、`ANTHROPIC_AUTH_TOKEN` は `Authorization: Bearer <token>` で送信されます。2 つは同時に使えないので、どちらか一方だけを設定してください。
@@ -91,7 +91,7 @@ QWEN_BASE_URL=https://your-custom-endpoint
 
 ```bash
 DOUBAO_API_KEY=your_api_key
-AI_MODEL=doubao-seed-1-8-251215  # または他の Doubao モデル
+AI_MODEL=doubao-seed-1-8-251228  # または他の Doubao モデル
 ```
 
 ### GLM（Zhipu AI）
@@ -198,10 +198,10 @@ SILICONFLOW_API_KEY=your_api_key
 AI_MODEL=deepseek-ai/DeepSeek-V3  # 例; 任意の SiliconFlow モデル ID を使用
 ```
 
-必要に応じて、カスタムエンドポイントを設定できます。設定しない場合は、推奨ドメインが使われます。
+ベース URL を設定しない場合、アプリは `https://api.siliconflow.cn/v1` を使います。これは cloud.siliconflow.cn で作成したキー用のエンドポイントです。キーを国際版のサイト cloud.siliconflow.com で作成した場合は、.com のエンドポイントを設定してください。
 
 ```bash
-SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # または https://api.siliconflow.cn/v1
+SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1
 ```
 
 ### ModelScope
@@ -215,6 +215,34 @@ AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
 
 ```bash
 MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
+### Novita AI
+
+```bash
+NOVITA_API_KEY=your_api_key
+AI_MODEL=deepseek/deepseek-v4-pro
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。設定しない場合は `https://api.novita.ai/openai` が使われます。
+
+```bash
+NOVITA_BASE_URL=https://your-custom-endpoint
+```
+
+### Atlas Cloud
+
+```bash
+ATLASCLOUD_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+アプリには Atlas Cloud のモデル一覧が組み込まれていません。設定の「モデル」タブでキーを入力すると、アプリが Atlas Cloud からモデル一覧を読み込みます。
+
+必要に応じて、カスタムエンドポイントを設定できます。設定しない場合は `https://api.atlascloud.ai/v1` が使われます。
+
+```bash
+ATLASCLOUD_BASE_URL=https://your-custom-endpoint
 ```
 
 ### Qiniu（Qiniu Cloud）
@@ -297,17 +325,21 @@ GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
 
 ### Azure OpenAI
 
+Azure には、リソース名かエンドポイント URL のどちらかが必要です。どちらか一方を設定してください。両方を設定した場合は `AZURE_BASE_URL` が使われます。
+
+リソース名を使う場合です。
+
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_RESOURCE_NAME=your-resource-name  # 必須: Azure リソース名
+AZURE_RESOURCE_NAME=your-resource-name  # Azure リソース名
 AI_MODEL=your-deployment-name
 ```
 
-リソース名の代わりに、カスタムエンドポイントを指定することもできます。
+リソース名の代わりに、エンドポイント URL を指定することもできます。
 
 ```bash
 AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME の代替
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME の代わり
 AI_MODEL=your-deployment-name
 ```
 
@@ -317,6 +349,17 @@ AI_MODEL=your-deployment-name
 AZURE_REASONING_EFFORT=low      # 任意: low, medium, high
 AZURE_REASONING_SUMMARY=detailed  # 任意: none, brief, detailed
 ```
+
+### EdgeOne Pages（Tencent Cloud）
+
+アプリを Tencent EdgeOne Pages にデプロイした場合は、サイト自身の Edge AI 関数 `/api/edgeai` を使えます。API キーもベース URL も要りません。検出できるキーがないので、サーバーはこのプロバイダーを自動では選べません。`AI_PROVIDER` を設定してください。
+
+```bash
+AI_PROVIDER=edgeone
+AI_MODEL=@tx/deepseek-ai/deepseek-v32
+```
+
+この関数が受け付けるモデルは `@tx/deepseek-ai/deepseek-v32`、`@tx/deepseek-ai/deepseek-r1-0528`、`@tx/deepseek-ai/deepseek-v3-0324` です。`ACCESS_CODE_LIST` を設定した場合は、関数もアクセスコードを確認します。
 
 ### Ollama（ローカル）
 
@@ -390,7 +433,7 @@ AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["
 
 ```bash
 AI_PROVIDER=doubao
-AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
+AI_MODEL=doubao-seed-1-8-251228,doubao-seed-1-6-flash-250828,doubao-seed-1-6-251015
 ```
 
 これは同じ内容の `ai-models.json` を短く書いたものです。複数のプロバイダーを使う場合や、独自の `apiKeyEnv` と `baseUrlEnv` を使う場合は、環境変数か設定ファイルを使ってください。

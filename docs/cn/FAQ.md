@@ -4,11 +4,11 @@
 
 ## 导出 PDF 后没有反应
 
-在网页版里导出 PDF 时，页面会跳转到 `convert.diagrams.net/node/export`，然后就没有反应了。
+应用自己的“导出”对话框可以保存 draw.io 文件、PNG 图片、SVG 图片或可编辑的 SVG。PDF 要从 draw.io 自己的菜单导出：点击画布左上角的 ☰，选择 **导出为**，再选择 **PDF**。接下来您会看到什么，取决于应用用的是哪一个 draw.io。
 
-应用里嵌入的 draw.io 编辑器自己不能直接导出 PDF。它要用外部的转换服务，而这个服务在 iframe（嵌入在其他页面里的页面）中无法正常工作。
+**应用自带的 draw.io。** 网页版、Docker 镜像和桌面应用都用它，除非构建应用时设置了 `NEXT_PUBLIC_DRAWIO_BASE_URL`。这份 draw.io 通过打印来生成 PDF。它会打开 PDF 对话框，点击其中的 **打印**，会打开浏览器或系统的打印对话框。请在打印对话框里选择保存为 PDF，例如 Chrome 的 **另存为 PDF**，或 Windows 的 **Microsoft Print to PDF**。
 
-请先把图表导出为 PNG 图片，再把图片打印成 PDF。
+**外部的 draw.io**，也就是用 `NEXT_PUBLIC_DRAWIO_BASE_URL` 设置的 draw.io，例如 `https://embed.diagrams.net`。页面会跳转到 `convert.diagrams.net/node/export`，然后就没有反应了。这种 draw.io 会把图表发给 `convert.diagrams.net` 上的转换服务来生成 PDF，而在应用里，这个下载会失败。请改用 draw.io 菜单里的 **打印**，然后在打印对话框里保存为 PDF。您也可以去掉 `NEXT_PUBLIC_DRAWIO_BASE_URL` 重新构建应用，让它使用自带的 draw.io。
 
 相关的 GitHub Issue：#539、#125
 
@@ -16,7 +16,9 @@
 
 在内网环境里，浏览器提示“找不到 embed.diagrams.net 的服务器 IP 地址”。
 
-应用现在自带一份 draw.io，从 `/drawio` 提供，所以浏览器不再需要访问 `embed.diagrams.net`。如果仍然看到这个错误，说明镜像是用 `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net` 构建的，这是旧版 Dockerfile 的默认值。请去掉这个构建参数，重新构建镜像。详见[在离线环境或内网中运行](./offline-deployment.md)。
+应用自带一份 draw.io，从 `/drawio` 提供，所以浏览器不需要访问 `embed.diagrams.net`。现在的 Dockerfile 把 `NEXT_PUBLIC_DRAWIO_BASE_URL` 留空，所以用它构建的镜像都使用这份 draw.io，官方发布的镜像也一样。只有用 `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net` 构建的镜像，才会从 `embed.diagrams.net` 加载 draw.io。v0.5.0 之前的 Dockerfile 默认使用这个值。
+
+如果您看到这个错误，请使用 v0.5.0 或更高版本的镜像，或者去掉这个构建参数，重新构建您的镜像。Dockerfile 不需要修改。构建时要下载 draw.io，所以如果要在内网使用，请在能联网的机器上构建镜像，再把镜像传到内网。详见[在不能联网的机器上构建](./offline-deployment.md#在不能联网的机器上构建)。
 
 `NEXT_PUBLIC_*` 环境变量是**构建时**变量，会被打包进 JS 代码。**在运行时设置它们不会生效。**
 
@@ -36,8 +38,6 @@ services:
     ports: ["3000:3000"]
     env_file: .env
 ```
-
-如果您在内网，请在外网修改 Dockerfile 并构建镜像，再把镜像传到内网使用。
 
 相关的 GitHub Issue：#295、#317
 
@@ -61,16 +61,19 @@ python -m vllm.entrypoints.openai.api_server \
 
 相关的 GitHub Issue：#269、#75
 
-## 上传图片后提示“未提供图片”
+## 模型读不了您上传的图片
 
-上传图片后，您会看到“未提供图片”的错误。
+发送图片后，您会看到下面其中一种情况：
 
-一个可能的原因是模型不支持视觉功能，也就是不能读取图片，例如 Kimi K2、DeepSeek 和 Qwen 的文本模型。
+- 对话里显示“这个模型不支持图片输入。”，下面是服务商返回的错误。
+- 模型的回答像是没有收到图片，例如说没有提供图片。
+
+您选的模型不支持视觉功能，也就是不能读取图片，例如 Kimi K2、DeepSeek 和 Qwen 的文本模型。应用会把图片发给您选的模型，由服务商判断这个模型能不能接收图片。服务商拒绝图片时，应用会显示上面的提示。有些服务商会悄悄丢掉图片，模型就会在没有图片的情况下回答。
 
 解决方法：
 
-- 使用能读取图片的模型，例如 GPT-5.2、Claude 4.5 Sonnet 或 Gemini 3 Pro。
-- 模型名里带 `vision` 或 `vl` 的模型能读取图片。
-- 更新到最新版本（v0.4.9 或更高版本）。
+- 在模型设置里选择能读取图片的模型，例如 GPT-5.2、Claude Sonnet 4.5 或 Gemini 3 Pro。
+- 其他模型请查看服务商的模型页面，确认它是否支持图片输入。模型名里带 `vision` 或 `vl` 的模型通常支持。
+- 如果您选的模型能读取图片，图片却仍被拒绝，请更新到 v0.5.0 或更高版本。旧版本会根据模型名猜测模型能否读取图片，有时会猜错。
 
-相关的 GitHub Issue：#324、#421、#469
+相关的 GitHub Issue：#324、#421、#469、#874
