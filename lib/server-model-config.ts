@@ -1,16 +1,15 @@
 import fs from "fs/promises"
 import path from "path"
 import { z } from "zod"
-import type { ProviderName } from "@/lib/types/model-config"
-import { PROVIDER_INFO } from "@/lib/types/model-config"
+import { PROVIDERS, type ProviderName } from "@/lib/providers"
 
 export const ProviderNameSchema: z.ZodType<ProviderName> = z
     .string()
-    .refine((val): val is ProviderName => Object.hasOwn(PROVIDER_INFO, val), {
+    .refine((val): val is ProviderName => Object.hasOwn(PROVIDERS, val), {
         message: "Invalid provider name",
     })
 
-export const ServerProviderSchema = z.object({
+const ServerProviderSchema = z.object({
     name: z.string().min(1),
     provider: ProviderNameSchema,
     models: z.array(z.string().min(1)),
@@ -30,7 +29,6 @@ export const ServerModelsConfigSchema = z.object({
     providers: z.array(ServerProviderSchema),
 })
 
-export type ServerProviderConfig = z.infer<typeof ServerProviderSchema>
 export type ServerModelsConfig = z.infer<typeof ServerModelsConfigSchema>
 
 export interface FlattenedServerModel {
@@ -47,11 +45,14 @@ export interface FlattenedServerModel {
 
 /**
  * Convert provider name to URL-safe slug for use in model ID
- * e.g., "OpenAI Production" → "openai-production"
+ * e.g., "OpenAI Production" → "openai-production", "主力" → "4e3b-529b"
+ * Non-ASCII characters become their hex code point so CJK names stay
+ * distinct; the id is sent in HTTP headers, which must be ASCII.
  */
-function slugify(name: string): string {
+export function slugify(name: string): string {
     return name
         .toLowerCase()
+        .replace(/[^\p{ASCII}]/gu, (c) => `-${c.codePointAt(0)?.toString(16)}-`)
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "")
 }
@@ -62,15 +63,57 @@ function getConfigPath(): string {
     return path.join(process.cwd(), "ai-models.json")
 }
 
-export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | null> {
+/**
+ * Synthesize a config from a comma-separated AI_MODEL value (Priority 3 fallback).
+ * Lets users expose multiple models without authoring AI_MODELS_CONFIG / ai-models.json.
+ * Triggers only when AI_MODEL contains a comma AND AI_PROVIDER is set to a known provider.
+ */
+function configFromCommaSeparatedAiModel(): ServerModelsConfig | null {
+    const aiModel = process.env.AI_MODEL
+    if (!aiModel || !aiModel.includes(",")) return null
+
+    const aiProvider = process.env.AI_PROVIDER
+    if (!aiProvider) {
+        console.warn(
+            "[server-model-config] AI_MODEL contains commas but AI_PROVIDER is not set; " +
+                "skipping multi-model fallback. Set AI_PROVIDER, or use AI_MODELS_CONFIG / ai-models.json.",
+        )
+        return null
+    }
+    if (!Object.hasOwn(PROVIDERS, aiProvider)) {
+        console.warn(
+            `[server-model-config] AI_PROVIDER="${aiProvider}" is not a known provider; skipping multi-model fallback.`,
+        )
+        return null
+    }
+
+    const models = Array.from(
+        new Set(
+            aiModel
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0),
+        ),
+    )
+    if (models.length === 0) return null
+
+    const providerName = aiProvider as ProviderName
+    return {
+        providers: [
+            {
+                name: PROVIDERS[providerName].label,
+                provider: providerName,
+                models,
+                default: true,
+            },
+        ],
+    }
+}
+
+export async function loadEnvServerModelsConfig(): Promise<ServerModelsConfig | null> {
     // Priority 1: AI_MODELS_CONFIG env var (JSON string) - for cloud deployments
     const envConfig = process.env.AI_MODELS_CONFIG
-    if (
-        envConfig &&
-        envConfig !== "undefined" &&
-        envConfig !== "null" &&
-        envConfig.trim().length > 0
-    ) {
+    if (envConfig && envConfig.trim().length > 0) {
         try {
             const json = JSON.parse(envConfig)
             return ServerModelsConfigSchema.parse(json)
@@ -90,15 +133,40 @@ export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | 
         const json = JSON.parse(jsonStr)
         return ServerModelsConfigSchema.parse(json)
     } catch (err: any) {
-        if (err?.code === "ENOENT") {
+        if (err?.code !== "ENOENT") {
+            console.error(
+                "[server-model-config] Failed to load ai-models.json:",
+                err,
+            )
             return null
         }
-        console.error(
-            "[server-model-config] Failed to load ai-models.json:",
-            err,
-        )
-        return null
     }
+
+    // Priority 3: AI_MODEL with comma-separated values + AI_PROVIDER
+    return configFromCommaSeparatedAiModel()
+}
+
+export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | null> {
+    const envConfig = await loadEnvServerModelsConfig()
+
+    // Merge in providers managed via the admin panel (settings.json).
+    // Dynamic import to avoid a module-init cycle with lib/admin/providers.
+    const { adminProvidersToConfig, loadAdminProviders } = await import(
+        "./admin/providers"
+    )
+    const adminConfig = adminProvidersToConfig(loadAdminProviders())
+
+    if (adminConfig.providers.length === 0) return envConfig
+    if (!envConfig) return adminConfig
+
+    // A panel default overrides an env default
+    const adminHasDefault = adminConfig.providers.some((p) => p.default)
+    const envProviders = adminHasDefault
+        ? envConfig.providers.map((p) =>
+              p.default ? { ...p, default: undefined } : p,
+          )
+        : envConfig.providers
+    return { providers: [...envProviders, ...adminConfig.providers] }
 }
 
 export async function loadFlattenedServerModels(): Promise<
@@ -111,16 +179,26 @@ export async function loadFlattenedServerModels(): Promise<
     const defaultModelId = process.env.AI_MODEL
 
     const flattened: FlattenedServerModel[] = []
+    const seenIds = new Set<string>()
 
     for (const p of cfg.providers) {
-        const providerLabel =
-            p.name || PROVIDER_INFO[p.provider]?.label || p.provider
+        const providerLabel = p.name
 
         // Use slugified name for unique ID (supports multiple API keys per provider)
         const nameSlug = slugify(p.name)
 
         for (const modelId of p.models) {
             const id = `server:${nameSlug}:${modelId}`
+            // Names that differ only in case or punctuation share a slug.
+            // A repeated id would always resolve to the first provider's
+            // credentials, so drop it instead.
+            if (seenIds.has(id)) {
+                console.warn(
+                    `[server-model-config] Skipping duplicate model id "${id}". Provider names must differ in letters or digits.`,
+                )
+                continue
+            }
+            seenIds.add(id)
 
             // Default model priority:
             // 1. From ai-models.json: first model of provider with default: true
@@ -153,8 +231,6 @@ export async function loadFlattenedServerModels(): Promise<
 export async function findServerModelById(
     modelId: string,
 ): Promise<FlattenedServerModel | null> {
-    if (!modelId.startsWith("server:")) return null
-
     const models = await loadFlattenedServerModels()
     return models.find((m) => m.id === modelId) || null
 }

@@ -1,4 +1,4 @@
-import { extractText, getDocumentProxy } from "unpdf"
+import { extractText } from "unpdf"
 
 // Maximum characters allowed for extracted text (configurable via env)
 const DEFAULT_MAX_EXTRACTED_CHARS = 150000 // 150k chars
@@ -14,6 +14,7 @@ const TEXT_EXTENSIONS = [
     ".json",
     ".csv",
     ".xml",
+    ".svg",
     ".html",
     ".css",
     ".js",
@@ -43,8 +44,10 @@ const TEXT_EXTENSIONS = [
  */
 export async function extractPdfText(file: File): Promise<string> {
     const buffer = await file.arrayBuffer()
-    const pdf = await getDocumentProxy(new Uint8Array(buffer))
-    const { text } = await extractText(pdf, { mergePages: true })
+    // Pass raw bytes so unpdf destroys the PDF document when it is done
+    const { text } = await extractText(new Uint8Array(buffer), {
+        mergePages: true,
+    })
     return text as string
 }
 

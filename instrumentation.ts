@@ -1,7 +1,13 @@
 import { LangfuseSpanProcessor } from "@langfuse/otel"
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node"
 
-export function register() {
+export async function register() {
+    // Overlay admin settings file onto process.env before anything reads config
+    if (process.env.NEXT_RUNTIME === "nodejs") {
+        const { applyToEnv } = await import("@/lib/admin/settings")
+        applyToEnv()
+    }
+
     // Skip telemetry if Langfuse env vars are not configured
     if (!process.env.LANGFUSE_PUBLIC_KEY || !process.env.LANGFUSE_SECRET_KEY) {
         console.warn(

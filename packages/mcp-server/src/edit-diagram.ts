@@ -1,0 +1,148 @@
+/**
+ * Core of the edit_diagram tool, kept free of session state so it can be
+ * unit tested.
+ *
+ * All-or-nothing, like the web app (hooks/use-diagram-tool-handlers.ts):
+ * if any operation fails, nothing is written and every failure is reported,
+ * so the model never builds on a half-applied edit.
+ */
+
+import { defaultLayerOf, expandCompactCells } from "./compact-cells.ts"
+import {
+    applyDiagramOperations,
+    type DiagramOperation,
+} from "./diagram-operations.ts"
+import { restoreImageData } from "./embedded-images.ts"
+import { type PageSelector, projectPage } from "./pages.ts"
+import { addDefaultStyles, edgeIdsOf } from "./style-classes.ts"
+import { validateAndFixXml, validateMxCellStructure } from "./xml-validation.ts"
+
+export type EditOutcome =
+    | {
+          ok: true
+          xml: string
+          applied: number
+          fixes: string[]
+          /** Ids of updates that sent the cell as it already was */
+          unchanged: string[]
+      }
+    | { ok: false; errors: string[]; pageError: boolean }
+
+/** Number of top-level elements in an XML fragment. */
+function countTopLevelElements(fragment: string): number {
+    const doc = new DOMParser().parseFromString(
+        `<wrapper>${fragment}</wrapper>`,
+        "text/xml",
+    )
+    // On a syntax error the browser adds a <parsererror> element (Chrome
+    // next to the cells, Firefox as the root); the syntax is checked later
+    const root = doc.documentElement
+    if (!root || root.tagName === "parsererror") return 1
+    return Array.from(root.children).filter(
+        (el) => el.tagName !== "parsererror",
+    ).length
+}
+
+/** The target page as a one-page <mxfile>, or the whole document. */
+export function targetPageXml(xml: string, selector: PageSelector): string {
+    const projection = projectPage(xml, selector)
+    return projection.ok ? projection.xml : xml
+}
+
+export function editDiagram(
+    xml: string,
+    operations: DiagramOperation[],
+    selector: PageSelector,
+): EditOutcome {
+    const errors: string[] = []
+    const fixes: string[] = []
+    const prepared: DiagramOperation[] = []
+
+    // Edges already on the page, so a label added to one is not wrapped, and
+    // the layer a compact cell without a parent goes on
+    const page = targetPageXml(xml, selector)
+    const edges = edgeIdsOf(page)
+    const layer = defaultLayerOf(page)
+    for (const op of operations) {
+        if (op.operation === "delete" || !op.new_xml) {
+            prepared.push(op)
+            continue
+        }
+        if (/<mxStyle\b/i.test(op.new_xml)) {
+            errors.push(
+                `${op.operation} ${op.cell_id}: named styles (mxStyle) are not available in edit_diagram; write the cell's complete style`,
+            )
+            continue
+        }
+        // Checked before validation: several cells fail the strict parser
+        // with a misleading "only one root" syntax error.
+        if (countTopLevelElements(op.new_xml) > 1) {
+            errors.push(
+                `${op.operation} ${op.cell_id}: new_xml must contain exactly one cell; use one add operation per cell`,
+            )
+            continue
+        }
+        const check = validateAndFixXml(op.new_xml)
+        if (!check.valid) {
+            errors.push(
+                `${op.operation} ${op.cell_id}: invalid new_xml: ${check.error}`,
+            )
+            continue
+        }
+        if (check.fixed) {
+            fixes.push(`${op.cell_id}: ${check.fixes.join(", ")}`)
+        }
+        // The defaults the model is told not to write (style-classes.ts),
+        // added after the fixes so a repaired cell gets them too; the
+        // pictures it was shown as references (embedded-images.ts) go back in
+        prepared.push({
+            ...op,
+            new_xml: addDefaultStyles(
+                expandCompactCells(
+                    restoreImageData(check.fixed ?? op.new_xml, xml),
+                    layer,
+                ),
+                edges,
+            ),
+        })
+    }
+    if (errors.length > 0) return { ok: false, errors, pageError: false }
+
+    const {
+        result,
+        errors: opErrors,
+        unchanged,
+    } = applyDiagramOperations(xml, prepared, selector)
+    // An empty cellId means the page itself could not be edited
+    const pageLevel = opErrors.find((e) => e.cellId === "")
+    if (pageLevel) {
+        return { ok: false, errors: [pageLevel.message], pageError: true }
+    }
+    if (opErrors.length > 0) {
+        return {
+            ok: false,
+            errors: opErrors.map((e) => `${e.type} ${e.cellId}: ${e.message}`),
+            pageError: false,
+        }
+    }
+
+    // Validate only the target page, and reject only errors this edit
+    // introduced: problems already in other pages or in a loaded file must
+    // not block every edit.
+    const after = validateMxCellStructure(targetPageXml(result, selector))
+    if (after && !validateMxCellStructure(targetPageXml(xml, selector))) {
+        return {
+            ok: false,
+            errors: [`the edit would make the page invalid: ${after}`],
+            pageError: false,
+        }
+    }
+
+    return {
+        ok: true,
+        xml: result,
+        applied: operations.length,
+        fixes,
+        unchanged,
+    }
+}

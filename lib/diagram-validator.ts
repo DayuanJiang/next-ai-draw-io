@@ -1,10 +1,10 @@
 /**
  * Types and utilities for VLM-based diagram validation.
- * The actual validation is performed via useValidateDiagram hook using AI SDK's useObject.
+ * The validation itself runs in the useValidateDiagram hook (a JSON request to /api/validate-diagram).
  */
 
 // Re-export types from the schema file (single source of truth)
-export type { ValidationIssue, ValidationResult } from "./validation-schema"
+export type { ValidationResult } from "./validation-schema"
 
 import type { ValidationResult } from "./validation-schema"
 
@@ -16,11 +16,6 @@ import type { ValidationResult } from "./validation-schema"
  * @returns Formatted string for tool error output
  */
 export function formatValidationFeedback(result: ValidationResult): string {
-    // If validation passed with no issues, return empty string
-    if (result.valid && result.issues.length === 0) {
-        return ""
-    }
-
     const lines: string[] = []
 
     lines.push("DIAGRAM VISUAL VALIDATION FAILED")

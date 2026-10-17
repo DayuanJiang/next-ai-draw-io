@@ -14,10 +14,33 @@ describe("findCachedResponse", () => {
         expect(result?.xml).toContain("Transformer Architecture")
     })
 
-    it("returns cached response for exact match with image", () => {
-        const result = findCachedResponse("Replicate this in aws style", true)
+    it("returns cached response for exact match with the example file", () => {
+        const result = findCachedResponse(
+            "Replicate this in aws style",
+            true,
+            "architecture.png",
+        )
         expect(result).toBeDefined()
         expect(result?.xml).toContain("AWS")
+    })
+
+    it("returns undefined when the user attached their own file", () => {
+        expect(
+            findCachedResponse("Replicate this flowchart.", true, "mine.png"),
+        ).toBeUndefined()
+        expect(
+            findCachedResponse(
+                "Summarize this paper as a diagram",
+                true,
+                "thesis.pdf",
+            ),
+        ).toBeUndefined()
+    })
+
+    it("returns undefined for file examples when the file name is unknown", () => {
+        // The server only knows whether a file is attached, not which one
+        const result = findCachedResponse("Replicate this in aws style", true)
+        expect(result).toBeUndefined()
     })
 
     it("returns undefined for non-matching prompt", () => {
@@ -35,8 +58,9 @@ describe("findCachedResponse", () => {
     })
 
     it("returns undefined for partial match", () => {
-        const result = findCachedResponse("Give me a diagram", false)
+        const result = findCachedResponse("Draw a cat for me in blue", false)
         expect(result).toBeUndefined()
+        expect(findCachedResponse("Draw a cat", false)).toBeUndefined()
     })
 
     it("returns response for Draw a cat prompt", () => {
@@ -48,7 +72,22 @@ describe("findCachedResponse", () => {
     it("all cached responses have non-empty xml", () => {
         for (const response of CACHED_EXAMPLE_RESPONSES) {
             expect(response.xml).not.toBe("")
-            expect(response.xml.length).toBeGreaterThan(0)
+        }
+    })
+
+    it("every example fits the width of one draw.io page", () => {
+        // A4 is 827 px wide; a wider example shows draw.io's page break line
+        for (const response of CACHED_EXAMPLE_RESPONSES) {
+            for (const [, attrs] of response.xml.matchAll(
+                /<mxGeometry\b([^>]*)>/g,
+            )) {
+                if (attrs.includes('relative="1"')) continue
+                const x = Number(attrs.match(/\bx="([-\d.]+)"/)?.[1] ?? 0)
+                const width = Number(
+                    attrs.match(/\bwidth="([\d.]+)"/)?.[1] ?? 0,
+                )
+                expect(x + width).toBeLessThanOrEqual(827)
+            }
         }
     })
 })

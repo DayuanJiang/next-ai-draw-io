@@ -16,6 +16,8 @@ packages/*/dist
 /coverage
 /playwright-report/
 /test-results/
+packages/*/playwright-report/
+packages/*/test-results/
 
 # next.js
 /.next/
@@ -76,3 +78,6 @@ ai-models.json
 # local backups
 *.bak
 .gstack/
+
+# admin panel settings (contains secrets)
+data/

@@ -1,23 +1,51 @@
-# AI Provider Configuration
+# AI providers
 
-This guide explains how to configure different AI model providers for next-ai-draw-io.
+When you host Next AI Draw.io yourself, environment variables choose the AI provider and the model. This page shows the variables for each provider, how to offer several models to all users, and how to add a new provider to the code.
 
-## Quick Start
+## Get started
 
-1. Copy `.env.example` to `.env.local`
-2. Set your API key for your chosen provider
-3. Set `AI_MODEL` to your desired model
-4. Run `npm run dev`
+1. Copy `env.example` to `.env.local`.
+2. Set the API key of the provider you chose.
+3. Set `AI_MODEL` to the model you want.
+4. Run `npm run dev`.
 
-## Supported Providers
+## Set up each provider
 
-### Doubao (ByteDance Volcengine)
-
-> **Free tokens**: Register on the [Volcengine ARK platform](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) to get 500K free tokens for all models!
+### OpenAI
 
 ```bash
-DOUBAO_API_KEY=your_api_key
-AI_MODEL=doubao-seed-1-8-251215  # or other Doubao model
+OPENAI_API_KEY=your_api_key
+AI_MODEL=gpt-4o
+```
+
+Optionally, set a custom endpoint for an OpenAI-compatible service:
+
+```bash
+OPENAI_BASE_URL=https://your-custom-endpoint/v1
+```
+
+LM Studio and other local OpenAI-compatible servers work the same way. Set the base URL to `http://localhost:1234/v1` (LM Studio's default port) and use any non-empty API key, such as `lm-studio`. This works with the environment variables above and in the Models tab of Settings.
+
+### Anthropic
+
+```bash
+ANTHROPIC_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+You can also sign in with a Bearer token, for example when you go through a gateway that issues OAuth-style tokens:
+
+```bash
+ANTHROPIC_AUTH_TOKEN=your_auth_token
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+`ANTHROPIC_API_KEY` is sent as the `x-api-key` header, and `ANTHROPIC_AUTH_TOKEN` is sent as `Authorization: Bearer <token>`. The two cannot be used together, so set only one.
+
+Optionally, set a custom endpoint:
+
+```bash
+ANTHROPIC_BASE_URL=https://your-custom-endpoint
 ```
 
 ### Google Gemini
@@ -27,51 +55,10 @@ GOOGLE_GENERATIVE_AI_API_KEY=your_api_key
 AI_MODEL=gemini-2.0-flash
 ```
 
-Optional custom endpoint:
+Optionally, set a custom endpoint:
 
 ```bash
 GOOGLE_BASE_URL=https://your-custom-endpoint
-```
-
-### Google Vertex AI (Enterprise GCP)
-
-Google Vertex AI offers enterprise-grade features and data residency. **Express Mode** allows for simple API key authentication, making it compatible with edge runtimes like Vercel and Cloudflare.
-
-```bash
-GOOGLE_VERTEX_API_KEY=your_api_key
-AI_MODEL=gemini-2.0-flash
-```
-
-Optional custom endpoint:
-
-```bash
-GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
-```
-
-### OpenAI
-
-```bash
-OPENAI_API_KEY=your_api_key
-AI_MODEL=gpt-4o
-```
-
-Optional custom endpoint (for OpenAI-compatible services):
-
-```bash
-OPENAI_BASE_URL=https://your-custom-endpoint/v1
-```
-
-### Anthropic
-
-```bash
-ANTHROPIC_API_KEY=your_api_key
-AI_MODEL=claude-sonnet-4-5-20250514
-```
-
-Optional custom endpoint:
-
-```bash
-ANTHROPIC_BASE_URL=https://your-custom-endpoint
 ```
 
 ### DeepSeek
@@ -81,159 +68,73 @@ DEEPSEEK_API_KEY=your_api_key
 AI_MODEL=deepseek-chat
 ```
 
-Optional custom endpoint:
+Optionally, set a custom endpoint:
 
 ```bash
 DEEPSEEK_BASE_URL=https://your-custom-endpoint
 ```
 
-### SiliconFlow (OpenAI-compatible)
+### Qwen (Alibaba Cloud)
 
 ```bash
-SILICONFLOW_API_KEY=your_api_key
-AI_MODEL=deepseek-ai/DeepSeek-V3  # example; use any SiliconFlow model id
+QWEN_API_KEY=your_api_key
+AI_MODEL=qwen-turbo
 ```
 
-Optional custom endpoint (defaults to the recommended domain):
+Optionally, set a custom endpoint:
 
 ```bash
-SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # or https://api.siliconflow.cn/v1
+QWEN_BASE_URL=https://your-custom-endpoint
 ```
 
-### SGLang
+### Doubao (ByteDance Volcengine)
 
 ```bash
-SGLANG_API_KEY=your_api_key
-AI_MODEL=your_model_id
+DOUBAO_API_KEY=your_api_key
+AI_MODEL=doubao-seed-1-8-251228  # or other Doubao model
 ```
 
-Optional custom endpoint:
+### GLM (Zhipu AI)
 
 ```bash
-SGLANG_BASE_URL=https://your-custom-endpoint/v1
+GLM_API_KEY=your_api_key
+AI_MODEL=glm-4
 ```
 
-### Azure OpenAI
+Optionally, set a custom endpoint:
 
 ```bash
-AZURE_API_KEY=your_api_key
-AZURE_RESOURCE_NAME=your-resource-name  # Required: your Azure resource name
-AI_MODEL=your-deployment-name
+GLM_BASE_URL=https://your-custom-endpoint
 ```
 
-Or use a custom endpoint instead of resource name:
+### Kimi (Moonshot AI)
 
 ```bash
-AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com  # Alternative to AZURE_RESOURCE_NAME
-AI_MODEL=your-deployment-name
+KIMI_API_KEY=your_api_key
+AI_MODEL=kimi-latest
 ```
 
-Optional reasoning configuration:
+Optionally, set a custom endpoint:
 
 ```bash
-AZURE_REASONING_EFFORT=low      # Optional: low, medium, high
-AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
+KIMI_BASE_URL=https://your-custom-endpoint
 ```
-
-### AWS Bedrock
-
-```bash
-AWS_REGION=us-west-2
-AWS_ACCESS_KEY_ID=your_access_key_id
-AWS_SECRET_ACCESS_KEY=your_secret_access_key
-AI_MODEL=anthropic.claude-sonnet-4-5-20250514-v1:0
-```
-
-Note: On AWS (Lambda, EC2 with IAM role), credentials are automatically obtained from the IAM role.
-
-### OpenRouter
-
-```bash
-OPENROUTER_API_KEY=your_api_key
-AI_MODEL=anthropic/claude-sonnet-4
-```
-
-Optional custom endpoint:
-
-```bash
-OPENROUTER_BASE_URL=https://your-custom-endpoint
-```
-
-### Ollama (Local)
-
-```bash
-AI_PROVIDER=ollama
-AI_MODEL=llama3.2
-```
-
-Optional custom URL:
-
-```bash
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-### ModelScope
-
-```bash
-MODELSCOPE_API_KEY=your_api_key
-AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
-```
-
-Optional custom endpoint:
-
-```bash
-MODELSCOPE_BASE_URL=https://your-custom-endpoint
-```
-
-### Vercel AI Gateway
-
-Vercel AI Gateway provides unified access to multiple AI providers through a single API key. This simplifies authentication and allows you to switch between providers without managing multiple API keys.
-
-**Basic Usage (Vercel-hosted Gateway):**
-
-```bash
-AI_GATEWAY_API_KEY=your_gateway_api_key
-AI_MODEL=openai/gpt-4o
-```
-
-**Custom Gateway URL (for local development or self-hosted Gateway):**
-
-```bash
-AI_GATEWAY_API_KEY=your_custom_api_key
-AI_GATEWAY_BASE_URL=https://your-custom-gateway.com/v1/ai
-AI_MODEL=openai/gpt-4o
-```
-
-Model format uses `provider/model` syntax:
-
--   `openai/gpt-4o` - OpenAI GPT-4o
--   `anthropic/claude-sonnet-4-5` - Anthropic Claude Sonnet 4.5
--   `google/gemini-2.0-flash` - Google Gemini 2.0 Flash
-
-**Configuration notes:**
-
--   If `AI_GATEWAY_BASE_URL` is not set, the default Vercel Gateway URL (`https://ai-gateway.vercel.sh/v1/ai`) is used
--   Custom base URL is useful for:
-    -   Local development with a custom Gateway instance
-    -   Self-hosted AI Gateway deployments
-    -   Enterprise proxy configurations
--   When using a custom base URL, you must also provide `AI_GATEWAY_API_KEY`
-
-Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-gateway).
 
 ### MiniMax
 
 MiniMax supports two API formats:
-- **Anthropic-compatible** (`/anthropic` endpoint) — recommended, supports interleaved thinking
-- **OpenAI-compatible** (`/v1` endpoint) — standard OpenAI chat completions format
+
+| Format | Endpoint | Notes |
+|---|---|---|
+| Anthropic-compatible | `/anthropic` | Recommended. Supports interleaved thinking, where the model can think between tool calls |
+| OpenAI-compatible | `/v1` | The standard OpenAI chat completions format |
 
 ```bash
 MINIMAX_API_KEY=your_api_key
-AI_MODEL=MiniMax-M2.7
+AI_MODEL=MiniMax-M3
 ```
 
-Optional configuration:
+Optional settings:
 
 ```bash
 # China mainland, Anthropic-compatible (default)
@@ -249,43 +150,99 @@ MINIMAX_BASE_URL=https://api.minimax.io/anthropic
 MINIMAX_BASE_URL=https://api.minimax.io/v1
 ```
 
-### GLM (Zhipu AI)
+### MiMo (Xiaomi)
 
 ```bash
-GLM_API_KEY=your_api_key
-AI_MODEL=glm-4
+MIMO_API_KEY=your_api_key
+AI_MODEL=mimo-v2.5-pro
 ```
 
-Optional custom endpoint:
+Optionally, set a custom endpoint. Token Plan subscribers should set their dedicated base URL:
 
 ```bash
-GLM_BASE_URL=https://your-custom-endpoint
+MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
-### Qwen (Alibaba Cloud)
+### OpenRouter
 
 ```bash
-QWEN_API_KEY=your_api_key
-AI_MODEL=qwen-turbo
+OPENROUTER_API_KEY=your_api_key
+AI_MODEL=anthropic/claude-sonnet-4
 ```
 
-Optional custom endpoint:
+Optionally, set a custom endpoint:
 
 ```bash
-QWEN_BASE_URL=https://your-custom-endpoint
+OPENROUTER_BASE_URL=https://your-custom-endpoint
 ```
 
-### Kimi (Moonshot AI)
+### AIHubMix
+
+AIHubMix gives you Claude, GPT, Gemini, DeepSeek and other models with one API key.
 
 ```bash
-KIMI_API_KEY=your_api_key
-AI_MODEL=kimi-latest
+AIHUBMIX_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
 ```
 
-Optional custom endpoint:
+Optionally, set a custom endpoint:
 
 ```bash
-KIMI_BASE_URL=https://your-custom-endpoint
+AIHUBMIX_BASE_URL=https://aihubmix.com/v1
+```
+
+### SiliconFlow (OpenAI-compatible)
+
+```bash
+SILICONFLOW_API_KEY=your_api_key
+AI_MODEL=deepseek-ai/DeepSeek-V3  # example; use any SiliconFlow model id
+```
+
+Without a base URL, the app uses `https://api.siliconflow.cn/v1`, the endpoint for keys from cloud.siliconflow.cn. If your key comes from the international site, cloud.siliconflow.com, set the .com endpoint:
+
+```bash
+SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1
+```
+
+### ModelScope
+
+```bash
+MODELSCOPE_API_KEY=your_api_key
+AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
+```
+
+Optionally, set a custom endpoint:
+
+```bash
+MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
+### Novita AI
+
+```bash
+NOVITA_API_KEY=your_api_key
+AI_MODEL=deepseek/deepseek-v4-pro
+```
+
+Optionally, set a custom endpoint. Without one, `https://api.novita.ai/openai` is used:
+
+```bash
+NOVITA_BASE_URL=https://your-custom-endpoint
+```
+
+### Atlas Cloud
+
+```bash
+ATLASCLOUD_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+The app has no built-in model list for Atlas Cloud. In the Models tab of Settings, it loads the list from Atlas Cloud with your key.
+
+Optionally, set a custom endpoint. Without one, `https://api.atlascloud.ai/v1` is used:
+
+```bash
+ATLASCLOUD_BASE_URL=https://your-custom-endpoint
 ```
 
 ### Qiniu (Qiniu Cloud)
@@ -295,41 +252,193 @@ QINIU_API_KEY=your_api_key
 AI_MODEL=your_model_id
 ```
 
-Optional custom endpoint:
+Optionally, set a custom endpoint:
 
 ```bash
 QINIU_BASE_URL=https://your-custom-endpoint
 ```
 
-## Auto-Detection
+### Vercel AI Gateway
 
-If you only configure **one** provider's API key, the system will automatically detect and use that provider. No need to set `AI_PROVIDER`.
+Vercel AI Gateway gives you many AI providers through one API key. Signing in is simpler, and you can switch providers without managing several API keys.
 
-If you configure **multiple** API keys, you must explicitly set `AI_PROVIDER`:
+With the gateway that Vercel hosts:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, deepseek, siliconflow, doubao, azure, bedrock, openrouter, ollama, gateway, sglang, modelscope, minimax, glm, qwen, kimi, qiniu
+AI_GATEWAY_API_KEY=your_gateway_api_key
+AI_MODEL=openai/gpt-4o
 ```
 
-## Server-Side Multi-Model Configuration
+With a custom gateway URL, for local development or a self-hosted gateway:
 
-Administrators can configure multiple server-side models that are available to all users without requiring personal API keys.
+```bash
+AI_GATEWAY_API_KEY=your_custom_api_key
+AI_GATEWAY_BASE_URL=https://your-custom-gateway.com/v1/ai
+AI_MODEL=openai/gpt-4o
+```
 
-### Configuration Methods
+Model ids take the form `provider/model`:
 
-**Option 1: Environment Variable** (recommended for cloud deployments)
+| `AI_MODEL` | Model |
+|---|---|
+| `openai/gpt-4o` | OpenAI GPT-4o |
+| `anthropic/claude-sonnet-4-5` | Anthropic Claude Sonnet 4.5 |
+| `google/gemini-2.0-flash` | Google Gemini 2.0 Flash |
 
-Set `AI_MODELS_CONFIG` as a JSON string:
+If `AI_GATEWAY_BASE_URL` is not set, the default Vercel Gateway URL (`https://ai-gateway.vercel.sh/v1/ai`) is used. A custom base URL is useful for:
+
+- Local development with your own Gateway instance
+- Self-hosted AI Gateway deployments
+- Enterprise proxy setups
+
+When you use a custom base URL, you must also set `AI_GATEWAY_API_KEY`.
+
+Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-gateway).
+
+### Amazon Bedrock
+
+```bash
+AWS_REGION=us-west-2
+AWS_ACCESS_KEY_ID=your_access_key_id
+AWS_SECRET_ACCESS_KEY=your_secret_access_key
+AI_MODEL=global.anthropic.claude-sonnet-5-5
+```
+
+Recent Claude models answer only through an inference profile id. This id starts with a region prefix such as `global.` or `us.`. The plain id (`anthropic.claude-sonnet-5-5`) fails with "on-demand throughput isn't supported".
+
+On AWS (Lambda, or EC2 with an IAM role), the credentials come from the IAM role automatically.
+
+### Google Vertex AI
+
+Google Vertex AI is Google Cloud's service for companies, with enterprise features and data residency (your data stays in the region you choose). Its Express Mode signs in with a plain API key, so it also works on edge runtimes such as Vercel and Cloudflare.
+
+```bash
+GOOGLE_VERTEX_API_KEY=your_api_key
+AI_MODEL=gemini-2.0-flash
+```
+
+Optionally, set a custom endpoint:
+
+```bash
+GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
+```
+
+### Azure OpenAI
+
+Azure needs either your resource name or your endpoint URL. Set one of the two. If you set both, `AZURE_BASE_URL` is used.
+
+With the resource name:
+
+```bash
+AZURE_API_KEY=your_api_key
+AZURE_RESOURCE_NAME=your-resource-name  # Your Azure resource name
+AI_MODEL=your-deployment-name
+```
+
+Or with the endpoint URL in place of the resource name:
+
+```bash
+AZURE_API_KEY=your_api_key
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # In place of AZURE_RESOURCE_NAME
+AI_MODEL=your-deployment-name
+```
+
+Optionally, set the reasoning options:
+
+```bash
+AZURE_REASONING_EFFORT=low      # Optional: low, medium, high
+AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
+```
+
+### EdgeOne Pages (Tencent Cloud)
+
+When you deploy the app on Tencent EdgeOne Pages, it can use the site's own Edge AI function at `/api/edgeai`. This needs no API key and no base URL. With no key to detect, the server cannot pick this provider by itself, so set `AI_PROVIDER`:
+
+```bash
+AI_PROVIDER=edgeone
+AI_MODEL=@tx/deepseek-ai/deepseek-v32
+```
+
+The function accepts `@tx/deepseek-ai/deepseek-v32`, `@tx/deepseek-ai/deepseek-r1-0528` and `@tx/deepseek-ai/deepseek-v3-0324`. If you set `ACCESS_CODE_LIST`, the function checks the access code too.
+
+### Ollama (local)
+
+```bash
+AI_PROVIDER=ollama
+AI_MODEL=llama3.2
+```
+
+Optionally, set a custom URL:
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434/api
+```
+
+### SGLang
+
+```bash
+SGLANG_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+Optionally, set a custom endpoint:
+
+```bash
+SGLANG_BASE_URL=https://your-custom-endpoint/v1
+```
+
+### Any other OpenAI-compatible API (custom)
+
+For a server not listed above, such as vLLM, LM Studio, LiteLLM or an API gateway, pick OpenAI-compatible in Settings and enter its base URL and a key. If the server ignores keys, any non-empty value works.
+
+The app merges several system messages into one, as open-source chat templates expect, and splits `<think>` reasoning from the reply.
+
+```bash
+CUSTOM_API_KEY=your_api_key
+CUSTOM_BASE_URL=http://127.0.0.1:8000/v1
+AI_MODEL=your_model_id
+```
+
+## How the server picks the provider
+
+If you set the API key of only one provider, the server detects that provider and uses it. You do not need to set `AI_PROVIDER`.
+
+If you set API keys for several providers, you must set `AI_PROVIDER`:
+
+```bash
+AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+```
+
+## Offer several models to all users
+
+As an administrator, you can set up several models on the server. All users can then use them without an API key of their own. Without this config, the app uses the `AI_PROVIDER` and `AI_MODEL` variables.
+
+You can set it up in three ways.
+
+### Put the config in an environment variable
+
+This way is recommended for cloud deployments. Set `AI_MODELS_CONFIG` to a JSON string:
 
 ```bash
 AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["gpt-4o"],"default":true}]}'
 ```
 
-**Option 2: Config File**
+### Use a config file
 
-Create an `ai-models.json` file in the project root (or set `AI_MODELS_CONFIG_PATH` to a custom location).
+Create an `ai-models.json` file in the project root. To keep it somewhere else, set `AI_MODELS_CONFIG_PATH` to its location.
 
-### Example Configuration
+### List several models in AI_MODEL
+
+This is a quick setup for a single provider. If you only need several models from one provider, list them in `AI_MODEL`, separated by commas. The first model is the default.
+
+```bash
+AI_PROVIDER=doubao
+AI_MODEL=doubao-seed-1-8-251228,doubao-seed-1-6-flash-250828,doubao-seed-1-6-251015
+```
+
+This is a short way to write the same `ai-models.json`. For several providers, or for your own `apiKeyEnv` and `baseUrlEnv`, use the environment variable or the config file.
+
+### Example
 
 ```json
 {
@@ -351,50 +460,83 @@ Create an `ai-models.json` file in the project root (or set `AI_MODELS_CONFIG_PA
 }
 ```
 
-### Field Reference
+### Fields
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Display name (supports multiple configs for same provider) |
-| `provider` | Yes | Provider type (`openai`, `anthropic`, `google`, `bedrock`, etc.) |
-| `models` | Yes | List of model IDs |
-| `default` | No | Set to `true` to auto-select this provider's first model as default |
-| `apiKeyEnv` | No | Custom API key env var name (defaults to provider's standard var like `OPENAI_API_KEY`) |
-| `baseUrlEnv` | No | Custom base URL env var name |
+| Field | Required | What it does |
+|---|---|---|
+| `name` | Yes | The display name. Several configs can use the same provider |
+| `provider` | Yes | The provider type (`openai`, `anthropic`, `google`, `bedrock` and so on) |
+| `models` | Yes | The list of model IDs |
+| `default` | No | `true` selects this provider's first model as the default |
+| `apiKeyEnv` | No | The name of a custom API key variable. Without it, the provider's standard variable is used, such as `OPENAI_API_KEY`. It can also be an array of variable names: each request picks one that has a value at random, which spreads the load over several keys |
+| `baseUrlEnv` | No | The name of a custom base URL variable |
 
-### Notes
+### Keys and names
 
-- API keys and credentials are provided via environment variables. By default, standard var names are used (e.g., `OPENAI_API_KEY`), but you can specify custom var names with `apiKeyEnv`.
-- The `name` field allows multiple configurations for the same provider (e.g., "OpenAI Production" and "OpenAI Staging" both using `provider: "openai"` but with different `apiKeyEnv` values).
-- If config is not present, the app falls back to `AI_PROVIDER`/`AI_MODEL` environment variable configuration.
+- API keys and credentials come from environment variables. By default the standard names are used, such as `OPENAI_API_KEY`. With `apiKeyEnv` you can use names of your own.
+- With `name`, one provider can have several configs. For example, "OpenAI Production" and "OpenAI Staging" can both use `provider: "openai"` with different `apiKeyEnv` values.
 
-## Model Capability Requirements
+## Choose a model
 
-This task requires exceptionally strong model capabilities, as it involves generating long-form text with strict formatting constraints (draw.io XML).
+To draw, the model writes long draw.io XML that must follow a strict format, so this task needs a very capable model.
 
-**Recommended models**:
+Recommended models: Claude Sonnet 4.5 or Opus 4.5.
 
--   Claude Sonnet 4.5 / Opus 4.5
+Ollama is supported as a provider. For this task, it is usually practical only when you run a strong model such as DeepSeek R1 or Qwen3-235B locally.
 
-**Note on Ollama**: While Ollama is supported as a provider, it's generally not practical for this use case unless you're running high-capability models like DeepSeek R1 or Qwen3-235B locally.
+| What you want | What to use |
+|---|---|
+| The best experience | A model that can read images (GPT-4o, Claude, Gemini), for turning images into diagrams |
+| A low cost | DeepSeek, which has competitive prices |
+| Privacy | Ollama, fully local and offline. It needs powerful hardware |
+| Flexibility | OpenRouter, which gives you many models through one API |
 
-## Temperature Setting
+## Set the temperature
 
-You can optionally configure the temperature via environment variable:
+Setting the temperature is optional. Set it with an environment variable:
 
 ```bash
 TEMPERATURE=0  # More deterministic output (recommended for diagrams)
 ```
 
-**Important**: Leave `TEMPERATURE` unset for models that don't support temperature settings, such as:
+**Important:** leave `TEMPERATURE` unset for models that do not support a temperature setting, such as:
+
 - GPT-5.1 and other reasoning models
 - Some specialized models
 
-When unset, the model uses its default behavior.
+When it is unset, the model uses its default behavior.
 
-## Recommendations
+## Add a new provider
 
--   **Best experience**: Use models with vision support (GPT-4o, Claude, Gemini) for image-to-diagram features
--   **Budget-friendly**: DeepSeek offers competitive pricing
--   **Privacy**: Use Ollama for fully local, offline operation (requires powerful hardware)
--   **Flexibility**: OpenRouter provides access to many models through a single API
+Everything about a provider is in one record in `lib/providers.ts`:
+
+- which AI SDK runs it (`sdk`)
+- what it signs in with (`credential`)
+- the prefix of its `<PREFIX>_API_KEY` and `<PREFIX>_BASE_URL` variables (`envPrefix`)
+- its official URL
+- its group in the provider picker
+- optional notes
+
+The settings screen, the connection test, the chat route and the admin panel all read this record. To add an OpenAI-compatible provider:
+
+1. Add a record to `lib/providers.ts`, for example:
+
+    ```ts
+    acme: {
+        label: "Acme AI",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "ACME",
+        defaultBaseUrl: "https://api.acme.example/v1",
+        apiKeyUrl: "https://acme.example/keys",
+        modelList: "openai",
+    },
+    ```
+
+    If the provider needs a hint under its base URL field, or a note in the picker, give it a `baseUrlHint` or `note` object with all four UI languages (`en`, `zh`, `ja`, `zh-Hant`). A provider that cannot list its models online gets a short `models` list in place of `modelList`.
+2. Add `ACME_API_KEY` and `ACME_BASE_URL` to `env.example`. A unit test checks that the variables of every record appear there.
+3. Add a section for it to this page in `docs/en`, `docs/cn`, `docs/tw` and `docs/ja`.
+4. Add it to the two lists at the top of `tests/unit/provider-matrix.test.ts` (`MATRIX_PROVIDERS` and `MATRIX_MODEL_IDS`). Then regenerate the behavior snapshot with `npx vitest run tests/unit/provider-matrix.test.ts -u`. The new rows belong to the new provider, and the existing rows must not change.
+5. Add it to `tests/unit/providers.test.ts` too. That file spells out the groups of the picker and the sets of providers that change what the server does (auto-detection, single system message).
+6. Update the provider count in the three READMEs and the `AI_PROVIDER` list on this page.

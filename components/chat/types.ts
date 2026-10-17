@@ -1,16 +1,19 @@
-export interface DiagramOperation {
-    operation: "update" | "add" | "delete"
-    cell_id: string
-    new_xml?: string
-}
+import type { DynamicToolUIPart, ToolUIPart, UITools } from "ai"
+import type { DiagramOperation } from "@/packages/mcp-server/src/diagram-operations.ts"
 
-export interface ToolPartLike {
-    type: string
-    toolCallId: string
-    state?: string
-    input?: {
-        xml?: string
-        operations?: DiagramOperation[]
-    } & Record<string, unknown>
+export type { DiagramOperation }
+
+/**
+ * A tool part as the UI reads it, in any state: input, output and errorText
+ * are each there or not, instead of one shape per state.
+ */
+export type ToolPartLike = (ToolUIPart<UITools> | DynamicToolUIPart) & {
+    input?:
+        | ({
+              xml?: string
+              operations?: DiagramOperation[]
+          } & Record<string, unknown>)
+        | undefined
     output?: string
+    errorText?: string
 }

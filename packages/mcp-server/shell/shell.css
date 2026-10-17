@@ -1,0 +1,20 @@
+/*
+ * Stylesheet of the MCP's canvas shell: the web app's theme and Tailwind,
+ * with the utility classes of the shared components the shell bundles.
+ * Built by scripts/build-shell.mjs; Tailwind scans this directory on its
+ * own, and the shared components through the @source lines.
+ */
+@import "../../../app/globals.css";
+@source "../../../components/canvas";
+@source "../../../components/ui";
+@source "../../../components/ai-elements";
+@source "../../../components/workspace/app-toaster.tsx";
+@source "../../../components/save-dialog.tsx";
+
+/* System fonts stand in for the web fonts the Next.js layout loads */
+:root {
+    --font-latin:
+        ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}

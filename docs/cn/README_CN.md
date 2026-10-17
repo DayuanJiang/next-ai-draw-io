@@ -1,106 +1,113 @@
-# Next AI Draw.io
-
 <div align="center">
 
-**AI驱动的图表创建工具 - 对话、绘制、可视化**
+# Next AI Draw.io
+
+**和 AI 对话，画出并修改 draw.io 图表。**
 
 [English](../../README.md) | 中文 | [日本語](../ja/README_JA.md)
 
 [![TrendShift](https://trendshift.io/api/badge/repositories/15449)](https://next-ai-drawio.jiang.jp/)
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Next.js](https://img.shields.io/badge/Next.js-16.x-black)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19.x-61dafb)](https://react.dev/)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+[**在线体验**](https://next-ai-drawio.jiang.jp/) · [**文档**](https://next-ai-drawio.jiang.jp/zh/docs) · [**图库**](https://next-ai-drawio.jiang.jp/zh/gallery) · [**桌面应用**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP 服务器**](https://next-ai-drawio.jiang.jp/zh/mcp)
 
 </div>
 
-一个集成了AI功能的Next.js网页应用，与draw.io图表无缝结合。通过自然语言命令和AI辅助可视化来创建、修改和增强图表。
+https://github.com/user-attachments/assets/66b9f12f-219f-4d62-acc0-0725e6850eec
 
-> 注：感谢 <img src="https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/public/doubao-color.png" alt="" height="20" /> [字节跳动豆包](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio) 的赞助支持，本项目的 Demo 现已接入强大的 glm-4.7 模型！
+用一句话描述想要的图，AI 就在真正的 draw.io 画布上把它画出来。你可以像编辑任何 draw.io 文件一样手动修改，也可以选中几个图形、告诉 AI 要改什么。AI 的每次修改都是一个版本，可以对比、恢复或撤销；结果可以导出为 `.drawio`、`.png` 或 `.svg`。
 
-<a href="https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio" target="_blank"><img src="../../public/volcengine-invite.png" alt="火山引擎方舟 Coding Plan" width="300" /></a>
+提供网页版、Windows / macOS / Linux 桌面版，以及供 Claude Code、Cursor、VS Code 等 AI 代理调用的 MCP 服务器。
 
-https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
+## 亮点
 
-## 目录
-- [Next AI Draw.io](#next-ai-drawio)
-  - [目录](#目录)
-  - [示例](#示例)
-  - [功能特性](#功能特性)
-  - [MCP服务器](#mcp服务器)
-    - [Claude Code CLI](#claude-code-cli)
-  - [快速开始](#快速开始)
-    - [在线试用](#在线试用)
-    - [桌面应用](#桌面应用)
-    - [使用Docker运行](#使用docker运行)
-    - [安装](#安装)
-  - [部署](#部署)
-    - [部署到腾讯云EdgeOne Pages](#部署到腾讯云edgeone-pages)
-    - [部署到Vercel](#部署到vercel)
-    - [部署到Cloudflare Workers](#部署到cloudflare-workers)
-  - [多提供商支持](#多提供商支持)
-  - [工作原理](#工作原理)
-  - [支持与联系](#支持与联系)
-  - [常见问题](#常见问题)
-  - [Star历史](#star历史)
+**画**
+
+-   一句话生成架构图、流程图、时序图等，内置 AWS、Azure、GCP、Kubernetes 等图标库
+-   连接线可以带流动动画
+-   上传截图或手绘图，让 AI 照着画；上传 PDF、Markdown、代码等文本文件，从内容生成图
+
+**改**
+
+-   用对话修改：改动流式呈现，刚改过的图形在画布上高亮
+-   选中图形提问：在画布上选中几个图形，AI 只改这几个
+-   版本与撤销：每次 AI 修改都是一张带缩略图的版本卡片，可以和画布对比、恢复、撤销；画布上按 Ctrl+Z 也能一步撤回 AI 的修改
+-   它就是普通的 draw.io：双击改名、拖动、调样式、多页，随时导出 `.drawio`、`.png`、`.svg`、`.drawio.svg`
+
+**用**
+
+-   支持 24 家模型服务商，可以在浏览器里填自己的 API Key，Key 只保存在本地
+-   支持推理的模型会显示思考过程
+-   深色模式；界面有英文、简体中文、繁体中文、日文
 
 ## 示例
-
-以下是一些示例提示词及其生成的图表：
 
 <div align="center">
 <table width="100%">
   <tr>
-    <td colspan="2" valign="top" align="center">
-      <strong>动画Transformer连接器</strong><br />
-      <p><strong>Prompt:</strong> Give me a **animated connector** diagram of transformer's architecture.</p>
-      <img src="../../public/animated_connectors.svg" alt="带动画连接器的Transformer架构" width="480" />
+    <td width="50%" valign="top">
+      <strong>AWS 上的高可用 Web 应用</strong><br />
+      <p><strong>提示词：</strong> Draw an AWS architecture for a highly available web app across two Availability Zones with AWS icons: Route 53, CloudFront with AWS WAF, an Application Load Balancer, ECS Fargate services in private subnets, Aurora PostgreSQL with a writer and a reader, ElastiCache for Redis, S3 for static assets, NAT gateways, and CloudWatch for monitoring.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/aws-ha.svg" alt="AWS 上的高可用 Web 应用" width="400" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>网店的 Kubernetes 部署</strong><br />
+      <p><strong>提示词：</strong> Draw a Kubernetes deployment for a web shop: an ingress, web and API deployments with their services and pods, a Redis StatefulSet with a persistent volume, a ConfigMap, a Secret, and an autoscaler on the API.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/kubernetes.svg" alt="网店的 Kubernetes 部署" width="400" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>RAG技术图</strong><br />
-      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for **chat application**. Use connected diagram for data ingestion</p>
-      <img src="../../public/rag_prod.svg" alt="RAG架构图" width="480" />
+      <strong>网店的 ER 图</strong><br />
+      <p><strong>提示词：</strong> Draw an ER diagram for an online shop: customers, addresses, orders, order items, products, categories and payments, with primary and foreign keys and the cardinality of each relationship.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/er-shop.svg" alt="网店的 ER 图" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>React和AWS认证流程</strong><br />
-      <p><strong>Prompt:</strong> Generate authentication process using React with **AWS**. Use Serverless architecture.</p>
-      <img src="../../public/auth.svg" alt="认证架构图" width="480" />
+      <strong>BPMN 报销流程</strong><br />
+      <p><strong>提示词：</strong> Draw a BPMN process for an expense claim: an employee submits it, the manager approves or rejects it, finance checks the receipts and pays, and the claim goes back to the employee when receipts are missing.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/bpmn-expense.svg" alt="BPMN 报销流程" width="400" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>开放式创新</strong><br />
-      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
-      <img src="../../public/inno.svg" alt="开放式创新图" width="480" />
+      <strong>带动画连线的 Transformer 架构</strong><br />
+      <p><strong>提示词：</strong> Give me an animated connector diagram of transformer's architecture.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/transformer.svg" alt="带动画连线的 Transformer 架构" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>猫咪素描</strong><br />
-      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
-      <img src="../../public/cat_demo.svg" alt="猫咪绘图" width="240" />
+      <strong>手机银行的用户旅程地图</strong><br />
+      <p><strong>提示词：</strong> Draw a customer journey map for a mobile banking app across five stages (discover, sign up, first payment, everyday use, get help), with the customer's actions, touchpoints, feelings and pain points in each stage, and an opportunity for each pain point.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/journey-map.svg" alt="手机银行的用户旅程地图" width="400" />
     </td>
   </tr>
 </table>
 </div>
 
-## 功能特性
+更多示例，以及每张图的提示词和模型，见 **[图库](https://next-ai-drawio.jiang.jp/zh/gallery)**。
 
--   **LLM驱动的图表创建**：利用大语言模型通过自然语言命令直接创建和操作draw.io图表
--   **基于图像的图表复制**：上传现有图表或图像，让AI自动复制和增强
--   **PDF和文本文件上传**：上传PDF文档和文本文件，提取内容并从现有文档生成图表
--   **AI推理过程显示**：查看支持模型的AI思考过程（OpenAI o1/o3、Gemini、Claude等）
--   **图表历史记录**：全面的版本控制，跟踪所有更改，允许您查看和恢复AI编辑前的图表版本
--   **交互式聊天界面**：与AI实时对话来完善您的图表
--   **云架构图支持**：专门支持生成云架构图（AWS、GCP、Azure）
--   **动画连接器**：在图表元素之间创建动态动画连接器，实现更好的可视化效果
+## 使用方式
 
-## MCP服务器
+### 在线体验
 
-通过MCP（模型上下文协议）在Claude Desktop、Cursor和VS Code等AI代理中使用Next AI Draw.io。
+打开 [next-ai-drawio.jiang.jp](https://next-ai-drawio.jiang.jp/) 即可使用，无需安装。演示站有用量限制；点击聊天面板里的设置图标，填入自己的服务商和 API Key 就不受限制。Key 只保存在浏览器本地，不会上传到服务器。
+
+### 桌面应用
+
+在 [Releases 页面](https://github.com/DayuanJiang/next-ai-draw-io/releases) 下载 Windows、macOS 或 Linux 安装包。
+
+### 在 AI 代理里使用（MCP）
+
+https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
+
+通过 MCP（Model Context Protocol，让 AI 代理调用外部工具的协议），Claude Desktop、Cursor、VS Code 等都能直接画 draw.io 图。在客户端的 MCP 配置里加上：
 
 ```json
 {
@@ -113,143 +120,72 @@ https://github.com/user-attachments/assets/b2eef5f3-b335-4e71-a755-dc2e80931979
 }
 ```
 
-### Claude Code CLI
+VS Code 和 Cursor 点一下就能装好：[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522drawio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540next-ai-drawio%252Fmcp-server%2540latest%2522%255D%257D) [![Add to Cursor](https://img.shields.io/badge/Cursor-Add_Server-000000?style=flat-square)](https://cursor.com/en/install-mcp?name=drawio&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJAbmV4dC1haS1kcmF3aW8vbWNwLXNlcnZlckBsYXRlc3QiXX0%3D)
+
+Claude Code 用一行命令（`--scope user` 让所有项目都能用）：
 
 ```bash
-claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
-然后让Claude创建图表：
-> "创建一个展示用户认证流程的流程图，包含登录、MFA和会话管理"
+它也是 Claude Code 社区插件市场里的一个插件（需要 Claude Code 2.1.275 或更高版本）：
 
-图表会实时显示在浏览器中！
+```text
+/plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
+```
 
-详情请参阅[MCP服务器README](../../packages/mcp-server/README.md)，了解VS Code、Cursor等客户端配置。
+然后对 AI 说"画一个用户认证流程图，包含登录、MFA 和会话管理"，图会实时出现在浏览器里。MCP 服务器包含网页版的大部分画图能力：
 
-## 快速开始
+-   与网页版相同的画图规则、图标库（AWS、Azure、GCP、Kubernetes 等）和画布：AI 的改动会被标出，按一次 Ctrl+Z 就能撤销，AI 还能读到你选中的图形
+-   截图工具，AI 可以看一眼画好的图并自行修正
+-   版本历史、多页图表，导出为 `.drawio`、`.png`、`.svg` 或 `.drawio.svg`，并自动保存到 `~/.next-ai-drawio/`；draw.io 编辑器随包安装，预览不需要联网
 
-### 在线试用
+Codex、VS Code、Cursor 等客户端的配置、全部工具，以及和其他 draw.io MCP 服务器的对比，见 [MCP 服务器页面](https://next-ai-drawio.jiang.jp/zh/mcp)。
 
-无需安装！直接在我们的演示站点试用：
+### 和 draw.io 自带的 AI 有什么不同
 
-[![Live Demo](../../public/live-demo-button.svg)](https://next-ai-drawio.jiang.jp/)
+draw.io 自带 Generate 工具（Arrange > Insert > Generate）。它在 draw.io 里运行，可以用免费的托管模型，也可以填自己的 API key；把图、页面或选中的图形附加到对话里，它就能修改。Next AI Draw.io 每条消息都会带上当前画布，包括你手动做的修改；AI 的每次修改都是一个可以对比或恢复的版本；支持 25 家模型服务商，包括通过 Ollama 使用本地模型，在演示站、桌面应用和自己的服务器上都能用。
 
-> **使用自己的 API Key**：您可以使用自己的 API Key 来绕过演示站点的用量限制。点击聊天面板中的设置图标即可配置您的 Provider 和 API Key。您的 Key 仅保存在浏览器本地，不会被存储在服务器上。
+## 自己部署
 
-### 桌面应用
-
-从 [Releases 页面](https://github.com/DayuanJiang/next-ai-draw-io/releases) 下载适用于您平台的原生桌面应用：
-
-支持的平台：Windows、macOS、Linux。
-
-### 使用Docker运行
-
-[查看 Docker 指南](./docker.md)
-
-### 安装
-
-1. 克隆仓库：
+### 本地运行
 
 ```bash
 git clone https://github.com/DayuanJiang/next-ai-draw-io
 cd next-ai-draw-io
 npm install
-cp env.example .env.local
-```
-
-详细设置说明请参阅[提供商配置指南](./ai-providers.md)。
-
-2. 运行开发服务器：
-
-```bash
+cp env.example .env.local   # 填入服务商和 API Key，见下文"模型与服务商"
 npm run dev
 ```
 
-3. 在浏览器中打开 [http://localhost:6002](http://localhost:6002) 查看应用。
+打开 [http://localhost:6002](http://localhost:6002)。
 
-## 部署
+### 一键部署
 
-### 部署到腾讯云EdgeOne Pages
+| 平台 | 方式 |
+| --- | --- |
+| 腾讯云 EdgeOne Pages | [![使用 EdgeOne Pages 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/pages/new?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io) 部署后还能获得[每日免费的 DeepSeek 模型额度](https://edgeone.cloud.tencent.com/pages/document/169925463311781888) |
+| Vercel | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io) 记得在 Vercel 控制台里设置和 `.env.local` 相同的环境变量 |
+| Cloudflare Workers | [Cloudflare 部署指南](./cloudflare-deploy.md) |
+| Docker | [Docker 指南](./docker.md) |
+| 离线或内网 | [离线部署说明](./offline-deployment.md) |
 
-您可以通过[腾讯云EdgeOne Pages](https://pages.edgeone.ai/zh)一键部署。
+### 模型与服务商
 
-直接点击此按钮一键部署：
-[![使用 EdgeOne Pages 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/pages/new?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+支持 AWS Bedrock（默认）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、腾讯云 EdgeOne、字节跳动豆包、ModelScope、智谱 GLM、通义千问、七牛云、Kimi、MiniMax、Novita、小米 MiMo、Atlas Cloud，以及一个可填任意地址的 OpenAI 兼容预设（vLLM、LM Studio、网关），共 25 家。各家的环境变量和注意事项见[服务商配置指南](./ai-providers.md)。
 
-查看[腾讯云EdgeOne Pages文档](https://pages.edgeone.ai/zh/document/product-introduction)了解更多详情。
+**选哪个模型**：这项任务要生成格式严格的长文本（draw.io XML），请选能力较强的模型，小模型容易画出错误的图。
 
-同时，通过腾讯云EdgeOne Pages部署，也会获得[每日免费的DeepSeek模型额度](https://edgeone.cloud.tencent.com/pages/document/169925463311781888)。
+**多模型与管理面板**：在 `AI_MODEL` 里用逗号列出多个模型 ID，或用 `AI_MODELS_CONFIG` 环境变量 / `ai-models.json` 文件配置多家服务商的模型，所有用户无需自带 Key 即可使用。设置 `ADMIN_PASSWORD` 后访问 `/admin`，可以在网页里管理模型、访问码、功能开关、可观测性和配额，见[管理面板指南](./admin-panel.md)。
 
-### 部署到Vercel
+## 支持
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDayuanJiang%2Fnext-ai-draw-io)
+-   问题和建议：提交 [GitHub Issue](https://github.com/DayuanJiang/next-ai-draw-io/issues)，或发邮件到 me[at]jiang.jp
+-   常见问题：[FAQ](./FAQ.md)
+-   如果这个项目对你有用，欢迎[赞助](https://github.com/sponsors/DayuanJiang)，帮助我维持演示站点的运行
 
-部署Next.js应用最简单的方式是使用Next.js创建者提供的[Vercel平台](https://vercel.com/new)。请确保在Vercel控制台中**设置环境变量**，就像您在本地 `.env.local` 文件中所做的那样。
-
-查看[Next.js部署文档](https://nextjs.org/docs/app/building-your-application/deploying)了解更多详情。
-
-### 部署到Cloudflare Workers
-
-[查看 Cloudflare 部署指南](./cloudflare-deploy.md)
-
-
-## 多提供商支持
-
--   [字节跳动豆包](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)
--   AWS Bedrock（默认）
--   OpenAI
--   Anthropic
--   Google AI
--   Google Vertex AI
--   Azure OpenAI
--   Ollama
--   OpenRouter
--   DeepSeek
--   SiliconFlow
--   ModelScope
--   SGLang
--   Vercel AI Gateway
-
-除AWS Bedrock和OpenRouter外，所有提供商都支持自定义端点。
-
-📖 **[详细的提供商配置指南](./ai-providers.md)** - 查看各提供商的设置说明。
-
-### 服务端多模型配置
-
-管理员可以配置多个服务端模型，让所有用户无需提供个人 API Key 即可使用。通过 `AI_MODELS_CONFIG` 环境变量（JSON 字符串）或 `ai-models.json` 文件配置。
-
-**模型要求**：此任务需要强大的模型能力，因为它涉及生成具有严格格式约束的长文本（draw.io XML）。推荐使用 Claude Sonnet 4.5、GPT-5.1、Gemini 3 Pro 和 DeepSeek V3.2/R1。
-
-注意：`claude` 系列已在带有 AWS、Azure、GCP 等云架构 Logo 的 draw.io 图表上进行训练，因此如果您想创建云架构图，这是最佳选择。
-
-
-## 工作原理
-
-本应用使用以下技术：
-
--   **Next.js**：用于前端框架和路由
--   **Vercel AI SDK**（`ai` + `@ai-sdk/*`）：用于流式AI响应和多提供商支持
--   **react-drawio**：用于图表表示和操作
-
-图表以XML格式表示，可在draw.io中渲染。AI处理您的命令并相应地生成或修改此XML。
-
-
-## 支持与联系
-
-**特别感谢[字节跳动豆包](https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio)赞助演示站点的 API Token 使用！** 注册火山引擎 ARK 平台即可获得50万免费Token！
-
-如果您觉得这个项目有用，请考虑[赞助](https://github.com/sponsors/DayuanJiang)来帮助我托管在线演示站点！
-
-如需支持或咨询，请在GitHub仓库上提交issue或联系维护者：
-
--   邮箱：me[at]jiang.jp
-
-## 常见问题
-
-请参阅 [FAQ](./FAQ.md) 了解常见问题和解决方案。
-
-## Star历史
+<div align="center">
 
 [![Star History Chart](https://api.star-history.com/svg?repos=DayuanJiang/next-ai-draw-io&type=date&legend=top-left)](https://www.star-history.com/#DayuanJiang/next-ai-draw-io&type=date&legend=top-left)
 
----
+</div>

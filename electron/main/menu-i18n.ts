@@ -3,71 +3,35 @@
  * Translations for menu labels that don't use Electron's built-in roles
  */
 
-import { getUserLocale } from "./config-manager"
+import { getUserLocale, type UserLocale } from "./config-manager"
 
-export type MenuLocale = "en" | "zh" | "ja" | "zh-Hant"
+export type MenuLocale = UserLocale
 
-export interface MenuTranslations {
-    // App menu (macOS only)
-    settings: string
-
+const en = {
     // File menu
-    file: string
+    file: "File",
 
     // Edit menu
-    edit: string
+    edit: "Edit",
 
     // View menu
-    view: string
-
-    // Configuration menu
-    configuration: string
-    switchPreset: string
-    managePresets: string
-    addConfigurationPreset: string
+    view: "View",
 
     // Window menu
-    window: string
+    window: "Window",
 
     // Help menu
-    help: string
-    documentation: string
-    reportIssue: string
+    help: "Help",
+    documentation: "Documentation",
+    reportIssue: "Report Issue",
 }
 
+type MenuTranslations = typeof en
+
 const translations: Record<MenuLocale, MenuTranslations> = {
-    en: {
-        // App menu
-        settings: "Settings...",
-
-        // File menu
-        file: "File",
-
-        // Edit menu
-        edit: "Edit",
-
-        // View menu
-        view: "View",
-
-        // Configuration menu
-        configuration: "Configuration",
-        switchPreset: "Switch Preset",
-        managePresets: "Manage Presets...",
-        addConfigurationPreset: "Add Configuration Preset...",
-
-        // Window menu
-        window: "Window",
-
-        // Help menu
-        help: "Help",
-        documentation: "Documentation",
-        reportIssue: "Report Issue",
-    },
+    en,
 
     zh: {
-        // App menu
-        settings: "设置...",
-
         // File menu
         file: "文件",
 
@@ -76,12 +40,6 @@ const translations: Record<MenuLocale, MenuTranslations> = {
 
         // View menu
         view: "查看",
-
-        // Configuration menu
-        configuration: "配置",
-        switchPreset: "切换预设",
-        managePresets: "管理预设...",
-        addConfigurationPreset: "添加配置预设...",
 
         // Window menu
         window: "窗口",
@@ -93,9 +51,6 @@ const translations: Record<MenuLocale, MenuTranslations> = {
     },
 
     ja: {
-        // App menu
-        settings: "設定...",
-
         // File menu
         file: "ファイル",
 
@@ -104,12 +59,6 @@ const translations: Record<MenuLocale, MenuTranslations> = {
 
         // View menu
         view: "表示",
-
-        // Configuration menu
-        configuration: "設定",
-        switchPreset: "プリセット切り替え",
-        managePresets: "プリセット管理...",
-        addConfigurationPreset: "設定プリセットを追加...",
 
         // Window menu
         window: "ウインドウ",
@@ -121,9 +70,6 @@ const translations: Record<MenuLocale, MenuTranslations> = {
     },
 
     "zh-Hant": {
-        // App menu
-        settings: "設定...",
-
         // File menu
         file: "檔案",
 
@@ -132,12 +78,6 @@ const translations: Record<MenuLocale, MenuTranslations> = {
 
         // View menu
         view: "檢視",
-
-        // Configuration menu
-        configuration: "配置",
-        switchPreset: "切換預設",
-        managePresets: "管理預設...",
-        addConfigurationPreset: "新增配置預設...",
 
         // Window menu
         window: "視窗",
@@ -150,33 +90,22 @@ const translations: Record<MenuLocale, MenuTranslations> = {
 }
 
 /**
- * Get menu translations for a given locale
- * Falls back to English if locale is not supported
+ * Get menu translations for a locale
  */
-export function getMenuTranslations(locale: string): MenuTranslations {
-    // Check for zh-Hant before normalizing
-    if (
-        locale === "zh-Hant" ||
-        locale.toLowerCase().startsWith("zh-hant") ||
-        locale.toLowerCase().startsWith("zh-tw") ||
-        locale.toLowerCase().startsWith("zh-hk")
-    ) {
-        return translations["zh-Hant"]
-    }
-
-    // Normalize locale (e.g., "zh-CN" -> "zh", "ja-JP" -> "ja")
-    const normalized = locale.toLowerCase().split("-")[0]
-
-    if (normalized === "zh") return translations.zh
-    if (normalized === "ja") return translations.ja
-    return translations.en
+export function getMenuTranslations(locale: MenuLocale): MenuTranslations {
+    return translations[locale]
 }
 
 /**
- * Detect system locale from Electron app
- * Returns one of: "en", "zh", "ja", "zh-Hant"
+ * Get locale from stored preference or system default
+ * Checks config file for user's language preference first
  */
-export function detectSystemLocale(appLocale: string): MenuLocale {
+export function getPreferredLocale(appLocale: string): MenuLocale {
+    const savedLocale = getUserLocale()
+    if (savedLocale) {
+        return savedLocale
+    }
+
     const lower = appLocale.toLowerCase()
 
     // Distinguish Traditional Chinese locales (TW, HK, Hant) from Simplified
@@ -188,24 +117,9 @@ export function detectSystemLocale(appLocale: string): MenuLocale {
         return "zh-Hant"
     }
 
-    const normalized = lower.split("-")[0]
+    const language = lower.split("-")[0]
 
-    if (normalized === "zh") return "zh"
-    if (normalized === "ja") return "ja"
+    if (language === "zh") return "zh"
+    if (language === "ja") return "ja"
     return "en"
-}
-
-/**
- * Get locale from stored preference or system default
- * Checks config file for user's language preference first
- */
-export function getPreferredLocale(appLocale: string): MenuLocale {
-    // Try to get from saved preference first
-    const savedLocale = getUserLocale()
-    if (savedLocale) {
-        return savedLocale
-    }
-
-    // Fall back to system locale
-    return detectSystemLocale(appLocale)
 }

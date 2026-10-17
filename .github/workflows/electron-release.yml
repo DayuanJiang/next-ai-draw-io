@@ -34,15 +34,7 @@ jobs:
           node-version: 24
           cache: "npm"
 
-      - name: Download draw.io static files for offline use
-        run: |
-          rm -rf public/drawio
-          git clone --depth 1 https://github.com/jgraph/drawio.git /tmp/drawio
-          mkdir -p public/drawio
-          cp -r /tmp/drawio/src/main/webapp/* public/drawio/
-          rm -rf public/drawio/WEB-INF
-          rm -rf public/drawio/META-INF
-
+      # npm run build downloads draw.io first (prebuild)
       - name: Install dependencies
         run: npm install
 
@@ -66,16 +58,7 @@ jobs:
           node-version: 24
           cache: "npm"
 
-      - name: Download draw.io static files for offline use
-        shell: bash
-        run: |
-          rm -rf public/drawio
-          git clone --depth 1 https://github.com/jgraph/drawio.git /tmp/drawio
-          mkdir -p public/drawio
-          cp -r /tmp/drawio/src/main/webapp/* public/drawio/
-          rm -rf public/drawio/WEB-INF
-          rm -rf public/drawio/META-INF
-
+      # npm run build downloads draw.io first (prebuild)
       - name: Install dependencies
         run: npm install
 
@@ -103,6 +86,9 @@ jobs:
           artifact-configuration-slug: 'windows-exe'
           github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
           wait-for-completion: true
+          # The release-signing policy needs a manual approval in SignPath;
+          # the default 600 s wait made the job fail before anyone could approve.
+          wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: release-signed
 
       - name: Upload signed artifacts to release

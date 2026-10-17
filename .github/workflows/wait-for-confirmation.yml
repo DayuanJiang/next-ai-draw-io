@@ -1,0 +1,55 @@
+# Issues labelled "wait for confrim" are waiting for the reporter. After 15
+# days without activity the issue gets a reminder and the "no response"
+# label; after 15 more days it is closed. A reply from the reporter removes
+# both labels, so the issue shows up as needing the maintainer again.
+name: Wait for confirmation
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  remind-and-close:
+    if: github.event_name != 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          only-issue-labels: "wait for confrim"
+          days-before-issue-stale: 15
+          days-before-issue-close: 15
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          stale-issue-label: "no response"
+          stale-issue-message: >-
+            Still there? We asked for more information 15 days ago. A reply
+            would help; if we hear nothing in another 15 days this issue will
+            be closed. It can be reopened any time.
+          close-issue-message: >-
+            No reply in 30 days, so this issue is closed for now. If the
+            problem is still there, reply or reopen it.
+          close-issue-reason: not_planned
+          remove-stale-when-updated: true
+
+  reporter-replied:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      contains(github.event.issue.labels.*.name, 'wait for confrim') &&
+      github.event.comment.user.type != 'Bot' &&
+      !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - name: The reporter answered, so the issue is the maintainer's again
+        run: >-
+          gh issue edit "$NUMBER" --repo "$REPO"
+          --remove-label "wait for confrim" --remove-label "no response"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}

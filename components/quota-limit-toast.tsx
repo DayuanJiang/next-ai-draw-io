@@ -2,7 +2,7 @@
 
 import { Coffee, Settings, X } from "lucide-react"
 import type React from "react"
-import { FaGithub } from "react-icons/fa"
+import { GitHubIcon } from "@/components/icons/github"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 
@@ -28,16 +28,10 @@ export function QuotaLimitToast({
         n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString()
 
     const quotaMessage = isTokenLimit
-        ? isSelfHosted
-            ? (dict.quota.messageTokenSelfHosted ?? dict.quota.messageToken)
-            : dict.quota.messageToken
-        : isSelfHosted
-          ? (dict.quota.messageApiSelfHosted ?? dict.quota.messageApi)
-          : dict.quota.messageApi
+        ? dict.quota.messageToken
+        : dict.quota.messageApi
 
-    const tipHtml = isSelfHosted
-        ? (dict.quota.tipSelfHosted ?? dict.quota.tip)
-        : dict.quota.tip
+    const tipHtml = isSelfHosted ? dict.quota.tipSelfHosted : dict.quota.tip
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Escape") {
@@ -52,7 +46,7 @@ export function QuotaLimitToast({
             aria-live="polite"
             tabIndex={0}
             onKeyDown={handleKeyDown}
-            className="relative w-[400px] overflow-hidden rounded-xl border border-border/50 bg-card p-5 shadow-soft animate-message-in"
+            className="relative w-[400px] overflow-hidden rounded-xl border border-border/50 bg-card p-5 shadow-float animate-message-in"
         >
             {/* Close button */}
             <button
@@ -85,18 +79,6 @@ export function QuotaLimitToast({
             {/* Message */}
             <div className="text-sm text-muted-foreground leading-relaxed mb-4 space-y-2">
                 <p>{quotaMessage}</p>
-                {!isSelfHosted && (
-                    <p
-                        dangerouslySetInnerHTML={{
-                            __html: formatMessage(
-                                dict.quota.doubaoSponsorship,
-                                {
-                                    link: "https://www.volcengine.com/activity/codingplan?ac=MMAP8JTTCAQ2&rc=Z9Z3LDTJ&utm_campaign=drawio&utm_content=drawio&utm_medium=devrel&utm_source=OWO&utm_term=drawio",
-                                },
-                            ),
-                        }}
-                    />
-                )}
                 <p
                     dangerouslySetInnerHTML={{
                         __html: tipHtml,
@@ -127,7 +109,7 @@ export function QuotaLimitToast({
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
                         >
-                            <FaGithub className="w-3.5 h-3.5" />
+                            <GitHubIcon className="w-3.5 h-3.5" />
                             {dict.quota.selfHost}
                         </a>
                         <a

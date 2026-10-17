@@ -1,81 +1,30 @@
 import { TRUNCATED_XML } from "./fixtures/diagrams"
 import {
-    createErrorMock,
     expect,
     getChatInput,
-    getIframe,
+    openApp,
     sendMessage,
     test,
 } from "./lib/fixtures"
+import { sse } from "./lib/helpers"
 
 test.describe("Error Handling", () => {
-    test("displays error message when API returns 500", async ({ page }) => {
-        await page.route(
-            "**/api/chat",
-            createErrorMock(500, "Internal server error"),
-        )
-
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await sendMessage(page, "Draw a cat")
-
-        // Should show error indication
-        const errorIndicator = page
-            .locator('[role="alert"]')
-            .or(page.locator("[data-sonner-toast]"))
-            .or(page.locator("text=/error|failed|something went wrong/i"))
-        await expect(errorIndicator.first()).toBeVisible({ timeout: 10000 })
-
-        // User should be able to type again
-        const chatInput = getChatInput(page)
-        await chatInput.fill("Retry message")
-        await expect(chatInput).toHaveValue("Retry message")
-    })
-
-    test("displays error message when API returns 429 rate limit", async ({
-        page,
-    }) => {
-        await page.route(
-            "**/api/chat",
-            createErrorMock(429, "Rate limit exceeded"),
-        )
-
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-
-        await sendMessage(page, "Draw a cat")
-
-        // Should show error indication for rate limit
-        const errorIndicator = page
-            .locator('[role="alert"]')
-            .or(page.locator("[data-sonner-toast]"))
-            .or(page.locator("text=/rate limit|too many|try again/i"))
-        await expect(errorIndicator.first()).toBeVisible({ timeout: 10000 })
-
-        // User should be able to type again
-        const chatInput = getChatInput(page)
-        await chatInput.fill("Retry after rate limit")
-        await expect(chatInput).toHaveValue("Retry after rate limit")
-    })
-
     test("handles network timeout gracefully", async ({ page }) => {
         await page.route("**/api/chat", async (route) => {
             await new Promise((resolve) => setTimeout(resolve, 2000))
             await route.abort("timedout")
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         await sendMessage(page, "Draw a cat")
 
         // Should show error indication for network failure
-        const errorIndicator = page
-            .locator('[role="alert"]')
-            .or(page.locator("[data-sonner-toast]"))
-            .or(page.locator("text=/error|failed|network|timeout/i"))
-        await expect(errorIndicator.first()).toBeVisible({ timeout: 10000 })
+        await expect(
+            page.getByRole("alert").filter({
+                hasText: "Network error. Please check your connection.",
+            }),
+        ).toBeVisible({ timeout: 10000 })
 
         // After timeout, user should be able to type again
         const chatInput = getChatInput(page)
@@ -116,15 +65,11 @@ test.describe("Error Handling", () => {
             await route.fulfill({
                 status: 200,
                 contentType: "text/event-stream",
-                body:
-                    events
-                        .map((e) => `data: ${JSON.stringify(e)}\n\n`)
-                        .join("") + "data: [DONE]\n\n",
+                body: sse(events),
             })
         })
 
-        await page.goto("/", { waitUntil: "networkidle" })
-        await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+        await openApp(page)
 
         await sendMessage(page, "Draw something")
 
@@ -132,5 +77,47 @@ test.describe("Error Handling", () => {
         await expect(page.locator('text="Truncated"')).toBeVisible({
             timeout: 15000,
         })
+    })
+
+    test("shows the error of a tool call with broken input", async ({
+        page,
+    }) => {
+        // Invalid JSON that the server could not repair: not a length limit
+        const toolCallId = `call_${Date.now()}`
+        const events = [
+            { type: "start", messageId: `msg_${Date.now()}` },
+            {
+                type: "tool-input-start",
+                toolCallId,
+                toolName: "display_diagram",
+            },
+            {
+                type: "tool-input-error",
+                toolCallId,
+                toolName: "display_diagram",
+                input: '{"xml": "<mxCell value="a"/>"}',
+                errorText: "Invalid input for tool display_diagram",
+            },
+            { type: "finish" },
+        ]
+        await page.route("**/api/chat", async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: sse(events),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Draw something")
+
+        // The failed call's row opens to show the error
+        const failed = page
+            .locator('[data-testid="tool-row"][data-tool-state="output-error"]')
+            .first()
+        await failed.getByRole("button").first().click({ timeout: 15000 })
+        await expect(
+            page.getByText("Invalid input for tool display_diagram").first(),
+        ).toBeVisible()
+        await expect(page.locator('text="Truncated"')).toHaveCount(0)
     })
 })

@@ -1,0 +1,234 @@
+/* The site pages (landing, MCP, docs): the canvas grid and the scripted demo */
+
+.site {
+    --lp-paper: #ffffff;
+    --lp-line: rgb(20 24 29 / 0.055);
+}
+.dark .site {
+    --lp-paper: #1b1d1e;
+    --lp-line: rgb(255 255 255 / 0.045);
+}
+
+/* draw.io's grid behind the hero */
+.lp-grid {
+    background-color: var(--lp-paper);
+    background-image:
+        linear-gradient(to right, var(--lp-line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--lp-line) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.lp-demo svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+/* draw.io's export picks its light or dark colors from the system setting;
+   follow the site's theme instead */
+.lp-demo svg {
+    color-scheme: light !important;
+}
+.dark .lp-demo svg {
+    color-scheme: dark !important;
+}
+
+/* Cells start hidden and the demo shows them one by one */
+.lp-demo [data-cell-id]:not([data-cell-id="0"]):not([data-cell-id="1"]) {
+    opacity: 0;
+    transition: opacity 0.35s ease;
+}
+.lp-demo [data-cell-id].on:not([data-cell-id="0"]):not([data-cell-id="1"]) {
+    opacity: 1;
+}
+.lp-demo [data-cell-id] > g > path {
+    transition: stroke-dashoffset 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* A connector the AI just added, in the marker color like the editor */
+.lp-demo [data-cell-id].changed path {
+    stroke: var(--marker-ink) !important;
+}
+.lp-demo [data-cell-id].changed g > path:last-child {
+    fill: var(--marker-ink) !important;
+}
+
+.lp-caret {
+    display: inline-block;
+    width: 1px;
+    height: 1.05em;
+    margin-left: 1px;
+    vertical-align: -2px;
+    background: currentColor;
+    animation: lp-blink 1s steps(1) infinite;
+}
+/* draw.io's selection: a dashed blue box */
+.lp-select {
+    border: 1px dashed #29b6f2;
+    background: rgb(41 182 242 / 0.08);
+}
+.lp-outline {
+    animation: lp-in 0.3s both;
+}
+.lp-cursor {
+    z-index: 2;
+    transform: translate(-3px, -2px);
+    transition:
+        left 0.7s cubic-bezier(0.45, 0, 0.2, 1),
+        top 0.7s cubic-bezier(0.45, 0, 0.2, 1);
+}
+/* While dragging, the pointer moves with the shape every frame */
+.lp-cursor.lp-dragging {
+    transition: none;
+}
+.lp-click {
+    position: absolute;
+    left: -6px;
+    top: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid #29b6f2;
+    animation: lp-ping 0.4s ease-out both;
+}
+.lp-msg {
+    animation: lp-rise 0.3s both cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* How far the current step has played */
+.lp-progress {
+    transform-origin: left;
+    animation: lp-grow linear both;
+}
+
+@keyframes lp-blink {
+    50% {
+        opacity: 0;
+    }
+}
+@keyframes lp-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@keyframes lp-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes lp-ping {
+    from {
+        transform: scale(0.4);
+        opacity: 1;
+    }
+    to {
+        transform: scale(1.6);
+        opacity: 0;
+    }
+}
+@keyframes lp-grow {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lp-demo *,
+    .lp-msg,
+    .lp-outline,
+    .lp-cursor,
+    .lp-caret,
+    .lp-progress {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* Tables in the docs */
+.docs-table th {
+    border-bottom: 1px solid var(--border);
+    background: var(--canvas);
+    padding: 0.55rem 0.9rem;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 600;
+}
+.docs-table td {
+    border-bottom: 1px solid var(--border);
+    padding: 0.6rem 0.9rem;
+    vertical-align: top;
+}
+.docs-table tr:last-child td {
+    border-bottom: 0;
+}
+.docs-table code {
+    border-radius: 4px;
+    background: var(--muted);
+    padding: 0.05rem 0.3rem;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 0.88em;
+}
+
+/* A long command or address in a sentence breaks on a phone */
+.docs-body :not(pre) > code {
+    overflow-wrap: anywhere;
+}
+
+/* The docs text in the site's own colors, as on the landing page and in the
+   editor, in place of the typography plugin's blue grays; the same in dark */
+.docs-body {
+    --docs-text: color-mix(in srgb, var(--foreground) 86%, var(--canvas));
+    --tw-prose-body: var(--docs-text);
+    --tw-prose-headings: var(--foreground);
+    --tw-prose-lead: var(--muted-foreground);
+    --tw-prose-links: var(--foreground);
+    --tw-prose-bold: var(--foreground);
+    --tw-prose-counters: var(--muted-foreground);
+    --tw-prose-bullets: var(--muted-foreground);
+    --tw-prose-hr: var(--border);
+    --tw-prose-quotes: var(--docs-text);
+    --tw-prose-quote-borders: var(--border);
+    --tw-prose-captions: var(--muted-foreground);
+    --tw-prose-code: var(--foreground);
+    --tw-prose-th-borders: var(--border);
+    --tw-prose-td-borders: var(--border);
+    --tw-prose-invert-body: var(--docs-text);
+    --tw-prose-invert-headings: var(--foreground);
+    --tw-prose-invert-lead: var(--muted-foreground);
+    --tw-prose-invert-links: var(--foreground);
+    --tw-prose-invert-bold: var(--foreground);
+    --tw-prose-invert-counters: var(--muted-foreground);
+    --tw-prose-invert-bullets: var(--muted-foreground);
+    --tw-prose-invert-hr: var(--border);
+    --tw-prose-invert-quotes: var(--docs-text);
+    --tw-prose-invert-quote-borders: var(--border);
+    --tw-prose-invert-captions: var(--muted-foreground);
+    --tw-prose-invert-code: var(--foreground);
+    --tw-prose-invert-th-borders: var(--border);
+    --tw-prose-invert-td-borders: var(--border);
+}
+/* Links underlined as on the landing page: a light line that darkens on
+   hover */
+.docs-body :where(a):not(:where(h2 a, h3 a)) {
+    text-decoration-color: var(--border);
+}
+.docs-body :where(a):not(:where(h2 a, h3 a)):hover {
+    text-decoration-color: var(--foreground);
+}
+
+/* draw.io exports change colors with the system's light or dark mode; make
+   them follow the site's theme instead, which can differ from the system */
+.site img {
+    color-scheme: light;
+}
+.dark .site img {
+    color-scheme: dark;
+}

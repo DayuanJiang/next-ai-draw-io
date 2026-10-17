@@ -10,5 +10,3 @@ export function formatMessage(
         return val === undefined ? match : String(val)
     })
 }
-
-export default formatMessage

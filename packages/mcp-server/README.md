@@ -1,207 +1,161 @@
 # Next AI Draw.io MCP Server
 
-MCP (Model Context Protocol) server that enables AI agents like Claude Desktop and Cursor to generate and edit draw.io diagrams with **real-time browser preview**.
+An MCP server that lets Claude Code, Cursor, VS Code and other AI agents draw draw.io diagrams from your project's files, with a live preview in your browser. The preview is the canvas of the [Next AI Draw.io web app](https://next-ai-drawio.jiang.jp/): the AI's changes are outlined, Ctrl+Z takes them back, and you can edit by hand at any time.
 
-**Self-contained** - includes an embedded HTTP server, no external dependencies required.
+https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
 
-## Quick Start
+## Install
 
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["@next-ai-drawio/mcp-server@latest"]
-    }
-  }
-}
+In VS Code or Cursor, one click adds it: [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522drawio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540next-ai-drawio%252Fmcp-server%2540latest%2522%255D%257D) [![Add to Cursor](https://img.shields.io/badge/Cursor-Add_Server-000000?style=flat-square)](https://cursor.com/en/install-mcp?name=drawio&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJAbmV4dC1haS1kcmF3aW8vbWNwLXNlcnZlckBsYXRlc3QiXX0%3D)
+
+### Let your AI agent install it
+
+Paste this into Claude Code, Codex, Cursor, VS Code, Cline or any agent that can edit files and run commands:
+
+```text
+Install the drawio MCP server for the client you are running in, following
+https://raw.githubusercontent.com/DayuanJiang/next-ai-draw-io/main/packages/mcp-server/README.md
+Install it for all my projects (user scope, for Claude Code "--scope user"),
+name the server "drawio" and keep the servers that are already configured.
+Then tell me how to reload so its tools show up.
 ```
 
-## Installation
+### Install by hand
 
-### Claude Desktop
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["@next-ai-drawio/mcp-server@latest"]
-    }
-  }
-}
-```
-
-### VS Code
-
-Add to your VS Code settings (`.vscode/mcp.json` in workspace or user settings):
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["@next-ai-drawio/mcp-server@latest"]
-    }
-  }
-}
-```
-
-### Cursor
-
-Add to Cursor MCP config (`~/.cursor/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["@next-ai-drawio/mcp-server@latest"]
-    }
-  }
-}
-```
-
-### Cline (VS Code Extension)
-
-1. Click the **MCP Servers** icon in Cline's top menu bar
-2. Select the **Configure** tab
-3. Click **Configure MCP Servers** to edit `cline_mcp_settings.json`
-4. Add the drawio server:
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["@next-ai-drawio/mcp-server@latest"]
-    }
-  }
-}
-```
-
-### Claude Code CLI
+**Claude Code**
 
 ```bash
-claude mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 ```
 
-### Other MCP Clients
+`--scope user` makes the tools available in every project. Without it, they exist only in the folder where you ran the command.
 
-Use the standard MCP configuration with:
-- **Command**: `npx`
-- **Args**: `["@next-ai-drawio/mcp-server@latest"]`
+Or install it as a plugin from the Claude Code community marketplace (Claude Code 2.1.275 or later):
 
-## Usage
+```text
+/plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
+```
 
-1. Restart your MCP client after updating config
-2. Ask the AI to create a diagram:
-   > "Create a flowchart showing user authentication with login, MFA, and session management"
-3. The diagram appears in your browser in real-time!
+**Codex CLI**
+
+```bash
+codex mcp add drawio -- npx @next-ai-drawio/mcp-server@latest
+```
+
+Codex asks before each drawio tool that changes the diagram, and `codex exec` without full access fails with "MCP tool call requires approval". To let the drawio tools run without asking, add one line to the server's section in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.drawio]
+command = "npx"
+args = ["@next-ai-drawio/mcp-server@latest"]
+default_tools_approval_mode = "approve"
+```
+
+To approve only some tools, use `[mcp_servers.drawio.tools.<tool name>]` with `approval_mode = "approve"` instead.
+
+**VS Code** (`.vscode/mcp.json`)
+
+```json
+{
+  "servers": {
+    "drawio": { "type": "stdio", "command": "npx", "args": ["@next-ai-drawio/mcp-server@latest"] }
+  }
+}
+```
+
+**Cursor, Claude Desktop, Cline and most other clients** (`~/.cursor/mcp.json`, `claude_desktop_config.json`, `cline_mcp_settings.json`)
+
+```json
+{
+  "mcpServers": {
+    "drawio": { "command": "npx", "args": ["@next-ai-drawio/mcp-server@latest"] }
+  }
+}
+```
+
+Restart the client, then ask, for example, "Read this repo and draw its architecture". The preview opens in your browser and the diagram appears as it is drawn.
 
 ## Features
 
-- **Real-time Preview**: Diagrams appear and update in your browser as the AI creates them
-- **Version History**: Restore previous diagram versions with visual thumbnails - click the clock button (bottom-right) to browse and restore earlier states
-- **Natural Language**: Describe diagrams in plain text - flowcharts, architecture diagrams, etc.
-- **Edit Support**: Modify existing diagrams with natural language instructions
-- **Export**: Save diagrams as `.drawio` files
-- **Self-contained**: Embedded server, works offline (except draw.io UI which loads from `embed.diagrams.net` by default, configurable via `DRAWIO_BASE_URL`)
+- **Draws from your project**: the agent reads your code and documents with its own tools. Existing `.drawio` and `.drawio.svg` files open with `load_diagram`.
+- **The web app's canvas**: the AI's changes are outlined for a few seconds (never in exports) and one Ctrl+Z takes them back. Select shapes and say "these" (`get_selection`). Your hand edits are read before the AI edits again.
+- **Real icons**: the web app's drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes, Cisco and more), so the AI uses real icon names.
+- **Self-check**: the AI can look at a screenshot of the rendered diagram and fix overlaps (`screenshot: true`, or `screenshot_diagram`).
+- **Versions**: the last 20 versions as cards next to the canvas; restore or compare one, or ask the AI to undo (`restore_version`).
+- **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin, and PNGs a white background (`transparent: true` for none).
+- **Offline**: the draw.io editor ships inside the package.
 
-## Available Tools
+## Choosing a draw.io MCP server
 
-| Tool | Description |
-|------|-------------|
-| `start_session` | Opens browser with real-time diagram preview |
-| `create_new_diagram` | Create a new diagram from XML (requires `xml` argument) |
-| `edit_diagram` | Edit diagram by ID-based operations (update/add/delete cells) |
-| `get_diagram` | Get the current diagram XML |
-| `export_diagram` | Save diagram to a `.drawio` file |
+Several MCP servers draw draw.io diagrams. As of October 2026 they differ like this:
 
-## How It Works
+| Server | How you see and change the diagram | A good fit when |
+|---|---|---|
+| This server, `@next-ai-drawio/mcp-server` | A live draw.io canvas in your browser. The AI reads it back, including your hand edits and selection; its changes are outlined, Ctrl+Z takes them back, and earlier versions can be restored | You and the AI take turns on the same diagram |
+| draw.io's official [`@drawio/mcp`](https://github.com/jgraph/drawio-mcp) | Opens each diagram from XML, CSV or Mermaid in the draw.io editor in a new tab; no tool reads it back | You want the diagram in the full draw.io editor and edit it yourself from there |
+| draw.io's hosted MCP app, `https://mcp.draw.io/mcp` | Shows the diagram inside the chat in Claude.ai, ChatGPT, VS Code or Cursor, with nothing to install; the diagram is sent to draw.io's server | You work in a chat app and want to see the diagram in the conversation |
+| draw.io's plugin for Claude Code, Codex CLI and Copilot CLI | A skill that writes `.drawio` files; PNG, SVG and PDF export needs draw.io Desktop | You want diagram files in your repository without an MCP server |
+| [`lgazo/drawio-mcp-server`](https://github.com/lgazo/drawio-mcp-server) | A draw.io editor on localhost, or your own draw.io through a browser extension; tools create, read, update and delete single shapes, layers and pages | You want fine-grained tools, several documents at once, or Mermaid import |
 
-```
-┌─────────────────┐     stdio      ┌─────────────────┐
-│  Claude Desktop │ <───────────> │   MCP Server    │
-│    (AI Agent)   │               │  (this package) │
-└─────────────────┘               └────────┬────────┘
-                                          │
-                                 ┌────────▼────────┐
-                                 │ Embedded HTTP   │
-                                 │ Server (:6002)  │
-                                 └────────┬────────┘
-                                          │
-                                 ┌────────▼────────┐
-                                 │  User's Browser │
-                                 │ (draw.io embed) │
-                                 └─────────────────┘
-```
+## Saved diagrams
 
-1. **MCP Server** receives tool calls from Claude via stdio
-2. **Embedded HTTP Server** serves the draw.io UI and handles state
-3. **Browser** shows real-time diagram updates via polling
+Every change is saved to `~/.next-ai-drawio/<session-id>.drawio` with its last 20 versions; the newest 50 diagrams are kept. To continue one in a later conversation, ask the AI for it: it finds it with `list_saved_diagrams` and reopens it with `start_session`.
+
+## Your own drawing rules
+
+Write them in `~/.next-ai-drawio/instructions.md`, for example "Always use a minimal style". They are added to the drawing guide on every call, so edits apply without a restart. The first 5000 characters are used.
+
+## Tools
+
+| Tool | What it does |
+|---|---|
+| `start_session` | Open the preview and return the drawing guide; `session_id` continues a saved diagram |
+| `create_new_diagram` | Draw a new diagram from `mxCell` XML |
+| `edit_diagram` | Add, update or delete cells by id, all or nothing |
+| `get_diagram` | The current XML, including your edits in the browser |
+| `get_selection` | The shapes you selected in the preview |
+| `screenshot_diagram` | A PNG of a page, for the AI to check |
+| `load_diagram`, `export_diagram` | Open a `.drawio` or `.drawio.svg` file; save `.drawio`, `.png`, `.svg` or `.drawio.svg` |
+| `restore_version` | Go back to an earlier version; a redo stays possible |
+| `list_saved_diagrams` | Diagrams saved by earlier sessions, newest first |
+| `get_drawing_guide`, `get_shape_library` | The drawing rules again; the icon styles of a library such as `aws4` |
+| `list_pages`, `add_page`, `rename_page`, `delete_page` | Pages (tabs) |
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `6002` | Port for the embedded HTTP server |
-| `DRAWIO_BASE_URL` | `https://embed.diagrams.net` | Base URL for the draw.io embed. Set this to use a self-hosted draw.io instance for private deployments. |
+Environment variables, set in the client's `env` for the server:
 
-### Private Deployment (Self-hosted draw.io)
+| Variable | Default | What it does |
+|---|---|---|
+| `PORT` | `6002` | Preview port; when it is taken, the next free one up to 6020 is used |
+| `DRAWIO_DATA_DIR` | `~/.next-ai-drawio` | Folder for saved diagrams and `instructions.md`; `off` turns saving off |
+| `DRAWIO_AUTO_SCREENSHOT` | unset | `true` attaches a screenshot to every create and edit result (2 to 10 s per call) |
+| `DRAWIO_BASE_URL` | the bundled draw.io | Use another draw.io, such as a self-hosted one (see below) |
+| `DRAWIO_LANG` | unset | Fix the editor and preview language: `en`, `zh`, `zh-tw`, `ja`, `de` and so on |
+| `DRAWIO_UI` | unset | Fix the draw.io theme: `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple` |
+| `DRAWIO_DARK` | `auto` | `1` starts dark, `0` starts light, `auto` follows the system |
+| `BROWSER` | unset | `none` does not open the preview by itself; `start_session` still returns the URL |
+| `DRAWIO_PREVIEW_UI` | `shell` | `classic` opens the previous preview page, without outlines, Ctrl+Z or `get_selection` |
+| `DEBUG` | unset | `true` logs debug messages to stderr |
 
-For security-sensitive environments that require private deployment of draw.io:
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["@next-ai-drawio/mcp-server@latest"],
-      "env": { 
-        "DRAWIO_BASE_URL": "https://drawio.your-company.com"
-      }
-    }
-  }
-}
-```
-
-You can deploy your own draw.io instance using the official Docker image:
+### Self-hosted draw.io
 
 ```bash
 docker run -d -p 8080:8080 jgraph/drawio
 ```
 
-Then set `DRAWIO_BASE_URL=http://localhost:8080` (or your server's URL).
+Then set `DRAWIO_BASE_URL=http://localhost:8080`. The preview cannot reach into a draw.io from another origin, so the AI's changes are not outlined, Ctrl+Z does not take them back (use the version cards) and `get_selection` does not work. The bundled copy leaves out a few features that load code on demand, such as the org chart layout. It also has no image proxy, so exported images leave out pictures inserted by their web address; see [Offline deployment](https://github.com/DayuanJiang/next-ai-draw-io/blob/main/docs/en/offline-deployment.md#insert-images-from-other-websites).
 
 ## Troubleshooting
 
-### Port already in use
+- **Blank preview in VS Code Simple Browser or Cursor's browser**: the page refuses to be embedded in other pages. Open the URL in a regular browser.
+- **Screenshot or PNG/SVG export times out**: the preview tab renders them, and browsers slow down background tabs. Bring the tab to the front and try again.
+- **"No active session"**: the AI has to call `start_session` first.
+- **The preview does not update**: open the URL that `start_session` returned; its `?mcp=` part connects the page to the session.
 
-If port 6002 is in use, the server will automatically try the next available port (up to 6020).
+## How it works
 
-Or set a custom port:
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["@next-ai-drawio/mcp-server@latest"],
-      "env": { "PORT": "6003" }
-    }
-  }
-}
-```
-
-### "No active session"
-
-Call `start_session` first to open the browser window.
-
-### Browser not updating
-
-Check that the browser URL has the `?mcp=` query parameter. The MCP session ID connects the browser to the server.
+The server talks to the agent over stdio and runs an HTTP server on `127.0.0.1` that serves the preview page and the bundled draw.io; the page polls it for changes. Every `/api` request needs a token that only the preview page has, so other websites cannot read or change your diagram.
 
 ## License
 
