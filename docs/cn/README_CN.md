@@ -11,7 +11,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/DayuanJiang)
 
-[**在线体验**](https://next-ai-drawio.jiang.jp/) · [**文档**](https://next-ai-drawio.jiang.jp/zh/docs) · [**桌面应用**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP 服务器**](#在-ai-代理里使用mcp)
+[**在线体验**](https://next-ai-drawio.jiang.jp/) · [**文档**](https://next-ai-drawio.jiang.jp/zh/docs) · [**图库**](https://next-ai-drawio.jiang.jp/zh/gallery) · [**桌面应用**](https://github.com/DayuanJiang/next-ai-draw-io/releases) · [**MCP 服务器**](https://next-ai-drawio.jiang.jp/zh/mcp)
 
 </div>
 
@@ -47,38 +47,51 @@ https://github.com/user-attachments/assets/66b9f12f-219f-4d62-acc0-0725e6850eec
 <div align="center">
 <table width="100%">
   <tr>
-    <td colspan="2" valign="top" align="center">
-      <strong>带动画连接线的 Transformer 架构</strong><br />
-      <p><strong>Prompt:</strong> Give me a <strong>animated connector</strong> diagram of transformer's architecture.</p>
-      <img src="../../public/animated_connectors.svg" alt="带动画连接线的 Transformer 架构" width="440" />
+    <td width="50%" valign="top">
+      <strong>AWS 上的高可用 Web 应用</strong><br />
+      <p><strong>提示词：</strong> Draw an AWS architecture for a highly available web app across two Availability Zones with AWS icons: Route 53, CloudFront with AWS WAF, an Application Load Balancer, ECS Fargate services in private subnets, Aurora PostgreSQL with a writer and a reader, ElastiCache for Redis, S3 for static assets, NAT gateways, and CloudWatch for monitoring.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/aws-ha.svg" alt="AWS 上的高可用 Web 应用" width="400" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>网店的 Kubernetes 部署</strong><br />
+      <p><strong>提示词：</strong> Draw a Kubernetes deployment for a web shop: an ingress, web and API deployments with their services and pods, a Redis StatefulSet with a persistent volume, a ConfigMap, a Secret, and an autoscaler on the API.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/kubernetes.svg" alt="网店的 Kubernetes 部署" width="400" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>RAG 架构图</strong><br />
-      <p><strong>Prompt:</strong> Generate a RAG architecture diagram for <strong>chat application</strong>. Use connected diagram for data ingestion</p>
-      <img src="../../public/rag_prod.svg" alt="RAG 架构图" width="400" />
+      <strong>网店的 ER 图</strong><br />
+      <p><strong>提示词：</strong> Draw an ER diagram for an online shop: customers, addresses, orders, order items, products, categories and payments, with primary and foreign keys and the cardinality of each relationship.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/er-shop.svg" alt="网店的 ER 图" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>React 加 AWS 的认证流程</strong><br />
-      <p><strong>Prompt:</strong> Generate authentication process using React with <strong>AWS</strong>. Use Serverless architecture.</p>
-      <img src="../../public/auth.svg" alt="认证架构图" width="400" />
+      <strong>BPMN 报销流程</strong><br />
+      <p><strong>提示词：</strong> Draw a BPMN process for an expense claim: an employee submits it, the manager approves or rejects it, finance checks the receipts and pays, and the claim goes back to the employee when receipts are missing.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/bpmn-expense.svg" alt="BPMN 报销流程" width="400" />
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <strong>开放式创新模型</strong><br />
-      <p><strong>Prompt:</strong> Create visualization of Henry Chesbrough's Open Innovation model.</p>
-      <img src="../../public/inno.svg" alt="开放式创新图" width="400" />
+      <strong>带动画连线的 Transformer 架构</strong><br />
+      <p><strong>提示词：</strong> Give me an animated connector diagram of transformer's architecture.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/transformer.svg" alt="带动画连线的 Transformer 架构" width="400" />
     </td>
     <td width="50%" valign="top">
-      <strong>猫咪素描</strong><br />
-      <p><strong>Prompt:</strong> Draw a cute cat for me.</p>
-      <img src="../../public/cat_demo.svg" alt="猫咪绘图" width="200" />
+      <strong>手机银行的用户旅程地图</strong><br />
+      <p><strong>提示词：</strong> Draw a customer journey map for a mobile banking app across five stages (discover, sign up, first payment, everyday use, get help), with the customer's actions, touchpoints, feelings and pain points in each stage, and an opportunity for each pain point.</p>
+      <p><strong>模型：</strong> Claude Opus 5.5，在 Claude Code 里通过 MCP 服务器</p>
+      <img src="../../public/gallery/journey-map.svg" alt="手机银行的用户旅程地图" width="400" />
     </td>
   </tr>
 </table>
 </div>
+
+更多示例，以及每张图的提示词和模型，见 **[图库](https://next-ai-drawio.jiang.jp/zh/gallery)**。
 
 ## 使用方式
 
@@ -121,15 +134,11 @@ claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 
 然后对 AI 说"画一个用户认证流程图，包含登录、MFA 和会话管理"，图会实时出现在浏览器里。MCP 服务器包含网页版的大部分画图能力：
 
--   同一套画图规则和图标库（AWS、Azure、GCP、Kubernetes 等）
--   预览页就是网页版的画布：AI 的改动会被标出，按一次 Ctrl+Z 就能撤销，AI 还能读到你选中的图形
--   draw.io 编辑器随包一起安装，装好后预览不需要联网（也可以用 `DRAWIO_BASE_URL` 改用外部的 draw.io）
+-   与网页版相同的画图规则、图标库（AWS、Azure、GCP、Kubernetes 等）和画布：AI 的改动会被标出，按一次 Ctrl+Z 就能撤销，AI 还能读到你选中的图形
 -   截图工具，AI 可以看一眼画好的图并自行修正
--   版本历史、多页图表，下载为 `.drawio`、`.png`、`.svg` 或 `.drawio.svg`
--   自动保存到 `~/.next-ai-drawio/`，重启后接着画
--   可以让 AI 撤销修改，也可以在 `~/.next-ai-drawio/instructions.md` 里写下自己的画图规则
+-   版本历史、多页图表，导出为 `.drawio`、`.png`、`.svg` 或 `.drawio.svg`，并自动保存到 `~/.next-ai-drawio/`；draw.io 编辑器随包安装，预览不需要联网
 
-VS Code、Cursor 等客户端的配置，以及[和其他 draw.io MCP 服务器的对比](../../packages/mcp-server/README.md#choosing-a-drawio-mcp-server)，见 [MCP 服务器 README](../../packages/mcp-server/README.md)。
+Codex、VS Code、Cursor 等客户端的配置、全部工具，以及和其他 draw.io MCP 服务器的对比，见 [MCP 服务器页面](https://next-ai-drawio.jiang.jp/zh/mcp)。
 
 ### 和 draw.io 自带的 AI 有什么不同
 
