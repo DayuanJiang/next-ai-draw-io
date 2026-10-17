@@ -1,6 +1,6 @@
-# AWS architecture diagrams
+# AWS architecture diagrams from text
 
-Next AI Draw.io draws AWS architecture diagrams with the official AWS icons from draw.io's `aws4` shape library. This page shows how to get a good first draft and how to refine it.
+Describe your system in plain text and Next AI Draw.io draws the AWS architecture diagram with the official AWS icons from draw.io's `aws4` shape library. It is free and open source, and the result is a normal draw.io diagram: edit it by hand and export it as `.drawio`, `.png` or `.svg`. This page shows how to get a good first draft and how to refine it.
 
 ## Start from a description
 
