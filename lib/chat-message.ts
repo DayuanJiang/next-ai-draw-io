@@ -16,6 +16,8 @@ export interface ReplyUsage {
     /** Of the output, spent thinking */
     reasoningTokens: number
     durationMs: number
+    /** USD at the official price; missing when a request had no known price */
+    costUsd?: number
 }
 
 export interface ChatMessageMetadata {
@@ -25,15 +27,21 @@ export interface ChatMessageMetadata {
 
 /**
  * The answer's usage with one more request added. A request whose provider
- * reported no usage adds nothing.
+ * reported no usage adds nothing. The cost stays known only while every
+ * request of the turn had a price.
  */
 export function addReplyUsage(
     before: ReplyUsage | undefined,
     usage: LanguageModelUsage,
     durationMs: number,
+    costUsd?: number,
 ): ReplyUsage | undefined {
     if (usage.inputTokens === undefined && usage.outputTokens === undefined)
         return before
+    const cost =
+        costUsd !== undefined && (!before || before.costUsd !== undefined)
+            ? (before?.costUsd ?? 0) + costUsd
+            : undefined
     return {
         inputTokens: (before?.inputTokens ?? 0) + (usage.inputTokens ?? 0),
         outputTokens: (before?.outputTokens ?? 0) + (usage.outputTokens ?? 0),
@@ -44,6 +52,7 @@ export function addReplyUsage(
             (before?.reasoningTokens ?? 0) +
             (usage.outputTokenDetails.reasoningTokens ?? 0),
         durationMs: (before?.durationMs ?? 0) + durationMs,
+        ...(cost !== undefined && { costUsd: cost }),
     }
 }
 

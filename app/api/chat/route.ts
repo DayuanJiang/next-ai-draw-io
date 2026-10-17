@@ -42,6 +42,7 @@ import {
     wrapWithObserve,
 } from "@/lib/langfuse"
 import { classifyLLMError, streamErrorText } from "@/lib/llm-errors"
+import { estimateCost } from "@/lib/model-catalog"
 import {
     resolveMaxOutputTokens,
     withOutputTokenLimitFallback,
@@ -575,7 +576,7 @@ Write your reply in the language of the user's own words in their latest message
     const response = withHeartbeat(
         result.toUIMessageStreamResponse<ChatUIMessage>({
             sendReasoning: true,
-            // The answer's tokens and time so far, shown under it in the chat
+            // The answer's tokens, time and cost so far, shown under it in the chat
             messageMetadata: ({ part }) =>
                 part.type === "finish"
                     ? {
@@ -583,6 +584,11 @@ Write your reply in the language of the user's own words in their latest message
                               usedBefore,
                               part.totalUsage,
                               Date.now() - startedAt,
+                              estimateCost(
+                                  resolvedProvider,
+                                  modelId,
+                                  part.totalUsage,
+                              ),
                           ),
                       }
                     : undefined,

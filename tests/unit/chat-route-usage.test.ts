@@ -97,6 +97,8 @@ describe("an answer's usage", () => {
             reasoningTokens: 12,
         })
         expect(usage?.durationMs).toBeGreaterThanOrEqual(0)
+        // GLM-5 has a price on models.dev
+        expect(usage?.costUsd).toBeGreaterThan(0)
     })
 
     it("adds a later request of the turn to what the answer used before", async () => {

@@ -8,7 +8,7 @@ const BOX = `<mxCell id="a" value="Alpha" style="rounded=1;" vertex="1" parent="
 const REJECTED = `<UserObject id="1" label="Bad" link="https://example.com"><mxCell vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell></UserObject>`
 
 // What the server reports after each request: the second adds its own
-// tokens and time to the first's
+// tokens and time to the first's, and the turn's cost
 const FIRST = {
     inputTokens: 1000,
     outputTokens: 100,
@@ -22,6 +22,7 @@ const BOTH = {
     cacheReadTokens: 800,
     reasoningTokens: 12,
     durationMs: 5400,
+    costUsd: 0.03734,
 }
 
 const drawReply = (id: string, xml: string, usage: object) => {
@@ -66,6 +67,7 @@ test("an answer shows the tokens and time of all its requests", async ({
     await expect(details).toContainText("From cache800")
     await expect(details).toContainText("Thinking12")
     await expect(details).toContainText("Time5.4")
+    await expect(details).toContainText("Estimated cost$0.0373")
 
     // Kept with the chat
     await page.waitForURL(/session=/)

@@ -1,6 +1,7 @@
 // Refresh lib/model-catalog.json from models.dev (MIT licensed model data):
-// whether each model can call tools and read images, and its limits. The
-// app only uses it for hints in model settings. Run before a release:
+// whether each model can call tools and read images, its limits and its
+// price. The app uses it for hints in model settings and the estimated cost
+// under each answer. Run before a release:
 //   node scripts/update-model-catalog.mjs
 import { writeFileSync } from "node:fs"
 
@@ -53,6 +54,20 @@ for (const [provider, source] of Object.entries(PROVIDERS)) {
             reasoning: m.reasoning === true,
             ...(m.limit?.context && { context: m.limit.context }),
             ...(m.limit?.output && { output: m.limit.output }),
+            // USD per million tokens
+            ...(m.cost?.input != null &&
+                m.cost?.output != null && {
+                    cost: {
+                        input: m.cost.input,
+                        output: m.cost.output,
+                        ...(m.cost.cache_read != null && {
+                            cacheRead: m.cost.cache_read,
+                        }),
+                        ...(m.cost.cache_write != null && {
+                            cacheWrite: m.cost.cache_write,
+                        }),
+                    },
+                }),
         }
     }
 }

@@ -38,6 +38,8 @@
         "usageTime": "用时",
         "usageTokenUnit": "token",
         "usageSecondUnit": "秒",
+        "usageCost": "预估费用",
+        "usageCostNote": "按 models.dev 上的官方价格估算",
         "clickToEdit": "点击编辑",
         "editMessage": "编辑消息",
         "saveAndSubmit": "保存并提交",

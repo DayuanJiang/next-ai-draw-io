@@ -38,6 +38,8 @@
         "usageTime": "所要時間",
         "usageTokenUnit": "トークン",
         "usageSecondUnit": "秒",
+        "usageCost": "推定料金",
+        "usageCostNote": "models.dev に載っている公式価格での見積もり",
         "clickToEdit": "クリックして編集",
         "editMessage": "メッセージを編集",
         "saveAndSubmit": "保存して送信",

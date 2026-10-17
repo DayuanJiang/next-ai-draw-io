@@ -1,10 +1,11 @@
+import type { LanguageModelUsage } from "ai"
 import catalog from "@/lib/model-catalog.json"
 import type { ProviderName } from "@/lib/types/model-config"
 
 /**
  * What models.dev knows about a model (scripts/update-model-catalog.mjs).
- * Only used for hints and suggestions: requests are sent the same way
- * either way, since the data can be wrong or out of date.
+ * Only used for hints, suggestions and estimates: requests are sent the
+ * same way either way, since the data can be wrong or out of date.
  */
 interface ModelInfo {
     tools: boolean
@@ -12,6 +13,13 @@ interface ModelInfo {
     reasoning: boolean
     context?: number
     output?: number
+    /** The official price in USD per million tokens */
+    cost?: {
+        input: number
+        output: number
+        cacheRead?: number
+        cacheWrite?: number
+    }
 }
 
 const CATALOG = catalog as Record<string, Record<string, ModelInfo>>
@@ -52,4 +60,33 @@ export function getModelInfo(
         }
     }
     return best ? models[best] : undefined
+}
+
+/**
+ * What a request cost in USD at the model's official price, or undefined
+ * when models.dev has no price for it. Not for Ollama: local runs are free
+ * and Ollama Cloud is a subscription.
+ */
+export function estimateCost(
+    provider: ProviderName,
+    modelId: string,
+    usage: LanguageModelUsage,
+): number | undefined {
+    if (provider === "ollama") return undefined
+    const cost = getModelInfo(provider, modelId)?.cost
+    if (!cost) return undefined
+    if (usage.inputTokens === undefined && usage.outputTokens === undefined)
+        return undefined
+    // The input tokens include those read from or written to the cache,
+    // which have prices of their own
+    const cacheRead = usage.inputTokenDetails.cacheReadTokens ?? 0
+    const cacheWrite = usage.inputTokenDetails.cacheWriteTokens ?? 0
+    const uncached = (usage.inputTokens ?? 0) - cacheRead - cacheWrite
+    return (
+        (uncached * cost.input +
+            cacheRead * (cost.cacheRead ?? cost.input) +
+            cacheWrite * (cost.cacheWrite ?? cost.input) +
+            (usage.outputTokens ?? 0) * cost.output) /
+        1_000_000
+    )
 }
