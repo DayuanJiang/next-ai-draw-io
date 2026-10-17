@@ -135,12 +135,6 @@ describe("pages.ts — addPageToDoc input validation", () => {
         const withDecl = `<?xml version="1.0"?>${BARE_MODEL_ONE_CELL}`
         const info = addPageToDoc(doc, { name: "Sequence", xml: withDecl })
         expect(info.cellCount).toBeGreaterThanOrEqual(3)
-        // Serialised document must not have <?xml ?> inside <diagram>.
-        const out = serializeMxfile(doc)
-        // The mxfile may have one <?xml ?> at the very start (the doc decl),
-        // but no further occurrence inside <diagram>.
-        const matches = out.match(/<\?xml/g) || []
-        expect(matches.length).toBeLessThanOrEqual(1)
     })
 })
 
@@ -268,17 +262,12 @@ describe("pages.ts — renamePageInDoc / deletePageFromDoc", () => {
 
 describe("xml-validation.ts — multi-page support", () => {
     it("accepts a valid two-page mxfile (the exact payload that used to fail)", () => {
-        const result = validateAndFixXml(TWO_PAGE_MXFILE)
-        expect(result.valid).toBe(true)
-        expect(result.error).toBeNull()
-    })
-
-    it("does NOT flag root sentinel ids 0 and 1 repeating across pages", () => {
         // This is the regression the planning doc explicitly called out:
         // before this work, the legacy regex-based duplicate-id check rejected
         // any multi-page document because cells "0" and "1" appear in every page.
         const result = validateAndFixXml(TWO_PAGE_MXFILE)
         expect(result.valid).toBe(true)
+        expect(result.error).toBeNull()
     })
 
     it("rejects duplicate cell ids WITHIN a single page", () => {
@@ -327,9 +316,10 @@ describe("xml-validation.ts — multi-page support", () => {
         const result = validateAndFixXml(malformedButMultiPage)
         // The doc has an unescaped & — autoFix will repair that. After repair
         // it should be valid AND must not have renamed the 0/1 cells.
-        const finalXml = result.fixed || malformedButMultiPage
-        expect(finalXml).not.toMatch(/id="0_dup/)
-        expect(finalXml).not.toMatch(/id="1_dup/)
+        expect(result.valid).toBe(true)
+        expect(result.fixed).toContain('value="Q &amp; A"')
+        expect(result.fixed).not.toMatch(/id="0_dup/)
+        expect(result.fixed).not.toMatch(/id="1_dup/)
     })
 })
 

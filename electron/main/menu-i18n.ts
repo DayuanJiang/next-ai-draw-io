@@ -90,10 +90,10 @@ const translations: Record<MenuLocale, MenuTranslations> = {
 }
 
 /**
- * Get menu translations for a locale (English for an unknown one)
+ * Get menu translations for a locale
  */
 export function getMenuTranslations(locale: MenuLocale): MenuTranslations {
-    return translations[locale] ?? translations.en
+    return translations[locale]
 }
 
 /**

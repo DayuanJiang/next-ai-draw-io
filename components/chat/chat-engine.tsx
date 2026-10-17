@@ -893,7 +893,7 @@ export function ChatEngineProvider({
             const currentDiagramXml =
                 continuationOriginalRef.current ??
                 previewOriginal ??
-                (chartXMLRef.current || "")
+                chartXMLRef.current
             const messages = sanitizeMessages(messagesRef.current).map(
                 (message) =>
                     withReasoningSeconds(
@@ -1298,7 +1298,7 @@ export function ChatEngineProvider({
         // rule as the server)
         if (
             messagesRef.current.length === 0 &&
-            !hasCells(chartXMLRef.current || "")
+            !hasCells(chartXMLRef.current)
         ) {
             // The file name keeps a user's own file from matching an example
             const cached = findCachedResponse(
@@ -1527,7 +1527,7 @@ export function ChatEngineProvider({
         }
         if (userMessageIndex < 0) return
         const userParts = messages[userMessageIndex].parts
-        if (!userParts?.some((p: any) => p.type === "text")) return
+        if (!userParts.some((p: any) => p.type === "text")) return
         rerunFrom(userMessageIndex, userParts)
     }
 
@@ -1536,14 +1536,14 @@ export function ChatEngineProvider({
         const message = messages[messageIndex]
         if (message?.role !== "user") return false
         // The edit box only shows the typed text; keep appended file content
-        const newParts = message.parts?.map((part: any) => {
+        const newParts = message.parts.map((part: any) => {
             if (part.type === "text") {
                 const appended =
                     part.text.match(APPENDED_FILE_SECTIONS_PATTERN)?.[0] ?? ""
                 return { ...part, text: newText + appended }
             }
             return part
-        }) || [{ type: "text", text: newText }]
+        })
         return rerunFrom(messageIndex, newParts)
     }
 
@@ -1850,9 +1850,7 @@ export function ChatEngineProvider({
         await whileLeaving(async () => {
             if (!(await saveBeforeLeaving(start))) return
             // The list shows the chat just saved
-            if (sessionManager.isAvailable) {
-                await sessionManager.refreshSessions()
-            }
+            await sessionManager.refreshSessions()
             start()
         })
     }

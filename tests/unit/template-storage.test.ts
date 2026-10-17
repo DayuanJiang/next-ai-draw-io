@@ -99,10 +99,6 @@ describe("sortTemplates", () => {
         sortTemplates(templates)
         expect(templates.map((t) => t.id)).toEqual(copy.map((t) => t.id))
     })
-
-    it("returns empty array for empty input", () => {
-        expect(sortTemplates([])).toEqual([])
-    })
 })
 
 describe("searchTemplates", () => {

@@ -44,8 +44,6 @@ function parseStoredConfig(stored: string): MultiModelConfig {
  * Load config from localStorage
  */
 function loadConfig(): MultiModelConfig {
-    if (typeof window === "undefined") return createEmptyConfig()
-
     const stored = localStorage.getItem(STORAGE_KEYS.modelConfigs)
     if (stored) {
         try {
@@ -62,7 +60,6 @@ function loadConfig(): MultiModelConfig {
  * Save config to localStorage
  */
 function saveConfig(config: MultiModelConfig): void {
-    if (typeof window === "undefined") return
     // Providers this version does not know are not in config: keep them,
     // with their keys, for the version that saved them
     let unknown: MultiModelConfig["providers"] = []
@@ -146,7 +143,6 @@ export function useModelConfig(): UseModelConfigReturn {
     // Load server models on mount (if any), and again when the desktop app
     // restarted its server for another preset
     useEffect(() => {
-        if (typeof window === "undefined") return
         loadServerModels()
         return window.electronAPI?.onServerRestarted?.(loadServerModels)
     }, [])
@@ -408,8 +404,6 @@ export function getSelectedAIConfig(): {
         providerId: "",
     }
 
-    if (typeof window === "undefined") return empty
-
     // Get access code (separate from model config)
     const accessCode = localStorage.getItem(STORAGE_KEYS.accessCode) || ""
 
@@ -434,7 +428,7 @@ export function getSelectedAIConfig(): {
     // Provider is resolved server-side via findServerModelById()
     if (config.selectedModelId.startsWith("server:")) {
         const parts = config.selectedModelId.split(":")
-        const nameSlug = parts[1] || ""
+        const nameSlug = parts[1]
         const modelId = parts.slice(2).join(":") // Preserve Bedrock-style IDs
 
         return {
@@ -443,8 +437,6 @@ export function getSelectedAIConfig(): {
             // Note: nameSlug is NOT the provider, but we send it for backwards compat
             // Server uses selectedModelId to lookup the actual provider
             aiProvider: nameSlug,
-            aiBaseUrl: "",
-            aiApiKey: "",
             aiModel: modelId,
             selectedModelId: config.selectedModelId,
         }
@@ -467,7 +459,7 @@ export function getSelectedAIConfig(): {
         awsSecretAccessKey: model.awsSecretAccessKey || "",
         awsRegion: model.awsRegion || "",
         awsSessionToken: model.awsSessionToken || "",
-        selectedModelId: config.selectedModelId || "",
+        selectedModelId: config.selectedModelId,
         // Vertex AI credentials (Express Mode)
         vertexApiKey: model.vertexApiKey || "",
         providerId:

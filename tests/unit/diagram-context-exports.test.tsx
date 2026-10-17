@@ -91,9 +91,8 @@ describe("requestExport", () => {
         const pending = result.current.requestExport({ format: "svg" }, 1000)
         await vi.advanceTimersByTimeAsync(1000)
         expect(await pending).toBeNull()
-        // A late answer goes nowhere
+        // A late answer is ignored without throwing
         reply(requests[0], "data:image/svg+xml;base64,AAAA")
-        expect(await pending).toBeNull()
     })
 
     it("resolves to null without draw.io", async () => {

@@ -694,6 +694,11 @@ describe("useNodeVersions", () => {
             wrapper,
         })
         await flush()
+        await act(async () => {
+            await result.current.restore("missing")
+        })
+        expect(server.sync.restoreEntry).not.toHaveBeenCalled()
+        expect(result.current.isBusy).toBe(false)
         act(() => {
             result.current.restore("0")
         })
@@ -701,7 +706,6 @@ describe("useNodeVersions", () => {
         expect(result.current.isBusy).toBe(true)
         act(() => {
             result.current.restore("0")
-            result.current.restore("missing")
         })
         expect(server.sync.restoreEntry).toHaveBeenCalledTimes(1)
         await act(async () => resolveRestore("ok"))

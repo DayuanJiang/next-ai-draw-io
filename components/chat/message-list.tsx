@@ -230,7 +230,7 @@ function UserMessage({
         )
     }
 
-    const images = (message.parts ?? []).filter((p) => p.type === "file") as {
+    const images = message.parts.filter((p) => p.type === "file") as {
         url: string
     }[]
     // The shapes that were selected when it was sent
@@ -369,7 +369,7 @@ function AssistantMessage({
     const engine = useChatEngine()
     const [feedback, setFeedback] = useState<"good" | "bad" | null>(null)
     const isRestored = engine.loadedMessageIdsRef.current.has(message.id)
-    const parts = message.parts ?? []
+    const parts = message.parts
     const isCachedExample = parts.some((p: any) =>
         p.toolCallId?.startsWith("cached-"),
     )

@@ -269,7 +269,6 @@
     "validation": {
         "title": "驗證圖表",
         "capturing": "截圖中",
-        "validating": "驗證中",
         "validatingWithAttempt": "驗證中 ({attempt}/{max})",
         "valid": "通過",
         "validWithWarnings": "通過（有警告）",

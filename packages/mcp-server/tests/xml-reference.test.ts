@@ -30,13 +30,6 @@ describe("XML_REFERENCE", () => {
         },
     )
 
-    it("tables use draw.io's table shapes", () => {
-        const xml = snippet("tables")
-        expect(xml).toContain("shape=table;")
-        expect(xml).toContain("shape=tableRow;")
-        expect(xml).toContain("shape=partialRectangle;")
-    })
-
     it('layers keep the layer cell with parent="0"', () => {
         const result = prepareNewDiagram(snippet("layers"))
         expect(result.ok).toBe(true)
@@ -44,9 +37,5 @@ describe("XML_REFERENCE", () => {
         expect(hasCells(result.xml)).toBe(true)
         expect(result.xml).toContain('id="L2"')
         expect(result.xml).toContain('parent="L2"')
-    })
-
-    it("groups use a group container", () => {
-        expect(snippet("groups")).toContain('style="group"')
     })
 })

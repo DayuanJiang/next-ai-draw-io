@@ -165,8 +165,8 @@ function rewriteCellStyles(
             return `<mxCell${attrText} ${written}${selfClose}>`
         }
         // Keep the attribute where it was, with the whitespace before it
-        const space =
-            attrText.slice(style.start, style.end).match(/^\s*/)?.[0] ?? " "
+        const text = attrText.slice(style.start, style.end)
+        const space = text.slice(0, text.length - text.trimStart().length)
         return `<mxCell${attrText.slice(0, style.start)}${space}${written}${attrText.slice(style.end)}${selfClose}>`
     })
 }

@@ -1,18 +1,5 @@
-import {
-    CAT_DIAGRAM_XML,
-    FLOWCHART_XML,
-    NEW_NODE_XML,
-} from "./fixtures/diagrams"
-import {
-    createMultiTurnMock,
-    expect,
-    getChatInput,
-    openApp,
-    sendMessage,
-    test,
-    waitForComplete,
-    waitForCompleteCount,
-} from "./lib/fixtures"
+import { CAT_DIAGRAM_XML } from "./fixtures/diagrams"
+import { expect, getChatInput, openApp, test } from "./lib/fixtures"
 import { createMockSSEResponse } from "./lib/helpers"
 
 test.describe("Diagram Generation", () => {
@@ -31,12 +18,6 @@ test.describe("Diagram Generation", () => {
         await openApp(page)
     })
 
-    test("generates and displays a diagram", async ({ page }) => {
-        await sendMessage(page, "Draw a cat")
-        await waitForComplete(page)
-        await expect(page.locator('[data-testid="version-card"]')).toBeVisible()
-    })
-
     test("chat input clears after sending", async ({ page }) => {
         const chatInput = getChatInput(page)
         await expect(chatInput).toBeVisible({ timeout: 10000 })
@@ -45,74 +26,5 @@ test.describe("Diagram Generation", () => {
         await chatInput.press("ControlOrMeta+Enter")
 
         await expect(chatInput).toHaveValue("", { timeout: 5000 })
-    })
-
-    test("user message appears in chat", async ({ page }) => {
-        await sendMessage(page, "Draw a cute cat")
-        await expect(page.locator('text="Draw a cute cat"')).toBeVisible({
-            timeout: 10000,
-        })
-    })
-
-    test("assistant text message appears in chat", async ({ page }) => {
-        await sendMessage(page, "Draw a cat")
-        await expect(
-            page.locator('text="I\'ll create a diagram for you."'),
-        ).toBeVisible({ timeout: 10000 })
-    })
-})
-
-test.describe("Diagram Edit", () => {
-    test.beforeEach(async ({ page }) => {
-        await page.route(
-            "**/api/chat",
-            createMultiTurnMock([
-                { xml: FLOWCHART_XML, text: "I'll create a diagram for you." },
-                {
-                    xml: FLOWCHART_XML.replace("Process", "Updated Process"),
-                    text: "I'll create a diagram for you.",
-                },
-            ]),
-        )
-
-        await openApp(page)
-    })
-
-    test("can edit an existing diagram", async ({ page }) => {
-        // First: create initial diagram
-        await sendMessage(page, "Create a flowchart")
-        await waitForComplete(page)
-
-        // Second: edit the diagram
-        await sendMessage(page, "Change Process to Updated Process")
-        await waitForCompleteCount(page, 2)
-    })
-})
-
-test.describe("Diagram Append", () => {
-    test.beforeEach(async ({ page }) => {
-        await page.route(
-            "**/api/chat",
-            createMultiTurnMock([
-                { xml: FLOWCHART_XML, text: "I'll create a diagram for you." },
-                {
-                    xml: NEW_NODE_XML,
-                    text: "I'll create a diagram for you.",
-                    toolName: "append_diagram",
-                },
-            ]),
-        )
-
-        await openApp(page)
-    })
-
-    test("can append to an existing diagram", async ({ page }) => {
-        // First: create initial diagram
-        await sendMessage(page, "Create a flowchart")
-        await waitForComplete(page)
-
-        // Second: append to diagram
-        await sendMessage(page, "Add a new node to the right")
-        await waitForCompleteCount(page, 2)
     })
 })

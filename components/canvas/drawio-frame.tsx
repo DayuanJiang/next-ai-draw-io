@@ -92,19 +92,15 @@ export const DrawioFrame = forwardRef<DrawioFrameHandle, DrawioFrameProps>(
         // Same-origin only: keep the theme CSS current without a reload
         const applyThemeCss = () => {
             if (!attachedRef.current) return
-            try {
-                const doc = iframeRef.current?.contentDocument
-                if (!doc?.head) return
-                let style = doc.getElementById(STYLE_ID)
-                if (!style) {
-                    style = doc.createElement("style")
-                    style.id = STYLE_ID
-                    doc.head.appendChild(style)
-                }
-                style.textContent = cssRef.current
-            } catch {
-                // Cross-origin: the configure message already applied it
+            const doc = iframeRef.current?.contentDocument
+            if (!doc?.head) return
+            let style = doc.getElementById(STYLE_ID)
+            if (!style) {
+                style = doc.createElement("style")
+                style.id = STYLE_ID
+                doc.head.appendChild(style)
             }
+            style.textContent = cssRef.current
         }
 
         useEffect(() => {

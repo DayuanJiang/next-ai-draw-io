@@ -7,7 +7,7 @@
  * leave valid parts of the document untouched.
  */
 
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { addPageToDoc, parseMxfile, serializeMxfile } from "../src/pages.ts"
 import { getXmlSyntaxError } from "../src/xml-syntax.ts"
 import { validateAndFixXml } from "../src/xml-validation.ts"
@@ -292,6 +292,20 @@ describe("text between tags", () => {
         )
         expect(r.valid).toBe(false)
         expect(r.error).toMatch(/Reset password/)
+    })
+
+    it("still repairs XML nested too deep for the text walk", () => {
+        // The recursive walk overflows the stack; the regex checks and
+        // auto-fix still run and remove the foreign tags
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+        const depth = 10_000
+        const r = validateAndFixXml(
+            model(
+                `${"<foreign>".repeat(depth)}<mxCell id="2" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>${"</foreign>".repeat(depth)}`,
+            ),
+        )
+        warn.mockRestore()
+        expect(r.valid).toBe(true)
     })
 
     it("accepts a compressed page", () => {

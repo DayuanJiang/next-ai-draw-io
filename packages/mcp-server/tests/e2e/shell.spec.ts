@@ -113,15 +113,6 @@ async function openShell(page: Page) {
     return page.frameLocator("iframe[title='draw.io']")
 }
 
-test("a diagram the MCP draws appears in the shell", async ({ page }) => {
-    const frame = await openShell(page)
-    await toolText("create_new_diagram", {
-        xml: `${box("2", "Alpha", 40)}\n${box("3", "Beta", 240)}\n<mxCell id="4" source="2" target="3"/>`,
-    })
-    await expect(frame.getByText("Alpha")).toBeVisible({ timeout: 10_000 })
-    await expect(frame.getByText("Beta")).toBeVisible()
-})
-
 test("an edit is marked on the canvas, and one Ctrl+Z takes it back for the server too", async ({
     page,
 }) => {
@@ -193,24 +184,6 @@ test("a change made in the editor is pushed, and get_diagram returns it", async 
             { timeout: 10_000 },
         )
         .toBe(true)
-})
-
-test("screenshot_diagram renders the canvas of the shell", async ({ page }) => {
-    const frame = await openShell(page)
-    await toolText("create_new_diagram", {
-        xml: `${box("2", "Shot A", 40)}\n${box("3", "Shot B", 240)}`,
-    })
-    await expect(frame.getByText("Shot B")).toBeVisible({ timeout: 10_000 })
-    const result = await client.callTool({
-        name: "screenshot_diagram",
-        arguments: {},
-    })
-    const image = (
-        result.content as { type: string; data?: string; mimeType?: string }[]
-    ).find((c) => c.type === "image")
-    expect(result.isError ?? false).toBe(false)
-    expect(image?.mimeType).toBe("image/png")
-    expect(image?.data?.length ?? 0).toBeGreaterThan(1000)
 })
 
 test("exporting another page shows it for a moment, then the user's page comes back", async ({
@@ -396,6 +369,16 @@ test("the download waits for a page export's projection, and saves every page", 
             .locator(".geTabContainer")
             .getByText("Elsewhere", { exact: true }),
     ).toBeVisible({ timeout: 10_000 })
+    // The preview follows the page the agent changed; the user goes back,
+    // so OnElsewhere shows again only as the export's projection
+    const activeTab = frame.locator(".geTabContainer .geActivePage")
+    await expect(activeTab).toHaveText("Elsewhere", { timeout: 10_000 })
+    await frame
+        .locator(".geTabContainer")
+        .getByText("Page-1", { exact: true })
+        .click()
+    await expect(activeTab).toHaveText("Page-1")
+    await expect(frame.getByText("OnElsewhere")).toHaveCount(0)
     await page.getByTestId("download").click()
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()

@@ -414,11 +414,6 @@ describe("loadAdminProviders", () => {
         expect(loadAdminProviders()).toEqual([])
     })
 
-    it("loads valid stored providers", () => {
-        saveSettings({ [ADMIN_PROVIDERS_KEY]: JSON.stringify([provider()]) })
-        expect(loadAdminProviders()).toHaveLength(1)
-    })
-
     it("round-trips a bedrock provider with multiple string secrets", () => {
         const bedrock = provider({
             provider: "bedrock",

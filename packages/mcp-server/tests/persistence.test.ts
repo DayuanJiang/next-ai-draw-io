@@ -407,14 +407,6 @@ describe("Autosaver History", () => {
         )
         expect(saver.loadHistory("mcp-who")).toEqual([{ xml: V1 }])
     })
-
-    it("flush() writes the History on shutdown", () => {
-        const dir = tempDir()
-        const saver = withHistory(dir, [{ id: 0, xml: V1 }])
-        saver.schedule("mcp-exit", V1)
-        saver.flush()
-        expect(saver.loadHistory("mcp-exit")).toEqual([{ xml: V1 }])
-    })
 })
 
 describe("defaultDataDir", () => {

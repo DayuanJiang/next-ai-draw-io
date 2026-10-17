@@ -116,7 +116,7 @@ export function loadDoc(lang: Locale, file: string): Doc {
         title,
         summary: plain(firstParagraph(body)),
         body,
-        locale: FOLDER_LOCALE[folder] ?? "en",
+        locale: FOLDER_LOCALE[folder],
         repoPath,
         headings: headingsOf(body),
     }

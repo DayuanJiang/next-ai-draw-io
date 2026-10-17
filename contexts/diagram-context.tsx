@@ -477,11 +477,6 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         sessionId?: string,
         successMessage?: string,
     ) => {
-        if (!drawioRef.current) {
-            console.warn("Draw.io editor not ready")
-            return
-        }
-
         // Map format to draw.io export format
         const drawioFormat =
             format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
@@ -509,12 +504,14 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             30000,
         )
         if (!result?.data) {
-            console.warn("Diagram export for saving timed out")
+            console.warn(
+                "Diagram export for saving failed (editor not ready or timed out)",
+            )
             return
         }
         const exportData = result.data
         const fullDiagramXML = result.xml
-        let fileContent: string | Blob
+        let fileContent: string
         let mimeType: string
         let extension: string
 
@@ -552,10 +549,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
         // Handle download
         let url: string
-        if (
-            typeof fileContent === "string" &&
-            fileContent.startsWith("data:")
-        ) {
+        if (fileContent.startsWith("data:")) {
             // Already a data URL (PNG)
             url = fileContent
         } else {

@@ -269,7 +269,6 @@
     "validation": {
         "title": "Validate Diagram",
         "capturing": "Capturing",
-        "validating": "Validating",
         "validatingWithAttempt": "Validating ({attempt}/{max})",
         "valid": "Valid",
         "validWithWarnings": "Valid with Warnings",

@@ -4,7 +4,6 @@ import { app, type UtilityProcess, utilityProcess } from "electron"
 import {
     findAvailablePort,
     getAllocatedPort,
-    getServerUrl,
     isPortAvailable,
 } from "./port-manager"
 import { setAppUrl } from "./window-manager"
@@ -29,7 +28,7 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
     while (Date.now() - start < timeout) {
         try {
             const response = await fetch(url)
-            if (response.ok || response.status < 500) {
+            if (response.status < 500) {
                 return
             }
         } catch {
@@ -127,7 +126,7 @@ async function startServer(): Promise<string> {
         }
     })
 
-    const url = getServerUrl()
+    const url = `http://127.0.0.1:${port}`
     await waitForServer(url)
     console.log(`Next.js server started at ${url}`)
 

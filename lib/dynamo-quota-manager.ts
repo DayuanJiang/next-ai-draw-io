@@ -72,7 +72,7 @@ export async function checkAndIncrementRequest(
     increment = 1,
 ): Promise<QuotaCheckResult> {
     // Skip if quota tracking not enabled
-    if (!client || !TABLE) {
+    if (!client) {
         return { allowed: true }
     }
 
@@ -182,7 +182,7 @@ export async function recordTokenUsage(
     tokens: number,
 ): Promise<void> {
     // Skip if quota tracking not enabled
-    if (!client || !TABLE) return
+    if (!client) return
     if (!Number.isFinite(tokens) || tokens <= 0) return
 
     const pk = ip // User identifier (base64 IP)

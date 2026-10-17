@@ -20,9 +20,7 @@ function serializeSettings() {
     return SETTINGS_REGISTRY.map((def) => {
         const source = getValueSource(def.key)
         const raw =
-            source === "file"
-                ? fileValues[def.key]
-                : (getEnvFallback(def.key) ?? null)
+            source === "file" ? fileValues[def.key] : getEnvFallback(def.key)
         const value = def.type === "secret" && raw ? maskSecret(raw) : raw
         return { key: def.key, source, value }
     })

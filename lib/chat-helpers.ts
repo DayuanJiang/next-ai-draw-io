@@ -12,8 +12,7 @@ export function validateFileParts(messages: any[]): {
     error?: string
 } {
     for (const message of messages) {
-        const fileParts =
-            message?.parts?.filter((p: any) => p.type === "file") || []
+        const fileParts = message.parts.filter((p: any) => p.type === "file")
 
         if (fileParts.length > MAX_FILES) {
             return {
@@ -25,10 +24,7 @@ export function validateFileParts(messages: any[]): {
         for (const filePart of fileParts) {
             // The client sends files inline. Any other URL would be downloaded
             // by the server (AI SDK does that for models without URL support).
-            if (
-                typeof filePart.url !== "string" ||
-                !filePart.url.startsWith("data:")
-            ) {
+            if (!filePart.url.startsWith("data:")) {
                 return {
                     valid: false,
                     error: "Files must be uploaded inline as data URLs.",

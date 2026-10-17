@@ -215,10 +215,6 @@ export async function onRequest({ request, env }: any) {
                         429,
                     )
                 }
-                return createResponse(
-                    { error: { message: error.message, type: "api_error" } },
-                    500,
-                )
             } catch {
                 // Not a JSON error message
             }

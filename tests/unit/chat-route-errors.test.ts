@@ -39,8 +39,10 @@ const providerAnswers = (status: number, body: string) =>
         ),
     )
 
-/** The error text the chat panel gets from the stream */
-async function streamedError(headers: Record<string, string>) {
+/** The error the chat panel gets from the stream */
+async function streamedError(
+    headers: Record<string, string>,
+): Promise<{ code: string; message: string }> {
     const res = await chat(
         new Request("http://localhost/api/chat", {
             method: "POST",
@@ -59,7 +61,9 @@ async function streamedError(headers: Record<string, string>) {
     )
     const text = await res.text()
     const line = text.split("\n").find((l) => l.includes('"type":"error"'))
-    return line ? JSON.parse(JSON.parse(line.slice(6)).errorText).message : ""
+    if (!line) throw new Error(`No error event in the stream:\n${text}`)
+    const { code, message } = JSON.parse(JSON.parse(line.slice(6)).errorText)
+    return { code, message }
 }
 
 describe("provider error texts in the stream", () => {
@@ -76,7 +80,7 @@ describe("provider error texts in the stream", () => {
                 })
             }),
         )
-        expect(await streamedError({})).toMatch(
+        expect((await streamedError({})).message).toMatch(
             /127\.0\.0\.1:11434|fetch failed/,
         )
         // The SDK retries a refused connection twice, waiting between
@@ -95,8 +99,8 @@ describe("provider error texts in the stream", () => {
                 })
             }),
         )
-        expect(await streamedError({})).not.toBe(
-            "The provider returned an error.",
+        expect((await streamedError({})).message).toMatch(
+            /10\.0\.0\.9:11434|fetch failed/,
         )
     }, 20_000)
 
@@ -112,12 +116,11 @@ describe("provider error texts in the stream", () => {
                 },
             }),
         )
-        expect(
-            await streamedError({
-                "x-ai-provider": "edgeone",
-                "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
-            }),
-        ).toMatch(/daily public quota/)
+        const { message } = await streamedError({
+            "x-ai-provider": "edgeone",
+            "x-ai-model": "@tx/deepseek-ai/deepseek-v3-0324",
+        })
+        expect(message).toMatch(/daily public quota/)
     })
 
     it("hides the provider's text on the server's own key", async () => {
@@ -130,9 +133,10 @@ describe("provider error texts in the stream", () => {
                 error: { message: "Organization org-operator is suspended" },
             }),
         )
-        const message = await streamedError({})
+        const { code, message } = await streamedError({})
         expect(message).not.toMatch(/org-operator/)
         // A 403 on the server's key gets its own hint and no message
+        expect(code).toBe("server_key_forbidden")
         expect(message).toBe("")
     })
 })
