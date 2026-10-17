@@ -38,6 +38,8 @@
         "usageTime": "Time",
         "usageTokenUnit": "tokens",
         "usageSecondUnit": "s",
+        "usageCost": "Estimated cost",
+        "usageCostNote": "At the official price listed on models.dev",
         "clickToEdit": "Click to edit",
         "editMessage": "Edit message",
         "saveAndSubmit": "Save & submit",

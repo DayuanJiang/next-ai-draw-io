@@ -9,9 +9,16 @@ import type { ReplyUsage } from "@/lib/chat-message"
 import { formatMessage } from "@/lib/i18n/utils"
 import { cn } from "@/lib/utils"
 
+/** Dollars to three significant digits: $0.0373, $1.24 */
+function formatUsd(usd: number): string {
+    return `$${new Intl.NumberFormat("en-US", {
+        maximumSignificantDigits: 3,
+    }).format(usd)}`
+}
+
 /**
  * An answer's input and output tokens and its time, in the row of buttons
- * under it; pointing at it shows the details
+ * under it; pointing at it shows the details and the estimated cost
  */
 export function ReplyUsageNote({ usage }: { usage: ReplyUsage }) {
     const t = useDictionary().chat
@@ -87,7 +94,23 @@ export function ReplyUsageNote({ usage }: { usage: ReplyUsage }) {
                             {t.usageSecondUnit}
                         </dd>
                     </div>
+                    {typeof usage.costUsd === "number" && (
+                        <div className="contents">
+                            <dt className="pr-3 text-muted-foreground">
+                                {t.usageCost}
+                            </dt>
+                            <dd className="text-right tabular-nums">
+                                {formatUsd(usage.costUsd)}
+                            </dd>
+                            <dd />
+                        </div>
+                    )}
                 </dl>
+                {typeof usage.costUsd === "number" && (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        {t.usageCostNote}
+                    </p>
+                )}
             </TooltipContent>
         </Tooltip>
     )

@@ -16,6 +16,12 @@ export interface ReplyUsage {
     /** Of the output, spent thinking */
     reasoningTokens: number
     durationMs: number
+    /**
+     * USD at the official price; null once a request of the turn had no
+     * known price. Null rather than left out: the chat merges an answer's
+     * metadata, which would keep an earlier, partial cost.
+     */
+    costUsd?: number | null
 }
 
 export interface ChatMessageMetadata {
@@ -25,15 +31,23 @@ export interface ChatMessageMetadata {
 
 /**
  * The answer's usage with one more request added. A request whose provider
- * reported no usage adds nothing.
+ * reported no usage adds no tokens, and leaves the cost unknown. The cost
+ * stays known only while every request of the turn had a price.
  */
 export function addReplyUsage(
     before: ReplyUsage | undefined,
     usage: LanguageModelUsage,
     durationMs: number,
+    costUsd?: number,
 ): ReplyUsage | undefined {
     if (usage.inputTokens === undefined && usage.outputTokens === undefined)
-        return before
+        return before && { ...before, costUsd: null }
+    // An answer saved before costs were kept has none: unknown too
+    const costBefore = before ? before.costUsd : 0
+    const cost =
+        costUsd !== undefined && typeof costBefore === "number"
+            ? costBefore + costUsd
+            : null
     return {
         inputTokens: (before?.inputTokens ?? 0) + (usage.inputTokens ?? 0),
         outputTokens: (before?.outputTokens ?? 0) + (usage.outputTokens ?? 0),
@@ -44,6 +58,7 @@ export function addReplyUsage(
             (before?.reasoningTokens ?? 0) +
             (usage.outputTokenDetails.reasoningTokens ?? 0),
         durationMs: (before?.durationMs ?? 0) + durationMs,
+        costUsd: cost,
     }
 }
 
