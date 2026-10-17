@@ -21,7 +21,7 @@ export const chatTools = {
         description: `Display a diagram on draw.io. Pass ONLY the mxStyle definitions and the mxCell elements - wrapper tags and root cells are added automatically.
 
 VALIDATION RULES (XML will be rejected if violated):
-1. Generate ONLY mxStyle definitions and mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
+1. Generate ONLY mxStyle definitions and mxCell elements (an mxCell with custom data inside an <object> wrapper) - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
 2. Do NOT include root cells (id="0" or id="1") - they are added automatically
 3. All mxCell elements must be siblings - never nested
 4. Every mxCell needs a unique id (start from "2")
@@ -53,7 +53,7 @@ Operations:
 - add: Add a new cell. Provide cell_id (new unique id) and new_xml.
 - delete: Remove a cell. Cascade is automatic: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
 
-For update/add, new_xml is the complete mxCell in the compact form (a shape with x, y, w, h; an edge with source and target), with its complete style (named styles are not available in edit_diagram).
+For update/add, new_xml is the complete mxCell (inside its <object> wrapper when it has custom data) in the compact form (a shape with x, y, w, h; an edge with source and target), with its complete style (named styles are not available in edit_diagram).
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
