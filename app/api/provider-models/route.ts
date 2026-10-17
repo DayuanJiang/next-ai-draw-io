@@ -36,6 +36,13 @@ export async function POST(req: Request) {
     if (!canListModels(provider)) {
         return NextResponse.json({ models: null })
     }
+    // The body is untrusted: only strings count as a key or a URL
+    if ([apiKey, baseUrl].some((v) => v != null && typeof v !== "string")) {
+        return NextResponse.json(
+            { error: "Invalid request body" },
+            { status: 400 },
+        )
+    }
     // SECURITY: Block SSRF attacks via custom baseUrl
     if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
         return NextResponse.json({ error: "Invalid base URL" }, { status: 400 })
