@@ -31,8 +31,8 @@ export interface ChatMessageMetadata {
 
 /**
  * The answer's usage with one more request added. A request whose provider
- * reported no usage adds nothing. The cost stays known only while every
- * request of the turn had a price.
+ * reported no usage adds no tokens, and leaves the cost unknown. The cost
+ * stays known only while every request of the turn had a price.
  */
 export function addReplyUsage(
     before: ReplyUsage | undefined,
@@ -41,7 +41,7 @@ export function addReplyUsage(
     costUsd?: number,
 ): ReplyUsage | undefined {
     if (usage.inputTokens === undefined && usage.outputTokens === undefined)
-        return before
+        return before && { ...before, costUsd: null }
     // An answer saved before costs were kept has none: unknown too
     const costBefore = before ? before.costUsd : 0
     const cost =

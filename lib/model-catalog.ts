@@ -8,7 +8,7 @@ interface Price {
     output: number
     cacheRead?: number
     cacheWrite?: number
-    /** Thinking output, where it costs more than the rest */
+    /** Output of an answer that thought, where it costs more */
     reasoning?: number
 }
 
@@ -76,14 +76,17 @@ export function getModelInfo(
 
 /**
  * The model's price, from its own entry or one it adds only a date or
- * version to (claude-sonnet-4-5-20250929, gpt-5.1-2025-11-13). A sibling's
- * price would be wrong: gpt-4.1 costs 20 times what gpt-4.1-nano does.
+ * version to (claude-sonnet-4-5-20250929, gpt-5.1-2025-11-13, -v1:0). A
+ * sibling's price would be wrong: gpt-4.1 costs 20 times what gpt-4.1-nano
+ * does, and gpt-5-4 is not gpt-5. On Azure the id is a deployment name, so
+ * only one that is exactly a model's name gets its price.
  */
 function priceOf(provider: ProviderName, modelId: string) {
     const entry = findEntry(provider, modelId)
     if (!entry?.info.cost) return undefined
     const added = modelId.trim().slice(entry.id.length)
-    return /^([-:.@](\d+|v\d+|latest))*$/i.test(added)
+    if (provider === "azure" && added) return undefined
+    return /^(-(\d{8}|\d{4}(-\d{2}-\d{2})?|v\d+|latest)|:\d+)*$/i.test(added)
         ? entry.info.cost
         : undefined
 }
@@ -108,17 +111,18 @@ export function estimateCost(
     let price: Price = cost
     for (const tier of cost.tiers ?? []) if (input > tier.above) price = tier
     // The input tokens include those read from or written to the cache,
-    // and the output tokens the thinking, which have prices of their own
+    // which have prices of their own
     const cacheRead = usage.inputTokenDetails.cacheReadTokens ?? 0
     const cacheWrite = usage.inputTokenDetails.cacheWriteTokens ?? 0
-    const reasoning = usage.outputTokenDetails.reasoningTokens ?? 0
-    const output = usage.outputTokens ?? 0
+    // A reasoning price is the output price of an answer that thought: Qwen
+    // bills its whole output at it
+    const thought = (usage.outputTokenDetails.reasoningTokens ?? 0) > 0
+    const output = thought ? (price.reasoning ?? price.output) : price.output
     return (
         ((input - cacheRead - cacheWrite) * price.input +
             cacheRead * (price.cacheRead ?? price.input) +
             cacheWrite * (price.cacheWrite ?? price.input) +
-            (output - reasoning) * price.output +
-            reasoning * (price.reasoning ?? price.output)) /
+            (usage.outputTokens ?? 0) * output) /
         1_000_000
     )
 }

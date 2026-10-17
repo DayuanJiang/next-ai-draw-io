@@ -493,6 +493,10 @@ Write your reply in the language of the user's own words in their latest message
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
+    // The request's cost, priced step by step: a price tier goes by one
+    // call's prompt, and a step without usage or price makes it unknown
+    let requestCost: number | undefined = 0
+
     const result = streamText({
         model,
         // The system messages carry cache points, so they go in messages
@@ -553,6 +557,11 @@ Write your reply in the language of the user's own words in their latest message
         // completed answer). Awaited, so the write is done before the host
         // may freeze the function after the answer ends.
         onStepFinish: async ({ usage }) => {
+            const stepCost = estimateCost(resolvedProvider, modelId, usage)
+            requestCost =
+                requestCost !== undefined && stepCost !== undefined
+                    ? requestCost + stepCost
+                    : undefined
             if (countsQuota) {
                 await recordTokenUsage(userId, usage.totalTokens ?? 0)
             }
@@ -584,11 +593,7 @@ Write your reply in the language of the user's own words in their latest message
                               usedBefore,
                               part.totalUsage,
                               Date.now() - startedAt,
-                              estimateCost(
-                                  resolvedProvider,
-                                  modelId,
-                                  part.totalUsage,
-                              ),
+                              requestCost,
                           ),
                       }
                     : undefined,

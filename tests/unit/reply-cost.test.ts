@@ -82,10 +82,19 @@ describe("estimateCost", () => {
         expect(
             estimateCost("openai", "gpt-4.1-nano", usage(1000, 100)),
         ).toBeUndefined()
-        // An Azure deployment name says nothing about the model behind it
+        // A version number is not a date: gpt-4.1-4 is not gpt-4.1
         expect(
-            estimateCost("azure", "gpt-5-prod", usage(1000, 100)),
+            estimateCost("openai", "gpt-4.1-4", usage(1000, 100)),
         ).toBeUndefined()
+        // An Azure deployment name says nothing about the model behind it,
+        // unless it is the model's name
+        expect(
+            estimateCost("azure", "gpt-5-2025-08-07", usage(1000, 100)),
+        ).toBeUndefined()
+        expect(estimateCost("azure", "gpt-5", usage(1000, 100))).toBeCloseTo(
+            (1000 * 1 + 100 * 10) / 1e6,
+            12,
+        )
     })
 
     it("uses the price tier of the prompt's size", () => {
@@ -97,14 +106,17 @@ describe("estimateCost", () => {
         ).toBeCloseTo((20000 * 1 + 1000 * 2) / 1e6, 12)
     })
 
-    it("prices thinking at its own price where it has one", () => {
+    it("prices an answer that thought at the thinking price, all of it", () => {
         expect(
             estimateCost(
                 "qwen",
                 "qwen-plus",
                 usage(1000, 1000, { reasoning: 800 }),
             ),
-        ).toBeCloseTo((1000 * 1 + 200 * 2 + 800 * 8) / 1e6, 12)
+        ).toBeCloseTo((1000 * 1 + 1000 * 8) / 1e6, 12)
+        expect(
+            estimateCost("qwen", "qwen-plus", usage(1000, 1000)),
+        ).toBeCloseTo((1000 * 1 + 1000 * 2) / 1e6, 12)
     })
 
     it("has no price for an unknown model or for Ollama", () => {
@@ -148,6 +160,15 @@ describe("addReplyUsage", () => {
                 0.02,
             )?.costUsd,
         ).toBeNull()
+        // A request that reported no usage
+        const none = {
+            ...usage(0, 0),
+            inputTokens: undefined,
+            outputTokens: undefined,
+        }
+        expect(
+            addReplyUsage({ ...before, costUsd: 0.01 }, none, 1000, undefined),
+        ).toEqual({ ...before, costUsd: null })
         // Saved before costs were kept
         expect(
             addReplyUsage(before, usage(100, 10), 1000, 0.02)?.costUsd,
