@@ -15,7 +15,11 @@ export type InstallTab = {
     )[]
 }
 
-/** The install steps of each MCP client, one tab at a time */
+/**
+ * The install steps of each MCP client, one tab at a time. Every panel is in
+ * the HTML (the others are hidden), so crawlers that do not click tabs still
+ * read the Codex, VS Code and Cursor steps.
+ */
 export function InstallTabs({
     tabs,
     labels,
@@ -25,7 +29,6 @@ export function InstallTabs({
 }) {
     const [current, setCurrent] = useState(tabs[0].id)
     const list = useRef<HTMLDivElement>(null)
-    const tab = tabs.find((t) => t.id === current) ?? tabs[0]
     // Arrow keys, Home and End move between the tabs, as in any tab list
     const onKeyDown = (event: KeyboardEvent) => {
         const index = tabs.findIndex((t) => t.id === current)
@@ -65,7 +68,7 @@ export function InstallTabs({
                             id={`install-tab-${t.id}`}
                             aria-selected={t.id === current}
                             tabIndex={t.id === current ? 0 : -1}
-                            aria-controls="install-panel"
+                            aria-controls={`install-panel-${t.id}`}
                             onClick={() => setCurrent(t.id)}
                             className={`relative shrink-0 rounded-t-lg px-3.5 py-2 text-[13.5px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${
                                 t.id === current
@@ -82,40 +85,44 @@ export function InstallTabs({
                 </div>
                 <span className="pointer-events-none absolute top-0 right-0 bottom-px w-10 bg-gradient-to-l from-canvas md:hidden" />
             </div>
-            <div
-                id="install-panel"
-                role="tabpanel"
-                aria-labelledby={`install-tab-${tab.id}`}
-                className="space-y-3.5 p-4 md:p-5"
-            >
-                {tab.items.map((item, i) =>
-                    "note" in item ? (
-                        <p
-                            key={i}
-                            className="text-[14.5px] leading-relaxed text-muted-foreground"
-                        >
-                            <Inline text={item.note} />
-                        </p>
-                    ) : "link" in item ? (
-                        <a
-                            key={i}
-                            href={item.link}
-                            target="_blank"
-                            rel="noopener"
-                            className="inline-flex rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background"
-                        >
-                            {item.label}
-                        </a>
-                    ) : (
-                        <CopyCommand
-                            key={i}
-                            command={item.code}
-                            labels={labels}
-                            prompt={item.code.startsWith("/") ? "" : "$"}
-                        />
-                    ),
-                )}
-            </div>
+            {tabs.map((tab) => (
+                <div
+                    key={tab.id}
+                    id={`install-panel-${tab.id}`}
+                    role="tabpanel"
+                    aria-labelledby={`install-tab-${tab.id}`}
+                    hidden={tab.id !== current}
+                    className="space-y-3.5 p-4 md:p-5"
+                >
+                    {tab.items.map((item, i) =>
+                        "note" in item ? (
+                            <p
+                                key={i}
+                                className="text-[14.5px] leading-relaxed text-muted-foreground"
+                            >
+                                <Inline text={item.note} />
+                            </p>
+                        ) : "link" in item ? (
+                            <a
+                                key={i}
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener"
+                                className="inline-flex rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background"
+                            >
+                                {item.label}
+                            </a>
+                        ) : (
+                            <CopyCommand
+                                key={i}
+                                command={item.code}
+                                labels={labels}
+                                prompt={item.code.startsWith("/") ? "" : "$"}
+                            />
+                        ),
+                    )}
+                </div>
+            ))}
         </div>
     )
 }
