@@ -145,7 +145,7 @@ function GeneralTab({ open }: { open: boolean }) {
     const t = dict.settings
     const engine = useChatEngine()
     const router = useRouter()
-    const pathname = usePathname() || "/"
+    const pathname = usePathname()
     const search = useSearchParams()
     const theme = useSettingsStore((s) => s.theme)
     const setTheme = useSettingsStore((s) => s.setTheme)
@@ -162,8 +162,7 @@ function GeneralTab({ open }: { open: boolean }) {
     const [httpProxy, setHttpProxy] = useState("")
     const [httpsProxy, setHttpsProxy] = useState("")
     const [isApplyingProxy, setIsApplyingProxy] = useState(false)
-    const isElectron =
-        typeof window !== "undefined" && !!window.electronAPI?.isElectron
+    const isElectron = !!window.electronAPI?.isElectron
 
     useEffect(() => {
         if (!open) return
@@ -208,7 +207,7 @@ function GeneralTab({ open }: { open: boolean }) {
             } else {
                 parts.splice(1, 0, lang)
             }
-            const params = new URLSearchParams(search?.toString())
+            const params = new URLSearchParams(search.toString())
             if (sessionId) params.set("session", sessionId)
             const query = params.toString() ? `?${params.toString()}` : ""
             router.push((parts.join("/") || "/") + query)
@@ -506,7 +505,7 @@ function DrawingTab() {
 
 function AboutTab() {
     const dict = useDictionary()
-    const pathname = usePathname() || "/"
+    const pathname = usePathname()
     const lang = pathname.split("/").filter(Boolean)[0] || i18n.defaultLocale
     const showAbout = process.env.NEXT_PUBLIC_SHOW_ABOUT_AND_NOTICE === "true"
     const isSelfHosted = process.env.NEXT_PUBLIC_SELFHOSTED === "true"

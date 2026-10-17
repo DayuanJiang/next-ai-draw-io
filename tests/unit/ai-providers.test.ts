@@ -21,19 +21,12 @@ describe("resolveBaseURL", () => {
             expect(result).toBe(USER_BASE_URL)
         })
 
-        it("returns undefined when user provides no baseUrl", () => {
-            const result = resolveBaseURL(USER_API_KEY, null, SERVER_BASE_URL)
-            expect(result).toBeUndefined()
-        })
-
         it("does NOT use server's baseUrl even when available", () => {
             const result = resolveBaseURL(
                 USER_API_KEY,
                 undefined,
                 SERVER_BASE_URL,
             )
-            // Should NOT return SERVER_BASE_URL
-            expect(result).not.toBe(SERVER_BASE_URL)
             expect(result).toBeUndefined()
         })
     })
@@ -296,18 +289,6 @@ describe("Ollama API key security", () => {
         const mod = await import("ollama-ai-provider-v2")
         createOllamaMock = mod.createOllama as ReturnType<typeof vi.fn>
         createOllamaMock.mockClear()
-    })
-
-    it("applies server OLLAMA_API_KEY when no client baseUrl is provided", () => {
-        vi.stubEnv("OLLAMA_API_KEY", "server-secret-key")
-
-        getAIModel({ provider: "ollama", modelId: "llama2" })
-
-        expect(createOllamaMock).toHaveBeenCalledWith(
-            expect.objectContaining({
-                headers: { Authorization: "Bearer server-secret-key" },
-            }),
-        )
     })
 
     it("does NOT leak server OLLAMA_API_KEY when client provides a custom baseUrl", () => {

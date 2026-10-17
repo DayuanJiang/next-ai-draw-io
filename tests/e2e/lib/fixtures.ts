@@ -251,19 +251,6 @@ export function createMixedMock(
 }
 
 /**
- * Create a mock that returns an error
- */
-export function createErrorMock(status: number, error: string) {
-    return async (route: Route) => {
-        await route.fulfill({
-            status,
-            contentType: "application/json",
-            body: JSON.stringify({ error }),
-        })
-    }
-}
-
-/**
  * Answer each chat request with the next reply, in the browser. Each string
  * in a reply is one network chunk, sent gapMs apart, so the throttled UI
  * renders between chunks like with a real model. A number in a reply sets

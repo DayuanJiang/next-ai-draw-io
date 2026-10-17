@@ -49,7 +49,6 @@ export function splitTextIntoFileSections(text: string): TextSection[] {
 }
 
 export function getMessageTextContent(message: UIMessage): string {
-    if (!message.parts) return ""
     return message.parts
         .filter((part) => part.type === "text")
         .map((part) => (part as { text: string }).text)

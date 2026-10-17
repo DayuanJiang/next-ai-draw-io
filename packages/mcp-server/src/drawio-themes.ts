@@ -9,11 +9,8 @@ const DRAWIO_THEMES = [
 
 type DrawioTheme = (typeof DRAWIO_THEMES)[number]
 
-export function isDrawioTheme(value: unknown): value is DrawioTheme {
-    return (
-        typeof value === "string" &&
-        (DRAWIO_THEMES as readonly string[]).includes(value)
-    )
+export function isDrawioTheme(value: string): value is DrawioTheme {
+    return (DRAWIO_THEMES as readonly string[]).includes(value)
 }
 
 /** draw.io's name for a locale: lowercase, "zh-tw" for Traditional and "zh" for Simplified Chinese */

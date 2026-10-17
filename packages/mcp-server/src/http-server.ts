@@ -217,7 +217,6 @@ export function restoreSavedSession(sessionId: string): void {
 }
 
 function ensureSessionStateInitialized(sessionId: string): void {
-    if (!sessionId) return
     if (!isValidSessionId(sessionId)) return
     restoreSavedSession(sessionId)
     if (stateStore.has(sessionId)) return

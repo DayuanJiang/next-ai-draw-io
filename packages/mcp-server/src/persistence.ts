@@ -192,7 +192,7 @@ export class Autosaver {
         const previous = this.pending.get(sessionId)
         if (previous) clearTimeout(previous.timer)
         const timer = setTimeout(() => this.write(sessionId), this.delayMs)
-        timer.unref?.()
+        timer.unref()
         this.pending.set(sessionId, { xml, timer })
     }
 

@@ -236,11 +236,9 @@ Since we skip styling, STRICTLY follow the "Edge Routing Rules" section below:
  * @returns The system prompt string
  */
 export function getSystemPrompt(
-    modelId?: string,
-    minimalStyle?: boolean,
+    modelId: string,
+    minimalStyle: boolean,
 ): string {
-    const modelName = modelId || "AI"
-
     // Minimal style: prepend instruction at START (more prominent)
     // Normal style: append at end
     let prompt: string
@@ -251,5 +249,5 @@ export function getSystemPrompt(
         prompt = DEFAULT_SYSTEM_PROMPT + STYLE_INSTRUCTIONS
     }
 
-    return prompt.replace("{{MODEL_NAME}}", modelName)
+    return prompt.replace("{{MODEL_NAME}}", modelId)
 }

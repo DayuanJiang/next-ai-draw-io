@@ -224,7 +224,6 @@
     "validation": {
         "title": "ダイアグラムを検証",
         "capturing": "キャプチャ中",
-        "validating": "検証中",
         "validatingWithAttempt": "検証中 ({attempt}/{max})",
         "valid": "有効",
         "validWithWarnings": "有効（警告あり）",

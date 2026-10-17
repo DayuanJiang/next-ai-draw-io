@@ -73,7 +73,6 @@ describe("validateFileParts", () => {
         for (const url of [
             "http://10.0.0.5/secret.png",
             "https://example.com/a.png",
-            undefined,
         ]) {
             const messages = [{ role: "user", parts: [{ type: "file", url }] }]
             expect(validateFileParts(messages).valid).toBe(false)

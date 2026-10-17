@@ -47,10 +47,7 @@ function write(key: string, value: string | null) {
 }
 
 function systemPrefersDark(): boolean {
-    return (
-        typeof window !== "undefined" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches
-    )
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
 }
 
 function applyDarkClass(isDark: boolean) {

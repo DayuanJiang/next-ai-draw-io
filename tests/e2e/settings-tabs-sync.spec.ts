@@ -230,28 +230,6 @@ test("an older test from before the tabs changed does not undo a newer one", asy
     ).toBe(true)
 })
 
-test("a model list request keeps only its own provider busy", async ({
-    page,
-}) => {
-    const releases = await holdEach(page, "**/api/provider-models", () => ({
-        models: [],
-    }))
-    await openApp(page, { config: TWO_PROVIDERS })
-    await openSettings(page)
-    const dialog = settingsDialog(page)
-    const fetchButton = dialog.getByRole("button", {
-        name: /^Get all models from/,
-    })
-    await dialog.getByTestId("provider-row-p1").click()
-    await fetchButton.click()
-    await expect.poll(() => releases.length).toBe(1)
-    await expect(fetchButton).toBeDisabled()
-    await backToModels(dialog)
-    await dialog.getByTestId("provider-row-p2").click()
-    await expect(fetchButton).toBeEnabled()
-    for (const release of releases) release()
-})
-
 test("a slow model list keeps its provider busy while another loads", async ({
     page,
 }) => {
@@ -269,6 +247,7 @@ test("a slow model list keeps its provider busy while another loads", async ({
     await expect.poll(() => releases.length).toBe(1)
     await backToModels(dialog)
     await dialog.getByTestId("provider-row-p2").click()
+    await expect(fetchButton).toBeEnabled()
     await fetchButton.click()
     await expect.poll(() => releases.length).toBe(2)
     releases[1]()

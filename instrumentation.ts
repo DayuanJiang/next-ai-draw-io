@@ -4,12 +4,8 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node"
 export async function register() {
     // Overlay admin settings file onto process.env before anything reads config
     if (process.env.NEXT_RUNTIME === "nodejs") {
-        try {
-            const { applyToEnv } = await import("@/lib/admin/settings")
-            applyToEnv()
-        } catch (err) {
-            console.error("[admin-settings] Failed to apply settings:", err)
-        }
+        const { applyToEnv } = await import("@/lib/admin/settings")
+        applyToEnv()
     }
 
     // Skip telemetry if Langfuse env vars are not configured

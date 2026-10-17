@@ -85,9 +85,7 @@ export function formatXML(xml: string, indent: string = "  "): string {
             const nextIndex = tags.indexOf(node) + 1
             if (nextIndex < tags.length && tags[nextIndex].startsWith("<")) {
                 formatted += "\n"
-                if (!node.match(/^<\w[^>]*\/>$/)) {
-                    pad++
-                }
+                pad++
             }
         } else if (node.match(/^<\w[^>]*\/>$/)) {
             // Self-closing tag
@@ -113,29 +111,24 @@ export function extractDiagramXML(
     xml_svg_string: string,
     pageId?: string | null,
 ): string {
-    try {
-        // The data URL holds the SVG; its root element's content attribute
-        // holds the mxfile, whose pages are compressed
-        const svg = atob(xml_svg_string.slice(26))
-        const content = extractSvgEmbeddedXml(svg)
-        if (content === undefined) {
-            throw new Error("No SVG element found in the input string.")
-        }
-        if (!content) {
-            throw new Error("SVG element does not have a 'content' attribute.")
-        }
-        const doc = new DOMParser().parseFromString(content, "text/xml")
-        const diagram = pageElement(doc, pageId)
-        if (!diagram) {
-            throw new Error("No diagram element found")
-        }
-        const xml = decompressPageContent(diagram.textContent ?? "")
-        if (!xml) {
-            throw new Error("No encoded data found in the diagram element")
-        }
-        return xml
-    } catch (error) {
-        console.error("Error extracting diagram XML:", error)
-        throw error // Re-throw for caller handling
+    // The data URL holds the SVG; its root element's content attribute
+    // holds the mxfile, whose pages are compressed
+    const svg = atob(xml_svg_string.slice(26))
+    const content = extractSvgEmbeddedXml(svg)
+    if (content === undefined) {
+        throw new Error("No SVG element found in the input string.")
     }
+    if (!content) {
+        throw new Error("SVG element does not have a 'content' attribute.")
+    }
+    const doc = new DOMParser().parseFromString(content, "text/xml")
+    const diagram = pageElement(doc, pageId)
+    if (!diagram) {
+        throw new Error("No diagram element found")
+    }
+    const xml = decompressPageContent(diagram.textContent ?? "")
+    if (!xml) {
+        throw new Error("No encoded data found in the diagram element")
+    }
+    return xml
 }

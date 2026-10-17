@@ -881,8 +881,7 @@ registerTool(
                     ? "The diagram changed in the browser since you last saw it (e.g. manual user edits). No changes were made."
                     : "You have not seen this diagram yet, so no changes were made."
             // Per-cell summary of the user's changes, when they can be compared
-            const summary =
-                gate.reason === "stale" ? describeChanges(before, liveXml) : ""
+            const summary = describeChanges(before, liveXml)
             const next =
                 session.lastSeenXml === liveXml
                     ? "Build your operations on this XML and retry."
@@ -1012,9 +1011,7 @@ registerTool(
         const liveXml = browserState?.xml || session.xml
         // What the user changed since the model last looked, computed
         // before lastSeenXml is overwritten below
-        const changes = session.lastSeenXml
-            ? describeChanges(session.lastSeenXml, liveXml)
-            : ""
+        const changes = describeChanges(session.lastSeenXml, liveXml)
         const changesNote = changes ? `\n\nNote: ${changes}` : ""
         const pageList = describePages(
             session.xml,
@@ -1725,7 +1722,7 @@ registerTool(
         // With two tabs the default name of the first one says nothing
         const first = listPagesFromDoc(loaded.doc)[0]
         const renameHint =
-            info.index === 1 && /^Page-\d+$/.test(first?.name ?? "")
+            info.index === 1 && /^Page-\d+$/.test(first.name)
                 ? `\n\nThe first page is still called "${first.name}": give it a name that says what it shows with rename_page.`
                 : ""
         return ok(
@@ -1909,9 +1906,7 @@ registerTool(
             contentFingerprint(current) !== contentFingerprint(BLANK_MXFILE) &&
             !isInHistory(session.id, current)
 
-        if (restoreHistoryEntry(session.id, entry.id) === null) {
-            return fail("That version is no longer in History.")
-        }
+        restoreHistoryEntry(session.id, entry.id)
         session.xml = entry.xml
         // As load_diagram: the model may never have seen this XML, so
         // the edit gate requires one get_diagram before edits

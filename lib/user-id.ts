@@ -13,7 +13,7 @@ export function getUserIdFromRequest(req: Request): string {
     const rawIp =
         (ipHeader
             ? req.headers.get(ipHeader)?.trim()
-            : req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()) ||
+            : req.headers.get("x-forwarded-for")?.split(",")[0].trim()) ||
         "anonymous"
     return rawIp === "anonymous"
         ? rawIp

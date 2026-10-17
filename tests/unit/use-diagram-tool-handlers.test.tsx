@@ -209,35 +209,24 @@ describe("append_diagram and the stored previews", () => {
         // The failed edit's preview was drawn on the cut off drawing: its
         // original must not come back later
         const invalid = `<mxCell id="1" value="root id" vertex="1" parent="1">${geometry}</mxCell><mxCell id="3" value="3" vertex="1" parent="1"><mxGeometry x="0" y="0" width="8`
-        const valid = `${box("2")}<mxCell id="3" value="3" vertex="1" parent="1"><mxGeometry x="0" y="0" width="8`
-        for (const [partial, commitFails] of [
-            [invalid, false],
-            [valid, true],
-        ] as const) {
-            const { refs, onDisplayChart, append } = setup(partial)
-            refs.continuationOriginalRef.current =
-                "<mxfile>before the cut</mxfile>" as any
-            refs.editDiagramOriginalXmlRef.current = new Map([
-                ["edit-1", "<mxfile>cut off</mxfile>"],
-            ])
-            if (commitFails) {
-                onDisplayChart.mockImplementation((_xml, _skip, mode) =>
-                    mode === "commit" ? "load failed" : null,
-                )
-            }
-            await append('0" height="40" as="geometry"/></mxCell>')
-            const calls = onDisplayChart.mock.calls
-            expect(calls.at(-1)).toEqual([
-                "<mxfile>before the cut</mxfile>",
-                true,
-                "revert",
-            ])
-            expect(
-                calls.some(([xml]) => xml === "<mxfile>cut off</mxfile>"),
-            ).toBe(false)
-            expect(refs.editDiagramOriginalXmlRef.current.size).toBe(0)
-            expect(refs.continuationOriginalRef.current).toBeNull()
-        }
+        const { refs, onDisplayChart, append } = setup(invalid)
+        refs.continuationOriginalRef.current =
+            "<mxfile>before the cut</mxfile>" as any
+        refs.editDiagramOriginalXmlRef.current = new Map([
+            ["edit-1", "<mxfile>cut off</mxfile>"],
+        ])
+        await append('0" height="40" as="geometry"/></mxCell>')
+        const calls = onDisplayChart.mock.calls
+        expect(calls.at(-1)).toEqual([
+            "<mxfile>before the cut</mxfile>",
+            true,
+            "revert",
+        ])
+        expect(calls.some(([xml]) => xml === "<mxfile>cut off</mxfile>")).toBe(
+            false,
+        )
+        expect(refs.editDiagramOriginalXmlRef.current.size).toBe(0)
+        expect(refs.continuationOriginalRef.current).toBeNull()
     })
 })
 

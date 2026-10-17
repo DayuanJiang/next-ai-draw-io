@@ -269,7 +269,6 @@
     "validation": {
         "title": "验证图表",
         "capturing": "截图中",
-        "validating": "验证中",
         "validatingWithAttempt": "验证中 ({attempt}/{max})",
         "valid": "通过",
         "validWithWarnings": "通过（有警告）",

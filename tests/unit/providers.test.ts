@@ -10,7 +10,7 @@ import path from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import { envVarsOf } from "@/lib/ai-providers"
 import { i18n } from "@/lib/i18n/config"
-import { POPULAR_PROVIDERS, PROVIDER_GROUPS } from "@/lib/provider-setup"
+import { PROVIDER_GROUPS } from "@/lib/provider-setup"
 import { PROVIDER_NAMES, PROVIDERS, publicDefaultUrl } from "@/lib/providers"
 
 vi.mock("@/lib/admin/settings", () => ({
@@ -202,17 +202,6 @@ describe("the picker's order", () => {
                 providers: ["bedrock", "vertexai", "azure", "edgeone"],
             },
             { id: "selfHosted", providers: ["ollama", "sglang", "custom"] },
-        ])
-    })
-
-    it("offers the same popular providers", () => {
-        expect(POPULAR_PROVIDERS).toEqual([
-            "openai",
-            "anthropic",
-            "google",
-            "deepseek",
-            "openrouter",
-            "qwen",
         ])
     })
 })

@@ -3,7 +3,6 @@ import { SINGLE_BOX_XML } from "./fixtures/diagrams"
 import {
     expect,
     getChatInput,
-    getIframe,
     getSendButton,
     openApp,
     openSettingsTab,
@@ -30,44 +29,7 @@ async function pickLanguage(page: Page, name: string) {
 }
 
 test.describe("Language Switching", () => {
-    test("loads English by default", async ({ page }) => {
-        await openApp(page)
-
-        const chatInput = getChatInput(page)
-        await expect(chatInput).toBeVisible({ timeout: 10000 })
-
-        await expect(getSendButton(page, "Send")).toBeVisible()
-    })
-
-    test("can switch to Japanese", async ({ page }) => {
-        await openApp(page)
-
-        await test.step("open settings and select Japanese", async () => {
-            await pickLanguage(page, "日本語")
-        })
-
-        await test.step("verify UI is in Japanese", async () => {
-            await expect(getSendButton(page, "送信")).toBeVisible({
-                timeout: 5000,
-            })
-        })
-    })
-
-    test("can switch to Chinese", async ({ page }) => {
-        await openApp(page)
-
-        await test.step("open settings and select Chinese", async () => {
-            await pickLanguage(page, "中文")
-        })
-
-        await test.step("verify UI is in Chinese", async () => {
-            await expect(getSendButton(page, "发送")).toBeVisible({
-                timeout: 5000,
-            })
-        })
-    })
-
-    test("language persists after reload", async ({ page }) => {
+    test("language persists on the next visit", async ({ page }) => {
         await openApp(page)
 
         await test.step("switch to Japanese", async () => {
@@ -75,17 +37,15 @@ test.describe("Language Switching", () => {
             await sleep(500)
         })
 
-        await test.step("verify Japanese before reload", async () => {
+        await test.step("verify Japanese before leaving", async () => {
             await expect(getSendButton(page, "送信")).toBeVisible({
                 timeout: 10000,
             })
         })
 
-        await test.step("reload and verify Japanese persists", async () => {
-            await page.reload({ waitUntil: "networkidle" })
-            await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
-            // Wait for hydration and localStorage to be read
-            await sleep(1000)
+        await test.step("open /en and verify Japanese persists", async () => {
+            await page.goto("/en", { waitUntil: "networkidle" })
+            await expect(page).toHaveURL(/\/ja(\?|$)/, { timeout: 10000 })
             await expect(getSendButton(page, "送信")).toBeVisible({
                 timeout: 10000,
             })

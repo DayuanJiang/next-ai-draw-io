@@ -195,15 +195,3 @@ export function getAllocatedPort(): number | null {
 export function resetAllocatedPort(): void {
     allocatedPort = null
 }
-
-/**
- * Get the server URL with the allocated port
- */
-export function getServerUrl(): string {
-    if (allocatedPort === null) {
-        throw new Error(
-            "No port allocated yet. Call findAvailablePort() first.",
-        )
-    }
-    return `http://127.0.0.1:${allocatedPort}`
-}

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
     filterProviderGroups,
     hasCredentials,
-    POPULAR_PROVIDERS,
     PROVIDER_GROUPS,
     providerStatus,
 } from "@/lib/provider-setup"
@@ -23,10 +22,6 @@ describe("provider groups", () => {
         const grouped = PROVIDER_GROUPS.flatMap((g) => g.providers)
         expect([...grouped].sort()).toEqual(Object.keys(PROVIDERS).sort())
         expect(new Set(grouped).size).toBe(grouped.length)
-    })
-
-    it("offer known providers as popular ones", () => {
-        for (const p of POPULAR_PROVIDERS) expect(PROVIDERS[p]).toBeTruthy()
     })
 
     it("are searched by label or name, ignoring case and spaces", () => {

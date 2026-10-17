@@ -1,19 +1,8 @@
-import {
-    expect,
-    openApp,
-    openSettings,
-    openSettingsTab,
-    test,
-} from "./lib/fixtures"
+import { expect, openApp, openSettingsTab, test } from "./lib/fixtures"
 
 test.describe("Settings", () => {
     test.beforeEach(async ({ page }) => {
         await openApp(page)
-    })
-
-    test("settings dialog opens", async ({ page }) => {
-        await openSettings(page)
-        // openSettings already verifies dialog is visible
     })
 
     test("language selection is available", async ({ page }) => {

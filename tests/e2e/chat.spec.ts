@@ -106,6 +106,9 @@ test.describe("Answers", () => {
                 ),
             })
         })
+        await page
+            .context()
+            .grantPermissions(["clipboard-read", "clipboard-write"])
         await openApp(page)
         await sendMessage(page, "Create a test box")
         await expect(
@@ -117,6 +120,9 @@ test.describe("Answers", () => {
         // The button shows a check mark for a moment
         await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible(
             { timeout: 3000 },
+        )
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+            "Here is your diagram with a test box.",
         )
     })
 })

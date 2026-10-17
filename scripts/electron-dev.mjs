@@ -28,7 +28,7 @@ async function waitForServer(url, timeout = 120000) {
     while (Date.now() - start < timeout) {
         try {
             const response = await fetch(url)
-            if (response.ok || response.status < 500) {
+            if (response.status < 500) {
                 console.log("Server is ready!")
                 return true
             }

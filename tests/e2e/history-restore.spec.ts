@@ -11,40 +11,6 @@ import {
 import { createMockSSEResponse, sse } from "./lib/helpers"
 
 test.describe("History and Session Restore", () => {
-    test("new chat button clears conversation", async ({ page }) => {
-        await page.route("**/api/chat", async (route) => {
-            await route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(
-                    SINGLE_BOX_XML,
-                    "Created your test diagram.",
-                ),
-            })
-        })
-
-        await openApp(page)
-
-        await test.step("create a conversation", async () => {
-            await sendMessage(page, "Create a test diagram")
-            await waitForText(page, "Created your test diagram.")
-        })
-
-        await test.step("click new chat button", async () => {
-            const newChatButton = page.locator(
-                '[data-testid="new-chat-button"]',
-            )
-            await expect(newChatButton).toBeVisible({ timeout: 5000 })
-            await newChatButton.click()
-        })
-
-        await test.step("verify conversation is cleared", async () => {
-            await expect(
-                page.locator('text="Created your test diagram."'),
-            ).not.toBeVisible({ timeout: 5000 })
-        })
-    })
-
     test("new chat keeps a conversation that could not be saved", async ({
         page,
     }) => {

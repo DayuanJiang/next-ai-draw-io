@@ -1030,7 +1030,7 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
 
     // Use client override if provided, otherwise fall back to env vars.
     // AI_MODEL may be comma-separated (multi-model fallback); pick the first.
-    const envModel = process.env.AI_MODEL?.split(",")[0]?.trim() || undefined
+    const envModel = process.env.AI_MODEL?.split(",")[0].trim() || undefined
     const modelId = overrides?.modelId || envModel
 
     if (!modelId) {
@@ -1055,6 +1055,11 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
         }
         provider = overrides.provider as ProviderName
     } else if (process.env.AI_PROVIDER) {
+        if (!Object.hasOwn(PROVIDERS, process.env.AI_PROVIDER)) {
+            throw new Error(
+                `Unknown AI provider: ${process.env.AI_PROVIDER}. Supported providers: ${Object.keys(PROVIDERS).join(", ")}`,
+            )
+        }
         provider = process.env.AI_PROVIDER as ProviderName
     } else {
         const detected = detectProvider()
@@ -1083,11 +1088,6 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                     `Please set AI_PROVIDER to specify which one to use.`,
             )
         }
-    }
-    if (!Object.hasOwn(PROVIDERS, provider)) {
-        throw new Error(
-            `Unknown AI provider: ${provider}. Supported providers: ${Object.keys(PROVIDERS).join(", ")}`,
-        )
     }
 
     // Only validate server credentials if client isn't providing their own API key
@@ -1227,18 +1227,18 @@ export function getServerProvider(): ProviderName | null {
  * every endpoint is the user's. clientBaseUrl: normalized.
  */
 export async function usesServerEndpoint(
-    provider: ProviderName | null | undefined,
+    provider: ProviderName,
     clientBaseUrl: string,
     apiKey: string | null | undefined,
 ): Promise<boolean> {
     if (process.env.NEXT_AI_DRAWIO_DESKTOP === "1") return false
-    const def = provider ? providerDef(provider) : undefined
-    if (def?.credential === "none") return true
-    if (def?.credential === "optionalKey" && !clientBaseUrl && !apiKey) {
+    const def = PROVIDERS[provider]
+    if (def.credential === "none") return true
+    if (def.credential === "optionalKey" && !clientBaseUrl && !apiKey) {
         return true
     }
     return (
-        def?.sdk !== "bedrock" &&
+        def.sdk !== "bedrock" &&
         !!clientBaseUrl &&
         (await isPrivateUrl(clientBaseUrl))
     )
@@ -1278,12 +1278,7 @@ export const CACHE_POINT = {
  * the Anthropic API or OpenRouter (see CACHE_POINT).
  */
 export function supportsPromptCaching(modelId: string): boolean {
-    return (
-        modelId.includes("claude") ||
-        modelId.includes("anthropic") ||
-        modelId.startsWith("us.anthropic") ||
-        modelId.startsWith("eu.anthropic")
-    )
+    return modelId.includes("claude") || modelId.includes("anthropic")
 }
 
 /**
@@ -1297,7 +1292,7 @@ export function supportsPromptCaching(modelId: string): boolean {
  */
 export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
     // AI_MODEL may be comma-separated (multi-model fallback); pick the first.
-    const envFallback = process.env.AI_MODEL?.split(",")[0]?.trim() || undefined
+    const envFallback = process.env.AI_MODEL?.split(",")[0].trim() || undefined
     const modelId = process.env.VALIDATION_MODEL || envFallback
 
     if (!modelId) {

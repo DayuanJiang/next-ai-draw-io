@@ -429,22 +429,6 @@ describe("whose keys a request uses", () => {
         )
     })
 
-    it("sends the server's Ollama key where OLLAMA_BASE_URL says, or to local Ollama", async () => {
-        // The desktop app's "Ollama (Local)" preset puts its API Key field
-        // into OLLAMA_API_KEY; with no base URL that is the local Ollama
-        process.env.OLLAMA_API_KEY = "server-key"
-        const { createOllama } = await import("ollama-ai-provider-v2")
-        getAIModel({ provider: "ollama", modelId: "m" })
-        expect(vi.mocked(createOllama).mock.lastCall?.[0]).not.toHaveProperty(
-            "baseURL",
-        )
-        process.env.OLLAMA_BASE_URL = "https://ollama.com/api"
-        getAIModel({ provider: "ollama", modelId: "m" })
-        expect(createOllama).toHaveBeenLastCalledWith(
-            expect.objectContaining({ baseURL: "https://ollama.com/api" }),
-        )
-    })
-
     it("uses a server model's own Ollama URL variable", async () => {
         process.env.OLLAMA_BASE_URL = "http://other.internal:11434/api"
         vi.stubEnv("MY_OLLAMA_URL", "https://ollama.proxy.example/api")

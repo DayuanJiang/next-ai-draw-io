@@ -106,7 +106,7 @@ export function useDiagramStreaming({
         (xml: string) => {
             // Named styles come before the cells, so the ones written so
             // far are known by the time their cells stream in
-            const { classes, xml: cellsXml } = readStyleClasses(xml || "")
+            const { classes, xml: cellsXml } = readStyleClasses(xml)
             const completeCells = extractCompleteMxCells(cellsXml)
             if (!completeCells) return
             // The same wrapping, fixes and expansion as the final diagram
@@ -149,7 +149,7 @@ export function useDiagramStreaming({
     useEffect(() => {
         // Only the last message can still be streaming
         const message = messages[messages.length - 1]
-        if (!message?.parts) return
+        if (!message) return
 
         // Messages restored from a saved session were applied before it was
         // saved; the saved diagram is authoritative, so don't replay them
@@ -229,18 +229,17 @@ export function useDiagramStreaming({
             if (completeOps.length === 0) continue
 
             // Capture the original XML when streaming starts
-            if (!editDiagramOriginalXmlRef.current.has(toolCallId)) {
+            let originalXml = editDiagramOriginalXmlRef.current.get(toolCallId)
+            if (!originalXml) {
                 if (!baseXml) {
                     console.warn(
                         "[edit_diagram streaming] No chart XML available",
                     )
                     continue
                 }
+                originalXml = baseXml
                 editDiagramOriginalXmlRef.current.set(toolCallId, baseXml)
             }
-            const originalXml =
-                editDiagramOriginalXmlRef.current.get(toolCallId)
-            if (!originalXml) continue
 
             // The last operation's XML may still be streaming: it applies
             // once it parses, so compare results, not the number of

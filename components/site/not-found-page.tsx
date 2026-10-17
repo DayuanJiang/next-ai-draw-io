@@ -43,7 +43,7 @@ const TEXTS: Record<
 /** The site's 404, in the language of the address that was not found */
 export function NotFoundPage() {
     // A not-found page gets no route params: the locale is the first segment
-    const first = (usePathname() ?? "").split("/")[1] ?? ""
+    const first = usePathname().split("/")[1] ?? ""
     const lang = (i18n.locales as readonly string[]).includes(first)
         ? (first as Locale)
         : "en"

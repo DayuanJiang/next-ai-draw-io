@@ -190,7 +190,9 @@ test("a model list that arrives after switching provider stays with its provider
     await showProvider(dialog, "p2")
     release()
     await page.waitForTimeout(500)
-    await expect(dialog.getByText("Incorrect API key")).toHaveCount(0)
+    await expect(
+        dialog.getByText("The provider rejected this API key."),
+    ).toHaveCount(0)
 })
 
 test("a test result that arrives after switching provider stays with its provider", async ({
