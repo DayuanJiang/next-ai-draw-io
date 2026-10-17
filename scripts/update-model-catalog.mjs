@@ -48,27 +48,34 @@ for (const [provider, source] of Object.entries(PROVIDERS)) {
         // Chat models only, and none that are on their way out
         if (!m.modalities?.output?.includes("text")) continue
         if (m.status === "deprecated") continue
+        const cost = priceOf(m.cost)
+        // A tier's price replaces the base one above that many input tokens
+        const tiers = (m.cost?.tiers ?? [])
+            .filter((t) => t.tier?.type === "context" && priceOf(t))
+            .map((t) => ({ above: t.tier.size, ...priceOf(t) }))
+            .sort((a, b) => a.above - b.above)
         catalog[provider][id] = {
             tools: m.tool_call === true,
             images: m.modalities?.input?.includes("image") === true,
             reasoning: m.reasoning === true,
             ...(m.limit?.context && { context: m.limit.context }),
             ...(m.limit?.output && { output: m.limit.output }),
-            // USD per million tokens
-            ...(m.cost?.input != null &&
-                m.cost?.output != null && {
-                    cost: {
-                        input: m.cost.input,
-                        output: m.cost.output,
-                        ...(m.cost.cache_read != null && {
-                            cacheRead: m.cost.cache_read,
-                        }),
-                        ...(m.cost.cache_write != null && {
-                            cacheWrite: m.cost.cache_write,
-                        }),
-                    },
-                }),
+            ...(cost && {
+                cost: { ...cost, ...(tiers.length > 0 && { tiers }) },
+            }),
         }
+    }
+}
+
+/** A models.dev price in our names (USD per million tokens), if complete */
+function priceOf(c) {
+    if (c?.input == null || c?.output == null) return undefined
+    return {
+        input: c.input,
+        output: c.output,
+        ...(c.cache_read != null && { cacheRead: c.cache_read }),
+        ...(c.cache_write != null && { cacheWrite: c.cache_write }),
+        ...(c.reasoning != null && { reasoning: c.reasoning }),
     }
 }
 

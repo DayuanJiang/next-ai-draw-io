@@ -94,7 +94,7 @@ export function ReplyUsageNote({ usage }: { usage: ReplyUsage }) {
                             {t.usageSecondUnit}
                         </dd>
                     </div>
-                    {usage.costUsd !== undefined && (
+                    {typeof usage.costUsd === "number" && (
                         <div className="contents">
                             <dt className="pr-3 text-muted-foreground">
                                 {t.usageCost}
@@ -106,7 +106,7 @@ export function ReplyUsageNote({ usage }: { usage: ReplyUsage }) {
                         </div>
                     )}
                 </dl>
-                {usage.costUsd !== undefined && (
+                {typeof usage.costUsd === "number" && (
                     <p className="mt-1.5 text-[11px] text-muted-foreground">
                         {t.usageCostNote}
                     </p>

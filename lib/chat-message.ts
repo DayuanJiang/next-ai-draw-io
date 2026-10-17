@@ -16,8 +16,12 @@ export interface ReplyUsage {
     /** Of the output, spent thinking */
     reasoningTokens: number
     durationMs: number
-    /** USD at the official price; missing when a request had no known price */
-    costUsd?: number
+    /**
+     * USD at the official price; null once a request of the turn had no
+     * known price. Null rather than left out: the chat merges an answer's
+     * metadata, which would keep an earlier, partial cost.
+     */
+    costUsd?: number | null
 }
 
 export interface ChatMessageMetadata {
@@ -38,10 +42,12 @@ export function addReplyUsage(
 ): ReplyUsage | undefined {
     if (usage.inputTokens === undefined && usage.outputTokens === undefined)
         return before
+    // An answer saved before costs were kept has none: unknown too
+    const costBefore = before ? before.costUsd : 0
     const cost =
-        costUsd !== undefined && (!before || before.costUsd !== undefined)
-            ? (before?.costUsd ?? 0) + costUsd
-            : undefined
+        costUsd !== undefined && typeof costBefore === "number"
+            ? costBefore + costUsd
+            : null
     return {
         inputTokens: (before?.inputTokens ?? 0) + (usage.inputTokens ?? 0),
         outputTokens: (before?.outputTokens ?? 0) + (usage.outputTokens ?? 0),
@@ -52,7 +58,7 @@ export function addReplyUsage(
             (before?.reasoningTokens ?? 0) +
             (usage.outputTokenDetails.reasoningTokens ?? 0),
         durationMs: (before?.durationMs ?? 0) + durationMs,
-        ...(cost !== undefined && { costUsd: cost }),
+        costUsd: cost,
     }
 }
 
