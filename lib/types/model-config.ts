@@ -12,6 +12,8 @@ export interface ModelConfig {
     validationError?: string // Error message if validation failed
     validationWarning?: string // Passed, but e.g. did not call a tool
     responseTime?: number // Milliseconds the last test took
+    // The thinking switch, for models that have one; unset means on
+    thinkingEnabled?: boolean
 }
 
 // Provider configuration
@@ -60,6 +62,7 @@ export interface FlattenedModel {
     source?: "user" | "server"
     // Whether this model is the server default (matches AI_MODEL env var)
     isDefault?: boolean
+    thinkingEnabled?: boolean
 }
 
 // Helper to generate UUID
@@ -123,6 +126,7 @@ export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
                 validated: model.validated,
                 source: "user",
                 isDefault: false,
+                thinkingEnabled: model.thinkingEnabled,
             })
         }
     }

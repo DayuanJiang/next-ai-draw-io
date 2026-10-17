@@ -369,6 +369,7 @@
         "modelWorksTime": "Works · {seconds} s",
         "modelFailed": "Failed",
         "modelUntested": "Untested",
+        "thinkingMode": "Thinking mode",
         "needKey": "Fill in the API key first.",
         "needUrl": "Fill in the API key and the base URL first.",
         "needAws": "Fill in the AWS credentials and region first.",

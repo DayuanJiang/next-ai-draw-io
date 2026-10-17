@@ -369,6 +369,7 @@
         "modelWorksTime": "可用 · {seconds} 秒",
         "modelFailed": "出錯",
         "modelUntested": "未測試",
+        "thinkingMode": "思考模式",
         "needKey": "先填好 API Key。",
         "needUrl": "先填好 API Key 和位址。",
         "needAws": "先填好 AWS 憑證和區域。",

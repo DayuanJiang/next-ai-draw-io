@@ -30,6 +30,7 @@ import {
     publicDefaultUrl,
 } from "@/lib/providers"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
+import { thinkingSwitchOf } from "@/lib/thinking-capabilities"
 import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
 
 const AIHUBMIX_APP_CODE = "MSBS9675"
@@ -452,6 +453,86 @@ function buildProviderOptions(
         }
 
         default:
+            break
+    }
+
+    return Object.keys(options).length > 0 ? options : undefined
+}
+
+/**
+ * The provider options with the user's thinking switch applied, for a model
+ * that has one (lib/thinking-capabilities.ts). With thinking on, a budget
+ * or effort set in the environment still applies.
+ */
+export function applyThinkingSwitch(
+    providerOptions: Record<string, any> | undefined,
+    provider: ProviderName,
+    modelId: string,
+    enabled: boolean,
+): Record<string, any> | undefined {
+    const kind = thinkingSwitchOf(provider, modelId)
+    if (!kind) return providerOptions
+    const options = { ...providerOptions }
+
+    switch (kind) {
+        case "effort": {
+            const key = provider === "azure" ? "azure" : "openai"
+            // A summary has nothing to summarize without reasoning
+            const { reasoningSummary, ...rest } = options[key] ?? {}
+            options[key] = enabled
+                ? {
+                      ...options[key],
+                      reasoningEffort: rest.reasoningEffort ?? "medium",
+                  }
+                : { ...rest, reasoningEffort: "none" }
+            break
+        }
+        case "budget":
+        case "adaptive": {
+            // Claude has thinking off unless the request asks for it
+            const key = provider === "bedrock" ? "bedrock" : "anthropic"
+            const field = key === "bedrock" ? "reasoningConfig" : "thinking"
+            const { [field]: current, ...rest } = options[key] ?? {}
+            // Opus 4.7 and later return no thinking text unless asked to
+            const on =
+                kind === "adaptive"
+                    ? { type: "adaptive", display: "summarized" }
+                    : {
+                          type: "enabled",
+                          budgetTokens: current?.budgetTokens ?? 1024,
+                      }
+            options[key] = enabled ? { ...rest, [field]: on } : rest
+            if (Object.keys(options[key]).length === 0) delete options[key]
+            break
+        }
+        case "gemini": {
+            // Gemini 2.5 Flash thinks by default, with a budget it picks
+            const config = options.google?.thinkingConfig ?? {}
+            options.google = {
+                ...options.google,
+                thinkingConfig: enabled
+                    ? { ...config, includeThoughts: true }
+                    : { thinkingBudget: 0 },
+            }
+            break
+        }
+        case "nova":
+            options.bedrock = {
+                ...options.bedrock,
+                reasoningConfig: enabled
+                    ? {
+                          type: "enabled",
+                          maxReasoningEffort:
+                              options.bedrock?.reasoningConfig
+                                  ?.maxReasoningEffort ?? "medium",
+                      }
+                    : { type: "disabled" },
+            }
+            break
+        case "deepseek":
+            options.deepseek = {
+                thinking: { type: enabled ? "enabled" : "disabled" },
+            }
             break
     }
 
