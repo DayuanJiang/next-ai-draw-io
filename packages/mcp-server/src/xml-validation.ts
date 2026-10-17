@@ -348,26 +348,35 @@ export function validateMxCellStructure(
     opts: { strict?: boolean } = {},
 ): string | null {
     // 0. DOM-based checks. Syntax errors are caught by the strict check at
-    // the end: linkedom's DOMParser never reports them.
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, "text/xml")
+    // the end: linkedom's DOMParser never reports them. The recursive text
+    // walk overflows the stack on XML nested thousands of levels deep; the
+    // checks below still run then, and auto-fix can repair it.
+    try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(xml, "text/xml")
 
-    // DOM-based checks for nested mxCell
-    const allCells = doc.querySelectorAll("mxCell")
-    for (const cell of allCells) {
-        if (cell.parentElement?.tagName === "mxCell") {
-            const id = cell.getAttribute("id") || "unknown"
-            return `Invalid XML: Found nested mxCell (id="${id}"). Cells should be siblings, not nested inside other mxCell elements.`
+        // DOM-based checks for nested mxCell
+        const allCells = doc.querySelectorAll("mxCell")
+        for (const cell of allCells) {
+            if (cell.parentElement?.tagName === "mxCell") {
+                const id = cell.getAttribute("id") || "unknown"
+                return `Invalid XML: Found nested mxCell (id="${id}"). Cells should be siblings, not nested inside other mxCell elements.`
+            }
         }
-    }
 
-    // draw.io reads any text inside a page as compressed page data and
-    // then fails to open the page
-    if (!doc.querySelector("parsererror")) {
-        const text = findTextBetweenTags(doc.documentElement)
-        if (text) {
-            return `Invalid XML: Found text "${text}" between tags. Labels belong in the value attribute; remove any other text between tags.`
+        // draw.io reads any text inside a page as compressed page data and
+        // then fails to open the page
+        if (!doc.querySelector("parsererror")) {
+            const text = findTextBetweenTags(doc.documentElement)
+            if (text) {
+                return `Invalid XML: Found text "${text}" between tags. Labels belong in the value attribute; remove any other text between tags.`
+            }
         }
+    } catch (error) {
+        console.warn(
+            "[validateMxCellStructure] DOM checks failed, falling back to regex validation:",
+            error,
+        )
     }
 
     // 1. Check for duplicate structural attributes

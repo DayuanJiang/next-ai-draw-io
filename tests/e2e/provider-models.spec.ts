@@ -188,7 +188,10 @@ test("a model list that arrives after switching provider stays with its provider
     const dialog = await openQwenSettings(page, TWO_PROVIDERS)
     await fetchButton(dialog).click()
     await showProvider(dialog, "p2")
+    // The wait counts from the answer, so a slow one cannot pass early
+    const answered = page.waitForResponse("**/api/provider-models")
     release()
+    await answered
     await page.waitForTimeout(500)
     await expect(
         dialog.getByText("The provider rejected this API key."),

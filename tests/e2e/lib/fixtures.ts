@@ -195,7 +195,6 @@ export const TWO_PROVIDERS = {
 interface MockResponse {
     xml: string
     text: string
-    toolName?: string
 }
 
 /**
@@ -211,11 +210,7 @@ export function createMultiTurnMock(responses: MockResponse[]) {
         await route.fulfill({
             status: 200,
             contentType: "text/event-stream",
-            body: createMockSSEResponse(
-                response.xml,
-                response.text,
-                response.toolName,
-            ),
+            body: createMockSSEResponse(response.xml, response.text),
         })
     }
 }
