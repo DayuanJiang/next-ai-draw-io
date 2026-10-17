@@ -107,7 +107,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         description: doc.summary,
         alternates: {
             canonical: `/${doc.locale}${path}`,
-            languages: { ...languages, "x-default": path },
+            // The English page, as in localeAlternates
+            languages: { ...languages, "x-default": `/en${path}` },
         },
         openGraph: {
             title,
