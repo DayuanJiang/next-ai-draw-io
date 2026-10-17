@@ -134,6 +134,14 @@ It is also a plugin in the Claude Code community marketplace (Claude Code 2.1.27
 /plugin install next-ai-drawio --marketplace anthropics/claude-plugins-community
 ```
 
+There is also an agent skill for Claude Code, Codex, Cursor and the other agents that the [skills CLI](https://skills.sh) supports:
+
+```bash
+npx skills add DayuanJiang/next-ai-draw-io
+```
+
+The skill tells the agent when and how to use the MCP server. If the server is not connected yet, the agent shows you the command that adds it to that agent, and runs the command once you agree.
+
 Then ask the AI for "a flowchart of user authentication with login, MFA and session management" and the diagram appears in your browser as it is drawn. The MCP server has most of the web app's drawing features:
 
 -   The same drawing rules, icon libraries (AWS, Azure, GCP, Kubernetes and more) and canvas as the web app: the AI's changes are outlined, one Ctrl+Z takes them back, and the AI reads the shapes you select
