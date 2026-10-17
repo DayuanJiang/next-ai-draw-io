@@ -79,6 +79,24 @@ describe("applyThinkingSwitch", () => {
         })
     })
 
+    it("takes only the budget from the environment's config", () => {
+        // ANTHROPIC_THINKING_TYPE=disabled with a budget
+        expect(
+            applyThinkingSwitch(
+                {
+                    anthropic: {
+                        thinking: { type: "disabled", budgetTokens: 2048 },
+                    },
+                },
+                "anthropic",
+                "claude-sonnet-4-5-20250929",
+                true,
+            ),
+        ).toEqual({
+            anthropic: { thinking: { type: "enabled", budgetTokens: 2048 } },
+        })
+    })
+
     it("keeps the environment's Claude budget when on, and says off explicitly", () => {
         const env = {
             anthropic: { thinking: { type: "enabled", budgetTokens: 4000 } },

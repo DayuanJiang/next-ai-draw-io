@@ -492,11 +492,12 @@ export function applyThinkingSwitch(
             const key = provider === "bedrock" ? "bedrock" : "anthropic"
             const field = key === "bedrock" ? "reasoningConfig" : "thinking"
             const { [field]: fromEnv, ...rest } = options[key] ?? {}
-            // The environment's budget if it set one (BEDROCK_REASONING_EFFORT
-            // alone gives Claude a config without one, which thinks not at
-            // all). Opus 4.7 and later return no thinking text unless asked to.
+            // The environment's budget if it set one, and only that: its type
+            // may say disabled, and BEDROCK_REASONING_EFFORT alone gives
+            // Claude a config without a budget, which does not think at all.
+            // Opus 4.7 and later return no thinking text unless asked to.
             const on = fromEnv?.budgetTokens
-                ? fromEnv
+                ? { type: "enabled", budgetTokens: fromEnv.budgetTokens }
                 : kind === "adaptive"
                   ? { type: "adaptive", display: "summarized" }
                   : { type: "enabled", budgetTokens: 1024 }
