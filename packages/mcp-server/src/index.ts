@@ -19,9 +19,9 @@
  */
 
 import { spawn } from "node:child_process"
-import { readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module"
-import { resolve } from "node:path"
+import { dirname, resolve } from "node:path"
 import {
     McpServer,
     type ToolCallback,
@@ -1435,6 +1435,7 @@ registerTool(
                 outXml = projection.xml
             }
 
+            await mkdir(dirname(absolutePath), { recursive: true })
             await writeFile(absolutePath, outXml, "utf-8")
             log.info(`Diagram exported to ${absolutePath}`)
             // The whole diagram is in this file now: the preview names it
@@ -1531,6 +1532,7 @@ registerTool(
         if (detectedFormat === "png") {
             const base64 = exportData.replace(/^data:image\/png;base64,/, "")
             const png = Buffer.from(base64, "base64")
+            await mkdir(dirname(absolutePath), { recursive: true })
             await writeFile(absolutePath, png)
             const size = pngSize(png)
             details = `Image: ${size ? `${size.width} x ${size.height} px, ` : ""}${pngTransparent ? "transparent" : "white"} background, ${IMAGE_MARGIN} px margin, showing ${shows}`
@@ -1543,6 +1545,7 @@ registerTool(
                 )
                 svgContent = Buffer.from(base64, "base64").toString("utf-8")
             }
+            await mkdir(dirname(absolutePath), { recursive: true })
             await writeFile(absolutePath, svgContent, "utf-8")
             details = `Image: ${IMAGE_MARGIN} px margin, showing ${shows}`
             if (detectedFormat === "drawio.svg") {

@@ -341,4 +341,15 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         await callTool("export_diagram", { path: pageFile, page_name: "Copy" })
         expect(readFileSync(pageFile, "utf8")).toContain(data)
     }, 30000)
+
+    it("exports into a folder that does not exist yet", async () => {
+        const drawn = await callTool("create_new_diagram", {
+            xml: '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>',
+        })
+        expect(drawn.isError).toBeFalsy()
+        const file = path.join(dataDir, "new", "folder", "out.drawio")
+        const exported = await callTool("export_diagram", { path: file })
+        expect(exported.isError).toBeFalsy()
+        expect(readFileSync(file, "utf8")).toContain('value="A"')
+    }, 30000)
 })
