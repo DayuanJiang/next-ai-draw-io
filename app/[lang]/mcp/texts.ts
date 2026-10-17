@@ -19,6 +19,8 @@ export type McpTexts = {
         others: string
         agent: string
     }
+    /** The one-click install buttons in the VS Code and Cursor tabs */
+    oneClick: { vscode: string; cursor: string }
     notes: {
         claudeScope: string
         claudePlugin: string
@@ -77,6 +79,7 @@ export const TEXTS: Record<Locale, McpTexts> = {
             others: "Cursor and others",
             agent: "Ask your agent",
         },
+        oneClick: { vscode: "Install in VS Code", cursor: "Add to Cursor" },
         notes: {
             claudeScope:
                 "`--scope user` makes the tools available in every project. Without it, they exist only in the folder where you ran the command.",
@@ -86,8 +89,8 @@ export const TEXTS: Record<Locale, McpTexts> = {
                 'Codex asks before each drawio tool that changes the diagram, and `codex exec` without full access fails with "MCP tool call requires approval". To let the drawio tools run without asking, add one line to the server\'s section in `~/.codex/config.toml`:',
             codexSome:
                 'To approve only some tools, use `[mcp_servers.drawio.tools.<tool name>]` with `approval_mode = "approve"` instead.',
-            vscode: "In `.vscode/mcp.json`:",
-            others: "In `~/.cursor/mcp.json`, `claude_desktop_config.json`, `cline_mcp_settings.json` or your client's MCP config:",
+            vscode: "Or write it in `.vscode/mcp.json`:",
+            others: "Or write it in `~/.cursor/mcp.json`, `claude_desktop_config.json`, `cline_mcp_settings.json` or your client's MCP config:",
             agent: "Paste this into Claude Code, Codex, Cursor, VS Code, Cline or any agent that can edit files and run commands:",
         },
         agentPrompt: `Install the drawio MCP server for the client you are running in, following
@@ -205,6 +208,7 @@ Then tell me how to reload so its tools show up.`,
             others: "Cursor 等",
             agent: "让代理来装",
         },
+        oneClick: { vscode: "在 VS Code 中安装", cursor: "添加到 Cursor" },
         notes: {
             claudeScope:
                 "`--scope user` 让所有项目都能用这些工具。不加的话，只有在运行命令的那个文件夹里才能用。",
@@ -214,8 +218,8 @@ Then tell me how to reload so its tools show up.`,
                 "Codex 每次调用会修改图表的 drawio 工具前都会询问，没有完全权限的 `codex exec` 会报错“MCP tool call requires approval”。想让 drawio 工具不经询问直接运行，在 `~/.codex/config.toml` 里这个服务器的配置下加一行：",
             codexSome:
                 '只想放行部分工具时，改用 `[mcp_servers.drawio.tools.<工具名>]`，并设置 `approval_mode = "approve"`。',
-            vscode: "写在 `.vscode/mcp.json` 里：",
-            others: "写在 `~/.cursor/mcp.json`、`claude_desktop_config.json`、`cline_mcp_settings.json` 或您的客户端的 MCP 配置里：",
+            vscode: "或者手动写在 `.vscode/mcp.json` 里：",
+            others: "或者手动写在 `~/.cursor/mcp.json`、`claude_desktop_config.json`、`cline_mcp_settings.json` 或您的客户端的 MCP 配置里：",
             agent: "把下面这段粘贴给 Claude Code、Codex、Cursor、VS Code、Cline，或任何能编辑文件和运行命令的代理：",
         },
         agentPrompt: `按照 ${README}
@@ -329,6 +333,7 @@ Then tell me how to reload so its tools show up.`,
             others: "Cursor など",
             agent: "エージェントに任せる",
         },
+        oneClick: { vscode: "VS Code にインストール", cursor: "Cursor に追加" },
         notes: {
             claudeScope:
                 "`--scope user` を付けると、すべてのプロジェクトでツールを使えます。付けないと、コマンドを実行したフォルダでしか使えません。",
@@ -338,8 +343,8 @@ Then tell me how to reload so its tools show up.`,
                 "Codex は図を変更する drawio ツールを呼ぶたびに確認を求め、フルアクセスなしの `codex exec` は「MCP tool call requires approval」で失敗します。drawio ツールを確認なしで実行させるには、`~/.codex/config.toml` のこのサーバーのセクションに 1 行追加します。",
             codexSome:
                 '一部のツールだけ許可するには、代わりに `[mcp_servers.drawio.tools.<ツール名>]` に `approval_mode = "approve"` を設定します。',
-            vscode: "`.vscode/mcp.json` に書きます。",
-            others: "`~/.cursor/mcp.json`、`claude_desktop_config.json`、`cline_mcp_settings.json` など、クライアントの MCP 設定に書きます。",
+            vscode: "または `.vscode/mcp.json` に手で書きます。",
+            others: "または `~/.cursor/mcp.json`、`claude_desktop_config.json`、`cline_mcp_settings.json` など、クライアントの MCP 設定に手で書きます。",
             agent: "Claude Code、Codex、Cursor、VS Code、Cline など、ファイルを編集してコマンドを実行できるエージェントに、次の文を貼り付けます。",
         },
         agentPrompt: `${README}
@@ -453,6 +458,7 @@ Then tell me how to reload so its tools show up.`,
             others: "Cursor 等",
             agent: "讓代理來裝",
         },
+        oneClick: { vscode: "在 VS Code 中安裝", cursor: "新增到 Cursor" },
         notes: {
             claudeScope:
                 "`--scope user` 讓所有專案都能用這些工具。不加的話，只有在執行指令的那個資料夾裡才能用。",
@@ -462,8 +468,8 @@ Then tell me how to reload so its tools show up.`,
                 "Codex 每次呼叫會修改圖表的 drawio 工具前都會詢問，沒有完整權限的 `codex exec` 會出現錯誤「MCP tool call requires approval」。想讓 drawio 工具不經詢問直接執行，在 `~/.codex/config.toml` 裡這個伺服器的設定下加一行：",
             codexSome:
                 '只想允許部分工具時，改用 `[mcp_servers.drawio.tools.<工具名稱>]`，並設定 `approval_mode = "approve"`。',
-            vscode: "寫在 `.vscode/mcp.json` 裡：",
-            others: "寫在 `~/.cursor/mcp.json`、`claude_desktop_config.json`、`cline_mcp_settings.json` 或您的用戶端的 MCP 設定裡：",
+            vscode: "或者手動寫在 `.vscode/mcp.json` 裡：",
+            others: "或者手動寫在 `~/.cursor/mcp.json`、`claude_desktop_config.json`、`cline_mcp_settings.json` 或您的用戶端的 MCP 設定裡：",
             agent: "把下面這段貼給 Claude Code、Codex、Cursor、VS Code、Cline，或任何能編輯檔案和執行指令的代理：",
         },
         agentPrompt: `依照 ${README}

@@ -6,6 +6,8 @@ https://github.com/user-attachments/assets/6f53a67b-ab21-4113-9fee-7fb32f9de678
 
 ## Install
 
+In VS Code or Cursor, one click adds it: [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522drawio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540next-ai-drawio%252Fmcp-server%2540latest%2522%255D%257D) [![Add to Cursor](https://img.shields.io/badge/Cursor-Add_Server-000000?style=flat-square)](https://cursor.com/en/install-mcp?name=drawio&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyJAbmV4dC1haS1kcmF3aW8vbWNwLXNlcnZlckBsYXRlc3QiXX0%3D)
+
 ### Let your AI agent install it
 
 Paste this into Claude Code, Codex, Cursor, VS Code, Cline or any agent that can edit files and run commands:

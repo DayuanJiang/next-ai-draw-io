@@ -8,6 +8,19 @@ export const SPONSOR_URL = "https://github.com/sponsors/DayuanJiang"
 export const MCP_INSTALL =
     "claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest"
 
+// One-click installs: these pages open VS Code or Cursor, which then adds the
+// server. The MCP server README links to the same addresses.
+const MCP_SERVER = {
+    command: "npx",
+    args: ["@next-ai-drawio/mcp-server@latest"],
+}
+export const MCP_VSCODE_INSTALL_URL = `https://insiders.vscode.dev/redirect?url=${encodeURIComponent(
+    `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: "drawio", ...MCP_SERVER }))}`,
+)}`
+export const MCP_CURSOR_INSTALL_URL = `https://cursor.com/en/install-mcp?name=drawio&config=${encodeURIComponent(
+    btoa(JSON.stringify(MCP_SERVER)),
+)}`
+
 // Each language's name in itself, for the language links
 export const LANGUAGE_NAMES: Record<Locale, string> = {
     en: "English",

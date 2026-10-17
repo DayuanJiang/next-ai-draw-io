@@ -9,7 +9,9 @@ import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import {
     GITHUB_URL,
+    MCP_CURSOR_INSTALL_URL,
     MCP_INSTALL,
+    MCP_VSCODE_INSTALL_URL,
     NPM_URL,
     SITE_TEXTS,
 } from "@/components/site/site-texts"
@@ -127,12 +129,20 @@ export default async function Mcp({ params }: Props) {
         {
             id: "vscode",
             label: t.tabs.vscode,
-            items: [{ note: t.notes.vscode }, { code: VSCODE_JSON }],
+            items: [
+                { link: MCP_VSCODE_INSTALL_URL, label: t.oneClick.vscode },
+                { note: t.notes.vscode },
+                { code: VSCODE_JSON },
+            ],
         },
         {
             id: "others",
             label: t.tabs.others,
-            items: [{ note: t.notes.others }, { code: OTHERS_JSON }],
+            items: [
+                { link: MCP_CURSOR_INSTALL_URL, label: t.oneClick.cursor },
+                { note: t.notes.others },
+                { code: OTHERS_JSON },
+            ],
         },
         {
             id: "agent",

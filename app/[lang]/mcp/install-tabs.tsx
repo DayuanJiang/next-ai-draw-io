@@ -7,8 +7,12 @@ import { Inline } from "@/components/site/inline"
 export type InstallTab = {
     id: string
     label: string
-    /** Notes and code, in order */
-    items: ({ note: string } | { code: string })[]
+    /** Notes, code and one-click install links, in order */
+    items: (
+        | { note: string }
+        | { code: string }
+        | { link: string; label: string }
+    )[]
 }
 
 /** The install steps of each MCP client, one tab at a time */
@@ -92,6 +96,16 @@ export function InstallTabs({
                         >
                             <Inline text={item.note} />
                         </p>
+                    ) : "link" in item ? (
+                        <a
+                            key={i}
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener"
+                            className="inline-flex rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background"
+                        >
+                            {item.label}
+                        </a>
                     ) : (
                         <CopyCommand
                             key={i}
