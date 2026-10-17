@@ -1,16 +1,18 @@
 import Link from "next/link"
+import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { Workspace } from "@/components/workspace/workspace"
-import type { Locale } from "@/lib/i18n/config"
-import { getDictionary } from "@/lib/i18n/dictionaries"
+import { getDictionary, hasLocale } from "@/lib/i18n/dictionaries"
 
 export default async function Home({
     params,
 }: {
     params: Promise<{ lang: string }>
 }) {
-    // The layout has already rejected unknown locales
-    const lang = (await params).lang as Locale
+    // The layout renders at the same time and cannot stop this page, so an
+    // address like /llms.txt is rejected here too (it was a 500)
+    const { lang } = await params
+    if (!hasLocale(lang)) notFound()
     const dict = await getDictionary(lang)
     return (
         <>

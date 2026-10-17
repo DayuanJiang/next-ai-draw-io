@@ -50,6 +50,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Switch } from "@/components/ui/switch"
 import { useDictionary } from "@/hooks/use-dictionary"
 import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
@@ -58,6 +59,7 @@ import type { ListedModel } from "@/lib/provider-models"
 import { hasCredentials } from "@/lib/provider-setup"
 import { PROVIDERS, publicDefaultUrl } from "@/lib/providers"
 import { STORAGE_KEYS } from "@/lib/storage"
+import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
 import type {
     ModelConfig,
     ProviderConfig,
@@ -1023,6 +1025,23 @@ export function ModelConfigDialog({
                         }}
                         className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1.5 font-mono text-sm shadow-none focus-visible:bg-background focus-visible:ring-1 dark:bg-transparent"
                     />
+                    {supportsThinkingToggle(
+                        selectedProvider.provider,
+                        model.modelId,
+                    ) && (
+                        <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                            {t.thinkingMode}
+                            <Switch
+                                checked={model.thinkingEnabled ?? true}
+                                onCheckedChange={(thinkingEnabled) =>
+                                    selectedProviderId &&
+                                    updateModel(selectedProviderId, model.id, {
+                                        thinkingEnabled,
+                                    })
+                                }
+                            />
+                        </label>
+                    )}
                     {!testing && (
                         <span
                             className={cn(

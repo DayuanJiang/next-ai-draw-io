@@ -30,6 +30,7 @@ import {
     publicDefaultUrl,
 } from "@/lib/providers"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
+import { thinkingSwitchOf } from "@/lib/thinking-capabilities"
 import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
 
 const AIHUBMIX_APP_CODE = "MSBS9675"
@@ -452,6 +453,103 @@ function buildProviderOptions(
         }
 
         default:
+            break
+    }
+
+    return Object.keys(options).length > 0 ? options : undefined
+}
+
+/**
+ * The provider options with the user's thinking switch applied, for a model
+ * that has one (lib/thinking-capabilities.ts). With thinking on, a budget
+ * or effort set in the environment still applies.
+ */
+export function applyThinkingSwitch(
+    providerOptions: Record<string, any> | undefined,
+    provider: ProviderName,
+    modelId: string,
+    enabled: boolean,
+): Record<string, any> | undefined {
+    const kind = thinkingSwitchOf(provider, modelId)
+    if (!kind) return providerOptions
+    const options = { ...providerOptions }
+
+    switch (kind) {
+        case "effort": {
+            const key = provider === "azure" ? "azure" : "openai"
+            // A summary has nothing to summarize without reasoning
+            const { reasoningSummary, ...rest } = options[key] ?? {}
+            options[key] = enabled
+                ? {
+                      ...options[key],
+                      reasoningEffort: rest.reasoningEffort ?? "medium",
+                  }
+                : { ...rest, reasoningEffort: "none" }
+            break
+        }
+        case "budget":
+        case "adaptive": {
+            const key = provider === "bedrock" ? "bedrock" : "anthropic"
+            const field = key === "bedrock" ? "reasoningConfig" : "thinking"
+            const { [field]: fromEnv, ...rest } = options[key] ?? {}
+            // The environment's budget if it set one, and only that: its type
+            // may say disabled, and BEDROCK_REASONING_EFFORT alone gives
+            // Claude a config without a budget, which does not think at all.
+            // Opus 4.7 and later return no thinking text unless asked to.
+            const on = fromEnv?.budgetTokens
+                ? { type: "enabled", budgetTokens: fromEnv.budgetTokens }
+                : kind === "adaptive"
+                  ? { type: "adaptive", display: "summarized" }
+                  : { type: "enabled", budgetTokens: 1024 }
+            // Claude Sonnet 5 and Opus 5 think when the request says
+            // nothing, so off is said explicitly. Bedrock's SDK does not
+            // send it for Claude, so it goes in the request fields.
+            options[key] = enabled
+                ? { ...rest, [field]: on }
+                : key === "anthropic"
+                  ? { ...rest, thinking: { type: "disabled" } }
+                  : {
+                        ...rest,
+                        additionalModelRequestFields: {
+                            ...rest.additionalModelRequestFields,
+                            thinking: { type: "disabled" },
+                        },
+                    }
+            break
+        }
+        case "gemini": {
+            // Flash thinks by default with a budget it picks, Flash-Lite
+            // only with a budget; -1 lets the model pick
+            const config = options.google?.thinkingConfig ?? {}
+            options.google = {
+                ...options.google,
+                thinkingConfig: enabled
+                    ? {
+                          ...config,
+                          includeThoughts: true,
+                          thinkingBudget: config.thinkingBudget ?? -1,
+                      }
+                    : { thinkingBudget: 0 },
+            }
+            break
+        }
+        case "nova":
+            options.bedrock = {
+                ...options.bedrock,
+                reasoningConfig: enabled
+                    ? {
+                          type: "enabled",
+                          maxReasoningEffort:
+                              options.bedrock?.reasoningConfig
+                                  ?.maxReasoningEffort ?? "medium",
+                      }
+                    : { type: "disabled" },
+            }
+            break
+        case "deepseek":
+            options.deepseek = {
+                thinking: { type: enabled ? "enabled" : "disabled" },
+            }
             break
     }
 

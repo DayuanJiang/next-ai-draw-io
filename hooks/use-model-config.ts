@@ -5,6 +5,7 @@ import { getApiEndpoint } from "@/lib/base-path"
 import { PROVIDERS } from "@/lib/providers"
 import type { FlattenedServerModel } from "@/lib/server-model-config"
 import { STORAGE_KEYS } from "@/lib/storage"
+import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
 import {
     createEmptyConfig,
     createModelConfig,
@@ -388,6 +389,8 @@ export function getSelectedAIConfig(): {
     vertexApiKey: string
     // The user's provider of the selected model ("" for a server model)
     providerId: string
+    // "true" or "false" for a model with a thinking switch, else ""
+    thinkingEnabled: string
 } {
     const empty = {
         accessCode: "",
@@ -402,6 +405,7 @@ export function getSelectedAIConfig(): {
         selectedModelId: "",
         vertexApiKey: "",
         providerId: "",
+        thinkingEnabled: "",
     }
 
     // Get access code (separate from model config)
@@ -466,5 +470,8 @@ export function getSelectedAIConfig(): {
             config.providers.find((p) =>
                 p.models.some((m) => m.id === config.selectedModelId),
             )?.id ?? "",
+        thinkingEnabled: supportsThinkingToggle(model.provider, model.modelId)
+            ? String(model.thinkingEnabled ?? true)
+            : "",
     }
 }

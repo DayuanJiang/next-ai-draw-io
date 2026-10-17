@@ -21,8 +21,10 @@ export function localeUrls(path: string): Record<Locale, string> {
 }
 
 /**
- * The canonical URL of a page and its hreflang links. x-default is the URL
- * without a locale, which redirects by the browser's language.
+ * The canonical URL of a page and its hreflang links. x-default is the
+ * English page: when it was the URL without a locale (a temporary redirect by
+ * the browser's language), Google picked that URL as canonical and left the
+ * English pages out of its index.
  */
 export function localeAlternates(
     lang: Locale,
@@ -30,6 +32,6 @@ export function localeAlternates(
 ): NonNullable<Metadata["alternates"]> {
     return {
         canonical: `/${lang}${path}`,
-        languages: { ...localeUrls(path), "x-default": path || "/" },
+        languages: { ...localeUrls(path), "x-default": `/en${path}` },
     }
 }
