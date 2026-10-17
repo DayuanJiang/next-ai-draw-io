@@ -1,21 +1,51 @@
-# AIプロバイダーの設定
+# AI プロバイダー
 
-このガイドでは、next-ai-draw-io でさまざまな AI モデルプロバイダーを設定する方法について説明します。
+Next AI Draw.io を自分でホストする場合は、環境変数で AI プロバイダーとモデルを選びます。このページでは、プロバイダーごとの環境変数と、全ユーザーに複数のモデルを提供する方法、コードに新しいプロバイダーを追加する方法を説明します。
 
-## クイックスタート
+## はじめる
 
-1. `.env.example` を `.env.local` にコピーします
-2. 選択したプロバイダーの API キーを設定します
-3. `AI_MODEL` を希望のモデルに設定します
-4. `npm run dev` を実行します
+1. `.env.example` を `.env.local` にコピーします。
+2. 選んだプロバイダーの API キーを設定します。
+3. `AI_MODEL` に使いたいモデルを設定します。
+4. `npm run dev` を実行します。
 
-## 対応プロバイダー
+## プロバイダーごとに設定する
 
-### Doubao (ByteDance Volcengine)
+### OpenAI
 
 ```bash
-DOUBAO_API_KEY=your_api_key
-AI_MODEL=doubao-seed-1-8-251215  # または他の Doubao モデル
+OPENAI_API_KEY=your_api_key
+AI_MODEL=gpt-4o
+```
+
+OpenAI 互換サービスを使う場合は、カスタムエンドポイントも設定できます。
+
+```bash
+OPENAI_BASE_URL=https://your-custom-endpoint/v1
+```
+
+LM Studio などのローカルな OpenAI 互換サーバーも同じ方法で使えます。ベース URL を `http://localhost:1234/v1`（LM Studio の既定ポート）に設定し、API キーには `lm-studio` など空でない任意の値を入力してください。上の環境変数でも、設定の「モデル」タブでも設定できます。
+
+### Anthropic
+
+```bash
+ANTHROPIC_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250514
+```
+
+Bearer トークンでサインインすることもできます。OAuth スタイルのトークンを発行するゲートウェイを経由する場合などです。
+
+```bash
+ANTHROPIC_AUTH_TOKEN=your_auth_token
+AI_MODEL=claude-sonnet-4-5-20250514
+```
+
+`ANTHROPIC_API_KEY` は `x-api-key` ヘッダーで送信され、`ANTHROPIC_AUTH_TOKEN` は `Authorization: Bearer <token>` で送信されます。2 つは同時に使えないので、どちらか一方だけを設定してください。
+
+必要に応じて、カスタムエンドポイントを設定できます。
+
+```bash
+ANTHROPIC_BASE_URL=https://your-custom-endpoint
 ```
 
 ### Google Gemini
@@ -25,60 +55,10 @@ GOOGLE_GENERATIVE_AI_API_KEY=your_api_key
 AI_MODEL=gemini-2.0-flash
 ```
 
-任意のカスタムエンドポイント:
+必要に応じて、カスタムエンドポイントを設定できます。
 
 ```bash
 GOOGLE_BASE_URL=https://your-custom-endpoint
-```
-
-### OpenAI
-
-```bash
-OPENAI_API_KEY=your_api_key
-AI_MODEL=gpt-4o
-```
-
-任意のカスタムエンドポイント（OpenAI 互換サービス用）:
-
-```bash
-OPENAI_BASE_URL=https://your-custom-endpoint/v1
-```
-
-LM Studio などのローカルな OpenAI 互換サーバーも同じ方法で使えます。ベース URL を `http://localhost:1234/v1`（LM Studio の既定ポート）に設定し、API キーには `lm-studio` など空でない任意の値を入力してください。上の環境変数でも、モデル設定画面でも設定できます。
-
-### AIHubMix
-
-AIHubMix は、単一の API キーで Claude、GPT、Gemini、DeepSeek などのモデルへのアクセスを提供します。
-
-```bash
-AIHUBMIX_API_KEY=your_api_key
-AI_MODEL=claude-sonnet-4-5-20250929
-```
-
-任意のカスタムエンドポイント:
-
-```bash
-AIHUBMIX_BASE_URL=https://aihubmix.com/v1
-```
-
-### Anthropic
-
-```bash
-ANTHROPIC_API_KEY=your_api_key
-AI_MODEL=claude-sonnet-4-5-20250514
-```
-
-または、Bearer 認証トークンを使用することもできます（OAuth スタイルのトークンを発行するゲートウェイ経由で利用する場合など）。`ANTHROPIC_AUTH_TOKEN` は `Authorization: Bearer <token>` ヘッダーで送信され、`ANTHROPIC_API_KEY` は `x-api-key` ヘッダーで送信されます。両者は排他的なので、いずれか一方のみを設定してください:
-
-```bash
-ANTHROPIC_AUTH_TOKEN=your_auth_token
-AI_MODEL=claude-sonnet-4-5-20250514
-```
-
-任意のカスタムエンドポイント:
-
-```bash
-ANTHROPIC_BASE_URL=https://your-custom-endpoint
 ```
 
 ### DeepSeek
@@ -88,161 +68,73 @@ DEEPSEEK_API_KEY=your_api_key
 AI_MODEL=deepseek-chat
 ```
 
-任意のカスタムエンドポイント:
+必要に応じて、カスタムエンドポイントを設定できます。
 
 ```bash
 DEEPSEEK_BASE_URL=https://your-custom-endpoint
 ```
 
-### SiliconFlow (OpenAI 互換)
+### Qwen（Alibaba Cloud）
 
 ```bash
-SILICONFLOW_API_KEY=your_api_key
-AI_MODEL=deepseek-ai/DeepSeek-V3  # 例; 任意の SiliconFlow モデル ID を使用
+QWEN_API_KEY=your_api_key
+AI_MODEL=qwen-turbo
 ```
 
-任意のカスタムエンドポイント（デフォルトは推奨ドメイン）:
+必要に応じて、カスタムエンドポイントを設定できます。
 
 ```bash
-SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # または https://api.siliconflow.cn/v1
+QWEN_BASE_URL=https://your-custom-endpoint
 ```
 
-### SGLang
+### Doubao（ByteDance Volcengine）
 
 ```bash
-SGLANG_API_KEY=your_api_key
-AI_MODEL=your_model_id
+DOUBAO_API_KEY=your_api_key
+AI_MODEL=doubao-seed-1-8-251215  # または他の Doubao モデル
 ```
 
-任意のカスタムエンドポイント:
+### GLM（Zhipu AI）
 
 ```bash
-SGLANG_BASE_URL=https://your-custom-endpoint/v1
+GLM_API_KEY=your_api_key
+AI_MODEL=glm-4
 ```
 
-### Azure OpenAI
+必要に応じて、カスタムエンドポイントを設定できます。
 
 ```bash
-AZURE_API_KEY=your_api_key
-AZURE_RESOURCE_NAME=your-resource-name  # 必須: Azure リソース名
-AI_MODEL=your-deployment-name
+GLM_BASE_URL=https://your-custom-endpoint
 ```
 
-またはリソース名の代わりにカスタムエンドポイントを使用:
+### Kimi（Moonshot AI）
 
 ```bash
-AZURE_API_KEY=your_api_key
-AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME の代替
-AI_MODEL=your-deployment-name
+KIMI_API_KEY=your_api_key
+AI_MODEL=kimi-latest
 ```
 
-任意の推論設定:
+必要に応じて、カスタムエンドポイントを設定できます。
 
 ```bash
-AZURE_REASONING_EFFORT=low      # 任意: low, medium, high
-AZURE_REASONING_SUMMARY=detailed  # 任意: none, brief, detailed
+KIMI_BASE_URL=https://your-custom-endpoint
 ```
-
-### AWS Bedrock
-
-```bash
-AWS_REGION=us-west-2
-AWS_ACCESS_KEY_ID=your_access_key_id
-AWS_SECRET_ACCESS_KEY=your_secret_access_key
-AI_MODEL=global.anthropic.claude-sonnet-5-5
-```
-
-最近の Claude モデルは、推論プロファイル（inference profile）の ID でのみ呼び出せます。この ID は `global.` や `us.` などのリージョン接頭辞で始まります。`anthropic.claude-sonnet-5-5` のような接頭辞なしの ID では「on-demand throughput isn't supported」というエラーになります。
-
-注: AWS 上（IAM ロールを持つ Lambda や EC2）では、認証情報は IAM ロールから自動的に取得されます。
-
-### OpenRouter
-
-```bash
-OPENROUTER_API_KEY=your_api_key
-AI_MODEL=anthropic/claude-sonnet-4
-```
-
-任意のカスタムエンドポイント:
-
-```bash
-OPENROUTER_BASE_URL=https://your-custom-endpoint
-```
-
-### Ollama (ローカル)
-
-```bash
-AI_PROVIDER=ollama
-AI_MODEL=llama3.2
-```
-
-任意のカスタム URL:
-
-```bash
-OLLAMA_BASE_URL=http://localhost:11434/api
-```
-
-### ModelScope
-
-```bash
-MODELSCOPE_API_KEY=your_api_key
-AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
-```
-
-任意のカスタムエンドポイント:
-
-```bash
-MODELSCOPE_BASE_URL=https://your-custom-endpoint
-```
-
-### Vercel AI Gateway
-
-Vercel AI Gateway は、単一の API キーで複数の AI プロバイダーへの統合アクセスを提供します。これにより認証が簡素化され、複数の API キーを管理することなくプロバイダーを切り替えることができます。
-
-**基本的な使用法 (Vercel ホストの Gateway):**
-
-```bash
-AI_GATEWAY_API_KEY=your_gateway_api_key
-AI_MODEL=openai/gpt-4o
-```
-
-**カスタム Gateway URL (ローカル開発またはセルフホスト Gateway 用):**
-
-```bash
-AI_GATEWAY_API_KEY=your_custom_api_key
-AI_GATEWAY_BASE_URL=https://your-custom-gateway.com/v1/ai
-AI_MODEL=openai/gpt-4o
-```
-
-モデル形式は `provider/model` 構文を使用します:
-
--   `openai/gpt-4o` - OpenAI GPT-4o
--   `anthropic/claude-sonnet-4-5` - Anthropic Claude Sonnet 4.5
--   `google/gemini-2.0-flash` - Google Gemini 2.0 Flash
-
-**設定に関する注意点:**
-
--   `AI_GATEWAY_BASE_URL` が設定されていない場合、デフォルトの Vercel Gateway URL (`https://ai-gateway.vercel.sh/v1/ai`) が使用されます
--   カスタムベース URL は以下の場合に便利です:
-    -   カスタム Gateway インスタンスを使用したローカル開発
-    -   セルフホスト AI Gateway デプロイメント
-    -   エンタープライズプロキシ設定
--   カスタムベース URL を使用する場合、`AI_GATEWAY_API_KEY` も指定する必要があります
-
-[Vercel AI Gateway ダッシュボード](https://vercel.com/ai-gateway)から API キーを取得してください。
 
 ### MiniMax
 
-MiniMax は 2 つの API 形式をサポートしています：
-- **Anthropic 互換**（`/anthropic` エンドポイント）— 推奨、インターリーブ思考をサポート
-- **OpenAI 互換**（`/v1` エンドポイント）— 標準 OpenAI チャット補完形式
+MiniMax は 2 つの API 形式に対応しています。
+
+| 形式 | エンドポイント | 説明 |
+|---|---|---|
+| Anthropic 互換 | `/anthropic` | 推奨です。インターリーブ思考（モデルがツール呼び出しの合間に考えること）に対応しています |
+| OpenAI 互換 | `/v1` | 標準的な OpenAI のチャット補完の形式です |
 
 ```bash
 MINIMAX_API_KEY=your_api_key
 AI_MODEL=MiniMax-M3
 ```
 
-オプション設定：
+オプションの設定です。
 
 ```bash
 # 中国大陸版、Anthropic 互換（デフォルト）
@@ -258,74 +150,205 @@ MINIMAX_BASE_URL=https://api.minimax.io/anthropic
 MINIMAX_BASE_URL=https://api.minimax.io/v1
 ```
 
-### GLM (Zhipu AI)
-
-```bash
-GLM_API_KEY=your_api_key
-AI_MODEL=glm-4
-```
-
-オプションのカスタムエンドポイント：
-
-```bash
-GLM_BASE_URL=https://your-custom-endpoint
-```
-
-### Qwen (Alibaba Cloud)
-
-```bash
-QWEN_API_KEY=your_api_key
-AI_MODEL=qwen-turbo
-```
-
-オプションのカスタムエンドポイント：
-
-```bash
-QWEN_BASE_URL=https://your-custom-endpoint
-```
-
-### Kimi (Moonshot AI)
-
-```bash
-KIMI_API_KEY=your_api_key
-AI_MODEL=kimi-latest
-```
-
-オプションのカスタムエンドポイント：
-
-```bash
-KIMI_BASE_URL=https://your-custom-endpoint
-```
-
-### Qiniu (Qiniu Cloud)
-
-```bash
-QINIU_API_KEY=your_api_key
-AI_MODEL=your_model_id
-```
-
-オプションのカスタムエンドポイント：
-
-```bash
-QINIU_BASE_URL=https://your-custom-endpoint
-```
-
-### MiMo (Xiaomi)
+### MiMo（Xiaomi）
 
 ```bash
 MIMO_API_KEY=your_api_key
 AI_MODEL=mimo-v2.5-pro
 ```
 
-オプションのカスタムエンドポイント（Token Plan 加入者は専用の Base URL を設定してください）：
+必要に応じて、カスタムエンドポイントを設定できます。Token Plan 加入者は、専用のベース URL を設定してください。
 
 ```bash
 MIMO_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
 ```
 
-### 任意の OpenAI 互換 API（custom）
+### OpenRouter
 
-上に挙がっていないサーバー（vLLM、LM Studio、LiteLLM、API ゲートウェイ）は、設定で **OpenAI-compatible** を選び、そのベース URL とキーを入力します。キーを確認しないサーバーには空でない任意の値を入れてください。複数の system メッセージは 1 つにまとめられ（オープンソースモデルのチャットテンプレートはそれを前提にしています）、`<think>` 内の推論は返答から分離されます。
+```bash
+OPENROUTER_API_KEY=your_api_key
+AI_MODEL=anthropic/claude-sonnet-4
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。
+
+```bash
+OPENROUTER_BASE_URL=https://your-custom-endpoint
+```
+
+### AIHubMix
+
+AIHubMix では、1 つの API キーで Claude、GPT、Gemini、DeepSeek などのモデルを使えます。
+
+```bash
+AIHUBMIX_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-4-5-20250929
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。
+
+```bash
+AIHUBMIX_BASE_URL=https://aihubmix.com/v1
+```
+
+### SiliconFlow（OpenAI 互換）
+
+```bash
+SILICONFLOW_API_KEY=your_api_key
+AI_MODEL=deepseek-ai/DeepSeek-V3  # 例; 任意の SiliconFlow モデル ID を使用
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。設定しない場合は、推奨ドメインが使われます。
+
+```bash
+SILICONFLOW_BASE_URL=https://api.siliconflow.com/v1  # または https://api.siliconflow.cn/v1
+```
+
+### ModelScope
+
+```bash
+MODELSCOPE_API_KEY=your_api_key
+AI_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。
+
+```bash
+MODELSCOPE_BASE_URL=https://your-custom-endpoint
+```
+
+### Qiniu（Qiniu Cloud）
+
+```bash
+QINIU_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。
+
+```bash
+QINIU_BASE_URL=https://your-custom-endpoint
+```
+
+### Vercel AI Gateway
+
+Vercel AI Gateway では、1 つの API キーで多くの AI プロバイダーを使えます。サインインが簡単になり、複数の API キーを管理しなくてもプロバイダーを切り替えられます。
+
+Vercel がホストする Gateway を使う場合です。
+
+```bash
+AI_GATEWAY_API_KEY=your_gateway_api_key
+AI_MODEL=openai/gpt-4o
+```
+
+カスタム Gateway URL を使う場合です。ローカル開発や、セルフホストの Gateway に使います。
+
+```bash
+AI_GATEWAY_API_KEY=your_custom_api_key
+AI_GATEWAY_BASE_URL=https://your-custom-gateway.com/v1/ai
+AI_MODEL=openai/gpt-4o
+```
+
+モデル ID は `provider/model` の形式で書きます。
+
+| `AI_MODEL` | モデル |
+|---|---|
+| `openai/gpt-4o` | OpenAI GPT-4o |
+| `anthropic/claude-sonnet-4-5` | Anthropic Claude Sonnet 4.5 |
+| `google/gemini-2.0-flash` | Google Gemini 2.0 Flash |
+
+`AI_GATEWAY_BASE_URL` を設定しない場合は、デフォルトの Vercel Gateway URL（`https://ai-gateway.vercel.sh/v1/ai`）が使われます。カスタムベース URL は次の場合に便利です。
+
+- 自分の Gateway インスタンスを使ったローカル開発
+- セルフホストの AI Gateway のデプロイ
+- エンタープライズのプロキシ設定
+
+カスタムベース URL を使う場合は、`AI_GATEWAY_API_KEY` も設定する必要があります。
+
+API キーは [Vercel AI Gateway のダッシュボード](https://vercel.com/ai-gateway)で取得してください。
+
+### Amazon Bedrock
+
+```bash
+AWS_REGION=us-west-2
+AWS_ACCESS_KEY_ID=your_access_key_id
+AWS_SECRET_ACCESS_KEY=your_secret_access_key
+AI_MODEL=global.anthropic.claude-sonnet-5-5
+```
+
+最近の Claude モデルは、推論プロファイル（inference profile）の ID でのみ呼び出せます。この ID は `global.` や `us.` などのリージョン接頭辞で始まります。`anthropic.claude-sonnet-5-5` のような接頭辞なしの ID では「on-demand throughput isn't supported」というエラーになります。
+
+AWS 上（Lambda や、IAM ロールを持つ EC2）では、認証情報は IAM ロールから自動的に取得されます。
+
+### Google Vertex AI
+
+Google Vertex AI は、企業向けの Google Cloud のサービスです。エンタープライズ向けの機能とデータレジデンシー（データを選んだリージョンに保管すること）を備えています。Express モードでは普通の API キーでサインインできるので、Vercel や Cloudflare などのエッジランタイムでも使えます。
+
+```bash
+GOOGLE_VERTEX_API_KEY=your_api_key
+AI_MODEL=gemini-2.0-flash
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。
+
+```bash
+GOOGLE_VERTEX_BASE_URL=https://your-custom-endpoint
+```
+
+### Azure OpenAI
+
+```bash
+AZURE_API_KEY=your_api_key
+AZURE_RESOURCE_NAME=your-resource-name  # 必須: Azure リソース名
+AI_MODEL=your-deployment-name
+```
+
+リソース名の代わりに、カスタムエンドポイントを指定することもできます。
+
+```bash
+AZURE_API_KEY=your_api_key
+AZURE_BASE_URL=https://your-resource.openai.azure.com/openai  # AZURE_RESOURCE_NAME の代替
+AI_MODEL=your-deployment-name
+```
+
+必要に応じて、推論の設定もできます。
+
+```bash
+AZURE_REASONING_EFFORT=low      # 任意: low, medium, high
+AZURE_REASONING_SUMMARY=detailed  # 任意: none, brief, detailed
+```
+
+### Ollama（ローカル）
+
+```bash
+AI_PROVIDER=ollama
+AI_MODEL=llama3.2
+```
+
+必要に応じて、カスタム URL を設定できます。
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434/api
+```
+
+### SGLang
+
+```bash
+SGLANG_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+必要に応じて、カスタムエンドポイントを設定できます。
+
+```bash
+SGLANG_BASE_URL=https://your-custom-endpoint/v1
+```
+
+### そのほかの OpenAI 互換 API（custom）
+
+上に挙がっていないサーバー（vLLM、LM Studio、LiteLLM、API ゲートウェイなど）は、設定で OpenAI-compatible を選び、そのベース URL とキーを入力します。キーを確認しないサーバーには、空でない任意の値を入れてください。
+
+アプリは複数の system メッセージを 1 つにまとめます。オープンソースモデルのチャットテンプレートがそれを前提にしているためです。`<think>` 内の推論は返答から分離されます。
 
 ```bash
 CUSTOM_API_KEY=your_api_key
@@ -333,48 +356,46 @@ CUSTOM_BASE_URL=http://127.0.0.1:8000/v1
 AI_MODEL=your_model_id
 ```
 
----
+## サーバーがプロバイダーを選ぶしくみ
 
-## 自動検出
+1 つのプロバイダーの API キーだけを設定した場合は、サーバーがそのプロバイダーを自動的に検出して使います。`AI_PROVIDER` を設定する必要はありません。
 
-**1つ**のプロバイダーの API キーのみを設定した場合、システムはそのプロバイダーを自動的に検出して使用します。`AI_PROVIDER` を設定する必要はありません。
-
-**複数**の API キーを設定する場合は、`AI_PROVIDER` を明示的に設定する必要があります:
+複数のプロバイダーの API キーを設定した場合は、`AI_PROVIDER` を設定する必要があります。
 
 ```bash
 AI_PROVIDER=google  # または: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
 ```
 
-## サーバーサイドマルチモデル設定
+## 全ユーザーに複数のモデルを提供する
 
-管理者は、ユーザーが個人のAPIキーを提供することなく利用できる複数のサーバーサイドモデルを設定できます。
+管理者は、サーバーに複数のモデルを設定できます。全ユーザーが、自分の API キーなしでそれらのモデルを使えます。この設定がない場合、アプリは環境変数 `AI_PROVIDER` と `AI_MODEL` を使います。
 
-### 設定方法
+設定の方法は 3 つあります。
 
-**方法1：環境変数**（クラウドデプロイ推奨）
+### 設定を環境変数に書く
 
-`AI_MODELS_CONFIG` をJSON文字列として設定：
+クラウドにデプロイする場合は、この方法をおすすめします。`AI_MODELS_CONFIG` に JSON 文字列を設定します。
 
 ```bash
 AI_MODELS_CONFIG='{"providers":[{"name":"OpenAI","provider":"openai","models":["gpt-4o"],"default":true}]}'
 ```
 
-**方法2：設定ファイル**
+### 設定ファイルを使う
 
-プロジェクトルートに `ai-models.json` ファイルを作成します（または `AI_MODELS_CONFIG_PATH` でパスを指定）。
+プロジェクトのルートに `ai-models.json` ファイルを作成します。別の場所に置く場合は、`AI_MODELS_CONFIG_PATH` でその場所を指定します。
 
-**方法3：`AI_MODEL` をカンマ区切りで指定**（単一プロバイダーの簡易設定）
+### AI_MODEL に複数のモデルを並べる
 
-同一プロバイダー内の複数モデルだけを公開したい場合は、`AI_MODEL` にカンマ区切りで列挙できます。最初のモデルがデフォルトになります。
+1 つのプロバイダー向けの簡易設定です。1 つのプロバイダーの複数のモデルだけが必要な場合は、`AI_MODEL` にカンマ区切りで並べます。最初のモデルがデフォルトになります。
 
 ```bash
 AI_PROVIDER=doubao
 AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
 ```
 
-これは等価な `ai-models.json` の簡易表記です。複数のプロバイダーや、カスタム `apiKeyEnv` / `baseUrlEnv` を使う場合は、方法1または方法2を使ってください。
+これは同じ内容の `ai-models.json` を短く書いたものです。複数のプロバイダーを使う場合や、独自の `apiKeyEnv` と `baseUrlEnv` を使う場合は、環境変数か設定ファイルを使ってください。
 
-### 設定例
+### 例
 
 ```json
 {
@@ -396,57 +417,64 @@ AI_MODEL=doubao-seed-1-8-251215,doubao-seed-1-6-flash,doubao-seed-1-6-pro
 }
 ```
 
-### フィールド説明
+### フィールド
 
-| フィールド | 必須 | 説明 |
-|------------|------|------|
-| `name` | はい | 表示名（同一プロバイダーの複数設定をサポート） |
-| `provider` | はい | プロバイダータイプ（`openai`, `anthropic`, `google`, `bedrock` など） |
-| `models` | はい | モデルIDのリスト |
-| `default` | いいえ | `true` に設定すると、そのプロバイダーの最初のモデルがデフォルトで選択されます |
-| `apiKeyEnv` | いいえ | カスタムAPIキー環境変数名（デフォルトは `OPENAI_API_KEY` などの標準変数）。環境変数名の配列も指定でき、リクエストごとに値のある変数から1つがランダムに選ばれます（複数キーへの負荷分散） |
-| `baseUrlEnv` | いいえ | カスタムBase URL環境変数名 |
+| フィールド | 必須 | 内容 |
+|---|---|---|
+| `name` | はい | 表示名です。同じプロバイダーに複数の設定を作れます |
+| `provider` | はい | プロバイダーの種類です（`openai`、`anthropic`、`google`、`bedrock` など） |
+| `models` | はい | モデル ID のリストです |
+| `default` | いいえ | `true` にすると、このプロバイダーの最初のモデルがデフォルトで選ばれます |
+| `apiKeyEnv` | いいえ | API キーを入れる独自の環境変数名です。指定しない場合は、`OPENAI_API_KEY` などプロバイダーの標準の変数を使います。環境変数名の配列も指定できます。リクエストごとに値のある変数から 1 つがランダムに選ばれ、負荷が複数のキーに分散されます |
+| `baseUrlEnv` | いいえ | ベース URL を入れる独自の環境変数名です |
 
-### 備考
+### キーと名前
 
-- APIキーと認証情報は環境変数で提供します。デフォルトは標準変数名（例：`OPENAI_API_KEY`）を使用しますが、`apiKeyEnv` でカスタム変数名を指定できます。
-- `name` フィールドにより同一プロバイダーの複数設定が可能です（例：「OpenAI Production」と「OpenAI Staging」が両方とも `provider: "openai"` を使用しつつ、異なる `apiKeyEnv` を持つ）。
-- 設定が存在しない場合、アプリは `AI_PROVIDER`/`AI_MODEL` 環境変数設定にフォールバックします。
+- API キーと認証情報は環境変数で渡します。デフォルトでは `OPENAI_API_KEY` などの標準の変数名を使います。`apiKeyEnv` を使うと、独自の変数名を指定できます。
+- `name` を使うと、同じプロバイダーに複数の設定を作れます。たとえば「OpenAI Production」と「OpenAI Staging」の両方で `provider: "openai"` を使い、`apiKeyEnv` をそれぞれ別にできます。
 
-## モデル性能要件
+## モデルを選ぶ
 
-このタスクは、厳密なフォーマット制約（draw.io XML）を伴う長文テキストの生成を含むため、非常に強力なモデル性能が必要です。
+図を描くとき、モデルは厳密な形式に従った長い draw.io XML を書きます。そのため、この作業にはとても高い性能のモデルが必要です。
 
-**推奨モデル**:
+推奨モデル：Claude Sonnet 4.5 または Opus 4.5。
 
--   Claude Sonnet 4.5 / Opus 4.5
+Ollama もプロバイダーとして使えます。ただしこの作業では、DeepSeek R1 や Qwen3-235B のような高性能なモデルをローカルで動かす場合でないと、たいてい実用的ではありません。
 
-**Ollama に関する注意**: Ollama はプロバイダーとしてサポートされていますが、DeepSeek R1 や Qwen3-235B のような高性能モデルをローカルで実行していない限り、このユースケースでは一般的に実用的ではありません。
+| 目的 | 使うもの |
+|---|---|
+| 最高の体験 | 画像を読めるモデル（GPT-4o、Claude、Gemini）。画像から図を作る機能に使います |
+| 低コスト | DeepSeek。競争力のある価格です |
+| プライバシー | Ollama。完全にローカルで、オフラインで動きます。高性能なハードウェアが必要です |
+| 柔軟性 | OpenRouter。1 つの API で多くのモデルを使えます |
 
-## Temperature（温度）設定
+## Temperature（温度）を設定する
 
-環境変数で Temperature を任意に設定できます:
+Temperature の設定は任意です。環境変数で設定します。
 
 ```bash
 TEMPERATURE=0  # より決定論的な出力（ダイアグラムに推奨）
 ```
 
-**重要**: 以下の Temperature 設定をサポートしていないモデルでは、`TEMPERATURE` を未設定のままにしてください:
+**重要：** Temperature の設定に対応していないモデルでは、`TEMPERATURE` を設定しないでください。たとえば次のモデルです。
+
 - GPT-5.1 およびその他の推論モデル
 - 一部の特殊なモデル
 
-未設定の場合、モデルはデフォルトの挙動を使用します。
+設定しない場合、モデルはデフォルトの動作になります。
 
-## 推奨事項
+## 新しいプロバイダーを追加する
 
--   **最高の体験**: 画像からダイアグラムを生成する機能には、ビジョン（画像認識）をサポートするモデル（GPT-4o, Claude, Gemini）を使用してください
--   **低コスト**: DeepSeek は競争力のある価格を提供しています
--   **プライバシー**: 完全にローカルなオフライン操作には Ollama を使用してください（強力なハードウェアが必要です）
--   **柔軟性**: OpenRouter は単一の API で多数のモデルへのアクセスを提供します
+プロバイダーに関する情報は、すべて `lib/providers.ts` の 1 つのレコードにあります。
 
-## プロバイダーの追加
+- 使用する AI SDK（`sdk`）
+- サインインに使う資格情報（`credential`）
+- 環境変数 `<PREFIX>_API_KEY` と `<PREFIX>_BASE_URL` のプレフィックス（`envPrefix`）
+- 公式 URL
+- プロバイダー選択でのグループ
+- 任意の注記
 
-プロバイダーに関する事実はすべて `lib/providers.ts` の 1 つのレコードにあります。使用する AI SDK（`sdk`）、サインインに使う資格情報（`credential`）、環境変数 `<PREFIX>_API_KEY` / `<PREFIX>_BASE_URL` のプレフィックス（`envPrefix`）、公式 URL、ピッカーのグループ、任意の注記です。設定画面、接続テスト、チャットのルート、管理パネルはすべてこのレコードを読むため、OpenAI 互換プロバイダーの追加は次の手順だけです。
+設定画面、接続テスト、チャットのルート、管理パネルは、すべてこのレコードを読みます。OpenAI 互換プロバイダーを追加する手順は次のとおりです。
 
 1. `lib/providers.ts` にレコードを追加します。例：
 
@@ -463,7 +491,9 @@ TEMPERATURE=0  # より決定論的な出力（ダイアグラムに推奨）
     },
     ```
 
-    ベース URL 欄の下にヒントを表示したい、またはピッカーに注記を表示したいプロバイダーには、4 つの UI 言語（`en`、`zh`、`ja`、`zh-Hant`）をすべて含む `baseUrlHint` または `note` オブジェクトを追加します。モデル一覧をオンラインで取得できないプロバイダーは、`modelList` の代わりに短い `models` リストを持ちます。
-2. `env.example` に `ACME_API_KEY` と `ACME_BASE_URL` を追加します（各レコードの変数名がそこに現れることをユニットテストが確認します）。
-3. `docs/en`、`docs/cn`、`docs/ja` のこのドキュメントにセクションを追加します。
-4. `tests/unit/provider-matrix.test.ts` 先頭の 2 つのリスト（`MATRIX_PROVIDERS` と `MATRIX_MODEL_IDS`）に追加し、`npx vitest run tests/unit/provider-matrix.test.ts -u` で動作スナップショットを再生成します。追加される行はこのプロバイダーのものだけで、既存の行は変わってはいけません。`tests/unit/providers.test.ts` にはピッカーのグループと、サーバーの動作を変えるプロバイダーの集合（自動検出、system メッセージが 1 つだけ）が書き出されているので、そこにも追加します。3 つの README のプロバイダー数と、このドキュメントの `AI_PROVIDER` の選択肢一覧も更新します。
+    ベース URL 欄の下にヒントを表示したいプロバイダーや、プロバイダー選択に注記を表示したいプロバイダーには、`baseUrlHint` または `note` オブジェクトを追加します。4 つの UI 言語（`en`、`zh`、`ja`、`zh-Hant`）をすべて書きます。モデル一覧をオンラインで取得できないプロバイダーは、`modelList` の代わりに短い `models` リストを持ちます。
+2. `env.example` に `ACME_API_KEY` と `ACME_BASE_URL` を追加します。各レコードの変数がそこにあることを、ユニットテストが確認します。
+3. `docs/en`、`docs/cn`、`docs/ja` のこのページに、それぞれセクションを追加します。
+4. `tests/unit/provider-matrix.test.ts` の先頭にある 2 つのリスト（`MATRIX_PROVIDERS` と `MATRIX_MODEL_IDS`）に追加します。次に `npx vitest run tests/unit/provider-matrix.test.ts -u` で動作のスナップショットを作り直します。新しく増える行はこのプロバイダーのものです。既存の行は変わってはいけません。
+5. `tests/unit/providers.test.ts` にも追加します。このファイルには、プロバイダー選択のグループと、サーバーの動作を変えるプロバイダーの集合（自動検出、system メッセージが 1 つだけ）が書き出されています。
+6. 3 つの README のプロバイダー数と、このページの `AI_PROVIDER` の選択肢一覧を更新します。

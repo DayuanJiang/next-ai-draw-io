@@ -1,28 +1,26 @@
-# 常见问题解答 (FAQ)
+# 常见问题解答
 
----
+这一页列出了使用 Next AI Draw.io 时常遇到的问题。每个问题都说明您会看到什么、为什么会这样，以及该怎么做。
 
-## 1. 无法导出 PDF
+## 导出 PDF 后没有反应
 
-**问题**: Web 版点击导出 PDF 后跳转到 `convert.diagrams.net/node/export` 然后无响应
+在网页版里导出 PDF 时，页面会跳转到 `convert.diagrams.net/node/export`，然后就没有反应了。
 
-**原因**: 嵌入式 Draw.io 不支持直接 PDF 导出，依赖外部转换服务，在 iframe 中无法正常工作
+应用里嵌入的 draw.io 编辑器自己不能直接导出 PDF。它要用外部的转换服务，而这个服务在 iframe（嵌入在其他页面里的页面）中无法正常工作。
 
-**解决方案**: 先导出为图片（PNG），再打印转成 PDF
+请先把图表导出为 PNG 图片，再把图片打印成 PDF。
 
-**相关 Issue**: #539, #125
+相关的 GitHub Issue：#539、#125
 
----
+## 在离线或内网环境里，浏览器访问不了 embed.diagrams.net
 
-## 2. 无法访问 embed.diagrams.net（离线/内网部署）
+在内网环境里，浏览器提示“找不到 embed.diagrams.net 的服务器 IP 地址”。
 
-**问题**: 内网环境提示"找不到 embed.diagrams.net 的服务器 IP 地址"
+应用现在自带一份 draw.io，从 `/drawio` 提供，所以浏览器不再需要访问 `embed.diagrams.net`。如果仍然看到这个错误，说明镜像是用 `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net` 构建的，这是旧版 Dockerfile 的默认值。请去掉这个构建参数，重新构建镜像。详见[在离线环境或内网中运行](./offline-deployment.md)。
 
-**关键点**: 应用现在自带一份 draw.io，从 `/drawio` 提供，浏览器不再需要访问 `embed.diagrams.net`。如果仍然看到这个错误，说明镜像是用 `NEXT_PUBLIC_DRAWIO_BASE_URL=https://embed.diagrams.net`（旧版 Dockerfile 的默认值）构建的，去掉这个构建参数重新构建即可。详见[离线部署](./offline-deployment.md)。
+`NEXT_PUBLIC_*` 环境变量是**构建时**变量，会被打包进 JS 代码。**在运行时设置它们不会生效。**
 
-`NEXT_PUBLIC_*` 环境变量是**构建时**变量，会被打包到 JS 代码中，**运行时设置无效**！
-
-**如果仍想使用单独的 draw.io 服务器**，在构建时通过 `args` 传入：
+如果仍想使用单独的 draw.io 服务器，请在构建时通过 `args` 传入它的地址：
 
 ```yaml
 # docker-compose.yml
@@ -39,21 +37,21 @@ services:
     env_file: .env
 ```
 
-**内网用户**: 在外网修改 Dockerfile 并构建镜像，再传到内网使用
+如果您在内网，请在外网修改 Dockerfile 并构建镜像，再把镜像传到内网使用。
 
-**相关 Issue**: #295, #317
+相关的 GitHub Issue：#295、#317
 
----
+## 自建模型只思考，不画图
 
-## 3. 自建模型只思考不画图
+本地部署的模型（例如 Qwen、LiteLLM）只输出思考过程，不生成图表。
 
-**问题**: 本地部署的模型（如 Qwen、LiteLLM）只输出思考过程，不生成图表
+可能的原因有两个：
 
-**可能原因**:
-1. **模型太小** - 小模型难以正确遵循 tool calling 指令，建议使用 32B+ 参数的模型
-2. **未开启 tool calling** - 模型服务需要配置 tool use 功能
+- **模型太小。** 小模型很难正确遵循工具调用的指令。请使用 32B 或更多参数的模型。
+- **没有开启工具调用。** 模型要通过工具调用来画图，所以运行模型的服务需要配置工具调用功能。
 
-**解决方案**: 开启 tool calling，例如 vLLM：
+请在运行模型的服务里开启工具调用。以 vLLM 为例：
+
 ```bash
 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-32B \
@@ -61,20 +59,18 @@ python -m vllm.entrypoints.openai.api_server \
     --tool-call-parser hermes
 ```
 
-**相关 Issue**: #269, #75
+相关的 GitHub Issue：#269、#75
 
----
+## 上传图片后提示“未提供图片”
 
-## 4. 上传图片后提示"未提供图片"
+上传图片后，您会看到“未提供图片”的错误。
 
-**问题**: 上传图片后，系统显示"未提供图片"错误
+一个可能的原因是模型不支持视觉功能，也就是不能读取图片，例如 Kimi K2、DeepSeek 和 Qwen 的文本模型。
 
-**可能原因**:
-1. 模型不支持视觉功能（如 Kimi K2、DeepSeek、Qwen 文本模型）
+解决方法：
 
-**解决方案**:
-- 使用支持视觉的模型：GPT-5.2、Claude 4.5 Sonnet、Gemini 3 Pro
-- 模型名带 `vision` 或 `vl` 的支持图片
-- 更新到最新版本（v0.4.9+）
+- 使用能读取图片的模型，例如 GPT-5.2、Claude 4.5 Sonnet 或 Gemini 3 Pro。
+- 模型名里带 `vision` 或 `vl` 的模型能读取图片。
+- 更新到最新版本（v0.4.9 或更高版本）。
 
-**相关 Issue**: #324, #421, #469
+相关的 GitHub Issue：#324、#421、#469

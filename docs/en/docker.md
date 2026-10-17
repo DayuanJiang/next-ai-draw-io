@@ -1,8 +1,10 @@
 # Run with Docker
 
-If you just want to run it locally, the best way is to use Docker.
+If you only want to run Next AI Draw.io on your own computer, Docker is the best way. This page shows how to start the app in a container, give it your AI provider settings, and offer several models from the server.
 
-First, install Docker if you haven't already: [Get Docker](https://docs.docker.com/get-docker/)
+## Start the app
+
+If Docker is not installed yet, install it first: [Get Docker](https://docs.docker.com/get-docker/).
 
 Then run:
 
@@ -14,7 +16,13 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
-Or use an env file:
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+The `-e` options set the AI provider, the model and the API key. Replace them with the settings of the AI provider you want to use. See [AI providers](./ai-providers.md) for the options.
+
+## Use an env file
+
+You can also keep the settings in an env file. Copy `env.example` to `.env`, edit `.env` with your settings, and start the container with `--env-file`:
 
 ```bash
 cp env.example .env
@@ -22,9 +30,9 @@ cp env.example .env
 docker run -d -p 3000:3000 --env-file .env ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
-### Using server-side model configuration
+## Offer several models from the server
 
-You can mount an `ai-models.json` file into the container to provide multiple server-side models without exposing user API keys:
+You can mount an `ai-models.json` file into the container. With it, the server provides several models, and user API keys are not exposed. Mount the file at `/app/ai-models.json`:
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -33,7 +41,7 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
-If you prefer to keep the config in a different path inside the container, set `AI_MODELS_CONFIG_PATH`:
+To keep the file at a different path inside the container, set `AI_MODELS_CONFIG_PATH` to that path:
 
 ```bash
 docker run -d -p 3000:3000 \
@@ -43,8 +51,6 @@ docker run -d -p 3000:3000 \
   ghcr.io/dayuanjiang/next-ai-draw-io:latest
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+## If embed.diagrams.net is blocked
 
-Replace the environment variables with your preferred AI provider configuration. See [AI Providers](./ai-providers.md) for available options.
-
-> **Offline Deployment:** If `embed.diagrams.net` is blocked, see [Offline Deployment](./offline-deployment.md) for configuration options.
+See [Run it offline or on an intranet](./offline-deployment.md) for the configuration options.

@@ -1,54 +1,47 @@
-# Cloudflare Workers へのデプロイ
+# Cloudflare Workers にデプロイする
 
-このプロジェクトは **OpenNext アダプター** を使用して **Cloudflare Worker** としてデプロイすることができ、以下のメリットがあります：
+このページでは、Next AI Draw.io を Cloudflare Worker（Cloudflare のサーバーで動くプログラム）としてデプロイする方法を説明します。Next.js アプリは、OpenNext アダプターで Worker に変換されます。
 
-- グローバルエッジへのデプロイ
-- 超低レイテンシー
-- 無料の `workers.dev` ホスティング
-- R2 を介した完全な Next.js ISR サポート（オプション）
+Worker は世界中にある Cloudflare のサーバーにデプロイされるので、応答までの時間（レイテンシー）がとても短くなります。`workers.dev` のアドレスでのホスティングは無料です。必要であれば、Cloudflare の R2 ストレージで Next.js の ISR を完全にサポートできます。
 
-> **Windows ユーザー向けの重要な注意:** OpenNext と Wrangler は、**ネイティブ Windows 環境では完全には信頼できません**。以下の方法を推奨します：
->
-> - **GitHub Codespaces** を使用する（完全に動作します）
-> - または **WSL (Linux)** を使用する
->
-> 純粋な Windows 環境でのビルドは、WASM ファイルパスの問題により失敗する可能性があります。
+## 必要なもの
 
----
+- Cloudflare アカウント。基本的なデプロイなら無料プランで十分です。
+- Node.js 18 以降。
+- Wrangler CLI。Cloudflare のコマンドラインツールです。
 
-## 前提条件
-
-1. **Cloudflare アカウント**（基本的なデプロイには無料プランで十分です）
-2. **Node.js 18以上**
-3. **Wrangler CLI** のインストール（開発依存関係で問題ありません）：
+Wrangler をインストールします。開発依存関係としてインストールして問題ありません。
 
 ```bash
 npm install -D wrangler
 ```
 
-4. Cloudflare へのログイン：
+次に Cloudflare にログインします。
 
 ```bash
 npx wrangler login
 ```
 
-> **注意:** 支払い方法の登録が必要なのは、ISR キャッシュのために R2 を有効にする場合のみです。基本的な Workers へのデプロイは無料です。
+基本的な Workers へのデプロイは無料です。支払い方法の登録が必要なのは、ISR キャッシュのために R2 を有効にする場合だけです。
 
----
+## Windows を使う場合
 
-## ステップ 1 — 依存関係のインストール
+OpenNext と Wrangler は、Windows 上で直接動かすと完全には信頼できません。Windows 上で直接ビルドすると、WASM ファイルのパスの問題で失敗することがあります。代わりに次のどちらかを使ってください。
+
+- GitHub Codespaces（完全に動作します）
+- WSL（Windows 上で Linux を使えます）
+
+## 依存関係をインストールする
 
 ```bash
 npm install
 ```
 
----
+## 環境変数を設定する
 
-## ステップ 2 — 環境変数の設定
+Cloudflare はローカルでのテストに別のファイルを使うので、2 つのファイルに同じ値を入れます。
 
-Cloudflare はローカルテスト用に別のファイルを使用します。
-
-### 1) `.dev.vars` の作成（Cloudflare ローカルおよびデプロイ用）
+`.dev.vars` を作成します。Cloudflare がローカルでの実行とデプロイに使うファイルです。
 
 ```bash
 cp env.example .dev.vars
@@ -56,182 +49,125 @@ cp env.example .dev.vars
 
 API キーと設定を入力してください。
 
-### 2) `.env.local` も存在することを確認（通常の Next.js 開発用）
+`.env.local` もあることを確認します。通常の Next.js の開発で使うファイルです。
 
 ```bash
 cp env.example .env.local
 ```
 
-同じ値を入力してください。
+こちらにも同じ値を入力してください。
 
----
+## R2 を使うかどうかを選ぶ
 
-## ステップ 3 — デプロイタイプの選択
+R2 は Cloudflare のストレージサービスです。OpenNext が Incremental Static Regeneration（ISR）のページを保存する場所になります。ISR のページは、Next.js が前もってビルドし、デプロイの後にも更新するページです。このアプリには現在 ISR のページがないため、R2 が必要なのは自分で ISR のページを追加した場合だけです。
 
-### オプション A: R2 なしでのデプロイ（デフォルト、無料）
+| 機能 | R2 なし | R2 あり |
+|---|---|---|
+| コスト | 無料 | 支払い方法が必要 |
+| ISR キャッシュ | なし | あり |
+| 静的ページ | あり | あり |
+| API ルート | あり | あり |
+| 設定の手間 | シンプル | 普通 |
 
-リポジトリはこの構成のままです。`open-next.config.ts` は `defineCloudflareConfig({})` で、`wrangler.jsonc` に `r2_buckets` はありません。ファイルを変更する必要はないので、**ステップ 4** へ進んでください。
+リポジトリの既定は R2 なしです。ISR キャッシュが必要なページを追加した場合にだけ、R2 ありを選んでください。
 
----
+### 既定のまま R2 を使わない
 
-### オプション B: R2 ありでのデプロイ（オプション、ISR キャッシュ用）
+この構成は無料で、リポジトリもこの構成になっています。`open-next.config.ts` は `defineCloudflareConfig({})` で、`wrangler.jsonc` に `r2_buckets` はありません。ファイルを変更する必要はないので、workers.dev サブドメインの登録に進んでください。
 
-R2 は OpenNext が **Incremental Static Regeneration (ISR)** ページを保存する場所になります。このアプリには現在 ISR ページがないため、自分で ISR ページを追加した場合にだけ必要です。Cloudflare アカウントに支払い方法の登録が必要です。
+### ISR キャッシュ用に R2 を追加する
 
-**1. R2 バケットの作成**（Cloudflare ダッシュボードにて）:
+R2 を使うには、Cloudflare アカウントに支払い方法の登録が必要です。
 
-- **Storage & Databases → R2** へ移動
-- **Create bucket** をクリック
-- 名前を入力: `next-inc-cache`
+1. Cloudflare ダッシュボードで R2 バケットを作成します。**Storage & Databases** から **R2** を開き、**Create bucket** をクリックして、名前を `next-inc-cache` にします。
+2. `open-next.config.ts` を設定します。
 
-**2. `open-next.config.ts` の設定:**
+   ```ts
+   import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
+   import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache"
 
-```ts
-import { defineCloudflareConfig } from "@opennextjs/cloudflare/config"
-import r2IncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/r2-incremental-cache"
+   export default defineCloudflareConfig({
+     incrementalCache: r2IncrementalCache,
+   })
+   ```
 
-export default defineCloudflareConfig({
-  incrementalCache: r2IncrementalCache,
-})
-```
+3. `wrangler.jsonc` に `r2_buckets` を追加します。
 
-**3. `wrangler.jsonc` に `r2_buckets` を追加:**
+   ```jsonc
+   {
+     "$schema": "node_modules/wrangler/config-schema.json",
+     "main": ".open-next/worker.js",
+     "name": "next-ai-draw-io-worker",
+     "compatibility_date": "2025-12-08",
+     "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+     "assets": {
+       "directory": ".open-next/assets",
+       "binding": "ASSETS"
+     },
+     "r2_buckets": [
+       {
+         "binding": "NEXT_INC_CACHE_R2_BUCKET",
+         "bucket_name": "next-inc-cache"
+       }
+     ],
+     "services": [
+       {
+         "binding": "WORKER_SELF_REFERENCE",
+         "service": "next-ai-draw-io-worker"
+       }
+     ]
+   }
+   ```
 
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "next-ai-draw-io-worker",
-  "compatibility_date": "2025-12-08",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "r2_buckets": [
-    {
-      "binding": "NEXT_INC_CACHE_R2_BUCKET",
-      "bucket_name": "next-inc-cache"
-    }
-  ],
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "next-ai-draw-io-worker"
-    }
-  ]
-}
-```
+`bucket_name` は、Cloudflare ダッシュボードで作成したバケットの名前と完全に一致させてください。
 
-> **重要:** `bucket_name` は Cloudflare ダッシュボードで作成した名前と完全に一致させる必要があります。
+時間ベースの再検証（決めた時間が過ぎたらページを更新する機能で、ページや fetch の `revalidate` のことです）には、`open-next.config.ts` での `queue` の設定も必要です。OpenNext の Cloudflare キャッシュのドキュメントを参照してください。
 
-> **注意:** 時間ベースの再検証（ページや fetch の `revalidate`）には、`open-next.config.ts` で `queue` の設定も必要です。OpenNext の Cloudflare キャッシュドキュメントを参照してください。
+## workers.dev サブドメインを登録する
 
----
+初回のデプロイの前に、workers.dev サブドメインが必要です。登録は 1 回だけです。
 
-## ステップ 4 — workers.dev サブドメインの登録（初回のみ）
+おすすめは Cloudflare ダッシュボードでの登録です。https://dash.cloudflare.com で **Workers & Pages**、**Overview** の順に開き、**Set up a subdomain** を選びます。
 
-初回デプロイの前に、workers.dev サブドメインが必要です。
-
-**オプション 1: Cloudflare ダッシュボード経由（推奨）**
-
-アクセス先: https://dash.cloudflare.com → Workers & Pages → Overview → Set up a subdomain
-
-**オプション 2: デプロイ時**
-
-`npm run deploy` を実行した際、Wrangler が以下のように尋ねてくる場合があります：
+デプロイ中に登録することもできます。`npm run deploy` を実行すると、Wrangler が次のように尋ねることがあります。
 
 ```
 Would you like to register a workers.dev subdomain? (Y/n)
 ```
 
-`Y` を入力し、サブドメイン名を選択してください。
+`Y` を入力し、サブドメイン名を選んでください。CI/CD など、質問に答える人がいない環境ではこの質問は表示されないので、先にダッシュボードで登録してください。
 
-> **注意:** CI/CD や非対話型環境では、このプロンプトは表示されません。事前にダッシュボードで登録してください。
+## 先にローカルでプレビューする
 
----
-
-## ステップ 5 — Cloudflare へのデプロイ
-
-```bash
-npm run deploy
-```
-
-スクリプトの処理内容：
-
-- Next.js アプリのビルド
-- OpenNext を介した Cloudflare Worker への変換
-- 静的アセットのアップロード
-- Worker の公開
-
-アプリは以下の URL で利用可能になります：
-
-```
-https://<worker-name>.<your-subdomain>.workers.dev
-```
-
----
-
-## よくある問題と解決策
-
-### `You need to register a workers.dev subdomain`
-
-**原因:** アカウントに workers.dev サブドメインが登録されていません。
-
-**解決策:** https://dash.cloudflare.com → Workers & Pages → Set up a subdomain から登録してください。
-
----
-
-### `Please enable R2 through the Cloudflare Dashboard`
-
-**原因:** `wrangler.jsonc` で R2 が設定されていますが、アカウントで R2 が有効になっていません。
-
-**解決策:** R2 を有効にする（支払い方法が必要）か、オプション A（R2 なしでデプロイ）を使用してください。
-
----
-
-### `No R2 binding "NEXT_INC_CACHE_R2_BUCKET" found`
-
-**原因:** `wrangler.jsonc` に `r2_buckets` がありません。
-
-**解決策:** `r2_buckets` セクションを追加するか、オプション A（R2 なし）に切り替えてください。
-
----
-
-### `Can't set compatibility date in the future`
-
-**原因:** wrangler 設定の `compatibility_date` が未来の日付に設定されています。
-
-**解決策:** `compatibility_date` を今日またはそれ以前の日付に変更してください。
-
----
-
-### Windows エラー: `resvg.wasm?module` (ENOENT)
-
-**原因:** Windows のファイル名には `?` を含めることができませんが、wasm アセットのファイル名に `?module` が使用されているためです。
-
-**解決策:** Linux 環境（WSL、Codespaces、または CI）でビルド/デプロイしてください。
-
----
-
-## オプション: ローカルでのプレビュー
-
-デプロイ前に Worker をローカルでプレビューできます：
+この手順は任意です。デプロイの前に Worker を自分のコンピューターでプレビューするには、次を実行します。
 
 ```bash
 npm run preview
 ```
 
----
+## デプロイする
 
-## まとめ
+```bash
+npm run deploy
+```
 
-| 機能 | R2 なし | R2 あり |
-|---------|------------|---------|
-| コスト | 無料 | 支払い方法が必要 |
-| ISR キャッシュ | なし | あり |
-| 静的ページ | あり | あり |
-| API ルート | あり | あり |
-| 設定の複雑さ | シンプル | 普通 |
+スクリプトは次の処理を行います。
 
-リポジトリのデフォルトは **R2 なし** です。ISR キャッシュが必要なページを追加した場合にだけ **R2 あり** を選んでください。
+1. Next.js アプリをビルドする
+2. OpenNext で Cloudflare Worker に変換する
+3. 静的アセットをアップロードする
+4. Worker を公開する
+
+アプリは次の URL で使えるようになります。
+
+```
+https://<worker-name>.<your-subdomain>.workers.dev
+```
+
+## よくあるエラーを解決する
+
+- **`You need to register a workers.dev subdomain`**：アカウントに workers.dev サブドメインが登録されていません。https://dash.cloudflare.com で **Workers & Pages** を開き、**Set up a subdomain** を選んでください。
+- **`Please enable R2 through the Cloudflare Dashboard`**：`wrangler.jsonc` で R2 が設定されていて、アカウントではまだ R2 が有効になっていません。R2 を有効にする（支払い方法が必要です）か、R2 なしでデプロイしてください。
+- **`No R2 binding "NEXT_INC_CACHE_R2_BUCKET" found`**：`wrangler.jsonc` に `r2_buckets` がありません。`r2_buckets` のセクションを追加するか、既定の R2 なしの構成に切り替えてください。
+- **`Can't set compatibility date in the future`**：wrangler の設定の `compatibility_date` が未来の日付になっています。今日かそれより前の日付に変更してください。
+- **Windows エラー `resvg.wasm?module`（ENOENT）**：wasm ファイルの 1 つは名前に `?module` を含み、Windows のファイル名には `?` を使えないためです。WSL、Codespaces、CI などの Linux 環境でビルドとデプロイをしてください。
