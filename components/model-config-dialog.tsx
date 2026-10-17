@@ -517,6 +517,11 @@ export function ModelConfigDialog({
             ? (model.tools ??
               catalog?.getModelInfo(selectedProvider.provider, model.id)?.tools)
             : undefined
+    // False when the model is known not to read images (issue #656)
+    const readsImages = (modelId: string) =>
+        selectedProvider
+            ? catalog?.getModelInfo(selectedProvider.provider, modelId)?.images
+            : undefined
 
     // Filter out already-added models from suggestions
     const existingModelIds =
@@ -914,6 +919,10 @@ export function ModelConfigDialog({
         const seconds = model.responseTime
             ? (model.responseTime / 1000).toFixed(1)
             : undefined
+        const info = catalog?.getModelInfo(
+            selectedProvider.provider,
+            model.modelId,
+        )
         return (
             <div
                 key={model.id}
@@ -1053,14 +1062,17 @@ export function ModelConfigDialog({
                     </p>
                 )}
                 {!model.validationWarning &&
-                    catalog?.getModelInfo(
-                        selectedProvider.provider,
-                        model.modelId,
-                    )?.tools === false && (
+                    (info?.tools === false ? (
                         <p className="px-3 pb-2 pl-11 text-xs text-amber-600 dark:text-amber-400">
                             {t.mayNotDraw}
                         </p>
-                    )}
+                    ) : (
+                        info?.images === false && (
+                            <p className="px-3 pb-2 pl-11 text-xs text-muted-foreground">
+                                {t.noImagesNote}
+                            </p>
+                        )
+                    ))}
                 {model.validated && model.validationWarning && (
                     <p className="px-3 pb-2 pl-11 text-xs text-amber-600 dark:text-amber-400">
                         {model.validationWarning}
@@ -1381,12 +1393,23 @@ export function ModelConfigDialog({
                                                                 </span>
                                                                 {supportsTools(
                                                                     model,
-                                                                ) === false && (
+                                                                ) === false ? (
                                                                     <span className="ml-auto shrink-0 font-sans text-[10px] text-amber-600 dark:text-amber-400">
                                                                         {
                                                                             t.noTools
                                                                         }
                                                                     </span>
+                                                                ) : (
+                                                                    readsImages(
+                                                                        model.id,
+                                                                    ) ===
+                                                                        false && (
+                                                                        <span className="ml-auto shrink-0 font-sans text-[10px] text-muted-foreground">
+                                                                            {
+                                                                                t.noImages
+                                                                            }
+                                                                        </span>
+                                                                    )
                                                                 )}
                                                             </CommandItem>
                                                         ),

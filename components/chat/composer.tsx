@@ -37,6 +37,7 @@ import { UrlInputDialog } from "@/components/url-input-dialog"
 import { IconButton } from "@/components/workspace/icon-button"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
+import { isTextFile } from "@/lib/pdf-utils"
 import { modKey } from "@/lib/platform"
 import { extractUrlContent } from "@/lib/url-utils"
 import { cn } from "@/lib/utils"
@@ -225,6 +226,27 @@ export function Composer({
         )
         showValidationErrors(errors, dict)
         if (validFiles.length > 0) setFiles([...files, ...validFiles])
+        warnIfNoImageInput(validFiles)
+    }
+
+    // An image sent to a model known not to read images fails with an
+    // error that often does not say why (issue #656): say so on attaching
+    const warnIfNoImageInput = async (added: File[]) => {
+        if (!added.some((f) => f.type.startsWith("image/") && !isTextFile(f)))
+            return
+        const model = modelConfig.models.find(
+            (m) => m.id === modelConfig.selectedModelId,
+        )
+        if (!model) return
+        const { getModelInfo } = await import("@/lib/model-catalog")
+        if (getModelInfo(model.provider, model.modelId)?.images !== false)
+            return
+        toast.warning(
+            formatMessage(dict.errors.imagesUnsupportedModel, {
+                model: model.modelId,
+            }),
+            { id: "images-unsupported", duration: 8000 },
+        )
     }
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

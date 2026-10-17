@@ -123,4 +123,71 @@ test.describe("File Upload", () => {
             timeout: 3000,
         })
     })
+
+    test("warns when the selected model cannot read images", async ({
+        page,
+    }) => {
+        // models.dev lists glm-4.7 as text only and glm-4.6v with images
+        await openApp(page, {
+            config: {
+                version: 1,
+                selectedModelId: "m1",
+                providers: [
+                    {
+                        id: "p1",
+                        provider: "glm",
+                        apiKey: "k1",
+                        models: [
+                            { id: "m1", modelId: "glm-4.7" },
+                            { id: "m2", modelId: "glm-4.6v" },
+                        ],
+                    },
+                ],
+            },
+        })
+        const warning = page.getByText("glm-4.7 can't read images")
+
+        // A text file needs no image input
+        await getAttachmentInput(page).setInputFiles({
+            name: "notes.md",
+            mimeType: "text/markdown",
+            buffer: Buffer.from("# Notes"),
+        })
+        await expect(page.getByText("notes.md")).toBeVisible()
+        await expect(warning).toHaveCount(0)
+
+        await getAttachmentInput(page).setInputFiles({
+            name: "photo.png",
+            mimeType: "image/png",
+            buffer: ONE_PIXEL_PNG,
+        })
+        await expect(warning).toBeVisible({ timeout: 5000 })
+        // The image is still attached: the warning does not block sending
+        await expect(page.getByAltText("photo.png")).toBeVisible()
+    })
+
+    test("no warning for a model that reads images", async ({ page }) => {
+        await openApp(page, {
+            config: {
+                version: 1,
+                selectedModelId: "m2",
+                providers: [
+                    {
+                        id: "p1",
+                        provider: "glm",
+                        apiKey: "k1",
+                        models: [{ id: "m2", modelId: "glm-4.6v" }],
+                    },
+                ],
+            },
+        })
+        await getAttachmentInput(page).setInputFiles({
+            name: "photo.png",
+            mimeType: "image/png",
+            buffer: ONE_PIXEL_PNG,
+        })
+        await expect(page.getByAltText("photo.png")).toBeVisible()
+        await page.waitForTimeout(1000)
+        await expect(page.getByText("can't read images")).toHaveCount(0)
+    })
 })
