@@ -326,6 +326,7 @@
         "modelWorksTime": "使用可能 · {seconds} 秒",
         "modelFailed": "エラー",
         "modelUntested": "未テスト",
+        "thinkingMode": "思考モード",
         "needKey": "先に API キーを入力してください。",
         "needUrl": "先に API キーとベース URL を入力してください。",
         "needAws": "先に AWS 認証情報とリージョンを入力してください。",

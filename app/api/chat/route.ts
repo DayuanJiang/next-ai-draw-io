@@ -12,6 +12,7 @@ import {
 import { jsonrepair } from "jsonrepair"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import {
+    applyThinkingSwitch,
     CACHE_POINT,
     edgeOneEndpoint,
     getAIModel,
@@ -327,6 +328,20 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
     console.log(`[maxOutputTokens] ${maxOutputTokens}`)
 
+    // The model's thinking switch from the user's settings, on their own key
+    // and endpoint only, like the output budget: on the server's, the
+    // server's settings decide what it pays for
+    const thinking = req.headers.get("x-ai-thinking-enabled")
+    const options =
+        thinking && !onServerCredentials && !onServerEndpoint
+            ? applyThinkingSwitch(
+                  providerOptions,
+                  resolvedProvider,
+                  modelId,
+                  thinking === "true",
+              )
+            : providerOptions
+
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
     console.log(
@@ -546,7 +561,7 @@ Write your reply in the language of the user's own words in their latest message
             return null
         },
         messages: allMessages,
-        ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
+        ...(options && { providerOptions: options }), // This now includes all reasoning configs
         // Langfuse telemetry (undefined when not configured)
         experimental_telemetry: getTelemetryConfig({
             sessionId: validSessionId,
