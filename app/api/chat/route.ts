@@ -26,7 +26,7 @@ import {
     formatSelectionContext,
     validateFileParts,
 } from "@/lib/chat-helpers"
-import type { ChatUIMessage } from "@/lib/chat-message"
+import { addReplyUsage, type ChatUIMessage } from "@/lib/chat-message"
 import { chatTools } from "@/lib/chat-tools"
 import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
 import {
@@ -90,6 +90,7 @@ const describeMessages = (msgs: any[]) =>
     }))
 
 async function handleChatRequest(req: Request): Promise<Response> {
+    const startedAt = Date.now()
     const crossSite = rejectCrossSite(req)
     if (crossSite) return crossSite
     // Check for access code
@@ -110,6 +111,13 @@ async function handleChatRequest(req: Request): Promise<Response> {
     }
     const messages = validated.data.filter((m) => m.role !== "system")
     const { xml, previousXml, sessionId } = body
+    // A turn's later requests (after a tool result, a retry) continue the
+    // same assistant message, which carries what the earlier ones used
+    const lastMessage = messages.at(-1)
+    const usedBefore =
+        lastMessage?.role === "assistant"
+            ? lastMessage.metadata?.usage
+            : undefined
     const customSystemMessage =
         typeof body.customSystemMessage === "string"
             ? body.customSystemMessage.slice(0, 5000)
@@ -565,8 +573,19 @@ Write your reply in the language of the user's own words in their latest message
     })
 
     const response = withHeartbeat(
-        result.toUIMessageStreamResponse({
+        result.toUIMessageStreamResponse<ChatUIMessage>({
             sendReasoning: true,
+            // The answer's tokens and time so far, shown under it in the chat
+            messageMetadata: ({ part }) =>
+                part.type === "finish"
+                    ? {
+                          usage: addReplyUsage(
+                              usedBefore,
+                              part.totalUsage,
+                              Date.now() - startedAt,
+                          ),
+                      }
+                    : undefined,
             // On the server's keys the provider's text can name its account.
             // Keyless endpoints keep theirs: the desktop app's Ollama is the
             // user's own, and EdgeOne's text is our function's explanation.
