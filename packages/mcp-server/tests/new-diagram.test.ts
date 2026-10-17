@@ -12,10 +12,8 @@ import {
 } from "../src/new-diagram.ts"
 
 describe("isMxCellXmlComplete", () => {
-    it("returns false for empty/null input", () => {
+    it("returns false for empty input", () => {
         expect(isMxCellXmlComplete("")).toBe(false)
-        expect(isMxCellXmlComplete(null)).toBe(false)
-        expect(isMxCellXmlComplete(undefined)).toBe(false)
     })
 
     it("returns true for self-closing mxCell", () => {

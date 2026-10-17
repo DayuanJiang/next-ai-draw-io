@@ -272,8 +272,8 @@ test("blank text before a tool call shows no empty bubble", async ({
     await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible({
         timeout: 15000,
     })
-    // Assistant text bubbles have this background
-    await expect(p.locator("div.rounded-2xl.bg-muted\\/60")).toHaveCount(0)
+    // Only the user's message has a text block
+    await expect(p.locator("div.prose")).toHaveCount(1)
 })
 
 test("an edit right after a broken edit call starts from the real diagram", async ({
@@ -754,7 +754,8 @@ test("the request after a failed screenshot check keeps the model and diagram", 
     await expect.poll(() => requests.length, { timeout: 20000 }).toBe(2)
     const [first, retry] = requests
     expect(retry.body.sessionId).toBe(first.body.sessionId)
-    expect(typeof retry.body.xml).toBe("string")
+    expect(first.body.xml).not.toContain('value="Alpha"')
+    expect(retry.body.xml).toContain('value="Alpha"')
     for (const name of Object.keys(first.headers)) {
         if (name.startsWith("x-")) {
             expect(retry.headers[name], name).toBe(first.headers[name])

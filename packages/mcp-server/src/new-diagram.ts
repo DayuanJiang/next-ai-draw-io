@@ -65,16 +65,14 @@ export function reservedIdError(input: string): string | null {
  * Complete XML ends with a self-closing tag (/>) or closing mxCell tag.
  * Uses a robust approach that handles any LLM provider's wrapper tags
  * by finding the last valid mxCell ending and checking if suffix is just closing tags.
- * @param xml - The XML string to check (can be undefined/null)
+ * @param xml - The XML string to check
  * @returns true if XML appears complete, false if truncated or empty
  */
-export function isMxCellXmlComplete(xml: string | undefined | null): boolean {
+export function isMxCellXmlComplete(xml: string): boolean {
     // Named style definitions before the cells are not cells: output cut off
     // right after them is incomplete. A compact cell whose last quote is
     // missing is complete; prepareNewDiagram repairs it.
-    const trimmed = repairQuoteBeforeSlash(
-        readStyleClasses(xml || "").xml,
-    ).trim()
+    const trimmed = repairQuoteBeforeSlash(readStyleClasses(xml).xml).trim()
     if (!trimmed) return false
 
     // Find position of last complete mxCell ending (either /> or </mxCell>)

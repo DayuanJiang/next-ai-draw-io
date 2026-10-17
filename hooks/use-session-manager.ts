@@ -155,13 +155,7 @@ export function useSessionManager(
 
     // Load sessions list
     const refreshSessions = useCallback(async () => {
-        if (!isIndexedDBAvailable()) return
-        try {
-            const metadata = await getAllSessionMetadata()
-            setSessions(metadata)
-        } catch (error) {
-            console.error("Failed to refresh sessions:", error)
-        }
+        setSessions(await getAllSessionMetadata())
     }, [])
 
     // Initialize on mount
@@ -217,8 +211,6 @@ export function useSessionManager(
                     // If session not found, stay in blank state (URL has invalid session ID)
                 }
                 // If no initialSessionId, start with blank state (no auto-restore)
-            } catch (error) {
-                console.error("Failed to initialize session manager:", error)
             } finally {
                 setIsLoading(false)
             }
@@ -231,7 +223,6 @@ export function useSessionManager(
     // Note: intentionally NOT including currentSessionId in deps to avoid race conditions
     // when clearCurrentSession() is called before URL updates
     useEffect(() => {
-        if (!isInitializedRef.current) return // Wait for initial load
         if (!isAvailable) return
 
         // Increment sequence to invalidate any pending async operations
@@ -320,7 +311,7 @@ export function useSessionManager(
                 xmlSnapshots: session.xmlSnapshots,
                 diagramXml: session.diagramXml,
                 thumbnailDataUrl: session.thumbnailDataUrl,
-                versions: session.versions ?? [],
+                versions: session.versions,
             }
         },
         [currentSessionId, changeChat],
@@ -356,8 +347,6 @@ export function useSessionManager(
                 // A copy read later was saved already (one that waited for
                 // its thumbnail must not undo it)
                 if (seq < savedSeqRef.current) return true
-                // Nothing can be stored without IndexedDB
-                if (!isIndexedDBAvailable()) return true
                 // The user may put another chat on screen while this one is
                 // written; the stored copy is still right, the state is not
                 const stillOnScreen = () =>

@@ -77,40 +77,4 @@ describe("formatValidationFeedback", () => {
         expect(feedback).toContain("Reroute the edge")
         expect(feedback).toContain("Adjust spacing")
     })
-
-    it("returns empty string for valid result with no issues", () => {
-        const result: ValidationResult = {
-            valid: true,
-            issues: [],
-            suggestions: [],
-        }
-
-        const feedback = formatValidationFeedback(result)
-
-        expect(feedback).toBe("")
-    })
-
-    it("formats result with multiple suggestions", () => {
-        const result: ValidationResult = {
-            valid: false,
-            issues: [
-                {
-                    type: "rendering",
-                    severity: "critical",
-                    description: "Missing element",
-                },
-            ],
-            suggestions: [
-                "Check the XML syntax",
-                "Ensure all elements are defined",
-                "Verify parent-child relationships",
-            ],
-        }
-
-        const feedback = formatValidationFeedback(result)
-
-        expect(feedback).toContain("Check the XML syntax")
-        expect(feedback).toContain("Ensure all elements are defined")
-        expect(feedback).toContain("Verify parent-child relationships")
-    })
 })

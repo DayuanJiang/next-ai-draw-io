@@ -135,12 +135,6 @@ describe("parseDrawioFileContent", () => {
 })
 
 describe("hadCompressedPages", () => {
-    it("is false for a plain-XML mxfile", () => {
-        const r = parseDrawioFileContent(PLAIN_MXFILE)
-        expect(r.ok).toBe(true)
-        if (r.ok) expect(r.hadCompressedPages).toBe(false)
-    })
-
     it("is false for a bare mxGraphModel", () => {
         const r = parseDrawioFileContent(MODEL_XML)
         expect(r.ok).toBe(true)

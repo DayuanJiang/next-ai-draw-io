@@ -52,9 +52,7 @@ async function getDB(): Promise<IDBPDatabase<TemplateDB>> {
         dbPromise = openDB<TemplateDB>(DB_NAME, DB_VERSION, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
-                    if (!db.objectStoreNames.contains(STORE_NAME)) {
-                        db.createObjectStore(STORE_NAME, { keyPath: "id" })
-                    }
+                    db.createObjectStore(STORE_NAME, { keyPath: "id" })
                 }
             },
         })
@@ -305,10 +303,8 @@ export async function importTemplates(
         const now = Date.now()
         const newTemplate: Template = {
             id: nanoid(),
-            title:
-                String(t.title || "").trim() ||
-                generateDefaultTitle(String(t.prompt || "")),
-            prompt: String(t.prompt || "").trim(),
+            title: t.title.trim(),
+            prompt: t.prompt.trim(),
             description: t.description ? String(t.description) : undefined,
             createdAt: typeof t.createdAt === "number" ? t.createdAt : now,
             updatedAt: now,

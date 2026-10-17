@@ -195,7 +195,6 @@ export const TWO_PROVIDERS = {
 interface MockResponse {
     xml: string
     text: string
-    toolName?: string
 }
 
 /**
@@ -211,11 +210,7 @@ export function createMultiTurnMock(responses: MockResponse[]) {
         await route.fulfill({
             status: 200,
             contentType: "text/event-stream",
-            body: createMockSSEResponse(
-                response.xml,
-                response.text,
-                response.toolName,
-            ),
+            body: createMockSSEResponse(response.xml, response.text),
         })
     }
 }
@@ -247,19 +242,6 @@ export function createMixedMock(
                 body: createMockSSEResponse(response.xml, response.text),
             })
         }
-    }
-}
-
-/**
- * Create a mock that returns an error
- */
-export function createErrorMock(status: number, error: string) {
-    return async (route: Route) => {
-        await route.fulfill({
-            status,
-            contentType: "application/json",
-            body: JSON.stringify({ error }),
-        })
     }
 }
 

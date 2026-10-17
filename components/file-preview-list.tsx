@@ -16,21 +16,21 @@ function formatCharCount(count: number): string {
 interface FilePreviewListProps {
     files: File[]
     onRemoveFile: (fileToRemove: File) => void
-    pdfData?: Map<
+    pdfData: Map<
         File,
         { text: string; charCount: number; isExtracting: boolean }
     >
-    urlData?: Map<
+    urlData: Map<
         string,
         { url: string; title: string; charCount: number; isExtracting: boolean }
     >
-    onRemoveUrl?: (url: string) => void
+    onRemoveUrl: (url: string) => void
 }
 
 export function FilePreviewList({
     files,
     onRemoveFile,
-    pdfData = new Map(),
+    pdfData,
     urlData,
     onRemoveUrl,
 }: FilePreviewListProps) {
@@ -83,8 +83,6 @@ export function FilePreviewList({
             setSelectedImage(null)
         }
     }, [imageUrls, selectedImage])
-
-    if (files.length === 0 && (!urlData || urlData.size === 0)) return null
 
     return (
         <>
@@ -160,7 +158,7 @@ export function FilePreviewList({
                     )
                 })}
                 {/* URL previews */}
-                {urlData && urlData.size > 0 && (
+                {urlData.size > 0 && (
                     <div className="flex flex-wrap gap-2">
                         {Array.from(urlData.entries()).map(
                             ([url, data], index) => (
@@ -197,16 +195,14 @@ export function FilePreviewList({
                                             )}
                                         </div>
                                     </div>
-                                    {onRemoveUrl && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onRemoveUrl(url)}
-                                            className="absolute -top-2 -right-2 bg-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            aria-label={dict.file.removeFile}
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => onRemoveUrl(url)}
+                                        className="absolute -top-2 -right-2 bg-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        aria-label={dict.file.removeFile}
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
                                 </div>
                             ),
                         )}

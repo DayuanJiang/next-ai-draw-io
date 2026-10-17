@@ -77,7 +77,10 @@ test.describe("File Upload", () => {
             page.locator('text="Based on your image, here is a diagram:"'),
         ).toBeVisible({ timeout: 15000 })
 
-        expect(capturedRequest).not.toBeNull()
+        const last = capturedRequest.postDataJSON().messages.at(-1)
+        const file = last.parts.find((p: any) => p.type === "file")
+        expect(file?.mediaType).toBe("image/png")
+        expect(file?.url).toMatch(/^data:image\/png;base64,/)
     })
 
     test("shows error for oversized file", async ({ page }) => {
@@ -93,8 +96,9 @@ test.describe("File Upload", () => {
         })
 
         await expect(
-            page.locator('[role="alert"], [data-sonner-toast]').first(),
+            page.getByText('"large-image.png" is 3.00MB (exceeds 2MB)'),
         ).toBeVisible({ timeout: 5000 })
+        await expect(page.getByAltText("large-image.png")).toHaveCount(0)
     })
 
     test("drag and drop file upload works", async ({ page }) => {

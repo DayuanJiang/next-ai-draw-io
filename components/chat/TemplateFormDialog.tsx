@@ -100,9 +100,6 @@ export function TemplateFormDialog({
             } else {
                 setError(failed)
             }
-        } catch (err) {
-            console.error("Failed to save template:", err)
-            setError(failed)
         } finally {
             setIsSubmitting(false)
         }

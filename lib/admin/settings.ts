@@ -92,7 +92,7 @@ export function applyToEnv(): void {
 
 // The effective env value if the file entry were removed (for fallback display)
 export function getEnvFallback(key: string): string | null {
-    if (state.overlaidKeys.has(key)) return state.originalEnv[key] ?? null
+    if (state.overlaidKeys.has(key)) return state.originalEnv[key]
     return process.env[key] ?? null
 }
 
@@ -147,7 +147,7 @@ export function _resetForTests(): void {
     for (const key of state.overlaidKeys) {
         const original = state.originalEnv[key]
         if (original === null) delete process.env[key]
-        else if (original !== undefined) process.env[key] = original
+        else process.env[key] = original
     }
     state.overlaidKeys = new Set()
     state.originalEnv = {}

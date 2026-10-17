@@ -989,10 +989,9 @@ export function ModelConfigDialog({
                             }
 
                             // Check for duplicate
-                            const otherModelIds =
-                                selectedProvider?.models
-                                    .filter((m) => m.id !== model.id)
-                                    .map((m) => m.modelId) || []
+                            const otherModelIds = selectedProvider.models
+                                .filter((m) => m.id !== model.id)
+                                .map((m) => m.modelId)
                             if (otherModelIds.includes(newModelId)) {
                                 showError(t.modelIdExists)
                                 return

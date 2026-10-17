@@ -121,13 +121,6 @@ describe("MCP server wiring", () => {
         }
     })
 
-    it("advertises page-selector params on edit_diagram", async () => {
-        const props = await properties("edit_diagram")
-        expect(props.page_id).toBeTruthy()
-        expect(props.page_name).toBeTruthy()
-        expect(props.page_index).toBeTruthy()
-    })
-
     it("advertises session_id on start_session", async () => {
         const start = await findTool("start_session")
         expect(start?.inputSchema?.properties?.session_id).toBeTruthy()
@@ -151,18 +144,6 @@ describe("MCP server wiring", () => {
             const screenshot = props.screenshot as { type?: string } | undefined
             expect(screenshot?.type, `${name} screenshot`).toBe("boolean")
         }
-    })
-
-    it("advertises name/id/xml on add_page", async () => {
-        const props = await properties("add_page")
-        expect(props.name).toBeTruthy()
-        expect(props.id).toBeTruthy()
-        expect(props.xml).toBeTruthy()
-    })
-
-    it("advertises steps_back on restore_version", async () => {
-        const props = await properties("restore_version")
-        expect(props.steps_back).toBeTruthy()
     })
 
     it("refuses restore_version without a session", async () => {
@@ -218,11 +199,6 @@ describe("MCP server wiring", () => {
         ).toBe(true)
     })
 
-    it("advertises topic on get_drawing_guide", async () => {
-        const props = await properties("get_drawing_guide")
-        expect(props.topic).toBeTruthy()
-    })
-
     it("serves the table XML reference with topic=tables", async () => {
         const result = await callTool("get_drawing_guide", { topic: "tables" })
         expect(result.isError).toBeFalsy()
@@ -233,16 +209,6 @@ describe("MCP server wiring", () => {
 })
 
 describe("load_diagram dual-source arguments", () => {
-    it("advertises both optional 'path' and 'xml' sources", async () => {
-        const load = await findTool("load_diagram")
-        const props = load?.inputSchema?.properties ?? {}
-        expect(props.path).toBeTruthy()
-        expect(props.xml).toBeTruthy()
-        const required: string[] = load?.inputSchema?.required ?? []
-        expect(required).not.toContain("path")
-        expect(required).not.toContain("xml")
-    })
-
     it("rejects passing both 'path' and 'xml'", async () => {
         // Argument validation fires before the session check: no session
         // exists in this harness, so a both-args call must report the

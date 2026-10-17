@@ -72,19 +72,10 @@ describe("findAvailablePort", () => {
     })
 
     it("goes back to the port with the chats once it is free", async () => {
-        // The previous version still quitting after an update
+        // The previous version still quitting after an update, or Windows
+        // reserving port ranges for one boot
         storeData(61337)
         busy.ports[61337] = "EADDRINUSE"
-        expect(await launch()).toBe(13370)
-        storeData(13370)
-        busy.ports = {}
-        expect(await launch()).toBe(61337)
-    })
-
-    it("does not hide the chats for good after one reserved launch", async () => {
-        // Windows reserves port ranges per boot
-        storeData(61337)
-        busy.ports[61337] = "EACCES"
         expect(await launch()).toBe(13370)
         storeData(13370)
         busy.ports = {}

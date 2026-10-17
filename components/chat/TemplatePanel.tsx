@@ -180,35 +180,27 @@ export function TemplatePanel({
             return
         }
 
-        try {
-            const exportData = exportTemplates(templates)
-            const json = JSON.stringify(exportData, null, 2)
-            const blob = new Blob([json], { type: "application/json" })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement("a")
-            a.href = url
-            // Local date as YYYY-MM-DD (toISOString would give UTC)
-            a.download = `templates-${new Date().toLocaleDateString("sv-SE")}.json`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
+        const exportData = exportTemplates(templates)
+        const json = JSON.stringify(exportData, null, 2)
+        const blob = new Blob([json], { type: "application/json" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        // Local date as YYYY-MM-DD (toISOString would give UTC)
+        a.download = `templates-${new Date().toLocaleDateString("sv-SE")}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
 
-            setImportMessage({
-                type: "success",
-                text: dict.templates.exportSuccess.replace(
-                    "{count}",
-                    String(templates.length),
-                ),
-            })
-            setTimeout(() => setImportMessage(null), 3000)
-        } catch (error) {
-            console.error("Failed to export templates:", error)
-            setImportMessage({
-                type: "error",
-                text: `Export failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-            })
-        }
+        setImportMessage({
+            type: "success",
+            text: dict.templates.exportSuccess.replace(
+                "{count}",
+                String(templates.length),
+            ),
+        })
+        setTimeout(() => setImportMessage(null), 3000)
     }
 
     // Import templates from JSON file

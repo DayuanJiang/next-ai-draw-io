@@ -163,9 +163,8 @@ export function SaveDialog({
                                     // a touch screen would open its keyboard
                                     if (
                                         e.detail > 0 &&
-                                        !window.matchMedia?.(
-                                            "(pointer: coarse)",
-                                        ).matches
+                                        !window.matchMedia("(pointer: coarse)")
+                                            .matches
                                     ) {
                                         inputRef.current?.focus()
                                     }
@@ -219,7 +218,7 @@ export function SaveDialog({
                                 className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm outline-none"
                             />
                             <span className="shrink-0 pr-3 text-sm text-muted-foreground">
-                                {currentFormat?.extension || ".drawio"}
+                                {currentFormat?.extension}
                             </span>
                         </div>
                     </div>

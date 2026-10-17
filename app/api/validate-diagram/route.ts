@@ -61,10 +61,7 @@ export async function POST(req: Request): Promise<Response> {
         }
 
         // Validate image data format
-        if (
-            !imageData.startsWith("data:image/png;base64,") &&
-            !imageData.startsWith("data:image/")
-        ) {
+        if (!imageData.startsWith("data:image/")) {
             return Response.json(
                 { error: "Invalid image data format" },
                 { status: 400 },
@@ -162,7 +159,7 @@ export async function POST(req: Request): Promise<Response> {
         }
         if (sessionId) {
             console.log(
-                `[validate-diagram] Session ${sessionId}: valid=${output.valid}, issues=${output.issues?.length ?? 0}`,
+                `[validate-diagram] Session ${sessionId}: valid=${output.valid}, issues=${output.issues.length}`,
             )
         }
         return Response.json(output)

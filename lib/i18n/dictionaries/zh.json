@@ -40,7 +40,8 @@
         "openFileAfterAnswer": "请等回答完成后，再打开一次 {name}。",
         "attachedImage": "附带的图片",
         "retry": "重试",
-        "sendKeyHint": "{send} 发送 · {newline} 换行"
+        "sendKeyHint": "{send} 发送 · {newline} 换行",
+        "drawingElapsed": "正在绘制，已用时 {seconds} 秒"
     },
     "examples": {
         "paperToDiagram": "论文转图表",
@@ -268,7 +269,6 @@
     "validation": {
         "title": "验证图表",
         "capturing": "截图中",
-        "validating": "验证中",
         "validatingWithAttempt": "验证中 ({attempt}/{max})",
         "valid": "通过",
         "validWithWarnings": "通过（有警告）",

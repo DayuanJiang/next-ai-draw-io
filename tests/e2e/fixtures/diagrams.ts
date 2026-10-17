@@ -31,11 +31,6 @@ export const ARCHITECTURE_XML = `<mxCell id="arch" value="Architecture" style="r
   <mxGeometry x="100" y="100" width="120" height="50" as="geometry"/>
 </mxCell>`
 
-// New node for append tests
-export const NEW_NODE_XML = `<mxCell id="new-node" value="New Node" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1">
-  <mxGeometry x="350" y="130" width="100" height="40" as="geometry"/>
-</mxCell>`
-
 // Truncated XML for error tests
 export const TRUNCATED_XML = `<mxCell id="node1" value="Start" style="rounded=1;" vertex="1" parent="1">
   <mxGeometry x="100" y="100" width="100" height="40"`

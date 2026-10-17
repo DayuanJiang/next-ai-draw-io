@@ -66,9 +66,8 @@ export function defaultLayerOf(xml: string): string {
         const attrs = new Map(
             readAttributes(attrText).map((a) => [a.name, a.value]),
         )
-        if (attrs.get("parent") === "0" && attrs.get("id")) {
-            return attrs.get("id") ?? "1"
-        }
+        const id = attrs.get("id")
+        if (attrs.get("parent") === "0" && id) return id
     }
     return "1"
 }

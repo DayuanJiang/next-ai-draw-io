@@ -3,6 +3,7 @@ import {
     createMixedMock,
     createMultiTurnMock,
     expect,
+    getIframeContent,
     openApp,
     sendMessage,
     test,
@@ -100,5 +101,9 @@ test.describe("Multi-turn Conversation", () => {
         // Then ask for diagram
         await sendMessage(page, "Now show it as a diagram")
         await waitForComplete(page)
+        // The diagram is on the canvas
+        await expect(
+            getIframeContent(page).getByText("Architecture", { exact: true }),
+        ).toBeVisible({ timeout: 15000 })
     })
 })

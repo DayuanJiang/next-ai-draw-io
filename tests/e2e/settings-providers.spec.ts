@@ -540,7 +540,8 @@ test("long names stay inside the page", async ({ page }) => {
     await dialog.getByTestId("provider-row-p1").click()
     const right = async (l: Locator) => {
         const box = await l.boundingBox()
-        return box ? box.x + box.width : 0
+        if (!box) throw new Error("element is not laid out")
+        return box.x + box.width
     }
     const pageRight = await right(dialog)
     expect(await right(dialog.getByTestId("test-models"))).toBeLessThanOrEqual(

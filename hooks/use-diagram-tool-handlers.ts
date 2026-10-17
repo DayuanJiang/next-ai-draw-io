@@ -146,12 +146,11 @@ export function useDiagramToolHandlers({
     const commit = (xml: string, toolCallId: string) => {
         const original = continuationOriginalRef.current
         if (original !== null) onDisplayChart(original, true, "revert")
-        const error = onDisplayChart(xml, true, "commit", {
+        onDisplayChart(xml, true, "commit", {
             toolCallId,
             pageId: aiPageId(),
         })
-        if (!error) continuationOriginalRef.current = null
-        return error
+        continuationOriginalRef.current = null
     }
 
     const aiPageId = () => turnPageIdRef?.current ?? null
@@ -236,9 +235,8 @@ NEXT STEP: Call append_diagram with the continuation XML.
         // check: a stop, another chat or a hand edit during the check then
         // finds the diagram already in place
         const prepared = prepareNewDiagram(withImages(finalXml), NEW_PAGE)
-        const validationError = prepared.ok
-            ? commit(onAiPage(prepared.xml), toolCall.toolCallId)
-            : prepared.error
+        if (prepared.ok) commit(onAiPage(prepared.xml), toolCall.toolCallId)
+        const validationError = prepared.ok ? null : prepared.error
 
         if (validationError) {
             console.warn("[display_diagram] Validation error:", validationError)
@@ -548,9 +546,10 @@ Start your continuation with the NEXT character after where it stopped.`,
             // The continuation ends here, drawn or not: it takes the stored
             // originals, so the preview code undoes none of them later
             const originalXml = takeOriginals()
-            const validationError = prepared.ok
-                ? commit(onAiPage(prepared.xml), toolCall.toolCallId)
-                : prepared.error
+            if (prepared.ok) {
+                commit(onAiPage(prepared.xml), toolCall.toolCallId)
+            }
+            const validationError = prepared.ok ? null : prepared.error
 
             if (validationError) {
                 // Back to the diagram before the cut off drawing, or else

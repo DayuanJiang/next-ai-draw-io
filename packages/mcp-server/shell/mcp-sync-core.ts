@@ -565,7 +565,6 @@ export function createMcpSync(options: SyncOptions): McpSync {
         source: "edit" | "sync" | "recover" = "edit",
         sid = stateId,
     ): Promise<void> {
-        if (!sessionId) return
         pushesInFlight.push(xml)
         try {
             const r = await postJson("/state", {
@@ -774,7 +773,6 @@ export function createMcpSync(options: SyncOptions): McpSync {
     }
 
     async function poll(): Promise<void> {
-        if (!sessionId) return
         const seq = ++pollSeq
         try {
             const r = await api(
@@ -914,7 +912,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
 
     return {
         start() {
-            if (!sessionId || interval) return
+            if (interval) return
             poll()
             interval = setInterval(poll, POLL_INTERVAL_MS)
         },

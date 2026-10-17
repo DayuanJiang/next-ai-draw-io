@@ -117,7 +117,7 @@ export function ChatPanel({
         (v) =>
             !v.toolCallId ||
             !engine.messages.some((m) =>
-                m.parts?.some((p) => {
+                m.parts.some((p) => {
                     const part = p as { toolCallId?: string; state?: string }
                     return (
                         part.toolCallId === v.toolCallId &&

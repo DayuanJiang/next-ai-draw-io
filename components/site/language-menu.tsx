@@ -21,7 +21,7 @@ export function LanguageMenu({
     const button = useRef<HTMLButtonElement>(null)
     const listId = useId()
     // The page without its locale, "/about" for "/zh/about"
-    const rest = (usePathname() ?? "").replace(/^\/[^/]+/, "")
+    const rest = usePathname().replace(/^\/[^/]+/, "")
 
     // Close on a click outside or Escape
     useEffect(() => {
