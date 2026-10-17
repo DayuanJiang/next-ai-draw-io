@@ -12,6 +12,7 @@ import {
 import { jsonrepair } from "jsonrepair"
 import { checkAccessCode, rejectCrossSite } from "@/lib/access-code"
 import {
+    applyThinkingSwitch,
     CACHE_POINT,
     edgeOneEndpoint,
     getAIModel,
@@ -42,6 +43,7 @@ import {
     wrapWithObserve,
 } from "@/lib/langfuse"
 import { classifyLLMError, streamErrorText } from "@/lib/llm-errors"
+import { estimateCost } from "@/lib/model-catalog"
 import {
     resolveMaxOutputTokens,
     withOutputTokenLimitFallback,
@@ -326,6 +328,20 @@ async function handleChatRequest(req: Request): Promise<Response> {
     )
     console.log(`[maxOutputTokens] ${maxOutputTokens}`)
 
+    // The model's thinking switch from the user's settings, on their own key
+    // and endpoint only, like the output budget: on the server's, the
+    // server's settings decide what it pays for
+    const thinking = req.headers.get("x-ai-thinking-enabled")
+    const options =
+        thinking && !onServerCredentials && !onServerEndpoint
+            ? applyThinkingSwitch(
+                  providerOptions,
+                  resolvedProvider,
+                  modelId,
+                  thinking === "true",
+              )
+            : providerOptions
+
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
     console.log(
@@ -492,6 +508,10 @@ Write your reply in the language of the user's own words in their latest message
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
+    // The request's cost, priced step by step: a price tier goes by one
+    // call's prompt, and a step without usage or price makes it unknown
+    let requestCost: number | undefined = 0
+
     const result = streamText({
         model,
         // The system messages carry cache points, so they go in messages
@@ -541,7 +561,7 @@ Write your reply in the language of the user's own words in their latest message
             return null
         },
         messages: allMessages,
-        ...(providerOptions && { providerOptions }), // This now includes all reasoning configs
+        ...(options && { providerOptions: options }), // This now includes all reasoning configs
         // Langfuse telemetry (undefined when not configured)
         experimental_telemetry: getTelemetryConfig({
             sessionId: validSessionId,
@@ -552,6 +572,11 @@ Write your reply in the language of the user's own words in their latest message
         // completed answer). Awaited, so the write is done before the host
         // may freeze the function after the answer ends.
         onStepFinish: async ({ usage }) => {
+            const stepCost = estimateCost(resolvedProvider, modelId, usage)
+            requestCost =
+                requestCost !== undefined && stepCost !== undefined
+                    ? requestCost + stepCost
+                    : undefined
             if (countsQuota) {
                 await recordTokenUsage(userId, usage.totalTokens ?? 0)
             }
@@ -575,7 +600,7 @@ Write your reply in the language of the user's own words in their latest message
     const response = withHeartbeat(
         result.toUIMessageStreamResponse<ChatUIMessage>({
             sendReasoning: true,
-            // The answer's tokens and time so far, shown under it in the chat
+            // The answer's tokens, time and cost so far, shown under it in the chat
             messageMetadata: ({ part }) =>
                 part.type === "finish"
                     ? {
@@ -583,6 +608,7 @@ Write your reply in the language of the user's own words in their latest message
                               usedBefore,
                               part.totalUsage,
                               Date.now() - startedAt,
+                              requestCost,
                           ),
                       }
                     : undefined,

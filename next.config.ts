@@ -29,9 +29,13 @@ const nextConfig: NextConfig = {
             "./docs/tw/*.md",
         ],
     },
-    // The Chinese and Japanese About pages used to be separate routes
+    // The Chinese and Japanese About pages used to be separate routes. The
+    // addresses without a language, which Google still has, go there in one
+    // step instead of through the language redirect first.
     async redirects() {
         return [
+            { source: "/about/cn", destination: "/zh/about", permanent: true },
+            { source: "/about/ja", destination: "/ja/about", permanent: true },
             {
                 source: "/:lang/about/cn",
                 destination: "/zh/about",
