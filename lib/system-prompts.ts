@@ -3,6 +3,8 @@
  */
 
 import {
+    CUSTOM_DATA_EXAMPLE,
+    CUSTOM_DATA_RULE,
     STYLE_CLASS_EXAMPLE,
     styleRules,
 } from "@/packages/mcp-server/src/xml-examples.ts"
@@ -118,7 +120,7 @@ Example - generate ONLY this:
 \`\`\`
 
 CRITICAL RULES:
-1. Generate ONLY mxStyle definitions and mxCell elements - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
+1. Generate ONLY mxStyle definitions and mxCell elements (wrapped in <object> for custom data, see below) - NO wrapper tags (<mxfile>, <mxGraphModel>, <root>)
 2. Do NOT include root cells (id="0" or id="1") - they are added automatically
 3. ALL mxCell elements must be siblings - NEVER nest mxCell inside another mxCell
 4. Use unique sequential IDs starting from "2"
@@ -132,6 +134,11 @@ Shape (vertex) example:
 Connector (edge) example:
 \`\`\`xml
 <mxCell id="3" style="edgeStyle=orthogonalEdgeStyle;" source="2" target="4"/>
+\`\`\`
+
+${CUSTOM_DATA_RULE}
+\`\`\`xml
+${CUSTOM_DATA_EXAMPLE}
 \`\`\`
 
 ### Edge Routing Rules:
