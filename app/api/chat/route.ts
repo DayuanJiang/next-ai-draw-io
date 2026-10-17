@@ -328,10 +328,11 @@ async function handleChatRequest(req: Request): Promise<Response> {
     console.log(`[maxOutputTokens] ${maxOutputTokens}`)
 
     // The model's thinking switch from the user's settings, on their own key
-    // only: on the server's keys the server's settings decide what it pays for
+    // and endpoint only, like the output budget: on the server's, the
+    // server's settings decide what it pays for
     const thinking = req.headers.get("x-ai-thinking-enabled")
     const options =
-        thinking && !onServerCredentials
+        thinking && !onServerCredentials && !onServerEndpoint
             ? applyThinkingSwitch(
                   providerOptions,
                   resolvedProvider,

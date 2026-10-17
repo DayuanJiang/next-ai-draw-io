@@ -489,29 +489,43 @@ export function applyThinkingSwitch(
         }
         case "budget":
         case "adaptive": {
-            // Claude has thinking off unless the request asks for it
             const key = provider === "bedrock" ? "bedrock" : "anthropic"
             const field = key === "bedrock" ? "reasoningConfig" : "thinking"
-            const { [field]: current, ...rest } = options[key] ?? {}
+            const { [field]: fromEnv, ...rest } = options[key] ?? {}
             // Opus 4.7 and later return no thinking text unless asked to
             const on =
-                kind === "adaptive"
+                fromEnv ??
+                (kind === "adaptive"
                     ? { type: "adaptive", display: "summarized" }
-                    : {
-                          type: "enabled",
-                          budgetTokens: current?.budgetTokens ?? 1024,
-                      }
-            options[key] = enabled ? { ...rest, [field]: on } : rest
-            if (Object.keys(options[key]).length === 0) delete options[key]
+                    : { type: "enabled", budgetTokens: 1024 })
+            // Claude Sonnet 5 and Opus 5 think when the request says
+            // nothing, so off is said explicitly. Bedrock's SDK does not
+            // send it for Claude, so it goes in the request fields.
+            options[key] = enabled
+                ? { ...rest, [field]: on }
+                : key === "anthropic"
+                  ? { ...rest, thinking: { type: "disabled" } }
+                  : {
+                        ...rest,
+                        additionalModelRequestFields: {
+                            ...rest.additionalModelRequestFields,
+                            thinking: { type: "disabled" },
+                        },
+                    }
             break
         }
         case "gemini": {
-            // Gemini 2.5 Flash thinks by default, with a budget it picks
+            // Flash thinks by default with a budget it picks, Flash-Lite
+            // only with a budget; -1 lets the model pick
             const config = options.google?.thinkingConfig ?? {}
             options.google = {
                 ...options.google,
                 thinkingConfig: enabled
-                    ? { ...config, includeThoughts: true }
+                    ? {
+                          ...config,
+                          includeThoughts: true,
+                          thinkingBudget: config.thinkingBudget ?? -1,
+                      }
                     : { thinkingBudget: 0 },
             }
             break

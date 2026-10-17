@@ -40,6 +40,7 @@ describe("thinkingSwitchOf", () => {
         ["google", "gemini-2.5-flash-lite", "gemini"],
         ["vertexai", "gemini-2.5-flash", "gemini"],
         ["deepseek", "deepseek-v4-flash", "deepseek"],
+        ["deepseek", "deepseek-flash", "deepseek"],
     ] as const)("%s %s: %s", (provider, modelId, kind) => {
         expect(thinkingSwitchOf(provider, modelId)).toBe(kind)
     })
@@ -56,6 +57,7 @@ describe("thinkingSwitchOf", () => {
         ["anthropic", "claude-3-5-sonnet-20241022"],
         ["google", "gemini-2.5-pro"],
         ["google", "gemini-3-pro-preview"],
+        ["vertexai", "gemini-2.5-flash-image"],
         ["bedrock", "amazon.nova-pro-v1:0"],
         ["openrouter", "anthropic/claude-sonnet-4.5"],
     ] as const)("%s %s: none", (provider, modelId) => {
@@ -74,20 +76,29 @@ describe("applyThinkingSwitch", () => {
         })
     })
 
-    it("keeps the environment's Claude budget when on, and drops it when off", () => {
+    it("keeps the environment's Claude budget when on, and says off explicitly", () => {
         const env = {
             anthropic: { thinking: { type: "enabled", budgetTokens: 4000 } },
         }
-        const model = "claude-sonnet-4-5-20250929"
-        expect(applyThinkingSwitch(env, "anthropic", model, true)).toEqual(env)
+        for (const model of ["claude-sonnet-4-5-20250929", "claude-opus-4-6"]) {
+            expect(applyThinkingSwitch(env, "anthropic", model, true)).toEqual(
+                env,
+            )
+            // Claude Sonnet 5 and Opus 5 think unless told not to
+            expect(applyThinkingSwitch(env, "anthropic", model, false)).toEqual(
+                { anthropic: { thinking: { type: "disabled" } } },
+            )
+        }
         expect(
-            applyThinkingSwitch(undefined, "anthropic", model, true),
+            applyThinkingSwitch(
+                undefined,
+                "anthropic",
+                "claude-sonnet-4-5-20250929",
+                true,
+            ),
         ).toEqual({
             anthropic: { thinking: { type: "enabled", budgetTokens: 1024 } },
         })
-        expect(
-            applyThinkingSwitch(env, "anthropic", model, false),
-        ).toBeUndefined()
     })
 
     it("asks newer Claude models for adaptive thinking", () => {
@@ -133,7 +144,14 @@ describe("applyThinkingSwitch", () => {
                 model,
                 false,
             ),
-        ).toEqual({ bedrock: beta })
+        ).toEqual({
+            bedrock: {
+                ...beta,
+                additionalModelRequestFields: {
+                    thinking: { type: "disabled" },
+                },
+            },
+        })
     })
 
     it("turns Gemini 2.5 Flash's thinking off with a zero budget", () => {
@@ -141,9 +159,14 @@ describe("applyThinkingSwitch", () => {
         expect(
             applyThinkingSwitch(env, "google", "gemini-2.5-flash", false),
         ).toEqual({ google: { thinkingConfig: { thinkingBudget: 0 } } })
+        // Flash-Lite thinks only with a budget: -1 lets it pick one
         expect(
-            applyThinkingSwitch(env, "google", "gemini-2.5-flash", true),
-        ).toEqual(env)
+            applyThinkingSwitch(env, "google", "gemini-2.5-flash-lite", true),
+        ).toEqual({
+            google: {
+                thinkingConfig: { includeThoughts: true, thinkingBudget: -1 },
+            },
+        })
     })
 
     it("uses Nova 2's own reasoning switch", () => {
@@ -202,7 +225,7 @@ describe("the chat route", () => {
     it("sends the switch for the user's own key", async () => {
         const body = await sentBody({
             "x-ai-provider": "deepseek",
-            "x-ai-base-url": "http://127.0.0.1:9000/v1",
+            "x-ai-base-url": "https://api.deepseek.example/v1",
             "x-ai-api-key": "user-key",
             "x-ai-model": "deepseek-v4-flash",
             "x-ai-thinking-enabled": "false",
@@ -216,6 +239,18 @@ describe("the chat route", () => {
         vi.stubEnv("DEEPSEEK_API_KEY", "server-key")
         vi.stubEnv("DEEPSEEK_BASE_URL", "http://127.0.0.1:9000/v1")
         const body = await sentBody({ "x-ai-thinking-enabled": "false" })
+        expect(body.model).toBe("deepseek-v4-flash")
+        expect(body.thinking).toBeUndefined()
+    })
+
+    it("ignores it on an endpoint of the server's network", async () => {
+        const body = await sentBody({
+            "x-ai-provider": "deepseek",
+            "x-ai-base-url": "http://127.0.0.1:9000/v1",
+            "x-ai-api-key": "dummy",
+            "x-ai-model": "deepseek-v4-flash",
+            "x-ai-thinking-enabled": "false",
+        })
         expect(body.model).toBe("deepseek-v4-flash")
         expect(body.thinking).toBeUndefined()
     })

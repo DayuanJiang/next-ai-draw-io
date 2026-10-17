@@ -54,12 +54,17 @@ export function thinkingSwitchOf(
             return claudeSwitch(id)
         case "google":
         case "vertexai":
-            return id.includes("gemini-2.5-flash") ? "gemini" : undefined
+            // Not the image and speech models of the family
+            return id.includes("gemini-2.5-flash") &&
+                !/image|tts|audio|live/.test(id)
+                ? "gemini"
+                : undefined
         case "bedrock":
             if (id.includes("nova-2-lite")) return "nova"
             return claudeSwitch(id)
         case "deepseek":
-            return id.startsWith("deepseek-v4") ? "deepseek" : undefined
+            // The V4 models as the SDK names them, aliases included
+            return /^deepseek-(v4|flash|pro)/.test(id) ? "deepseek" : undefined
         default:
             return undefined
     }
