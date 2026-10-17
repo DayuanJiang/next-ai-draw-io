@@ -1147,15 +1147,21 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
             )
         }
         // The user's own headers go only with the user's own key, never
-        // with the server's (issue #763)
-        const headers =
+        // with the server's (issue #763), and to no other origin
+        const userHeaders =
             e.keySource === "client" && overrides?.customHeaders
-                ? { ...e.headers, ...overrides.customHeaders }
-                : e.headers
+                ? overrides.customHeaders
+                : {}
+        const userHeaderNames = Object.keys(userHeaders)
         model = createModel(provider, modelId, {
             ...e,
-            headers,
-            fetch: e.guarded ? redirectGuardedFetch() : undefined,
+            headers: userHeaderNames.length
+                ? { ...e.headers, ...userHeaders }
+                : e.headers,
+            fetch:
+                e.guarded || userHeaderNames.length
+                    ? redirectGuardedFetch(userHeaderNames)
+                    : undefined,
         })
     }
 

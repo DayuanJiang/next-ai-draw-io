@@ -548,6 +548,13 @@ test("custom headers are checked as typed and go with the test and the chat", as
     await testButton(dialog).click()
     await expect.poll(() => bodies.length).toBe(1)
     expect(bodies[0]).toMatchObject({ provider: "custom", customHeaders: text })
+    await expect(dialog.getByText(/^Works ·/)).toBeVisible()
+
+    // New headers make the old result stale, like a new key
+    await field.fill(`${text}\nx-extra: 1`)
+    await expect(dialog.getByText(/^Works ·/)).toHaveCount(0)
+    await expect(testButton(dialog)).toBeVisible()
+    await field.fill(text)
 
     let headers: Record<string, string> = {}
     await page.route("**/api/chat", async (route) => {

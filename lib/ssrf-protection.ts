@@ -145,11 +145,20 @@ const CREDENTIAL_HEADERS = [
  * host, so redirects are refused. With private URLs allowed but the quota
  * on (DYNAMODB_QUOTA_TABLE), a request to a private address counts as the
  * server's: a public URL's redirects are followed only to public addresses,
- * or it could reach the server's own network uncounted. Undefined otherwise.
+ * or it could reach the server's own network uncounted. userHeaders, the
+ * names of the user's own headers (lib/custom-headers.ts), are credentials
+ * too: with them redirects are followed here, so another origin gets none
+ * of them. Undefined otherwise.
  */
-export function redirectGuardedFetch(): typeof fetch | undefined {
+export function redirectGuardedFetch(
+    userHeaders: string[] = [],
+): typeof fetch | undefined {
     const blockAll = !allowPrivateUrls()
-    if (!blockAll && !process.env.DYNAMODB_QUOTA_TABLE) return undefined
+    const countsPrivate = !!process.env.DYNAMODB_QUOTA_TABLE
+    if (!blockAll && !countsPrivate && userHeaders.length === 0) {
+        return undefined
+    }
+    const dropped = [...CREDENTIAL_HEADERS, ...userHeaders]
     return async (input, init) => {
         let url = input instanceof Request ? input.url : String(input)
         let next = init
@@ -162,10 +171,10 @@ export function redirectGuardedFetch(): typeof fetch | undefined {
                 return response
             }
             if (blockAll) throw new RedirectRefusedError()
-            startsPrivate ??= await isPrivateUrl(url)
+            if (countsPrivate) startsPrivate ??= await isPrivateUrl(url)
             const from = new URL(url)
             url = new URL(location, url).toString()
-            if (!startsPrivate && (await isPrivateUrl(url))) {
+            if (countsPrivate && !startsPrivate && (await isPrivateUrl(url))) {
                 throw new RedirectRefusedError(
                     "Redirects to private addresses are not allowed",
                 )
@@ -174,7 +183,7 @@ export function redirectGuardedFetch(): typeof fetch | undefined {
             // credentials (the user's key, EdgeOne's cookies)
             const headers = new Headers(next?.headers)
             if (new URL(url).origin !== from.origin) {
-                for (const name of CREDENTIAL_HEADERS) headers.delete(name)
+                for (const name of dropped) headers.delete(name)
             }
             next = { ...next, headers }
             // 303, and 301 or 302 after a POST, go on as a GET without the

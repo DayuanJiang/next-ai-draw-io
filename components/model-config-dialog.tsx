@@ -143,6 +143,7 @@ function isUntouched(p: ProviderConfig): boolean {
         !p.awsSessionToken &&
         !p.awsRegion &&
         !p.vertexApiKey &&
+        !p.customHeaders?.trim() &&
         !p.name &&
         (p.baseUrl || "") === (def.defaultBaseUrl || "") &&
         p.models.every(
@@ -596,6 +597,7 @@ export function ModelConfigDialog({
             "awsRegion",
             "awsSessionToken",
             "vertexApiKey",
+            "customHeaders",
         ]
         if (Object.keys(updates).some((f) => credentialFields.includes(f))) {
             setValidationStatus("idle")

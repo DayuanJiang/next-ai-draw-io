@@ -38,6 +38,17 @@ export async function POST(req: Request) {
     if (!canListModels(provider)) {
         return NextResponse.json({ models: null })
     }
+    // The body is untrusted: only strings count as a key, URL or headers
+    if (
+        [apiKey, baseUrl, customHeaders].some(
+            (v) => v != null && typeof v !== "string",
+        )
+    ) {
+        return NextResponse.json(
+            { error: "Invalid request body" },
+            { status: 400 },
+        )
+    }
     // SECURITY: Block SSRF attacks via custom baseUrl
     if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
         return NextResponse.json({ error: "Invalid base URL" }, { status: 400 })
@@ -58,11 +69,15 @@ export async function POST(req: Request) {
     }
 
     try {
+        // Only the client's key is used, so the headers go with it, and
+        // to no other origin
+        const headerNames = Object.keys(extraHeaders.headers ?? {})
         const models = await listProviderModels(
             provider,
-            // Only the client's key is used, so the headers go with it
             { apiKey, baseUrl, customHeaders: extraHeaders.headers },
-            (baseUrl && redirectGuardedFetch()) || fetch,
+            ((baseUrl || headerNames.length) &&
+                redirectGuardedFetch(headerNames)) ||
+                fetch,
         )
         return NextResponse.json({ models })
     } catch (error) {

@@ -78,6 +78,30 @@ export async function testModelConnection(
                 { status: 400 },
             )
         }
+        // The body is untrusted: a key that is not a string (an object is
+        // truthy) would count as the user's own while the SDK ignores it
+        // and uses the server's credentials, with the user's headers
+        const textFields = [
+            "apiKey",
+            "baseUrl",
+            "modelId",
+            "awsAccessKeyId",
+            "awsSecretAccessKey",
+            "awsRegion",
+            "awsSessionToken",
+            "vertexApiKey",
+            "customHeaders",
+        ] as const
+        if (
+            textFields.some(
+                (f) => body[f] != null && typeof body[f] !== "string",
+            )
+        ) {
+            return NextResponse.json(
+                { valid: false, error: "Invalid request body" },
+                { status: 400 },
+            )
+        }
         // The body is untrusted: an unknown name has no record to read
         if (!Object.hasOwn(PROVIDERS, provider)) {
             return NextResponse.json(

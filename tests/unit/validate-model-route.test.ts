@@ -119,6 +119,63 @@ describe("POST /api/validate-model", () => {
         }
     })
 
+    it("refuses a key or headers that are not text", async () => {
+        // An object is truthy: it would pass as the user's own key while
+        // the SDK falls back to the server's credentials
+        const fetchMock = vi.fn()
+        vi.stubGlobal("fetch", fetchMock)
+        for (const extra of [
+            { apiKey: {} },
+            { apiKey: "key", customHeaders: { "x-user": "a" } },
+        ]) {
+            const res = await validateModel(
+                new Request("http://localhost/api/validate-model", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider: "gateway",
+                        modelId: "openai/gpt-4o",
+                        ...extra,
+                    }),
+                }),
+            )
+            expect(res.status).toBe(400)
+        }
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it("sends the user's headers with the user's key", async () => {
+        streamReply({
+            role: "assistant",
+            tool_calls: [
+                {
+                    index: 0,
+                    id: "call_1",
+                    type: "function",
+                    function: { name: "ping", arguments: "{}" },
+                },
+            ],
+        })
+        const res = await validateModel(
+            new Request("http://localhost/api/validate-model", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider: "custom",
+                    apiKey: "key",
+                    baseUrl: "https://gateway.example.com/v1",
+                    modelId: "m",
+                    customHeaders: "username: myApiID\nplatform: myPlatform",
+                }),
+            }),
+        )
+        expect((await res.json()).valid).toBe(true)
+        const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit
+        const sent = new Headers(init.headers)
+        expect(sent.get("username")).toBe("myApiID")
+        expect(sent.get("platform")).toBe("myPlatform")
+    })
+
     it("does not run on the server's keys", async () => {
         vi.stubEnv("OLLAMA_API_KEY", "server-ollama-key")
         const res = await validateModel(

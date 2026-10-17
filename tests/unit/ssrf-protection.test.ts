@@ -211,3 +211,43 @@ describe("redirectGuardedFetch with the quota on", () => {
         expect(redirectGuardedFetch()).toBeUndefined()
     })
 })
+
+describe("redirectGuardedFetch with the user's own headers", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals()
+    })
+
+    it("sends them to no other origin, also without the quota", async () => {
+        vi.stubEnv("DYNAMODB_QUOTA_TABLE", undefined)
+        vi.stubEnv("ALLOW_PRIVATE_URLS", undefined)
+        const fetchMock = vi.fn(async (url: string) =>
+            url === "https://gateway.example/v1/models"
+                ? new Response(null, {
+                      status: 302,
+                      headers: { location: "https://other.example/v1/models" },
+                  })
+                : new Response("ok"),
+        )
+        vi.stubGlobal("fetch", fetchMock)
+        const guarded = redirectGuardedFetch(["x-gateway-token"])
+        expect(guarded).toBeDefined()
+        const res = await guarded?.("https://gateway.example/v1/models", {
+            headers: { "X-Gateway-Token": "secret", "x-other": "kept" },
+        })
+        expect(await res?.text()).toBe("ok")
+        const sent = (call: number) =>
+            new Headers(
+                (
+                    fetchMock.mock.calls[call] as unknown as [
+                        string,
+                        RequestInit,
+                    ]
+                )[1].headers,
+            )
+        expect(sent(0).get("x-gateway-token")).toBe("secret")
+        expect(sent(1).get("x-gateway-token")).toBeNull()
+        expect(sent(1).get("x-other")).toBe("kept")
+        // Nothing checks addresses without the quota: no DNS lookup
+        expect(lookupMock).not.toHaveBeenCalled()
+    })
+})
