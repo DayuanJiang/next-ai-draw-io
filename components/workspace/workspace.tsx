@@ -16,6 +16,7 @@ import { LobbyHero } from "@/components/chat/lobby-hero"
 import { SaveDialog } from "@/components/save-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { BrandMark } from "@/components/workspace/brand-mark"
+import { DocsButton } from "@/components/workspace/docs-button"
 import { IconButton } from "@/components/workspace/icon-button"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
@@ -76,7 +77,7 @@ export function exportFilename(title: string | null): string {
     return name || `diagram-${new Date().toLocaleDateString("sv-SE")}`
 }
 
-/** App name and settings button above the start screen */
+/** App name, docs and settings buttons above the start screen */
 function StartBar({
     className,
     nameClassName,
@@ -97,6 +98,7 @@ function StartBar({
             >
                 Next AI Draw.io
             </span>
+            <DocsButton />
             <IconButton
                 label={dict.nav.settings}
                 onClick={() => openSettings()}

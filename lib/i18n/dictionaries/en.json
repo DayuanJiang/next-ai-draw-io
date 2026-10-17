@@ -10,6 +10,7 @@
     "nav": {
         "newChat": "New diagram",
         "settings": "Settings",
+        "docs": "Docs",
         "hidePanel": "Hide chat panel",
         "showPanel": "Show chat panel",
         "aiChat": "AI chat",

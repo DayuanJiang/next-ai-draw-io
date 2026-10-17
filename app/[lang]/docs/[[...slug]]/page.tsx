@@ -186,7 +186,7 @@ export default async function DocsPage({ params }: Props) {
                 ]}
             />
             <div className="border-b border-border">
-                <SiteHeader lang={lang} current="docs" wide />
+                <SiteHeader lang={lang} current="docs" />
             </div>
             {/* Below 1024 px the pages open from a bar under the header */}
             <details
@@ -208,7 +208,7 @@ export default async function DocsPage({ params }: Props) {
                 </nav>
             </details>
             {/* Below 1280 px the page's headings give their room to the text */}
-            <div className="mx-auto grid max-w-[1440px] px-5 md:px-8 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-12 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
+            <div className="mx-auto grid max-w-7xl px-5 md:px-8 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-12 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
                 {/* Pages */}
                 <nav className="sticky top-0 max-h-screen self-start overflow-y-auto py-8 text-[14px] max-lg:hidden">
                     <PageList lang={lang} file={file} />
@@ -235,7 +235,7 @@ export default async function DocsPage({ params }: Props) {
                         )}
                         <article
                             lang={doc.locale}
-                            className="docs-body prose mt-6 max-w-none text-[15px] leading-relaxed dark:prose-invert prose-headings:tracking-[-0.015em] prose-h2:mt-11 prose-h2:text-[22px] prose-h3:text-[17px] prose-a:font-medium prose-a:underline-offset-4 prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-px prose-code:text-[0.88em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-blockquote:rounded-lg prose-blockquote:border-0 prose-blockquote:bg-muted prose-blockquote:px-4 prose-blockquote:py-0.5 prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none"
+                            className="docs-body prose mt-6 max-w-none text-[15px] leading-relaxed dark:prose-invert prose-headings:font-semibold prose-headings:tracking-[-0.015em] prose-h2:mt-11 prose-h2:text-[22px] prose-h3:text-[17px] prose-a:font-medium prose-a:underline-offset-4 prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-px prose-code:text-[0.88em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-blockquote:rounded-lg prose-blockquote:border-0 prose-blockquote:bg-muted prose-blockquote:px-4 prose-blockquote:py-0.5 prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none"
                         >
                             <DocMarkdown
                                 doc={doc}

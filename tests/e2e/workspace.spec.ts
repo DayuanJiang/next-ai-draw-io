@@ -183,6 +183,21 @@ test.describe("Workspace", () => {
         await expect(card).toHaveCount(0)
     })
 
+    test("the start screen links the docs in a new tab, the editor does not", async ({
+        page,
+    }) => {
+        await openApp(page)
+        const docs = page.locator('[data-testid="docs-button"]')
+        await expect(docs).toHaveAttribute("href", /\/en\/docs$/)
+        await expect(docs).toHaveAttribute("target", "_blank")
+        await expect(
+            page.locator('[data-testid="mcp-notice"] a').first(),
+        ).toHaveAttribute("href", /\/en\/mcp$/)
+        await page.getByTestId("draw-yourself").click()
+        await expect(page.locator('[data-testid="chat-panel"]')).toBeVisible()
+        await expect(docs).toHaveCount(0)
+    })
+
     test("each AI change becomes a version card; the latest undoes and redoes it", async ({
         page,
     }) => {

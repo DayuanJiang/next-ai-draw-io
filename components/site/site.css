@@ -181,3 +181,45 @@
 .docs-body :not(pre) > code {
     overflow-wrap: anywhere;
 }
+
+/* The docs text in the site's own colors, as on the landing page and in the
+   editor, in place of the typography plugin's blue grays; the same in dark */
+.docs-body {
+    --docs-text: color-mix(in srgb, var(--foreground) 86%, var(--canvas));
+    --tw-prose-body: var(--docs-text);
+    --tw-prose-headings: var(--foreground);
+    --tw-prose-lead: var(--muted-foreground);
+    --tw-prose-links: var(--foreground);
+    --tw-prose-bold: var(--foreground);
+    --tw-prose-counters: var(--muted-foreground);
+    --tw-prose-bullets: var(--muted-foreground);
+    --tw-prose-hr: var(--border);
+    --tw-prose-quotes: var(--docs-text);
+    --tw-prose-quote-borders: var(--border);
+    --tw-prose-captions: var(--muted-foreground);
+    --tw-prose-code: var(--foreground);
+    --tw-prose-th-borders: var(--border);
+    --tw-prose-td-borders: var(--border);
+    --tw-prose-invert-body: var(--docs-text);
+    --tw-prose-invert-headings: var(--foreground);
+    --tw-prose-invert-lead: var(--muted-foreground);
+    --tw-prose-invert-links: var(--foreground);
+    --tw-prose-invert-bold: var(--foreground);
+    --tw-prose-invert-counters: var(--muted-foreground);
+    --tw-prose-invert-bullets: var(--muted-foreground);
+    --tw-prose-invert-hr: var(--border);
+    --tw-prose-invert-quotes: var(--docs-text);
+    --tw-prose-invert-quote-borders: var(--border);
+    --tw-prose-invert-captions: var(--muted-foreground);
+    --tw-prose-invert-code: var(--foreground);
+    --tw-prose-invert-th-borders: var(--border);
+    --tw-prose-invert-td-borders: var(--border);
+}
+/* Links underlined as on the landing page: a light line that darkens on
+   hover */
+.docs-body :where(a):not(:where(h2 a, h3 a)) {
+    text-decoration-color: var(--border);
+}
+.docs-body :where(a):not(:where(h2 a, h3 a)):hover {
+    text-decoration-color: var(--foreground);
+}

@@ -1,14 +1,13 @@
 "use client"
 
 import { ArrowUpRight, Terminal, X } from "lucide-react"
+import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { usePathLocale } from "@/hooks/use-path-locale"
 import { getAssetUrl } from "@/lib/base-path"
 import { STORAGE_KEYS } from "@/lib/storage"
 import { cn } from "@/lib/utils"
-
-const MCP_URL =
-    "https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
 
 /**
  * Whether the user closed the MCP notice once. Starts as closed so the server
@@ -68,14 +67,16 @@ function CloseButton({ onClick }: { onClick: () => void }) {
     )
 }
 
-/** Icon, title and tagline of the MCP server, linking to its README */
+/** Icon, title and tagline of the MCP server, linking to the site's MCP page */
 function NoticeLink({ className }: { className?: string }) {
     const dict = useDictionary()
+    const lang = usePathLocale()
     return (
-        <a
-            href={MCP_URL}
+        <Link
+            href={`/${lang}/mcp`}
             target="_blank"
-            rel="noopener noreferrer"
+            // A new tab loads the page itself: nothing to prefetch
+            prefetch={false}
             className={cn("group flex min-w-0 items-center gap-3", className)}
         >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/20">
@@ -90,7 +91,7 @@ function NoticeLink({ className }: { className?: string }) {
                 </span>
             </span>
             <ArrowUpRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-purple-500" />
-        </a>
+        </Link>
     )
 }
 

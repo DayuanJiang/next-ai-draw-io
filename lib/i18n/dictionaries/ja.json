@@ -10,6 +10,7 @@
     "nav": {
         "newChat": "新しい図",
         "settings": "設定",
+        "docs": "ドキュメント",
         "hidePanel": "チャットパネルを非表示",
         "showPanel": "チャットパネルを表示",
         "aiChat": "AI チャット",

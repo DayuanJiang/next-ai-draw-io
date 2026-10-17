@@ -8,6 +8,7 @@ import {
     Sun,
     Terminal,
 } from "lucide-react"
+import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -526,10 +527,10 @@ function AboutTab() {
             </div>
             {/* MCP server card, hidden on self-hosted deployments */}
             {!isSelfHosted && (
-                <a
-                    href="https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server"
+                <Link
+                    href={`/${lang}/mcp`}
                     target="_blank"
-                    rel="noopener noreferrer"
+                    prefetch={false}
                     className="flex items-center gap-3 rounded-xl border border-border p-3.5 transition-colors hover:border-foreground/25"
                 >
                     <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -543,7 +544,7 @@ function AboutTab() {
                             {dict.examples.mcpDescription}
                         </span>
                     </span>
-                </a>
+                </Link>
             )}
             <div className="flex flex-wrap gap-2">
                 <a
