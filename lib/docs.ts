@@ -46,7 +46,7 @@ export const DOCS_NAV: { group: Record<Locale, string>; files: string[] }[] = [
             ja: "ユースケース",
             "zh-Hant": "使用情境",
         },
-        files: ["aws-architecture", "flowcharts"],
+        files: ["gallery", "aws-architecture", "flowcharts"],
     },
     {
         group: {

@@ -10,12 +10,16 @@ export const DEMO_SCENES: Record<string, number> = {
     versions: 3,
 }
 
-/** Every name: the steps, the whole tour, the flowchart and the MCP terminal */
+/**
+ * Every name: the steps, the whole tour, the flowchart, the MCP terminal and
+ * the gallery of examples
+ */
 export const DOC_DEMOS = [
     ...Object.keys(DEMO_SCENES),
     "tour",
     "flowchart",
     "mcp",
+    "gallery",
 ]
 
 /** The line that shows a demo, with the demo's name as its group */

@@ -305,8 +305,22 @@ export function ChatEngineProvider({
 
     const [input, setInputState] = useState("")
 
-    // Restore the unsent input from sessionStorage
+    // Restore the unsent input from sessionStorage. A prompt in the address
+    // (?prompt=, from the docs' gallery) wins, is kept like typed text, and
+    // leaves the address so a reload does not bring it back.
     useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        const prompt = params.get("prompt")
+        if (prompt) {
+            sessionStorage.setItem(SESSION_STORAGE_INPUT_KEY, prompt)
+            params.delete("prompt")
+            const query = params.toString()
+            window.history.replaceState(
+                window.history.state,
+                "",
+                `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+            )
+        }
         const savedInput = sessionStorage.getItem(SESSION_STORAGE_INPUT_KEY)
         if (savedInput) {
             inputRef.current = savedInput

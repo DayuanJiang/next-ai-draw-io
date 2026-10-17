@@ -10,6 +10,7 @@ import { DEMO_LINE, DEMO_SCENES } from "./demo-names"
 import { DemoPlayer } from "./demo-player"
 import type { DocsDemos } from "./demo-texts"
 import { FLOWCHART } from "./flowchart-diagram"
+import { Gallery } from "./gallery"
 import { McpDemo } from "./mcp-demo"
 
 /** A docs page's Markdown, with links, headings and code made for the site */
@@ -28,6 +29,7 @@ export function DocMarkdown({
     const demoNamed = (name: string) => {
         if (name === "tour") return <DemoPlayer texts={demos.editor} tour />
         if (name === "mcp") return <McpDemo texts={demos.mcp} />
+        if (name === "gallery") return <Gallery lang={lang} />
         if (name === "flowchart") {
             return (
                 <DemoPlayer
