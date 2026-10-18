@@ -2,7 +2,6 @@ import {
     APICallError,
     convertToModelMessages,
     InvalidToolInputError,
-    isFileUIPart,
     isTextUIPart,
     pruneMessages,
     safeValidateUIMessages,
@@ -22,14 +21,18 @@ import {
     usesServerEndpoint,
 } from "@/lib/ai-providers"
 import {
+    diagramContextText,
     dropInvalidToolCalls,
     fixToolInputJson,
     formatSelectionContext,
+    parseStringifiedArrays,
     validateFileParts,
+    withoutOldAttachments,
 } from "@/lib/chat-helpers"
 import { addReplyUsage, type ChatUIMessage } from "@/lib/chat-message"
 import { chatTools } from "@/lib/chat-tools"
 import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
+import { diagramOf } from "@/lib/diagram-context"
 import {
     checkAndIncrementRequest,
     isQuotaEnabled,
@@ -58,8 +61,6 @@ import { withHeartbeat } from "@/lib/stream-heartbeat"
 import { getSystemPrompt } from "@/lib/system-prompts"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
 import { getUserIdFromRequest } from "@/lib/user-id"
-import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
-import { imageRefNote } from "@/packages/mcp-server/src/embedded-images.ts"
 
 // No explicit cap: a reasoning model can spend minutes planning before it emits
 // the tool call, so take whatever the host allows. Vercel's own default is 300s,
@@ -112,7 +113,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         )
     }
     const messages = validated.data.filter((m) => m.role !== "system")
-    const { xml, previousXml, sessionId } = body
+    const { xml, sessionId } = body
     // A turn's later requests (after a tool result, a retry) continue the
     // same assistant message, which carries what the earlier ones used
     const lastMessage = messages.at(-1)
@@ -354,19 +355,48 @@ async function handleChatRequest(req: Request): Promise<Response> {
         ? `${systemMessage}\n\n## Custom Instructions\n${customSystemMessage}`
         : systemMessage
 
-    // Extract file parts (images) from the last user message
-    const fileParts = lastUserMessage?.parts.filter(isFileUIPart) ?? []
-
     // Note: we used to pre-emptively reject images for models we guessed were
     // text-only (by name matching). That heuristic misfired on newer models
     // (see issue #874), so we now let the request through and surface the real
     // provider error if the model genuinely can't accept images.
 
-    // User input only - XML is now in a separate cached system message
-    const formattedUserInput = `User input:
-"""md
-${userInputText}
-"""`
+    // Each user message ends with a note on the canvas when it was sent
+    // (lib/diagram-context.ts): the canvas itself when the model's own calls
+    // no longer describe it, else that it was unchanged. The note, and the
+    // shapes the user selected, come from the message's metadata, so a
+    // message gets the same text in every request and the history before
+    // the newest message stays cacheable. Each starts on a new paragraph:
+    // some providers join a message's text parts as they are.
+    const newestUser = messages.findLastIndex((m) => m.role === "user")
+    const withNotes = messages.map((message, i) => {
+        if (message.role !== "user") return message
+        const isNewest = i === newestUser
+        const diagram = diagramOf(message)
+        const notes = [
+            // A message from an older client has no note: the newest one
+            // then gets the canvas of the request
+            diagram
+                ? diagramContextText(diagram)
+                : isNewest
+                  ? diagramContextText({ xml: xml || "", pageId: null })
+                  : "",
+            formatSelectionContext(
+                message.metadata?.selectedCells ??
+                    (isNewest ? body.selectedCells : undefined),
+            ),
+        ].filter(Boolean)
+        if (notes.length === 0) return message
+        return {
+            ...message,
+            parts: [
+                ...message.parts,
+                ...notes.map((text) => ({
+                    type: "text" as const,
+                    text: `\n\n${text}`,
+                })),
+            ],
+        }
+    })
 
     // Convert UIMessages to ModelMessages. A tool call that never got its
     // result (the user stopped while it ran) is left out: the SDK would
@@ -375,7 +405,7 @@ ${userInputText}
     // the chat shows is a data part, which the model never sees) are
     // dropped: Bedrock rejects empty content.
     const modelMessages = pruneMessages({
-        messages: await convertToModelMessages(messages, {
+        messages: await convertToModelMessages(withNotes, {
             ignoreIncompleteToolCalls: true,
         }),
     })
@@ -391,7 +421,10 @@ ${userInputText}
     // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
     // and their results. Bedrock API rejects messages where toolUse.input is not a valid
     // JSON object, and every provider rejects a tool result whose call is gone.
-    let enhancedMessages = dropInvalidToolCalls(modelMessages)
+    // An attached document or image is sent with its own turn only.
+    const enhancedMessages = withoutOldAttachments(
+        dropInvalidToolCalls(modelMessages),
+    )
 
     // DEBUG_LLM_PAYLOAD=true logs what is sent to the model
     if (DEBUG_LLM_PAYLOAD) {
@@ -399,31 +432,6 @@ ${userInputText}
             "[route.ts] to model",
             JSON.stringify(describeMessages(enhancedMessages)),
         )
-    }
-
-    // Update the last message with user input only (XML moved to separate cached system message)
-    if (enhancedMessages.length >= 1) {
-        const lastModelMessage = enhancedMessages[enhancedMessages.length - 1]
-        if (lastModelMessage.role === "user") {
-            // Build content array with user input text and file parts
-            const contentParts: any[] = [
-                { type: "text", text: formattedUserInput },
-            ]
-
-            // Add image parts back
-            for (const filePart of fileParts) {
-                contentParts.push({
-                    type: "image",
-                    image: filePart.url,
-                    mediaType: filePart.mediaType,
-                })
-            }
-
-            enhancedMessages = [
-                ...enhancedMessages.slice(0, -1),
-                { ...lastModelMessage, content: contentParts },
-            ]
-        }
     }
 
     // Add cache point to the last assistant message in conversation history
@@ -442,69 +450,17 @@ ${userInputText}
         }
     }
 
-    // System messages with multiple cache breakpoints for optimal caching:
-    // - Breakpoint 1: System instructions + custom instructions - changes when user updates custom system message
-    // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
-    // Some providers (e.g. MiniMax) don't support multiple system messages
-    // Merge them into a single system message for compatibility
-    // Also merge for OpenAI-compatible providers with custom base URLs (e.g. vLLM, LMStudio)
-    // because open-source model chat templates (Qwen, Llama, etc.) typically reject multiple system messages
-    const isCustomOpenAIEndpoint =
-        PROVIDERS[resolvedProvider].sdk === "openai" &&
-        !!(
-            baseUrl ||
-            process.env.OPENAI_BASE_URL ||
-            (serverModelConfig.baseUrlEnv &&
-                process.env[serverModelConfig.baseUrlEnv])
-        )
-    const isSingleSystemProvider =
-        !!PROVIDERS[resolvedProvider].singleSystem || isCustomOpenAIEndpoint
-
-    const selectionContext = formatSelectionContext(body.selectedCells)
-    // The model reads the diagram in the compact notation it writes
-    // (compact-cells.ts); the canvas itself keeps the full XML
-    const shownPrevious = previousXml ? foldCells(previousXml) : ""
-    const shownCurrent = foldCells(xml || "")
-    const imageNote = imageRefNote(`${shownPrevious}${shownCurrent}`)
-    const xmlContext = `${
-        shownPrevious
-            ? `Previous diagram XML (before user's last message):
-"""xml
-${shownPrevious}
-"""
-
-`
-            : ""
-    }Current diagram XML (AUTHORITATIVE - the source of truth), shown in the same compact notation you write (shapes with x, y, w, h; edges with source and target):
-"""xml
-${shownCurrent}
-"""
-
-IMPORTANT: The "Current diagram XML" is the SINGLE SOURCE OF TRUTH for what's on the canvas right now. The user can manually add, delete, or modify shapes directly in draw.io. Always count and describe elements based on the CURRENT XML, not on what you previously generated. If both previous and current XML are shown, compare them to understand what the user changed. The user can also undo or restore your earlier edits with the version buttons, so never reuse positions from your earlier tool calls; take every position from the Current diagram XML.${imageNote ? `\n\n${imageNote}` : ""}${selectionContext ? `\n\n${selectionContext}` : ""}
-
-Write your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or these notes.`
-
-    const systemMessages = isSingleSystemProvider
-        ? [
-              {
-                  role: "system" as const,
-                  content: `${finalSystemMessage}\n\n${xmlContext}`,
-              },
-          ]
-        : [
-              // Cache breakpoint 1: Instructions (+ optional custom instructions)
-              {
-                  role: "system" as const,
-                  content: finalSystemMessage,
-                  ...(shouldCache && { providerOptions: CACHE_POINT }),
-              },
-              // Cache breakpoint 2: Previous and Current diagram XML context
-              {
-                  role: "system" as const,
-                  content: xmlContext,
-                  ...(shouldCache && { providerOptions: CACHE_POINT }),
-              },
-          ]
+    // One system message with the instructions, the same in every request
+    // of the chat: the diagram goes with the user messages (above). One
+    // message also suits the providers that accept only one (MiniMax, chat
+    // templates of open models behind OpenAI-compatible endpoints).
+    const systemMessages = [
+        {
+            role: "system" as const,
+            content: `${finalSystemMessage}\n\nWrite your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or the canvas notes in square brackets.`,
+            ...(shouldCache && { providerOptions: CACHE_POINT }),
+        },
+    ]
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
@@ -514,7 +470,7 @@ Write your reply in the language of the user's own words in their latest message
 
     const result = streamText({
         model,
-        // The system messages carry cache points, so they go in messages
+        // The system message carries a cache point, so it goes in messages
         // (the client's own system messages were dropped above)
         allowSystemInMessages: true,
         abortSignal: req.signal,
@@ -540,8 +496,8 @@ Write your reply in the language of the user's own words in their latest message
                 try {
                     // Pre-process to fix common LLM JSON errors that jsonrepair can't handle,
                     // then use jsonrepair to fix truncated JSON
-                    const repairedInput = jsonrepair(
-                        fixToolInputJson(toolCall.input),
+                    const repairedInput = parseStringifiedArrays(
+                        jsonrepair(fixToolInputJson(toolCall.input)),
                     )
                     console.log(
                         `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,

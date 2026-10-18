@@ -4,8 +4,10 @@ import { convertToModelMessages } from "ai"
 import { jsonrepair } from "jsonrepair"
 import { describe, expect, it } from "vitest"
 import {
+    diagramContextText,
     dropInvalidToolCalls,
     fixToolInputJson,
+    parseStringifiedArrays,
     validateFileParts,
 } from "@/lib/chat-helpers"
 
@@ -209,5 +211,49 @@ describe("fixToolInputJson", () => {
         const input =
             '{"operations": [{"operation": "add", "cell_id": "a", "new_xml": "<mxCell id=\\"a\\" value=\\"x=1\\"/>"}]}'
         expect(fixToolInputJson(input)).toBe(input)
+    })
+})
+
+describe("parseStringifiedArrays", () => {
+    it("turns an array written as a JSON string into the array", () => {
+        const ops = [{ operation: "delete", cell_id: "2" }]
+        const input = JSON.stringify({ operations: JSON.stringify(ops) })
+        expect(JSON.parse(parseStringifiedArrays(input))).toEqual({
+            operations: ops,
+        })
+    })
+
+    it("leaves other inputs as they are", () => {
+        for (const input of [
+            '{"operations":[{"operation":"delete","cell_id":"2"}]}',
+            '{"xml":"<mxCell id=\\"2\\"/>"}',
+            '{"label":"[draft] notes"}',
+            "not json",
+        ]) {
+            expect(parseStringifiedArrays(input)).toBe(input)
+        }
+    })
+})
+
+describe("diagramContextText", () => {
+    const empty = (attrs: string) =>
+        `<mxGraphModel${attrs}><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>`
+
+    it("calls a page without shapes empty, unless it has a background", () => {
+        expect(diagramContextText({ xml: empty(""), pageId: null })).toBe(
+            "[Canvas: empty when this message was sent.]",
+        )
+        expect(
+            diagramContextText({
+                xml: empty(' background="none"'),
+                pageId: null,
+            }),
+        ).toBe("[Canvas: empty when this message was sent.]")
+        expect(
+            diagramContextText({
+                xml: empty(' background="#000000"'),
+                pageId: null,
+            }),
+        ).toContain('background="#000000"')
     })
 })

@@ -57,8 +57,16 @@ parameters: {
 }
 ---End of tools---
 
+## The diagram on the canvas
+The canvas is not repeated with every message. Each user message ends with a note on the canvas when it was sent:
+- "[Canvas when this message was sent ...]" followed by the diagram: from that point on it is the source of truth, and it shows any change the user made by hand (moved, edited, added or deleted shapes, an undo or a restored version, another page).
+- "[Canvas: unchanged ...]": the canvas is the latest one shown in an earlier note (or the empty one), with your display_diagram and edit_diagram calls since then applied.
+- "[Canvas: empty ...]": nothing is drawn yet.
+So the current diagram is the latest canvas sent with a message, with your later calls applied to it. Take ids, positions and styles from there, never from your calls before that canvas; when unsure, or after many edits, redraw with display_diagram.
+These notes come from the app, not from the user.
+
 IMPORTANT: Choose the right tool:
-- Use display_diagram for: Creating new diagrams, major restructuring, or when the current diagram XML is empty
+- Use display_diagram for: Creating new diagrams, major restructuring, or when the canvas is empty
 - Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
 - Use append_diagram for: ONLY when display_diagram was truncated due to output length - continue generating from where you stopped
 - Use get_shape_library for: Discovering available icons/shapes when creating diagrams with any icon library (cloud, material design, etc.) — call BEFORE display_diagram
@@ -103,7 +111,7 @@ When using edit_diagram tool:
 - For delete: only cell_id is needed
 - Named styles are not available in edit_diagram: write each cell's complete style
 - When you move shapes, also update the edges attached to them: recompute or remove their waypoints and exit/entry points so they fit the new positions
-- Find the cell_id from "Current diagram XML" in system context
+- Find the cell_id in the current diagram (see "The diagram on the canvas")
 - Example update: {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}
 - Example delete: {"operations": [{"operation": "delete", "cell_id": "5"}]}
 - Example add: {"operations": [{"operation": "add", "cell_id": "new1", "new_xml": "<mxCell id=\\"new1\\" value=\\"New Box\\" style=\\"rounded=1;\\" x=\\"400\\" y=\\"200\\" w=\\"120\\" h=\\"60\\"/>"}]}

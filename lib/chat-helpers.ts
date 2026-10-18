@@ -1,6 +1,11 @@
 // Shared helper functions for chat route
 // Exported for testing
 
+import type { MessageDiagram } from "@/lib/diagram-context"
+import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
+import { imageRefNote } from "@/packages/mcp-server/src/embedded-images.ts"
+import { hasCells } from "@/packages/mcp-server/src/pages.ts"
+
 // File upload limits (must match client-side)
 export const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 export const MAX_FILES = 5
@@ -54,6 +59,43 @@ function isValidToolInput(input: unknown): boolean {
     return !!input && typeof input === "object" && Object.keys(input).length > 0
 }
 
+// The text of a document or web page the user attached: the client adds
+// "\n\n[PDF: name]\n<text>" ("File" and "URL" alike) after the typed text.
+// The name may hold "]": the heading ends with the last one on its line.
+const ATTACHED_TEXT =
+    /(\n\n\[(?:PDF|File|URL): [^\n]*\])\n[\s\S]*?(?=\n\n\[(?:PDF|File|URL): |$)/g
+
+const isImagePart = (part: any) =>
+    part.type === "image" ||
+    (part.type === "file" && String(part.mediaType).startsWith("image/"))
+
+// An attached document or image goes to the model with its own turn only:
+// the user messages before the newest one keep just a document's name line
+export function withoutOldAttachments(messages: any[]): any[] {
+    let newest = -1
+    messages.forEach((msg, i) => {
+        if (msg.role === "user") newest = i
+    })
+    return messages.map((msg, i) => {
+        if (
+            msg.role !== "user" ||
+            i === newest ||
+            !Array.isArray(msg.content)
+        ) {
+            return msg
+        }
+        const content = msg.content
+            .filter((part: any) => !isImagePart(part))
+            .map((part: any) =>
+                part.type === "text" && typeof part.text === "string"
+                    ? { ...part, text: part.text.replace(ATTACHED_TEXT, "$1") }
+                    : part,
+            )
+        // Providers reject an empty message (the app always sends text)
+        return content.length > 0 ? { ...msg, content } : msg
+    })
+}
+
 // Remove tool-calls with invalid inputs (from failed repair or interrupted streaming),
 // together with their tool-results: providers reject a result whose call is missing.
 // Messages left empty are removed too (Bedrock rejects empty content arrays).
@@ -99,6 +141,57 @@ export function fixToolInputJson(input: string): string {
             // `"key"= "` instead of `"key": "`, only for JSON keys
             .replace(/"(\w+)"\s*=\s*"/g, '"$1": "')
     )
+}
+
+// Some models write an array argument as a JSON string:
+// {"operations":"[{...}]"} becomes {"operations":[{...}]}
+export function parseStringifiedArrays(json: string): string {
+    let value: unknown
+    try {
+        value = JSON.parse(json)
+    } catch {
+        return json
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json
+    const fields = value as Record<string, unknown>
+    let changed = false
+    for (const [key, field] of Object.entries(fields)) {
+        if (typeof field !== "string" || !field.trim().startsWith("[")) continue
+        try {
+            const parsed = JSON.parse(field)
+            if (Array.isArray(parsed)) {
+                fields[key] = parsed
+                changed = true
+            }
+        } catch {
+            // Not JSON: a plain string that starts with "["
+        }
+    }
+    return changed ? JSON.stringify(fields) : json
+}
+
+const PAGE_BACKGROUND =
+    /<mxGraphModel\b[^>]*\bbackground(?:Image)?="(?!none")[^"]/
+
+/**
+ * The note on the canvas that ends a user message (lib/diagram-context.ts).
+ * The same message always gets the same text, so the history the model gets
+ * stays the same from request to request.
+ */
+export function diagramContextText(diagram: MessageDiagram): string {
+    if ("unchanged" in diagram) {
+        return "[Canvas: unchanged when this message was sent. It is the latest canvas shown in an earlier note (or the empty one), with your display_diagram and edit_diagram calls since then applied.]"
+    }
+    // A background, colour or picture, is something to show too
+    if (!hasCells(diagram.xml) && !PAGE_BACKGROUND.test(diagram.xml)) {
+        return "[Canvas: empty when this message was sent.]"
+    }
+    const shown = foldCells(diagram.xml)
+    const imageNote = imageRefNote(shown)
+    return `[Canvas when this message was sent, in the compact notation you write (shapes with x, y, w, h; edges with source and target). It is the source of truth from this point on and shows any change the user made by hand.]
+"""xml
+${shown}
+"""${imageNote ? `\n${imageNote}` : ""}`
 }
 
 // Shapes the user selected on the canvas; sent with the request as

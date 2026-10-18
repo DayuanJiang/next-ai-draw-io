@@ -7,6 +7,7 @@ import type {
 } from "@/components/chat/ValidationCard"
 import type { LoadMode } from "@/contexts/diagram-context"
 import type { ChatUIMessage } from "@/lib/chat-message"
+import { type AiCanvasState, diagramFingerprint } from "@/lib/diagram-context"
 import { pageModelXml, pageSelectorFor, placeOnPage } from "@/lib/diagram-pages"
 import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
@@ -52,6 +53,9 @@ interface UseDiagramToolHandlersParams {
     // The page the model reads and writes in this turn (the one the user
     // viewed when it began); null, or absent, means the first page
     turnPageIdRef?: RefObject<string | null>
+    // The canvas after each change the model made, by tool call: the next
+    // message sends the canvas only when it differs (lib/diagram-context.ts)
+    aiCanvasStatesRef?: RefObject<Map<string, AiCanvasState>>
     onDisplayChart: (
         xml: string,
         skipValidation?: boolean,
@@ -89,6 +93,7 @@ export function useDiagramToolHandlers({
     validationRetryCountRef,
     chartXMLRef,
     turnPageIdRef,
+    aiCanvasStatesRef,
     onDisplayChart,
     onFetchChart,
     captureValidationPng,
@@ -143,7 +148,15 @@ export function useDiagramToolHandlers({
     // The final result as one undo step. A cut off drawing it replaces goes
     // first, so the step (and the version) starts from the diagram before
     // it, also when a failed call in between was undone to the cut off one.
-    const commit = (xml: string, toolCallId: string) => {
+    // exact: the canvas holds what the model wrote, with no auto-fix and no
+    // continuation joined to it; otherwise the next message sends the canvas.
+    // base: an edit's starting canvas, to tell a hand change made meanwhile
+    const commit = (
+        xml: string,
+        toolCallId: string,
+        exact: boolean,
+        base: string | null = null,
+    ) => {
         const original = continuationOriginalRef.current
         if (original !== null) onDisplayChart(original, true, "revert")
         onDisplayChart(xml, true, "commit", {
@@ -151,7 +164,16 @@ export function useDiagramToolHandlers({
             pageId: aiPageId(),
         })
         continuationOriginalRef.current = null
+        aiCanvasStatesRef?.current.set(toolCallId, {
+            pageId: aiPageId(),
+            fingerprint: pageFingerprint(xml),
+            exact,
+            base: base === null ? null : pageFingerprint(base),
+        })
     }
+
+    const pageFingerprint = (xml: string) =>
+        diagramFingerprint(pageModelXml(xml, aiPageId()) ?? xml)
 
     const aiPageId = () => turnPageIdRef?.current ?? null
 
@@ -235,7 +257,13 @@ NEXT STEP: Call append_diagram with the continuation XML.
         // check: a stop, another chat or a hand edit during the check then
         // finds the diagram already in place
         const prepared = prepareNewDiagram(withImages(finalXml), NEW_PAGE)
-        if (prepared.ok) commit(onAiPage(prepared.xml), toolCall.toolCallId)
+        if (prepared.ok) {
+            commit(
+                onAiPage(prepared.xml),
+                toolCall.toolCallId,
+                prepared.fixes.length === 0,
+            )
+        }
         const validationError = prepared.ok ? null : prepared.error
 
         if (validationError) {
@@ -325,7 +353,9 @@ ${finalXml}
                                     tool: "display_diagram",
                                     toolCallId: toolCall.toolCallId,
                                     state: "output-error",
-                                    errorText: `[Validation attempt ${attempt}/${MAX_VALIDATION_RETRIES}]\n${feedback}`,
+                                    // The drawing stays on the canvas, as
+                                    // the app may have fixed it
+                                    errorText: `[Validation attempt ${attempt}/${MAX_VALIDATION_RETRIES}]\n${feedback}\n\nCurrent diagram XML:\n\`\`\`xml\n${shownToModel(chartXMLRef.current)}\n\`\`\``,
                                 })
                                 return
                             } else {
@@ -453,7 +483,12 @@ Please check the cell IDs and retry.`,
                 return
             }
 
-            commit(outcome.xml, toolCall.toolCallId)
+            commit(
+                outcome.xml,
+                toolCall.toolCallId,
+                outcome.fixes.length === 0,
+                currentXml,
+            )
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
@@ -546,8 +581,10 @@ Start your continuation with the NEXT character after where it stopped.`,
             // The continuation ends here, drawn or not: it takes the stored
             // originals, so the preview code undoes none of them later
             const originalXml = takeOriginals()
+            // A continued drawing is pieced together from several calls:
+            // the next message sends the canvas
             if (prepared.ok) {
-                commit(onAiPage(prepared.xml), toolCall.toolCallId)
+                commit(onAiPage(prepared.xml), toolCall.toolCallId, false)
             }
             const validationError = prepared.ok ? null : prepared.error
 
