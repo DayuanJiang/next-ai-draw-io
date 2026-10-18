@@ -170,6 +170,9 @@ export function parseStringifiedArrays(json: string): string {
     return changed ? JSON.stringify(fields) : json
 }
 
+const PAGE_BACKGROUND =
+    /<mxGraphModel\b[^>]*\bbackground(?:Image)?="(?!none")[^"]/
+
 /**
  * The note on the canvas that ends a user message (lib/diagram-context.ts).
  * The same message always gets the same text, so the history the model gets
@@ -179,7 +182,8 @@ export function diagramContextText(diagram: MessageDiagram): string {
     if ("unchanged" in diagram) {
         return "[Canvas: unchanged when this message was sent. It is the latest canvas shown in an earlier note (or the empty one), with your display_diagram and edit_diagram calls since then applied.]"
     }
-    if (!hasCells(diagram.xml)) {
+    // A background, colour or picture, is something to show too
+    if (!hasCells(diagram.xml) && !PAGE_BACKGROUND.test(diagram.xml)) {
         return "[Canvas: empty when this message was sent.]"
     }
     const shown = foldCells(diagram.xml)

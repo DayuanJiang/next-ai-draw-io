@@ -80,6 +80,25 @@ describe("diagramFingerprint", () => {
         ).not.toBe(base)
     })
 
+    it("reads the cells in draw.io's order: each parent, then its children", () => {
+        const container = `<mxCell id="c" value="Group" style="swimlane;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="300" height="200" as="geometry"/></mxCell>`
+        const child = `<mxCell id="k" value="Inside" vertex="1" parent="c"><mxGeometry x="20" y="40" width="80" height="40" as="geometry"/></mxCell>`
+        // An edit adds the child at the end; draw.io writes it after its parent
+        expect(diagramFingerprint(page(container + box("2") + child))).toBe(
+            diagramFingerprint(page(container + child + box("2"))),
+        )
+    })
+
+    it("takes a waypoint's left-out coordinate as 0, as draw.io writes it", () => {
+        const edge = (point: string) =>
+            page(
+                `${box("2")}<mxCell id="5" edge="1" parent="1" source="2" target="2"><mxGeometry relative="1" as="geometry"><Array as="points">${point}</Array></mxGeometry></mxCell>`,
+            )
+        expect(diagramFingerprint(edge('<mxPoint x="0" y="80"/>'))).toBe(
+            diagramFingerprint(edge('<mxPoint y="80"/>')),
+        )
+    })
+
     it("is null for XML without a model", () => {
         expect(diagramFingerprint("")).toBeNull()
         expect(diagramFingerprint("<mxGraphModel><root>")).toBeNull()

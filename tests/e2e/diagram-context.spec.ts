@@ -179,3 +179,38 @@ test("a picture is kept as its short reference in the message", async ({
     expect(kept.xml).not.toContain(image)
     expect(sent[2].xml).toContain(image)
 })
+
+test("an edit that adds a shape into a container leaves the canvas out", async ({
+    page: p,
+}) => {
+    const GROUP = `<mxCell id="grp" value="Group" style="swimlane;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="300" height="200" as="geometry"/></mxCell>`
+    const sent = await mockChat(p, [
+        toolCall("display_diagram", { xml: GROUP + BOX }),
+        toolCall("edit_diagram", {
+            operations: [
+                {
+                    operation: "add",
+                    cell_id: "inner",
+                    new_xml:
+                        '<mxCell id="inner" value="Inside" style="rounded=1;" parent="grp" x="20" y="60" w="100" h="40"/>',
+                },
+            ],
+        }),
+        text("Fine."),
+    ])
+    await p.goto("/", { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    const canvas = p.frameLocator("iframe")
+    await sendMessage(p, "Draw a group and a box")
+    await waitForCompleteCount(p, 1)
+    await expect(canvas.getByText("Hand me")).toBeVisible({ timeout: 15000 })
+    await sendMessage(p, "Put a shape in the group")
+    await expect(canvas.getByText("Inside")).toBeVisible({ timeout: 15000 })
+    await p.waitForTimeout(800)
+
+    // draw.io writes the new shape right after its group; the canvas is
+    // still what the model's calls made
+    await sendMessage(p, "Thanks")
+    await expect.poll(() => sent.length).toBe(3)
+    expect(diagramOfLast(sent[2])).toEqual({ unchanged: true })
+})

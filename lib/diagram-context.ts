@@ -58,8 +58,10 @@ const GEOMETRY_DEFAULTS: Record<string, string> = {
 function canonical(el: Element): string {
     const attrs = new Map<string, string>()
     for (const a of Array.from(el.attributes)) attrs.set(a.name, a.value)
-    if (el.tagName === "mxGeometry") {
+    if (el.tagName === "mxGeometry" || el.tagName === "mxPoint") {
         for (const [k, v] of Object.entries(GEOMETRY_DEFAULTS)) {
+            if (el.tagName === "mxPoint" && (k === "width" || k === "height"))
+                continue
             if (!attrs.has(k)) attrs.set(k, v)
         }
     }
@@ -84,9 +86,44 @@ function canonical(el: Element): string {
     return `<${el.tagName} ${text}>${children}</${el.tagName}>`
 }
 
+// A root child's parent: on the cell, or on the cell an <object> wraps
+const parentOf = (el: Element) =>
+    el.getAttribute("parent") ??
+    el.getElementsByTagName("mxCell")[0]?.getAttribute("parent") ??
+    null
+
 /**
- * The cells of one page in their order (which shape is in front), and the
- * page background, written so that two exports of the same diagram compare
+ * The cells in the order draw.io keeps them: each parent followed by its
+ * children, in their order among each other (which shape is in front).
+ * draw.io writes a file that way, whatever order the XML came in.
+ */
+function treeOrder(cells: Element[]): Element[] {
+    const ids = new Set(cells.map((c) => c.getAttribute("id")))
+    const children = new Map<string | null, Element[]>()
+    for (const cell of cells) {
+        const parent = parentOf(cell)
+        const key = parent !== null && ids.has(parent) ? parent : null
+        children.set(key, [...(children.get(key) ?? []), cell])
+    }
+    const out: Element[] = []
+    const seen = new Set<Element>()
+    const visit = (cell: Element) => {
+        if (seen.has(cell)) return
+        seen.add(cell)
+        out.push(cell)
+        for (const child of children.get(cell.getAttribute("id")) ?? []) {
+            visit(child)
+        }
+    }
+    for (const cell of children.get(null) ?? []) visit(cell)
+    // Cells in a cycle of parents, as they came
+    for (const cell of cells) visit(cell)
+    return out
+}
+
+/**
+ * The cells of one page in the order draw.io keeps them, and the page
+ * background, written so that two exports of the same diagram compare
  * equal however they are formatted. Null when the XML has no model to read.
  */
 export function diagramFingerprint(modelXml: string): string | null {
@@ -106,7 +143,9 @@ export function diagramFingerprint(modelXml: string): string | null {
                 `${name}=${JSON.stringify(model?.getAttribute(name) ?? "")}`,
         )
         .join(" ")
-    return [page, ...Array.from(root.children).map(canonical)].join("\n")
+    return [page, ...treeOrder(Array.from(root.children)).map(canonical)].join(
+        "\n",
+    )
 }
 
 interface MessageLike {

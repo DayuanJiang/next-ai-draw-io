@@ -4,6 +4,7 @@ import { convertToModelMessages } from "ai"
 import { jsonrepair } from "jsonrepair"
 import { describe, expect, it } from "vitest"
 import {
+    diagramContextText,
     dropInvalidToolCalls,
     fixToolInputJson,
     parseStringifiedArrays,
@@ -231,5 +232,28 @@ describe("parseStringifiedArrays", () => {
         ]) {
             expect(parseStringifiedArrays(input)).toBe(input)
         }
+    })
+})
+
+describe("diagramContextText", () => {
+    const empty = (attrs: string) =>
+        `<mxGraphModel${attrs}><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>`
+
+    it("calls a page without shapes empty, unless it has a background", () => {
+        expect(diagramContextText({ xml: empty(""), pageId: null })).toBe(
+            "[Canvas: empty when this message was sent.]",
+        )
+        expect(
+            diagramContextText({
+                xml: empty(' background="none"'),
+                pageId: null,
+            }),
+        ).toBe("[Canvas: empty when this message was sent.]")
+        expect(
+            diagramContextText({
+                xml: empty(' background="#000000"'),
+                pageId: null,
+            }),
+        ).toContain('background="#000000"')
     })
 })
