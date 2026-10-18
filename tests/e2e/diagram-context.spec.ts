@@ -136,7 +136,7 @@ test("the canvas goes with a message only when the model's calls do not describe
     expect(diagramOfLast(sent[6]).xml).toContain("Edited by AI")
 })
 
-test("a large image stays out of the copy kept in the message", async ({
+test("a picture is kept as its short reference in the message", async ({
     page: p,
 }) => {
     const image = `data:image/png,${"A".repeat(30000)}`
@@ -144,6 +144,7 @@ test("a large image stays out of the copy kept in the message", async ({
     const sent = await mockChat(p, [
         toolCall("display_diagram", { xml: BOX + PICTURE }),
         text("Nice."),
+        text("After reload."),
     ])
     await p.goto("/", { waitUntil: "networkidle" })
     await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
@@ -153,13 +154,28 @@ test("a large image stays out of the copy kept in the message", async ({
         timeout: 15000,
     })
 
-    // The canvas is what the model drew, yet it goes with the message, with
-    // the image as a placeholder; the request carries it in full
+    // The canvas is what the model drew: a picture on it changes nothing
     await sendMessage(p, "Thanks")
     await expect.poll(() => sent.length).toBe(2)
-    const kept = diagramOfLast(sent[1])
+    expect(diagramOfLast(sent[1])).toEqual({ unchanged: true })
+
+    // After a reload the canvas goes with the message, its picture as the
+    // reference the model sees; the request still carries the canvas in full
+    await expect
+        .poll(() => new URL(p.url()).searchParams.get("session"))
+        .toBeTruthy()
+    // Saving the chat is debounced
+    await p.waitForTimeout(1500)
+    await p.goto(p.url(), { waitUntil: "networkidle" })
+    await getIframe(p).waitFor({ state: "visible", timeout: 30000 })
+    await expect(p.frameLocator("iframe").getByText("Hand me")).toBeVisible({
+        timeout: 15000,
+    })
+    await sendMessage(p, "Hello again")
+    await expect.poll(() => sent.length).toBe(3)
+    const kept = diagramOfLast(sent[2])
     expect(kept.xml).toContain('id="pic"')
-    expect(kept.xml).toContain("omitted-image-30015-")
+    expect(kept.xml).toContain("data:image/png,embedded-image-")
     expect(kept.xml).not.toContain(image)
-    expect(sent[1].xml).toContain(image)
+    expect(sent[2].xml).toContain(image)
 })
