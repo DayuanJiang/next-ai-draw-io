@@ -197,13 +197,47 @@ describe("the diagram in the request to the model", () => {
                 },
                 userMessage("u4", "And more", { diagram: { unchanged: true } }),
             ],
-            xml: EDITED,
+            // The request's own canvas plays no part in earlier messages
+            xml: BOXES,
         })
-        // Everything up to the newest message of the first request
-        const prefix = first.length - 1
-        expect(JSON.stringify(second.slice(0, prefix).map((m) => m.raw))).toBe(
-            JSON.stringify(first.slice(0, prefix).map((m) => m.raw)),
-        )
+        // The whole first request, its newest message included
+        expect(
+            JSON.stringify(second.slice(0, first.length).map((m) => m.raw)),
+        ).toBe(JSON.stringify(first.map((m) => m.raw)))
+    })
+
+    it("starts each note on a new paragraph, also where text parts are joined", async () => {
+        const prompt = await promptFor({
+            messages: [
+                userMessage("u1", "Make it blue", {
+                    diagram: { unchanged: true },
+                    selectedCells: [{ id: "2", label: "Kickoff42" }],
+                }),
+            ],
+            xml: BOXES,
+        })
+        const newest = prompt[prompt.length - 1]
+        expect(newest.text).toMatch(/Make it blue\n\n\n\[Canvas: unchanged/)
+        expect(newest.text).toMatch(/\]\n\n\n\S/)
+    })
+
+    it("keeps each note with its own message next to an empty one", async () => {
+        const prompt = await promptFor({
+            messages: [
+                { id: "u0", role: "user", parts: [{ type: "text", text: "" }] },
+                userMessage("u1", "Draw a box", {
+                    diagram: { xml: EDITED, pageId: null },
+                }),
+                drawing("a1"),
+                userMessage("u2", "Make it blue", {
+                    diagram: { unchanged: true },
+                }),
+            ],
+            xml: BOXES,
+        })
+        const users = prompt.filter((m) => m.role === "user")
+        expect(users.at(-2)?.text).toContain('value="Moved by hand"')
+        expect(users.at(-1)?.text).toContain("[Canvas: unchanged")
     })
 
     it("falls back to the canvas from the request for an older client", async () => {
@@ -289,7 +323,7 @@ describe("the diagram in the request to the model", () => {
             parts: [
                 {
                     type: "text",
-                    text: "Draw this\n\n[PDF: spec.pdf]\nSPEC-BODY-TEXT\n\n[URL: https://example.test/a]\nTitle: A\n\nPAGE-BODY-TEXT",
+                    text: "Draw this\n\n[PDF: spec.pdf]\nSPEC-BODY-TEXT\n\n[URL: https://example.test/a]\nTitle: A\n\nPAGE-BODY-TEXT\n\n[File: notes [v2].txt]\nNAMED-BODY-TEXT",
                 },
                 {
                     type: "file",
@@ -322,6 +356,8 @@ describe("the diagram in the request to the model", () => {
         expect(raw).not.toContain("iVBORw0KGgo")
         expect(first).toContain("Draw this")
         expect(first).toContain("[PDF: spec.pdf]")
+        expect(first).not.toContain("NAMED-BODY-TEXT")
+        expect(first).toContain("[File: notes [v2].txt]")
         expect(first).toContain("[URL: https://example.test/a]")
         expect(first).not.toContain("SPEC-BODY-TEXT")
         expect(first).not.toContain("PAGE-BODY-TEXT")

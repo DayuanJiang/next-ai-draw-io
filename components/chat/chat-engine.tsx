@@ -889,6 +889,12 @@ export function ChatEngineProvider({
                 )
                 setMessages(data.messages as unknown as ChatUIMessage[])
                 xmlSnapshotsRef.current = new Map(data.xmlSnapshots)
+                // The chat's messages show the model the canvas they were
+                // sent with, pictures as references: its XML may name any
+                // of them (embedded-images.ts)
+                for (const xml of xmlSnapshotsRef.current.values()) {
+                    rememberImages(xml)
+                }
                 if (data.diagramXml) onDisplayChart(data.diagramXml, true)
                 else clearDiagram()
                 if (!isRealDiagram(data.diagramXml)) latestSvgRef.current = ""
@@ -1188,18 +1194,6 @@ export function ChatEngineProvider({
         return userText
     }
 
-    const getPreviousXml = (beforeIndex: number): string => {
-        const snapshotKeys = Array.from(xmlSnapshotsRef.current.keys())
-            .filter((k) => k < beforeIndex)
-            .sort((a, b) => b - a)
-        return snapshotKeys.length > 0
-            ? getPageXml(
-                  xmlSnapshotsRef.current.get(snapshotKeys[0]) || "",
-                  viewedPageId(),
-              )
-            : ""
-    }
-
     // xml: the page the model works on, as it is when the message is sent.
     // messageId: the user message sent again (regenerate, edit, retry); the
     // SDK puts the new one in its place and drops the answers after it
@@ -1214,10 +1208,10 @@ export function ChatEngineProvider({
         continuationRetryCountRef.current = 0
         validationRetryCountRef.current = 0
         partialXmlRef.current = ""
-        // The model sees the pictures in them as references; its XML gets
-        // them back from here (embedded-images.ts)
+        // The model sees the pictures in it as references; its XML gets
+        // them back from here (embedded-images.ts). Those of the chat's
+        // earlier canvases were kept when they were sent or the chat loaded.
         rememberImages(xml)
-        rememberImages(getPreviousXml(turnIndex))
         continuationOriginalRef.current = null
         stoppedRef.current = false
         currentTurnRef.current = turnIndex

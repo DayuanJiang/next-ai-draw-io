@@ -40,11 +40,11 @@ describe("diagramFingerprint", () => {
   <root>
     <mxCell id="0" />
     <mxCell id="1" parent="0" />
-    <mxCell id="5" parent="1" source="2" target="2" edge="1">
-      <mxGeometry relative="1" as="geometry" />
-    </mxCell>
     <mxCell id="2" parent="1" vertex="1" style="rounded=1;" value="A">
       <mxGeometry y="40" width="120" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="5" parent="1" source="2" target="2" edge="1">
+      <mxGeometry relative="1" as="geometry" />
     </mxCell>
   </root>
 </mxGraphModel>`
@@ -62,6 +62,21 @@ describe("diagramFingerprint", () => {
         expect(diagramFingerprint(page(box("2")))).not.toBe(base)
         expect(
             diagramFingerprint(page(box("2") + box("3", "B", 200) + box("4"))),
+        ).not.toBe(base)
+    })
+
+    it("tells a change of which shape is in front, or of the background, apart", () => {
+        const base = diagramFingerprint(A)
+        expect(
+            diagramFingerprint(page(box("3", "B", 200) + box("2"))),
+        ).not.toBe(base)
+        expect(
+            diagramFingerprint(
+                A.replace(
+                    "<mxGraphModel>",
+                    '<mxGraphModel background="#000000">',
+                ),
+            ),
         ).not.toBe(base)
     })
 
@@ -190,6 +205,77 @@ describe("diagramForMessage", () => {
                 states: new Map([["d1", stateOf(A)]]),
             }),
         ).toEqual({ unchanged: true })
+    })
+
+    it("sends the canvas when any change since the model's last picture was inexact", () => {
+        const afterEdit = page(box("2", "edited") + box("3", "B", 200))
+        const history = [
+            user(),
+            assistant(
+                { tool: "display_diagram", id: "d1" },
+                { tool: "edit_diagram", id: "e1" },
+            ),
+        ]
+        const states = (exactDrawing: boolean) =>
+            new Map([
+                ["d1", stateOf(A, exactDrawing)],
+                ["e1", { ...stateOf(afterEdit), base: diagramFingerprint(A) }],
+            ])
+        const args = { history, pageXml: afterEdit, pageId: null }
+        expect(diagramForMessage({ ...args, states: states(true) })).toEqual({
+            unchanged: true,
+        })
+        // An auto-fixed drawing, then an exact edit: the fixes are unknown
+        expect(diagramForMessage({ ...args, states: states(false) })).toEqual({
+            xml: afterEdit,
+            pageId: null,
+        })
+    })
+
+    it("sends the canvas after a hand change made while the model worked", () => {
+        const movedByHand = page(box("2") + box("3", "B", 400))
+        const afterEdit = page(box("2", "edited") + box("3", "B", 400))
+        const history = [
+            user(),
+            assistant({ tool: "display_diagram", id: "d1" }),
+            user({ diagram: { unchanged: true } }),
+            assistant({ tool: "edit_diagram", id: "e1" }),
+        ]
+        // The edit started from a canvas the model never saw
+        const states = new Map([
+            ["d1", stateOf(A)],
+            [
+                "e1",
+                {
+                    ...stateOf(afterEdit),
+                    base: diagramFingerprint(movedByHand),
+                },
+            ],
+        ])
+        expect(
+            diagramForMessage({
+                history,
+                pageXml: afterEdit,
+                pageId: null,
+                states,
+            }),
+        ).toEqual({ xml: afterEdit, pageId: null })
+    })
+
+    it("sends the canvas when a change on it got an error or no result", () => {
+        for (const state of ["output-error", "input-available"]) {
+            expect(
+                diagramForMessage({
+                    history: [
+                        user(),
+                        assistant({ tool: "display_diagram", id: "d1", state }),
+                    ],
+                    pageXml: A,
+                    pageId: null,
+                    states: new Map([["d1", stateOf(A)]]),
+                }),
+            ).toEqual(send)
+        }
     })
 
     it("sends the canvas again after more than the allowed edits in a row", () => {

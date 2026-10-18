@@ -60,9 +60,10 @@ function isValidToolInput(input: unknown): boolean {
 }
 
 // The text of a document or web page the user attached: the client adds
-// "\n\n[PDF: name]\n<text>" ("File" and "URL" alike) after the typed text
+// "\n\n[PDF: name]\n<text>" ("File" and "URL" alike) after the typed text.
+// The name may hold "]": the heading ends with the last one on its line.
 const ATTACHED_TEXT =
-    /(\n\n\[(?:PDF|File|URL): [^\]\n]*\])\n[\s\S]*?(?=\n\n\[(?:PDF|File|URL): |$)/g
+    /(\n\n\[(?:PDF|File|URL): [^\n]*\])\n[\s\S]*?(?=\n\n\[(?:PDF|File|URL): |$)/g
 
 const isImagePart = (part: any) =>
     part.type === "image" ||
@@ -176,7 +177,7 @@ export function parseStringifiedArrays(json: string): string {
  */
 export function diagramContextText(diagram: MessageDiagram): string {
     if ("unchanged" in diagram) {
-        return "[Canvas: unchanged when this message was sent. It is exactly the result of your display_diagram and edit_diagram calls so far.]"
+        return "[Canvas: unchanged when this message was sent. It is the latest canvas shown in an earlier note (or the empty one), with your display_diagram and edit_diagram calls since then applied.]"
     }
     if (!hasCells(diagram.xml)) {
         return "[Canvas: empty when this message was sent.]"

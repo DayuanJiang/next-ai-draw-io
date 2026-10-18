@@ -360,6 +360,44 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // (see issue #874), so we now let the request through and surface the real
     // provider error if the model genuinely can't accept images.
 
+    // Each user message ends with a note on the canvas when it was sent
+    // (lib/diagram-context.ts): the canvas itself when the model's own calls
+    // no longer describe it, else that it was unchanged. The note, and the
+    // shapes the user selected, come from the message's metadata, so a
+    // message gets the same text in every request and the history before
+    // the newest message stays cacheable. Each starts on a new paragraph:
+    // some providers join a message's text parts as they are.
+    const newestUser = messages.findLastIndex((m) => m.role === "user")
+    const withNotes = messages.map((message, i) => {
+        if (message.role !== "user") return message
+        const isNewest = i === newestUser
+        const diagram = diagramOf(message)
+        const notes = [
+            // A message from an older client has no note: the newest one
+            // then gets the canvas of the request
+            diagram
+                ? diagramContextText(diagram)
+                : isNewest
+                  ? diagramContextText({ xml: xml || "", pageId: null })
+                  : "",
+            formatSelectionContext(
+                message.metadata?.selectedCells ??
+                    (isNewest ? body.selectedCells : undefined),
+            ),
+        ].filter(Boolean)
+        if (notes.length === 0) return message
+        return {
+            ...message,
+            parts: [
+                ...message.parts,
+                ...notes.map((text) => ({
+                    type: "text" as const,
+                    text: `\n\n${text}`,
+                })),
+            ],
+        }
+    })
+
     // Convert UIMessages to ModelMessages. A tool call that never got its
     // result (the user stopped while it ran) is left out: the SDK would
     // refuse this and every later request of the chat
@@ -367,7 +405,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // the chat shows is a data part, which the model never sees) are
     // dropped: Bedrock rejects empty content.
     const modelMessages = pruneMessages({
-        messages: await convertToModelMessages(messages, {
+        messages: await convertToModelMessages(withNotes, {
             ignoreIncompleteToolCalls: true,
         }),
     })
@@ -395,53 +433,6 @@ async function handleChatRequest(req: Request): Promise<Response> {
             JSON.stringify(describeMessages(enhancedMessages)),
         )
     }
-
-    // Each user message ends with a note on the canvas when it was sent
-    // (lib/diagram-context.ts): the canvas itself when the model's own calls
-    // no longer describe it, else that it was unchanged. The note, and the
-    // shapes the user selected, come from the message's metadata, so a
-    // message gets the same text in every request and the history before
-    // the newest message stays cacheable.
-    const userUiMessages = messages.filter((m) => m.role === "user")
-    const userModelIndexes = enhancedMessages
-        .map((m, i) => (m.role === "user" ? i : -1))
-        .filter((i) => i !== -1)
-    // The counts match unless a user message was dropped as empty; then
-    // only the newest one gets its note
-    const countsMatch = userModelIndexes.length === userUiMessages.length
-    userModelIndexes.forEach((index, k) => {
-        const isNewest = k === userModelIndexes.length - 1
-        const uiMessage = isNewest ? userUiMessages.at(-1) : userUiMessages[k]
-        if (!isNewest && !countsMatch) return
-        const diagram = uiMessage && diagramOf(uiMessage)
-        const texts = [
-            // A message from an older client has no note: the newest one
-            // then gets the canvas of the request
-            diagram
-                ? diagramContextText(diagram)
-                : isNewest
-                  ? diagramContextText({ xml: xml || "", pageId: null })
-                  : "",
-            formatSelectionContext(
-                uiMessage?.metadata?.selectedCells ??
-                    (isNewest ? body.selectedCells : undefined),
-            ),
-        ].filter(Boolean)
-        if (texts.length === 0) return
-        const message = enhancedMessages[index]
-        if (message.role !== "user") return
-        const content =
-            typeof message.content === "string"
-                ? [{ type: "text" as const, text: message.content }]
-                : message.content
-        enhancedMessages[index] = {
-            ...message,
-            content: [
-                ...content,
-                ...texts.map((text) => ({ type: "text" as const, text })),
-            ],
-        }
-    })
 
     // Add cache point to the last assistant message in conversation history
     // This caches the entire conversation prefix for subsequent requests

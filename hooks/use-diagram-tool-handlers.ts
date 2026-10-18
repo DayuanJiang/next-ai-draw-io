@@ -149,8 +149,14 @@ export function useDiagramToolHandlers({
     // first, so the step (and the version) starts from the diagram before
     // it, also when a failed call in between was undone to the cut off one.
     // exact: the canvas holds what the model wrote, with no auto-fix and no
-    // continuation joined to it; otherwise the next message sends the canvas
-    const commit = (xml: string, toolCallId: string, exact: boolean) => {
+    // continuation joined to it; otherwise the next message sends the canvas.
+    // base: an edit's starting canvas, to tell a hand change made meanwhile
+    const commit = (
+        xml: string,
+        toolCallId: string,
+        exact: boolean,
+        base: string | null = null,
+    ) => {
         const original = continuationOriginalRef.current
         if (original !== null) onDisplayChart(original, true, "revert")
         onDisplayChart(xml, true, "commit", {
@@ -160,12 +166,14 @@ export function useDiagramToolHandlers({
         continuationOriginalRef.current = null
         aiCanvasStatesRef?.current.set(toolCallId, {
             pageId: aiPageId(),
-            fingerprint: diagramFingerprint(
-                pageModelXml(xml, aiPageId()) ?? xml,
-            ),
+            fingerprint: pageFingerprint(xml),
             exact,
+            base: base === null ? null : pageFingerprint(base),
         })
     }
+
+    const pageFingerprint = (xml: string) =>
+        diagramFingerprint(pageModelXml(xml, aiPageId()) ?? xml)
 
     const aiPageId = () => turnPageIdRef?.current ?? null
 
@@ -345,7 +353,9 @@ ${finalXml}
                                     tool: "display_diagram",
                                     toolCallId: toolCall.toolCallId,
                                     state: "output-error",
-                                    errorText: `[Validation attempt ${attempt}/${MAX_VALIDATION_RETRIES}]\n${feedback}`,
+                                    // The drawing stays on the canvas, as
+                                    // the app may have fixed it
+                                    errorText: `[Validation attempt ${attempt}/${MAX_VALIDATION_RETRIES}]\n${feedback}\n\nCurrent diagram XML:\n\`\`\`xml\n${shownToModel(chartXMLRef.current)}\n\`\`\``,
                                 })
                                 return
                             } else {
@@ -473,7 +483,12 @@ Please check the cell IDs and retry.`,
                 return
             }
 
-            commit(outcome.xml, toolCall.toolCallId, outcome.fixes.length === 0)
+            commit(
+                outcome.xml,
+                toolCall.toolCallId,
+                outcome.fixes.length === 0,
+                currentXml,
+            )
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,

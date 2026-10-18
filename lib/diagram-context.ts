@@ -27,6 +27,11 @@ export interface AiCanvasState {
     fingerprint: string | null
     /** False when the canvas is not exactly what the model wrote */
     exact: boolean
+    /**
+     * An edit's starting canvas: when it differs from the model's picture
+     * before the edit, the user changed the canvas while the model worked
+     */
+    base?: string | null
 }
 
 /** What a user message tells the model about the canvas */
@@ -80,9 +85,9 @@ function canonical(el: Element): string {
 }
 
 /**
- * The cells of one page, written so that two exports of the same diagram
- * compare equal however they are formatted. Null when the XML has no
- * model to read.
+ * The cells of one page in their order (which shape is in front), and the
+ * page background, written so that two exports of the same diagram compare
+ * equal however they are formatted. Null when the XML has no model to read.
  */
 export function diagramFingerprint(modelXml: string): string | null {
     if (!modelXml?.trim()) return null
@@ -94,14 +99,14 @@ export function diagramFingerprint(modelXml: string): string | null {
     if (doc.querySelector("parsererror")) return null
     const root = doc.getElementsByTagName("root")[0]
     if (!root) return null
-    return Array.from(root.children)
-        .map((child) => ({
-            id: child.getAttribute("id") ?? "",
-            text: canonical(child),
-        }))
-        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-        .map((c) => c.text)
-        .join("\n")
+    const model = doc.getElementsByTagName("mxGraphModel")[0]
+    const page = ["background", "backgroundImage"]
+        .map(
+            (name) =>
+                `${name}=${JSON.stringify(model?.getAttribute(name) ?? "")}`,
+        )
+        .join(" ")
+    return [page, ...Array.from(root.children).map(canonical)].join("\n")
 }
 
 interface MessageLike {
@@ -151,18 +156,24 @@ export function diagramForMessage({
     const send: MessageDiagram = { xml: hideImageData(pageXml), pageId }
 
     // The latest state the model knows, and how many edits it made since
-    // its last full picture (a drawing, or a canvas sent with a message)
+    // its last full picture (a drawing, or a canvas sent with a message).
+    // Each change back to that picture must be one the model knows exactly.
     let reference:
         | { kind: "ai"; state: AiCanvasState }
         | { kind: "sent"; xml: string; pageId: string | null }
         | undefined
     let edits = 0
     let fullPicture = false
+    // The canvas the newer edit started from: the older state must be it
+    let startedFrom: string | null | undefined
+    const followsOn = (fingerprint: string | null) =>
+        startedFrom === undefined || startedFrom === fingerprint
     for (let i = history.length - 1; i >= 0 && !fullPicture; i--) {
         const message = history[i]
         if (message.role === "user") {
             const diagram = diagramOf(message)
             if (diagram && "xml" in diagram) {
+                if (!followsOn(diagramFingerprint(diagram.xml))) return send
                 reference ??= { kind: "sent", ...diagram }
                 fullPicture = true
             }
@@ -181,9 +192,17 @@ export function diagramForMessage({
                 // A call that failed changed nothing
                 continue
             }
+            // On the canvas, but the model got an error for it (a failed
+            // screenshot check) or no result (stopped): it may think the
+            // call changed nothing
+            if (part.state !== "output-available") return send
+            // The program changed what the model wrote, or the user changed
+            // the canvas while the model worked
+            if (!state.exact || !followsOn(state.fingerprint)) return send
             reference ??= { kind: "ai", state }
             if (part.type === "tool-edit_diagram") {
                 edits++
+                startedFrom = state.base
             } else {
                 fullPicture = true
                 break
@@ -197,7 +216,6 @@ export function diagramForMessage({
     if (now === null) return send
     if (reference.kind === "ai") {
         const { state } = reference
-        if (!state.exact) return send
         if ((state.pageId ?? null) !== (pageId ?? null)) return send
         return state.fingerprint === now ? { unchanged: true } : send
     }
