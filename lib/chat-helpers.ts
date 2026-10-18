@@ -142,6 +142,33 @@ export function fixToolInputJson(input: string): string {
     )
 }
 
+// Some models write an array argument as a JSON string:
+// {"operations":"[{...}]"} becomes {"operations":[{...}]}
+export function parseStringifiedArrays(json: string): string {
+    let value: unknown
+    try {
+        value = JSON.parse(json)
+    } catch {
+        return json
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) return json
+    const fields = value as Record<string, unknown>
+    let changed = false
+    for (const [key, field] of Object.entries(fields)) {
+        if (typeof field !== "string" || !field.trim().startsWith("[")) continue
+        try {
+            const parsed = JSON.parse(field)
+            if (Array.isArray(parsed)) {
+                fields[key] = parsed
+                changed = true
+            }
+        } catch {
+            // Not JSON: a plain string that starts with "["
+        }
+    }
+    return changed ? JSON.stringify(fields) : json
+}
+
 /**
  * The note on the canvas that ends a user message (lib/diagram-context.ts).
  * The same message always gets the same text, so the history the model gets

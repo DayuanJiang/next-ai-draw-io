@@ -25,6 +25,7 @@ import {
     dropInvalidToolCalls,
     fixToolInputJson,
     formatSelectionContext,
+    parseStringifiedArrays,
     validateFileParts,
     withoutOldAttachments,
 } from "@/lib/chat-helpers"
@@ -504,8 +505,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
                 try {
                     // Pre-process to fix common LLM JSON errors that jsonrepair can't handle,
                     // then use jsonrepair to fix truncated JSON
-                    const repairedInput = jsonrepair(
-                        fixToolInputJson(toolCall.input),
+                    const repairedInput = parseStringifiedArrays(
+                        jsonrepair(fixToolInputJson(toolCall.input)),
                     )
                     console.log(
                         `[repairToolCall] Repaired truncated JSON for tool: ${toolCall.toolName}`,
