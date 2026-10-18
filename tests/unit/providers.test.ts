@@ -23,9 +23,8 @@ const sorted = (list: Iterable<string>) => [...list].sort()
 describe("the provider record", () => {
     // The fields that change what the server does are spelled out here, so
     // a slip in one record fails a test instead of changing a request
-    const withField = (
-        field: "singleSystem" | "listNeedsNoKey" | "sdkKnowsEndpoint",
-    ) => sorted(PROVIDER_NAMES.filter((p) => PROVIDERS[p][field]))
+    const withField = (field: "listNeedsNoKey" | "sdkKnowsEndpoint") =>
+        sorted(PROVIDER_NAMES.filter((p) => PROVIDERS[p][field]))
 
     it("lets the server auto-detect exactly the providers that need a key", () => {
         // credential apiKey or vertexKey: the providers whose <P>_API_KEY the
@@ -63,21 +62,6 @@ describe("the provider record", () => {
         const withKeyVar = PROVIDER_NAMES.filter((p) => !!envVarsOf(p).apiKey)
         expect(sorted(detected)).toEqual(
             sorted(withKeyVar.filter((p) => p !== "ollama")),
-        )
-    })
-
-    it("merges system messages for the providers that reject several", () => {
-        expect(withField("singleSystem")).toEqual(
-            sorted([
-                "minimax",
-                "glm",
-                "qwen",
-                "kimi",
-                "qiniu",
-                "novita",
-                "mimo",
-                "custom",
-            ]),
         )
     })
 

@@ -87,8 +87,6 @@ export interface ProviderDef {
     models?: string[]
     /** The SDK builds the request path itself, so chatRequestUrl shows nothing */
     ownRequestPath?: true
-    /** Only one system message per request */
-    singleSystem?: true
     /** Server credentials live in fixed env vars; the admin panel allows one entry */
     fixedCredentials?: true
     /** models.dev logo name when it differs from the key */
@@ -161,7 +159,6 @@ const defs = {
         defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
         apiKeyUrl: "https://bailian.console.aliyun.com/?tab=model#/api-key",
         modelList: "openai",
-        singleSystem: true,
     },
     doubao: {
         label: "Doubao (ByteDance)",
@@ -195,7 +192,6 @@ const defs = {
         defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
         apiKeyUrl: "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
         modelList: "openai",
-        singleSystem: true,
     },
     kimi: {
         label: "Kimi (Moonshot)",
@@ -206,7 +202,6 @@ const defs = {
         defaultBaseUrl: "https://api.moonshot.cn/v1",
         apiKeyUrl: "https://platform.moonshot.cn/console/api-keys",
         modelList: "openai",
-        singleSystem: true,
     },
     minimax: {
         label: "MiniMax",
@@ -218,7 +213,6 @@ const defs = {
         apiKeyUrl:
             "https://platform.minimaxi.com/user-center/basic-information/interface-key",
         ownRequestPath: true,
-        singleSystem: true,
         optionsOpen: true,
         baseUrlHint: {
             en: "Use /anthropic for Anthropic-compatible API (recommended), or /v1 for OpenAI-compatible API",
@@ -244,7 +238,6 @@ const defs = {
         defaultBaseUrl: "https://api.xiaomimimo.com/v1",
         apiKeyUrl: "https://platform.xiaomimimo.com/#/console/api-keys",
         modelList: "openai",
-        singleSystem: true,
         logo: "xiaomi",
         optionsOpen: true,
         baseUrlHint: {
@@ -309,7 +302,6 @@ const defs = {
         defaultBaseUrl: "https://api.novita.ai/openai",
         apiKeyUrl: "https://novita.ai/dashboard/key",
         modelList: "openai",
-        singleSystem: true,
     },
     atlascloud: {
         label: "Atlas Cloud",
@@ -331,7 +323,6 @@ const defs = {
         defaultBaseUrl: "https://api.qnaigc.com/v1",
         apiKeyUrl: "https://www.qiniu.com/ai/models",
         modelList: "openai",
-        singleSystem: true,
     },
     gateway: {
         label: "AI Gateway",
@@ -527,8 +518,6 @@ const defs = {
         modelList: "openai",
         icon: "server",
         optionsOpen: true,
-        // Open-source chat templates reject several system messages
-        singleSystem: true,
         note: {
             en: "Your URL and key",
             zh: "填地址和 Key",

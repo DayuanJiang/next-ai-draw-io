@@ -43,6 +43,11 @@ import {
     noticeMessage,
 } from "@/lib/chat-message"
 import { buildChatHeaders } from "@/lib/chat-request"
+import {
+    type AiCanvasState,
+    diagramFingerprint,
+    diagramForMessage,
+} from "@/lib/diagram-context"
 import { pageModelXml, placeOnPage } from "@/lib/diagram-pages"
 import { EMPTY_DRAWIO_DOCUMENT } from "@/lib/drawio/drawio-config"
 import { clearHighlights } from "@/lib/drawio/editor-bridge"
@@ -366,6 +371,9 @@ export function ChatEngineProvider({
     // The page the running turn's model reads and writes: the one the user
     // viewed when the message was sent (null: the first page)
     const turnPageIdRef = useRef<string | null>(null)
+    // The canvas after each change the model made, by tool call: a message
+    // sends the canvas only when it differs (lib/diagram-context.ts)
+    const aiCanvasStatesRef = useRef<Map<string, AiCanvasState>>(new Map())
     // Index of the user message whose turn is running (versions belong to it)
     const currentTurnRef = useRef(0)
     // The chat (its generation) the running turn was sent in: a reply that
@@ -432,6 +440,7 @@ export function ChatEngineProvider({
         // A preview undone just before the tool call is in this one already
         chartXMLRef,
         turnPageIdRef,
+        aiCanvasStatesRef,
         onDisplayChart,
         onFetchChart: fetchDiagramXml,
         captureValidationPng,
@@ -1191,12 +1200,12 @@ export function ChatEngineProvider({
             : ""
     }
 
+    // xml: the page the model works on, as it is when the message is sent.
     // messageId: the user message sent again (regenerate, edit, retry); the
     // SDK puts the new one in its place and drops the answers after it
     const sendChatMessage = (
         parts: any,
         xml: string,
-        previousXml: string,
         turnIndex: number,
         selectedCells: MessageSelection,
         messageId?: string,
@@ -1208,7 +1217,7 @@ export function ChatEngineProvider({
         // The model sees the pictures in them as references; its XML gets
         // them back from here (embedded-images.ts)
         rememberImages(xml)
-        rememberImages(previousXml)
+        rememberImages(getPreviousXml(turnIndex))
         continuationOriginalRef.current = null
         stoppedRef.current = false
         currentTurnRef.current = turnIndex
@@ -1230,10 +1239,17 @@ export function ChatEngineProvider({
         requestProviderIdRef.current = config.providerId || undefined
 
         const selected = selectedCells.map(({ id, label }) => ({ id, label }))
+        // The canvas goes with the message only when the model's own calls
+        // no longer describe it; kept in the message for later requests
+        const diagram = diagramForMessage({
+            history: messagesRef.current.slice(0, turnIndex),
+            pageXml: xml,
+            pageId: turnPageIdRef.current,
+            states: aiCanvasStatesRef.current,
+        })
         const options = {
             body: {
                 xml,
-                previousXml,
                 sessionId: langfuseSessionId,
                 customSystemMessage,
                 ...(selected.length > 0 && { selectedCells: selected }),
@@ -1244,14 +1260,16 @@ export function ChatEngineProvider({
             }),
         }
         turnRequestsRef.current = 0
-        // The selection stays with the message, for regenerate and retry,
-        // and its chip names a connector as one
+        // The canvas note and the selection stay with the message: every
+        // later request sends them the same way, and regenerate and retry
+        // keep the selection. Its chip names a connector as one.
         sendMessage(
             {
                 ...(messageId !== undefined && { messageId }),
                 parts,
-                ...(selected.length > 0 && {
-                    metadata: {
+                metadata: {
+                    diagram,
+                    ...(selected.length > 0 && {
                         selectedCells: selectedCells.map(
                             ({ id, label, isEdge }) => ({
                                 id,
@@ -1259,8 +1277,8 @@ export function ChatEngineProvider({
                                 isEdge: !!isEdge,
                             }),
                         ),
-                    },
-                }),
+                    }),
+                },
             },
             options,
         )
@@ -1280,12 +1298,11 @@ export function ChatEngineProvider({
             return false
         }
         const turnIndex = messagesRef.current.length
-        const previousXml = getPreviousXml(turnIndex)
         // Snapshot the full multi-page document (kept fresh by autosave) so
         // regenerate/edit can restore every page; the model gets the page
         // the user is viewing
         xmlSnapshotsRef.current.set(turnIndex, chartXMLRef.current || chartXml)
-        sendChatMessage(parts, chartXml, previousXml, turnIndex, selectedCells)
+        sendChatMessage(parts, chartXml, turnIndex, selectedCells)
         return true
     }
 
@@ -1367,12 +1384,24 @@ export function ChatEngineProvider({
                 })
                 if (prepared.ok) {
                     const pageId = viewedPageId()
-                    onDisplayChart(
-                        placeOnPage(prepared.xml, chartXMLRef.current, pageId),
-                        true,
-                        "commit",
-                        { toolCallId, pageId },
+                    const placed = placeOnPage(
+                        prepared.xml,
+                        chartXMLRef.current,
+                        pageId,
                     )
+                    onDisplayChart(placed, true, "commit", {
+                        toolCallId,
+                        pageId,
+                    })
+                    // The next message can then leave the canvas out, as
+                    // after a drawing of the model
+                    aiCanvasStatesRef.current.set(toolCallId, {
+                        pageId,
+                        fingerprint: diagramFingerprint(
+                            pageModelXml(placed, pageId) ?? placed,
+                        ),
+                        exact: prepared.fixes.length === 0,
+                    })
                 }
                 clearComposer()
                 return true
@@ -1513,7 +1542,6 @@ export function ChatEngineProvider({
             toast.error(dict.errors.cannotResend)
             return false
         }
-        const previousXml = getPreviousXml(index)
         onDisplayChart(savedXml, true)
         dropLaterSnapshots(index)
         useVersionsStore.getState().removeFromTurn(index)
@@ -1521,7 +1549,6 @@ export function ChatEngineProvider({
         sendChatMessage(
             parts,
             getPageXml(savedXml, viewedPageId()),
-            previousXml,
             index,
             selectionOf(messages[index]),
             messages[index].id,
@@ -1593,7 +1620,6 @@ export function ChatEngineProvider({
             sendChatMessage(
                 message.parts,
                 chartXml,
-                getPreviousXml(index),
                 index,
                 selectionOf(message),
                 message.id,

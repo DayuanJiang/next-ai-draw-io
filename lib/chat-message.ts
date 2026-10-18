@@ -1,5 +1,6 @@
 import type { InferUITools, LanguageModelUsage, UIMessage } from "ai"
 import type { chatTools } from "@/lib/chat-tools"
+import type { MessageDiagram } from "@/lib/diagram-context"
 import type { SelectedCell } from "@/stores/canvas-store"
 
 /** Shapes sent with a user message (also kept in its metadata, where
@@ -25,6 +26,8 @@ export interface ReplyUsage {
 }
 
 export interface ChatMessageMetadata {
+    /** On a user message: what it told the model about the canvas */
+    diagram?: MessageDiagram
     selectedCells?: MessageSelection
     usage?: ReplyUsage
 }

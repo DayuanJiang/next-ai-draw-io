@@ -1,6 +1,11 @@
 // Shared helper functions for chat route
 // Exported for testing
 
+import type { MessageDiagram } from "@/lib/diagram-context"
+import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
+import { imageRefNote } from "@/packages/mcp-server/src/embedded-images.ts"
+import { hasCells } from "@/packages/mcp-server/src/pages.ts"
+
 // File upload limits (must match client-side)
 export const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 export const MAX_FILES = 5
@@ -99,6 +104,26 @@ export function fixToolInputJson(input: string): string {
             // `"key"= "` instead of `"key": "`, only for JSON keys
             .replace(/"(\w+)"\s*=\s*"/g, '"$1": "')
     )
+}
+
+/**
+ * The note on the canvas that ends a user message (lib/diagram-context.ts).
+ * The same message always gets the same text, so the history the model gets
+ * stays the same from request to request.
+ */
+export function diagramContextText(diagram: MessageDiagram): string {
+    if ("unchanged" in diagram) {
+        return "[Canvas: unchanged when this message was sent. It is exactly the result of your display_diagram and edit_diagram calls so far.]"
+    }
+    if (!hasCells(diagram.xml)) {
+        return "[Canvas: empty when this message was sent.]"
+    }
+    const shown = foldCells(diagram.xml)
+    const imageNote = imageRefNote(shown)
+    return `[Canvas when this message was sent, in the compact notation you write (shapes with x, y, w, h; edges with source and target). It is the source of truth from this point on and shows any change the user made by hand.]
+"""xml
+${shown}
+"""${imageNote ? `\n${imageNote}` : ""}`
 }
 
 // Shapes the user selected on the canvas; sent with the request as
