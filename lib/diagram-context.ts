@@ -86,11 +86,12 @@ function canonical(el: Element): string {
     return `<${el.tagName} ${text}>${children}</${el.tagName}>`
 }
 
-// A root child's parent: on the cell, or on the cell an <object> wraps
+// A root child's parent: on the cell, or on the cell an <object> wraps (the
+// wrapper's own attributes are the user's data, which may be named "parent")
 const parentOf = (el: Element) =>
-    el.getAttribute("parent") ??
-    el.getElementsByTagName("mxCell")[0]?.getAttribute("parent") ??
-    null
+    (el.tagName === "mxCell"
+        ? el.getAttribute("parent")
+        : el.getElementsByTagName("mxCell")[0]?.getAttribute("parent")) ?? null
 
 /**
  * The cells in the order draw.io keeps them: each parent followed by its

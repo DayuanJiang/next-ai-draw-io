@@ -89,6 +89,15 @@ describe("diagramFingerprint", () => {
         )
     })
 
+    it("reads a wrapped cell's parent from the cell, not the user's data", () => {
+        const wrapped = `<object id="a" label="A" parent="b"><mxCell style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></object>`
+        const b = box("b", "B", 60)
+        // Bringing a to the front is a change, whatever its data says
+        expect(diagramFingerprint(page(wrapped + b))).not.toBe(
+            diagramFingerprint(page(b + wrapped)),
+        )
+    })
+
     it("takes a waypoint's left-out coordinate as 0, as draw.io writes it", () => {
         const edge = (point: string) =>
             page(
