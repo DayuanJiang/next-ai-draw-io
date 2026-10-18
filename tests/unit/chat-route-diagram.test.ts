@@ -282,4 +282,48 @@ describe("the diagram in the request to the model", () => {
             expect(user.text).not.toContain(data)
         }
     })
+
+    it("sends attached documents and images with their own turn only", async () => {
+        const withDocs = {
+            ...userMessage("u1", "", { diagram: { xml: "", pageId: null } }),
+            parts: [
+                {
+                    type: "text",
+                    text: "Draw this\n\n[PDF: spec.pdf]\nSPEC-BODY-TEXT\n\n[URL: https://example.test/a]\nTitle: A\n\nPAGE-BODY-TEXT",
+                },
+                {
+                    type: "file",
+                    mediaType: "image/png",
+                    url: "data:image/png;base64,iVBORw0KGgo=",
+                },
+            ],
+        }
+        const firstUser = async (messages: unknown[]) => {
+            const prompt = await promptFor({ messages, xml: BOXES })
+            const user = prompt.find((m) => m.role === "user")
+            return { text: user?.text ?? "", raw: JSON.stringify(user?.raw) }
+        }
+
+        // Its turn, the requests after a tool result included
+        for (const messages of [[withDocs], [withDocs, drawing("a1")]]) {
+            const first = await firstUser(messages)
+            expect(first.text).toContain("SPEC-BODY-TEXT")
+            expect(first.text).toContain("PAGE-BODY-TEXT")
+            expect(first.raw).toContain("iVBORw0KGgo")
+        }
+
+        // After the next user message: the names stay, the text and the
+        // image go
+        const { text: first, raw } = await firstUser([
+            withDocs,
+            drawing("a1"),
+            userMessage("u2", "Make it blue", { diagram: { unchanged: true } }),
+        ])
+        expect(raw).not.toContain("iVBORw0KGgo")
+        expect(first).toContain("Draw this")
+        expect(first).toContain("[PDF: spec.pdf]")
+        expect(first).toContain("[URL: https://example.test/a]")
+        expect(first).not.toContain("SPEC-BODY-TEXT")
+        expect(first).not.toContain("PAGE-BODY-TEXT")
+    })
 })

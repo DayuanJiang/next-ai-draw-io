@@ -26,6 +26,7 @@ import {
     fixToolInputJson,
     formatSelectionContext,
     validateFileParts,
+    withoutOldAttachments,
 } from "@/lib/chat-helpers"
 import { addReplyUsage, type ChatUIMessage } from "@/lib/chat-message"
 import { chatTools } from "@/lib/chat-tools"
@@ -381,7 +382,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Filter out tool-calls with invalid inputs (from failed repair or interrupted streaming)
     // and their results. Bedrock API rejects messages where toolUse.input is not a valid
     // JSON object, and every provider rejects a tool result whose call is gone.
-    const enhancedMessages = dropInvalidToolCalls(modelMessages)
+    // An attached document or image is sent with its own turn only.
+    const enhancedMessages = withoutOldAttachments(
+        dropInvalidToolCalls(modelMessages),
+    )
 
     // DEBUG_LLM_PAYLOAD=true logs what is sent to the model
     if (DEBUG_LLM_PAYLOAD) {

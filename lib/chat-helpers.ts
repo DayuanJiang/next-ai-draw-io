@@ -59,6 +59,42 @@ function isValidToolInput(input: unknown): boolean {
     return !!input && typeof input === "object" && Object.keys(input).length > 0
 }
 
+// The text of a document or web page the user attached: the client adds
+// "\n\n[PDF: name]\n<text>" ("File" and "URL" alike) after the typed text
+const ATTACHED_TEXT =
+    /(\n\n\[(?:PDF|File|URL): [^\]\n]*\])\n[\s\S]*?(?=\n\n\[(?:PDF|File|URL): |$)/g
+
+const isImagePart = (part: any) =>
+    part.type === "image" ||
+    (part.type === "file" && String(part.mediaType).startsWith("image/"))
+
+// An attached document or image goes to the model with its own turn only:
+// the user messages before the newest one keep just a document's name line
+export function withoutOldAttachments(messages: any[]): any[] {
+    let newest = -1
+    messages.forEach((msg, i) => {
+        if (msg.role === "user") newest = i
+    })
+    return messages.map((msg, i) => {
+        if (
+            msg.role !== "user" ||
+            i === newest ||
+            !Array.isArray(msg.content)
+        ) {
+            return msg
+        }
+        const content = msg.content
+            .filter((part: any) => !isImagePart(part))
+            .map((part: any) =>
+                part.type === "text" && typeof part.text === "string"
+                    ? { ...part, text: part.text.replace(ATTACHED_TEXT, "$1") }
+                    : part,
+            )
+        // Providers reject an empty message (the app always sends text)
+        return content.length > 0 ? { ...msg, content } : msg
+    })
+}
+
 // Remove tool-calls with invalid inputs (from failed repair or interrupted streaming),
 // together with their tool-results: providers reject a result whose call is missing.
 // Messages left empty are removed too (Bedrock rejects empty content arrays).
