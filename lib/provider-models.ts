@@ -1,5 +1,6 @@
 import { createGateway } from "ai"
 import { getModelInfo } from "@/lib/model-catalog"
+import { currentModelSuggestions } from "@/lib/model-suggestions"
 import { PROVIDERS, type ProviderName, publicDefaultUrl } from "@/lib/providers"
 import { readLimitedBody } from "@/lib/read-limited-body"
 import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
@@ -244,6 +245,13 @@ export async function listProviderModels(
         }
     }
 
+    // A custom endpoint owns its model names and availability.
+    if (
+        !baseUrl ||
+        base === normalizeBaseUrl(publicDefaultUrl(provider) ?? "")
+    ) {
+        models = currentModelSuggestions(provider, models)
+    }
     return models.map((m) => ({
         ...m,
         tools: m.tools ?? getModelInfo(provider, m.id)?.tools,

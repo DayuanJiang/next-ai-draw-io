@@ -430,7 +430,7 @@
     "kimi-k3": {"tools":true,"images":true,"reasoning":true,"context":1048576,"output":131072,"cost":{"input":3,"output":15,"cacheRead":0.3}},
     "minimax-m2.5": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072},
     "minimax-m2.7": {"tools":true,"images":false,"reasoning":true,"context":196608,"output":196608,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06}},
-    "minimax-m3": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":131072,"cost":{"input":0.6,"output":2.4,"cacheRead":0.12}},
+    "minimax-m3": {"tools":true,"images":true,"reasoning":true,"context":512000,"output":131072,"cost":{"input":0.6,"output":2.4,"cacheRead":0.12}},
     "mistral-large-3:675b": {"tools":true,"images":true,"reasoning":false,"context":262144,"output":262144,"cost":{"input":0.5,"output":1.5}},
     "mistral-large-4": {"tools":true,"images":true,"reasoning":true,"context":1048576,"output":262144,"cost":{"input":1.36,"output":4.18,"cacheRead":0.14}},
     "muse-spark-open": {"tools":true,"images":true,"reasoning":true,"context":1048576,"output":131072,"cost":{"input":1.25,"output":4.25,"cacheRead":0.15}},
@@ -590,7 +590,8 @@
     "minimax/minimax-m2.1": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.3,"output":1.2,"cacheRead":0.03}},
     "minimax/minimax-m2.5": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":32768,"cost":{"input":0.27,"output":0.95,"cacheRead":0.03}},
     "minimax/minimax-m2.7": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06}},
-    "minimax/minimax-m3": {"tools":true,"images":true,"reasoning":true,"context":1048576,"output":512000,"cost":{"input":0.6,"output":2.4,"cacheRead":0.12}},
+    "minimax/minimax-m3": {"tools":true,"images":true,"reasoning":true,"context":1048576,"output":512000,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06}},
+    "minimax/minimax-m3.1-flash:free": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":524288,"cost":{"input":0,"output":0}},
     "mistralai/codestral-2508": {"tools":true,"images":false,"reasoning":false,"context":256000,"output":204800,"cost":{"input":0.3,"output":0.9,"cacheRead":0.03}},
     "mistralai/devstral-2512": {"tools":true,"images":false,"reasoning":false,"context":262144,"output":209715,"cost":{"input":0.4,"output":2,"cacheRead":0.04}},
     "mistralai/ministral-14b-2512": {"tools":true,"images":true,"reasoning":false,"context":262144,"output":209715,"cost":{"input":0.2,"output":0.2,"cacheRead":0.02}},
@@ -1174,7 +1175,7 @@
     "minimax/minimax-m2.5-highspeed": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131000,"cost":{"input":0.6,"output":2.4,"cacheRead":0.03,"cacheWrite":0.375}},
     "minimax/minimax-m2.7": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131000,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06,"cacheWrite":0.375}},
     "minimax/minimax-m2.7-highspeed": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131100,"cost":{"input":0.6,"output":2.4,"cacheRead":0.06,"cacheWrite":0.375}},
-    "minimax/minimax-m3": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":512000,"cost":{"input":0.6,"output":2.4,"cacheRead":0.12}},
+    "minimax/minimax-m3": {"tools":true,"images":true,"reasoning":true,"context":512000,"output":512000,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06}},
     "mistral/codestral": {"tools":true,"images":false,"reasoning":false,"context":256000,"output":4096,"cost":{"input":0.3,"output":0.9,"cacheRead":0.03}},
     "mistral/codestral-embed": {"tools":false,"images":false,"reasoning":false,"context":8192,"output":1536},
     "mistral/ministral-14b": {"tools":false,"images":true,"reasoning":false,"context":262144,"output":256000,"cost":{"input":0.2,"output":0.2,"cacheRead":0.02}},
@@ -1595,7 +1596,8 @@
     "MiniMax-M2.5-highspeed": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.6,"output":2.4,"cacheRead":0.06,"cacheWrite":0.375}},
     "MiniMax-M2.7": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06,"cacheWrite":0.375}},
     "MiniMax-M2.7-highspeed": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.6,"output":2.4,"cacheRead":0.06,"cacheWrite":0.375}},
-    "MiniMax-M3": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":512000,"cost":{"input":0.6,"output":2.4,"cacheRead":0.12}}
+    "MiniMax-M3": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":512000,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06,"tiers":[{"above":512000,"input":0.6,"output":2.4,"cacheRead":0.12}]}},
+    "MiniMax-M3.1-Flash": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":524288,"cost":{"input":0.15,"output":0.6,"cacheRead":0.015}}
   },
   "novita": {
     "apodex/apodex-1.1-mini": {"tools":true,"images":false,"reasoning":true,"context":262144,"output":262144,"cost":{"input":0,"output":0}},

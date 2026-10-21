@@ -222,12 +222,7 @@ const defs = {
                 "使用 /anthropic 端點為 Anthropic 相容 API（推薦），或使用 /v1 端點為 OpenAI 相容 API",
         },
         // The Anthropic-compatible API
-        models: [
-            "MiniMax-M3",
-            "MiniMax-M2.7",
-            "MiniMax-M2.7-highspeed",
-            "MiniMax-M2.5",
-        ],
+        models: ["MiniMax-M3.1-Flash", "MiniMax-M3"],
     },
     mimo: {
         label: "MiMo (Xiaomi)",
