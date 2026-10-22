@@ -1,5 +1,6 @@
 import type { LanguageModelUsage } from "ai"
 import catalog from "@/lib/model-catalog.json"
+import { currentModelSuggestions } from "@/lib/model-suggestions"
 import type { ProviderName } from "@/lib/types/model-config"
 
 /** USD per million tokens */
@@ -34,9 +35,12 @@ const CATALOG = catalog as Record<string, Record<string, ModelInfo>>
  * needs them), offered when the provider's own list is not available
  */
 export function listCatalogModels(provider: ProviderName): string[] {
-    return Object.entries(CATALOG[provider] ?? {})
-        .filter(([, info]) => info.tools)
-        .map(([id]) => id)
+    return currentModelSuggestions(
+        provider,
+        Object.entries(CATALOG[provider] ?? {})
+            .filter(([, info]) => info.tools)
+            .map(([id]) => ({ id })),
+    ).map(({ id }) => id)
 }
 
 /**
