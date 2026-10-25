@@ -49,4 +49,12 @@ describe("locale redirect", () => {
             "http://localhost/zh-Hant/about",
         )
     })
+
+    it("redirects the home page temporarily and other pages permanently", () => {
+        const status = (path: string) =>
+            proxy(new NextRequest(`http://localhost${path}`))?.status
+        expect(status("/")).toBe(307)
+        expect(status("/docs/editor")).toBe(308)
+        expect(status("/mcp")).toBe(308)
+    })
 })

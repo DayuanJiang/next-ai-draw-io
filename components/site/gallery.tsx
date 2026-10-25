@@ -138,6 +138,9 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
                     href={`/${lang}?prompt=${encodeURIComponent(item.prompt)}`}
                     // The editor is large: load it only when asked
                     prefetch={false}
+                    // The editor takes the prompt out of the address, which
+                    // search engines report as a redirect: keep them out
+                    rel="nofollow"
                     className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[13px] font-medium text-background"
                 >
                     <SquarePen className="size-3.5" />
