@@ -119,7 +119,7 @@
         "@vitejs/plugin-react": "^5.1.2",
         "cross-env": "^10.1.0",
         "dotenv": "^16.6.1",
-        "electron": "^41.10.6",
+        "electron": "^42.0.0",
         "electron-builder": "^26.0.12",
         "esbuild": "^0.28.0",
         "husky": "^9.1.7",
