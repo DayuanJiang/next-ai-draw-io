@@ -79,7 +79,11 @@ export function proxy(request: NextRequest) {
         // new URL("/...", request.url) would drop.
         const url = request.nextUrl.clone()
         url.pathname = `/${locale}${pathname}`
-        return NextResponse.redirect(url)
+        // A page is only ever at its localized path, so say so with a
+        // permanent redirect; with a temporary one, search engines keep the
+        // path without a locale as the page's address. The home page stays
+        // temporary: it is the entry point that picks the visitor's language.
+        return NextResponse.redirect(url, pathname === "/" ? 307 : 308)
     }
 }
 
