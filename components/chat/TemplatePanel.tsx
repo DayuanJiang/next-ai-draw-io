@@ -40,13 +40,13 @@ import {
 import { TemplateFormDialog } from "./TemplateFormDialog"
 
 interface TemplatePanelProps {
-    /** Whether it was sent */
-    onSendTemplate: (template: Template) => Promise<boolean>
+    /** Puts the template's prompt in the message box */
+    onUseTemplate: (template: Template) => void
     currentInput?: string
 }
 
 export function TemplatePanel({
-    onSendTemplate,
+    onUseTemplate,
     currentInput = "",
 }: TemplatePanelProps) {
     const dict = useDictionary()
@@ -60,8 +60,9 @@ export function TemplatePanel({
     const [templateToDelete, setTemplateToDelete] = useState<Template | null>(
         null,
     )
-    const [confirmSendDialogOpen, setConfirmSendDialogOpen] = useState(false)
-    const [templateToSend, setTemplateToSend] = useState<Template | null>(null)
+    const [confirmReplaceDialogOpen, setConfirmReplaceDialogOpen] =
+        useState(false)
+    const [templateToUse, setTemplateToUse] = useState<Template | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [importMessage, setImportMessage] = useState<{
@@ -131,43 +132,31 @@ export function TemplatePanel({
         }
     }
 
-    // Handle template card click - send directly or show confirmation
-    const handleTemplateClick = async (template: Template) => {
-        // If there's unsent content in the input, show confirmation dialog
+    // A click puts the prompt in the message box, where the user can change
+    // it and send it; text already typed there is replaced only on confirm
+    const handleTemplateClick = (template: Template) => {
         if (currentInput.trim()) {
-            setTemplateToSend(template)
-            setConfirmSendDialogOpen(true)
+            setTemplateToUse(template)
+            setConfirmReplaceDialogOpen(true)
             return
         }
-
-        // No unsent content, send directly
-        await sendTemplate(template)
+        applyTemplate(template)
     }
 
-    // Actually send the template
-    const sendTemplate = async (template: Template) => {
-        // A run only when it was sent (not while a message is still being
-        // sent, or attachments read)
-        if (await onSendTemplate(template)) {
-            // Increment run count and update lastUsedAt
-            await incrementRunCount(template.id)
-            // Reload to show updated stats
-            loadTemplates()
-        }
-        setConfirmSendDialogOpen(false)
-        setTemplateToSend(null)
+    const applyTemplate = (template: Template) => {
+        setConfirmReplaceDialogOpen(false)
+        setTemplateToUse(null)
+        onUseTemplate(template)
+        void incrementRunCount(template.id)
     }
 
-    // Handle confirmation dialog - user confirmed to send template
-    const handleConfirmSend = async () => {
-        if (!templateToSend) return
-        await sendTemplate(templateToSend)
+    const handleConfirmReplace = () => {
+        if (templateToUse) applyTemplate(templateToUse)
     }
 
-    // Handle cancel - close dialog without sending
-    const handleCancelSend = () => {
-        setConfirmSendDialogOpen(false)
-        setTemplateToSend(null)
+    const handleCancelReplace = () => {
+        setConfirmReplaceDialogOpen(false)
+        setTemplateToUse(null)
     }
 
     // Export templates to JSON file
@@ -554,26 +543,26 @@ export function TemplatePanel({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Confirm Send Dialog - when there's unsent input */}
+            {/* Confirm Replace Dialog - when there's unsent input */}
             <AlertDialog
-                open={confirmSendDialogOpen}
-                onOpenChange={setConfirmSendDialogOpen}
+                open={confirmReplaceDialogOpen}
+                onOpenChange={setConfirmReplaceDialogOpen}
             >
                 <AlertDialogContent className="max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {dict.templates.confirmSendTitle}
+                            {dict.templates.confirmReplaceTitle}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            {dict.templates.confirmSendDescription}
+                            {dict.templates.confirmReplaceDescription}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={handleCancelSend}>
+                        <AlertDialogCancel onClick={handleCancelReplace}>
                             {dict.common.cancel}
                         </AlertDialogCancel>
-                        <AlertDialogAction onClick={handleConfirmSend}>
-                            {dict.templates.confirmSendButton}
+                        <AlertDialogAction onClick={handleConfirmReplace}>
+                            {dict.templates.confirmReplaceButton}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

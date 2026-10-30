@@ -180,6 +180,7 @@ export function Composer({
     const [isDragging, setIsDragging] = useState(false)
     const [addOpen, setAddOpen] = useState(false)
     const [templatesOpen, setTemplatesOpen] = useState(false)
+    const templatePickedRef = useRef(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
     const [isExtractingUrl, setIsExtractingUrl] = useState(false)
     const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
@@ -579,16 +580,26 @@ export function Composer({
                 initialPrompt={input.trim()}
             />
             <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}>
-                <DialogContent className="flex max-h-[80vh] flex-col gap-0 p-0 sm:max-w-lg">
+                <DialogContent
+                    className="flex max-h-[80vh] flex-col gap-0 p-0 sm:max-w-lg"
+                    onCloseAutoFocus={(e) => {
+                        // A picked prompt is edited and sent from the box
+                        if (!templatePickedRef.current) return
+                        templatePickedRef.current = false
+                        e.preventDefault()
+                        textareaRef.current?.focus()
+                    }}
+                >
                     <DialogHeader className="px-5 pt-5 pb-2">
                         <DialogTitle>{dict.templates.myTemplates}</DialogTitle>
                     </DialogHeader>
                     <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
                         <TemplatePanel
                             currentInput={input}
-                            onSendTemplate={(template) => {
+                            onUseTemplate={(template) => {
+                                templatePickedRef.current = true
+                                setInput(template.prompt)
                                 setTemplatesOpen(false)
-                                return engine.sendTemplate(template.prompt)
                             }}
                         />
                     </div>

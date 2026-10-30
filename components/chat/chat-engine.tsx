@@ -213,9 +213,7 @@ export interface ChatEngine {
     isExtractingAttachments: boolean
 
     /** Whether the message was sent */
-    submit: (overrideText?: string) => Promise<boolean>
-    /** Whether it was sent */
-    sendTemplate: (prompt: string) => Promise<boolean>
+    submit: () => Promise<boolean>
     improveWithSuggestions: (feedback: string) => Promise<void>
     regenerate: (messageIndex: number) => Promise<void>
     retryLastMessage: () => Promise<void>
@@ -1307,9 +1305,9 @@ export function ChatEngineProvider({
     }
 
     // Whether the message was sent
-    const submitInput = async (overrideText?: string): Promise<boolean> => {
-        const text = overrideText ?? input
-        // busyRef: also when called after a wait (a template click)
+    const submitInput = async (): Promise<boolean> => {
+        const text = input
+        // busyRef: the value of the latest render
         if (!text.trim() || busyRef.current || isExtractingAttachments) {
             return false
         }
@@ -1461,7 +1459,7 @@ export function ChatEngineProvider({
         return false
     }
 
-    const submit = async (overrideText?: string): Promise<boolean> => {
+    const submit = async (): Promise<boolean> => {
         // While a send is prepared (attachments read, diagram exported) the
         // status is still "ready": a second Enter or click would send the
         // message again
@@ -1472,38 +1470,10 @@ export function ChatEngineProvider({
         }
         preparingSendRef.current = true
         try {
-            return await submitInput(overrideText)
+            return await submitInput()
         } finally {
             preparingSendRef.current = false
         }
-    }
-
-    // Templates fill the input and send it right away (attachments included)
-    // Whether it was sent (it can run after a wait, so busy is read from
-    // the ref)
-    const sendTemplate = async (prompt: string): Promise<boolean> => {
-        // Like the send button, it waits for an answer or a message being
-        // prepared (that message may still come back to the input), and for
-        // attachments still being read; the input keeps what it has
-        if (leavingRef.current) return false
-        if (busyRef.current) {
-            toast.error(dict.errors.answerInProgress, {
-                id: "template-not-sent",
-            })
-            return false
-        }
-        if (preparingSendRef.current) {
-            toast.error(dict.errors.sendInProgress, { id: "send-in-progress" })
-            return false
-        }
-        if (isExtractingAttachments) {
-            toast.error(dict.errors.attachmentsStillReading, {
-                id: "template-not-sent",
-            })
-            return false
-        }
-        setInput(prompt)
-        return submit(prompt)
     }
 
     const improveWithSuggestions = async (feedback: string) => {
@@ -1979,7 +1949,6 @@ export function ChatEngineProvider({
         setUrlData,
         isExtractingAttachments,
         submit,
-        sendTemplate,
         improveWithSuggestions,
         regenerate,
         retryLastMessage,
