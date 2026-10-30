@@ -51,6 +51,7 @@ export function attachEditor(editorUi: EditorUi, frameWindow: FrameWindow) {
     quietUnload()
     confirmDeleteAll()
     nameEmbedFiles()
+    savePdfsOnDesktop()
     useCanvasStore.getState().set({ hasEditor: true })
     syncAll()
 }
@@ -134,6 +135,50 @@ function nameEmbedFiles() {
     }
     wrapped.naiWrapped = true
     proto.getTitle = wrapped
+}
+
+// Desktop app: draw.io makes a PDF by printing its preview window, which
+// Electron sends to the system print dialog (fixed paper sizes, so the crop
+// size is lost and wide diagrams are turned). Export in the PDF dialog saves
+// the preview with Electron's printToPDF instead; File > Print still prints.
+function savePdfsOnDesktop() {
+    const save = window.electronAPI?.savePreviewAsPdf
+    const dialog = win?.PrintDialog
+    const printPreview = dialog?.printPreview
+    if (!save || typeof printPreview !== "function" || printPreview.naiWrapped)
+        return
+    // Both dialogs end in printPreview: which one is open
+    let forPdf = false
+    for (const [name, pdf] of [
+        ["exportPdf", true],
+        ["print", false],
+    ] as const) {
+        const action = ui?.actions?.get?.(name)
+        const funct = action?.funct
+        if (typeof funct !== "function") continue
+        action.funct = function (this: unknown, ...args: unknown[]) {
+            forPdf = pdf
+            return funct.apply(this, args)
+        }
+    }
+    const wrapped = (preview: any) => {
+        const wnd = preview?.wnd
+        if (!forPdf || !wnd) return printPreview(preview)
+        const title = ui?.getCurrentFile?.()?.getTitle?.() || "diagram"
+        const run = () =>
+            save(`${title}.pdf`).catch((error) => {
+                console.warn(`[drawio] PDF export failed: ${error}`)
+                printPreview(preview)
+            })
+        // As draw.io waits before printing: images and fonts in the preview
+        if (typeof dialog.waitForResources === "function") {
+            dialog.waitForResources(wnd, run, dialog.printTimeout)
+        } else {
+            run()
+        }
+    }
+    wrapped.naiWrapped = true
+    dialog.printPreview = wrapped
 }
 
 // draw.io's simple UI opens or closes its format panel and shape library
