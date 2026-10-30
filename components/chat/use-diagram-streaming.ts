@@ -250,7 +250,7 @@ export function useDiagramStreaming({
             if (lastProcessedXmlRef.current.get(opsKey) === ops) continue
             lastProcessedXmlRef.current.set(opsKey, ops)
             try {
-                // The model's page: the edges on it and its first layer,
+                // The model's page: the edges on it and its default layer,
                 // as editDiagram reads them
                 const selector = pageSelectorFor(
                     originalXml,

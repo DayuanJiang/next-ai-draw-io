@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { extractCompleteMxCells, isMxCellXmlComplete } from "@/lib/utils"
 import {
+    defaultLayerOf,
     expandCompactCells,
     foldCells,
 } from "@/packages/mcp-server/src/compact-cells.ts"
@@ -317,6 +318,38 @@ describe("review round: cells the model may write", () => {
         // Folding keeps a parent other than the default layer "1"
         expect(foldCells(file)).toContain(
             '<mxCell id="2" value="Start" style="rounded=1;" parent="L1" x="40" y="40" w="120" h="60"/>',
+        )
+    })
+
+    it("keeps a cell shown without its parent on layer 1 when another layer comes first (#1027)", () => {
+        // draw.io saves a layer moved to the back before layer 1
+        const file = `<mxfile><diagram id="p1" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="L2" value="Layer 2" parent="0"/><mxCell id="1" parent="0"/>${shapeLong}</root></mxGraphModel></diagram></mxfile>`
+        expect(defaultLayerOf(file)).toBe("1")
+        // The model reads the shape without parent="1" and sends it back so
+        expect(foldCells(file)).toContain(shape)
+        const outcome = editDiagram(
+            file,
+            [
+                {
+                    operation: "update",
+                    cell_id: "2",
+                    new_xml: shape.replace('value="Start"', 'value="B"'),
+                },
+                {
+                    operation: "add",
+                    cell_id: "3",
+                    new_xml:
+                        '<mxCell id="3" value="C" x="1" y="2" w="3" h="4"/>',
+                },
+            ],
+            {},
+        )
+        expect(outcome.ok).toBe(true)
+        if (!outcome.ok) return
+        expect(outcome.xml).toContain('value="B" style="rounded=1;')
+        expect(outcome.xml).not.toContain('parent="L2"')
+        expect(outcome.xml).toContain(
+            '<mxCell id="3" value="C" vertex="1" parent="1"',
         )
     })
 
