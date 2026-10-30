@@ -67,28 +67,6 @@ for (const [provider, source] of Object.entries(PROVIDERS)) {
     }
 }
 
-// Current release entries until models.dev includes them. Keep gateway facts
-// separate from the direct API; do not replace historical model metadata.
-// https://platform.minimax.io/docs/guides/models-intro.md
-// https://platform.minimax.io/docs/guides/pricing-paygo.md
-// https://openrouter.ai/api/v1/models
-catalog.minimax["MiniMax-M3.1-Flash"] = {
-    tools: true,
-    images: true,
-    reasoning: true,
-    context: 1000000,
-    output: 524288,
-    cost: { input: 0.15, output: 0.6, cacheRead: 0.015 },
-}
-catalog.openrouter["minimax/minimax-m3.1-flash:free"] = {
-    tools: true,
-    images: true,
-    reasoning: true,
-    context: 1000000,
-    output: 524288,
-    cost: { input: 0, output: 0 },
-}
-
 /** A models.dev price in our names (USD per million tokens), if complete */
 function priceOf(c) {
     if (c?.input == null || c?.output == null) return undefined

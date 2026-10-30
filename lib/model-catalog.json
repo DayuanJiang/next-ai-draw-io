@@ -591,7 +591,7 @@
     "minimax/minimax-m2.5": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":32768,"cost":{"input":0.27,"output":0.95,"cacheRead":0.03}},
     "minimax/minimax-m2.7": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06}},
     "minimax/minimax-m3": {"tools":true,"images":true,"reasoning":true,"context":1048576,"output":512000,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06}},
-    "minimax/minimax-m3.1-flash:free": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":524288,"cost":{"input":0,"output":0}},
+    "minimax/minimax-m3.1-flash": {"tools":true,"images":true,"reasoning":true,"context":1048576,"output":524288,"cost":{"input":0.075,"output":0.3,"cacheRead":0.0075}},
     "mistralai/codestral-2508": {"tools":true,"images":false,"reasoning":false,"context":256000,"output":204800,"cost":{"input":0.3,"output":0.9,"cacheRead":0.03}},
     "mistralai/devstral-2512": {"tools":true,"images":false,"reasoning":false,"context":262144,"output":209715,"cost":{"input":0.4,"output":2,"cacheRead":0.04}},
     "mistralai/ministral-14b-2512": {"tools":true,"images":true,"reasoning":false,"context":262144,"output":209715,"cost":{"input":0.2,"output":0.2,"cacheRead":0.02}},
@@ -1597,7 +1597,7 @@
     "MiniMax-M2.7": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06,"cacheWrite":0.375}},
     "MiniMax-M2.7-highspeed": {"tools":true,"images":false,"reasoning":true,"context":204800,"output":131072,"cost":{"input":0.6,"output":2.4,"cacheRead":0.06,"cacheWrite":0.375}},
     "MiniMax-M3": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":512000,"cost":{"input":0.3,"output":1.2,"cacheRead":0.06,"tiers":[{"above":512000,"input":0.6,"output":2.4,"cacheRead":0.12}]}},
-    "MiniMax-M3.1-Flash": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":524288,"cost":{"input":0.15,"output":0.6,"cacheRead":0.015}}
+    "MiniMax-M3.1-Flash": {"tools":true,"images":true,"reasoning":true,"context":1000000,"output":524288,"cost":{"input":0.1494,"output":0.5976,"cacheRead":0.0149}}
   },
   "novita": {
     "apodex/apodex-1.1-mini": {"tools":true,"images":false,"reasoning":true,"context":262144,"output":262144,"cost":{"input":0,"output":0}},
