@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     chatSaved: () => ipcRenderer.invoke("chat-saved"),
     chatsLoaded: (count: number) => ipcRenderer.invoke("chats-loaded", count),
 
+    // draw.io's PDF export: save its print preview as a PDF file
+    savePreviewAsPdf: (fileName: string) =>
+        ipcRenderer.invoke("save-preview-as-pdf", fileName),
+
     // The server restarted on the same port (proxy change)
     onServerRestarted: (callback: () => void) => {
         const listener = () => callback()

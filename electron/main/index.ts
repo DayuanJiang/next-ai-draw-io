@@ -3,6 +3,7 @@ import { buildAppMenu } from "./app-menu"
 import { loadEnvFile } from "./env-loader"
 import { registerIpcHandlers } from "./ipc-handlers"
 import { startNextServer, stopNextServer } from "./next-server"
+import { trackOpenedWindows } from "./pdf-export"
 import { applyProxyToEnv } from "./proxy-manager"
 import {
     createWindow,
@@ -103,6 +104,9 @@ if (!gotTheLock) {
 
     // Open external links in default browser
     app.on("web-contents-created", (_, contents) => {
+        // draw.io's print previews, for its PDF export
+        trackOpenedWindows(contents)
+
         contents.setWindowOpenHandler(({ url }) => {
             if (isInAppUrl(url)) {
                 return { action: "allow" }

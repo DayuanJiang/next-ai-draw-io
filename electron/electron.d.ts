@@ -41,6 +41,11 @@ declare global {
             chatSaved?: () => Promise<void>
             /** The page loaded with this many chats */
             chatsLoaded?: (count: number) => Promise<void>
+            /**
+             * Save draw.io's print preview window as a PDF (asks where);
+             * whether it was saved
+             */
+            savePreviewAsPdf?: (fileName: string) => Promise<boolean>
         }
     }
 }

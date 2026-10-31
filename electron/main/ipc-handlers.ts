@@ -2,6 +2,7 @@ import { app, type IpcMainInvokeEvent, ipcMain } from "electron"
 import { buildAppMenu } from "./app-menu"
 import { setUserLocale, USER_LOCALES, type UserLocale } from "./config-manager"
 import { restartNextServer } from "./next-server"
+import { savePreviewAsPdf } from "./pdf-export"
 import { noteNoChats, rememberChatPort } from "./port-manager"
 import {
     applyProxyToEnv,
@@ -112,4 +113,13 @@ export function registerIpcHandlers(): void {
             }
         }
     })
+
+    // ==================== PDF Export ====================
+
+    handle("save-preview-as-pdf", (event, fileName: unknown) =>
+        savePreviewAsPdf(
+            event.sender,
+            typeof fileName === "string" ? fileName : "diagram.pdf",
+        ),
+    )
 }
