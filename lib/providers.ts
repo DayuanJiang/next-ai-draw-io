@@ -223,6 +223,7 @@ const defs = {
         },
         // The Anthropic-compatible API
         models: [
+            "MiniMax-M3.1-Flash",
             "MiniMax-M3",
             "MiniMax-M2.7",
             "MiniMax-M2.7-highspeed",
