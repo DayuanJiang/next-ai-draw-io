@@ -39,11 +39,16 @@ async function fingerprints() {
         const html = (await get(url))
             .replace(/<script[\s\S]*?<\/script>/g, "")
             .replace(/<a [^>]*aria-label="GitHub"[^>]*>[\s\S]*?<\/a>/g, "")
+        // Sorted, without Next's font tag: its place in the head moves from
+        // build to build, which made unchanged pages look changed
         const head = (
             html.match(
                 /<(title|meta|link rel="(canonical|alternate)")[^>]*>/g,
             ) ?? []
-        ).join("\n")
+        )
+            .filter((tag) => !tag.includes("next-size-adjust"))
+            .sort()
+            .join("\n")
         const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")
         result[url] = createHash("sha256")
             .update(`${head}\n${text}`)
