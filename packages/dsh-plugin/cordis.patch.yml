@@ -2,7 +2,8 @@
 #
 # Mounts the @next-ai-drawio/mcp-server MCP server over stdio. Its tools show
 # up as mcp__drawio__start_session, mcp__drawio__create_new_diagram and so on.
-# start_session opens the live preview in the browser.
+# start_session returns the preview link; clicking it in the chat opens the
+# live preview in DSH's right sidebar.
 #
 # Install through DSH's plugin manager: dsh plugin --profile web add @next-ai-drawio/dsh
 
@@ -16,3 +17,12 @@
         args: ['-y', '@next-ai-drawio/mcp-server@latest']
         # Screenshots and exports can take longer than the 60 s default.
         toolCallTimeoutMs: 120000
+        env:
+          # Let DSH's sidebar browser frame the preview page
+          DRAWIO_ALLOW_EMBED: 'true'
+          # Give the link in the chat instead of opening a browser tab
+          BROWSER: none
+
+# The sidebar browser is off by default in the web profile
+- id: ui-sidebar-browser
+  disabled: false

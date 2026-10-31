@@ -51,7 +51,9 @@ default_tools_approval_mode = "approve"
 dsh plugin --profile web add @next-ai-drawio/dsh
 ```
 
-插件会用 `npx` 启动这个 MCP 服务器。只有支持图片输入的模型才能看到截图；使用纯文本模型时，DSH 会用一句文字说明代替图片。
+插件会用 `npx` 启动这个 MCP 服务器。AI 会在回复里给出预览链接，点开后预览显示在 DSH 的右侧栏里。DSH 网页版默认关闭侧栏浏览器，插件会把它打开。
+
+预览打开之后，AI 才能截图检查自己画的图，而且只有支持图片输入的模型才能看到截图；使用纯文本模型时，DSH 会用一句文字说明代替图片。
 
 ## Cursor、Claude Desktop、Cline 等
 

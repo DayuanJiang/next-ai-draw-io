@@ -737,6 +737,18 @@ describe("preview page", () => {
         // It holds the process's token
         expect(res.headers["cache-control"]).toBe("no-store")
     })
+
+    it("lets pages on this machine frame the preview with DRAWIO_ALLOW_EMBED=true", async () => {
+        process.env.DRAWIO_ALLOW_EMBED = "true"
+        try {
+            const res = await request("/?mcp=mcp-test-embed")
+            expect(res.headers["content-security-policy"]).toBe(
+                "frame-ancestors 'self' localhost:* 127.0.0.1:*",
+            )
+        } finally {
+            delete process.env.DRAWIO_ALLOW_EMBED
+        }
+    })
 })
 
 describe("API token", () => {

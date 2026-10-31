@@ -51,7 +51,9 @@ default_tools_approval_mode = "approve"
 dsh plugin --profile web add @next-ai-drawio/dsh
 ```
 
-外掛會用 `npx` 啟動這個 MCP 伺服器。只有支援圖片輸入的模型才能看到截圖；使用純文字模型時，DSH 會用一句文字說明代替圖片。
+外掛會用 `npx` 啟動這個 MCP 伺服器。AI 會在回覆裡給出預覽連結，點開後預覽顯示在 DSH 的右側欄裡。DSH 網頁版預設關閉側欄瀏覽器，外掛會把它開啟。
+
+預覽開啟之後，AI 才能截圖檢查自己畫的圖，而且只有支援圖片輸入的模型才能看到截圖；使用純文字模型時，DSH 會用一句文字說明代替圖片。
 
 ## Cursor、Claude Desktop、Cline 等
 

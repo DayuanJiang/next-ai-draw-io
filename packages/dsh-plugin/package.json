@@ -1,7 +1,7 @@
 {
     "name": "@next-ai-drawio/dsh",
     "version": "0.1.0",
-    "description": "draw.io diagrams in DeepSeek Harness: the AI draws on a live browser canvas you can also edit by hand, with versions and undo",
+    "description": "draw.io diagrams in DeepSeek Harness: the AI draws on a live canvas in the sidebar that you can also edit by hand, with versions and undo",
     "keywords": [
         "dsh",
         "dsh-plugin",

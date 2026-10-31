@@ -51,7 +51,9 @@ Install the plugin into the profile you start DSH with (`web` for `dsh web`):
 dsh plugin --profile web add @next-ai-drawio/dsh
 ```
 
-The plugin starts this MCP server with `npx`. Screenshots reach the model only when it accepts images; with a text-only model, DSH passes a short note instead of the picture.
+The plugin starts this MCP server with `npx`. The agent replies with the preview link; click it and the preview opens in DSH's right sidebar. The plugin turns on DSH's sidebar browser, which the web profile leaves off by default.
+
+The agent can check its drawing with screenshots once the preview is open, and only with a model that accepts images; with a text-only model, DSH passes a short note instead of the picture.
 
 ## Cursor, Claude Desktop, Cline and others
 
