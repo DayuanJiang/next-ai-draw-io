@@ -1,6 +1,6 @@
 # ほかの MCP クライアント
 
-MCP サーバーは、ローカルの MCP サーバーを stdio で動かせるクライアントならどれでも使えます。Codex CLI、VS Code、Cursor、Claude Desktop、Cline などです。Node.js 18 以降が必要です。Claude Code については [Claude Code から使う](./claude-code.md)を参照してください。
+MCP サーバーは、ローカルの MCP サーバーを stdio で動かせるクライアントならどれでも使えます。Codex CLI、VS Code、DeepSeek Harness、Cursor、Claude Desktop、Cline などです。Node.js 18 以降が必要です。Claude Code については [Claude Code から使う](./claude-code.md)を参照してください。
 
 ## エージェントにインストールしてもらう
 
@@ -42,6 +42,18 @@ default_tools_approval_mode = "approve"
   }
 }
 ```
+
+## DeepSeek Harness
+
+DSH を起動するときの profile（DSH の設定一式。`dsh web` なら `web`）にプラグインをインストールします。
+
+```bash
+dsh plugin --profile web add @next-ai-drawio/dsh
+```
+
+プラグインはこの MCP サーバーを `npx` で起動します。AI が返信にプレビューのリンクを書くので、クリックすると DSH の右サイドバーにプレビューが開きます。DSH の Web 版はサイドバーのブラウザーが既定でオフなので、プラグインがオンにします。
+
+AI がスクリーンショットで図を確認できるのは、プレビューを開いたあとで、しかも画像入力に対応したモデルの場合だけです。テキストのみのモデルでは、DSH が画像の代わりに短い説明文を渡します。
 
 ## Cursor、Claude Desktop、Cline など
 

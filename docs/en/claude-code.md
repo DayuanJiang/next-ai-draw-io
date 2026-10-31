@@ -73,6 +73,7 @@ claude mcp add --scope user drawio -e DRAWIO_LANG=ja -- npx @next-ai-drawio/mcp-
 | `DRAWIO_LANG` | unset | Fix the editor and preview language: `en`, `zh`, `zh-tw`, `ja`, `de` and so on |
 | `DRAWIO_DARK` | `auto` | `1` starts dark, `0` starts light, `auto` follows the system |
 | `BROWSER` | unset | `none` does not open the preview by itself |
+| `DRAWIO_ALLOW_EMBED` | unset | `true` lets pages on this machine (`localhost`, `127.0.0.1`) show the preview in a frame, such as DeepSeek Harness's sidebar browser |
 
 All variables, and how to use a self-hosted draw.io, are in the [MCP server README](../../packages/mcp-server/README.md#configuration).
 

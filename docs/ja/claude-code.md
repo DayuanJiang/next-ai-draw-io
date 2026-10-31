@@ -73,6 +73,7 @@ claude mcp add --scope user drawio -e DRAWIO_LANG=ja -- npx @next-ai-drawio/mcp-
 | `DRAWIO_LANG` | 未設定 | エディタとプレビューの言語を固定します：`en`、`zh`、`zh-tw`、`ja`、`de` など |
 | `DRAWIO_DARK` | `auto` | `1` はダーク、`0` はライトで起動し、`auto` はシステムに合わせます |
 | `BROWSER` | 未設定 | `none` にすると、プレビューを自動では開きません |
+| `DRAWIO_ALLOW_EMBED` | 未設定 | `true` にすると、このマシン（`localhost`、`127.0.0.1`）のページがプレビューを埋め込めます。DeepSeek Harness のサイドバーのブラウザーなどです |
 
 すべての変数と、セルフホストした draw.io を使う方法は、[MCP サーバーの README](../../packages/mcp-server/README.md#configuration) にあります。
 

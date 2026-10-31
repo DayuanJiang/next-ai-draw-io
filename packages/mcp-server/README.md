@@ -63,6 +63,12 @@ To approve only some tools, use `[mcp_servers.drawio.tools.<tool name>]` with `a
 }
 ```
 
+**DeepSeek Harness**: install the [plugin](https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/dsh-plugin) into the profile you start DSH with (`web` for `dsh web`). The agent replies with the preview link; clicking it opens the preview in DSH's right sidebar.
+
+```bash
+dsh plugin --profile web add @next-ai-drawio/dsh
+```
+
 **Cursor, Claude Desktop, Cline and most other clients** (`~/.cursor/mcp.json`, `claude_desktop_config.json`, `cline_mcp_settings.json`)
 
 ```json
@@ -135,6 +141,7 @@ Environment variables, set in the client's `env` for the server:
 | `DRAWIO_UI` | unset | Fix the draw.io theme: `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple` |
 | `DRAWIO_DARK` | `auto` | `1` starts dark, `0` starts light, `auto` follows the system |
 | `BROWSER` | unset | `none` does not open the preview by itself; `start_session` still returns the URL |
+| `DRAWIO_ALLOW_EMBED` | unset | `true` lets pages on this machine (`localhost`, `127.0.0.1`) show the preview in a frame, such as DeepSeek Harness's sidebar browser |
 | `DRAWIO_PREVIEW_UI` | `shell` | `classic` opens the previous preview page, without outlines, Ctrl+Z or `get_selection` |
 | `DEBUG` | unset | `true` logs debug messages to stderr |
 

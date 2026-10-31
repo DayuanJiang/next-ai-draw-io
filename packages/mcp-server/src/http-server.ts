@@ -789,7 +789,7 @@ function servePage(
     res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
-        ...HTML_SECURITY_HEADERS,
+        ...htmlSecurityHeaders(),
     })
     res.end(req.method === "HEAD" ? undefined : html)
 }
@@ -1146,10 +1146,18 @@ function handleHistorySvgApi(
     })
 }
 
-// Pages may be framed only by this origin, and nothing is content-sniffed
-const HTML_SECURITY_HEADERS = {
-    "Content-Security-Policy": "frame-ancestors 'self'",
-    "X-Content-Type-Options": "nosniff",
+// Pages may be framed only by this origin, and nothing is content-sniffed.
+// DRAWIO_ALLOW_EMBED=true also lets pages on this machine frame them, so
+// DeepSeek Harness can show the preview in its sidebar browser.
+function htmlSecurityHeaders(): Record<string, string> {
+    const ancestors =
+        process.env.DRAWIO_ALLOW_EMBED === "true"
+            ? "'self' localhost:* 127.0.0.1:*"
+            : "'self'"
+    return {
+        "Content-Security-Policy": `frame-ancestors ${ancestors}`,
+        "X-Content-Type-Options": "nosniff",
+    }
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -1240,7 +1248,7 @@ function serveStaticFile(
         ...cacheHeaders,
         "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
         "Content-Length": size,
-        ...(ext === ".html" ? HTML_SECURITY_HEADERS : {}),
+        ...(ext === ".html" ? htmlSecurityHeaders() : {}),
     })
     if (req.method === "HEAD") {
         res.end()

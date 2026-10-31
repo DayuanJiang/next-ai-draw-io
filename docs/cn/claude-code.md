@@ -73,6 +73,7 @@ claude mcp add --scope user drawio -e DRAWIO_LANG=ja -- npx @next-ai-drawio/mcp-
 | `DRAWIO_LANG` | 未设置 | 固定编辑器和预览的语言：`en`、`zh`、`zh-tw`、`ja`、`de` 等 |
 | `DRAWIO_DARK` | `auto` | `1` 以深色启动，`0` 以浅色启动，`auto` 跟随系统 |
 | `BROWSER` | 未设置 | 设为 `none` 时不会自动打开预览 |
+| `DRAWIO_ALLOW_EMBED` | 未设置 | 设为 `true` 时，允许本机（`localhost`、`127.0.0.1`）上的页面嵌入预览，例如 DeepSeek Harness 的侧栏浏览器 |
 
 所有变量，以及如何使用自建的 draw.io，见 [MCP 服务器 README](../../packages/mcp-server/README.md#configuration)。
 

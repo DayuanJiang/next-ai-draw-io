@@ -1,0 +1,42 @@
+{
+    "name": "@next-ai-drawio/dsh",
+    "version": "0.1.0",
+    "description": "draw.io diagrams in DeepSeek Harness: the AI draws on a live canvas in the sidebar that you can also edit by hand, with versions and undo",
+    "keywords": [
+        "dsh",
+        "dsh-plugin",
+        "deepseek-harness",
+        "mcp",
+        "drawio",
+        "draw.io",
+        "diagram",
+        "architecture-diagram",
+        "flowchart"
+    ],
+    "author": "DayuanJiang",
+    "license": "Apache-2.0",
+    "homepage": "https://next-ai-drawio.jiang.jp/en/mcp",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/DayuanJiang/next-ai-draw-io.git",
+        "directory": "packages/dsh-plugin"
+    },
+    "bugs": {
+        "url": "https://github.com/DayuanJiang/next-ai-draw-io/issues"
+    },
+    "icon": "./icon.png",
+    "files": [
+        "cordis.patch.yml",
+        "icon.png",
+        "locale",
+        "README.md"
+    ],
+    "publishConfig": {
+        "access": "public"
+    },
+    "dsh": {
+        "bundle": {
+            "patch": "./cordis.patch.yml"
+        }
+    }
+}
