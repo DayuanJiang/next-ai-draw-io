@@ -1,6 +1,6 @@
 # Other MCP clients
 
-The MCP server works with any client that runs local MCP servers over stdio: Codex CLI, VS Code, Cursor, Claude Desktop, Cline and more. You need Node.js 18 or later. For Claude Code, see [Use it from Claude Code](./claude-code.md).
+The MCP server works with any client that runs local MCP servers over stdio: Codex CLI, VS Code, DeepSeek Harness, Cursor, Claude Desktop, Cline and more. You need Node.js 18 or later. For Claude Code, see [Use it from Claude Code](./claude-code.md).
 
 ## Let your agent install it
 
@@ -42,6 +42,16 @@ In `.vscode/mcp.json`:
   }
 }
 ```
+
+## DeepSeek Harness
+
+Install the plugin into the profile you start DSH with (`web` for `dsh web`):
+
+```bash
+dsh plugin --profile web add @next-ai-drawio/dsh
+```
+
+The plugin starts this MCP server with `npx`. Screenshots reach the model only when it accepts images; with a text-only model, DSH passes a short note instead of the picture.
 
 ## Cursor, Claude Desktop, Cline and others
 

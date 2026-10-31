@@ -63,6 +63,12 @@ To approve only some tools, use `[mcp_servers.drawio.tools.<tool name>]` with `a
 }
 ```
 
+**DeepSeek Harness**: install the [plugin](https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/dsh-plugin) into the profile you start DSH with (`web` for `dsh web`)
+
+```bash
+dsh plugin --profile web add @next-ai-drawio/dsh
+```
+
 **Cursor, Claude Desktop, Cline and most other clients** (`~/.cursor/mcp.json`, `claude_desktop_config.json`, `cline_mcp_settings.json`)
 
 ```json

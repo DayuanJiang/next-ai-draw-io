@@ -1,0 +1,18 @@
+# next-ai-drawio for DeepSeek Harness
+#
+# Mounts the @next-ai-drawio/mcp-server MCP server over stdio. Its tools show
+# up as mcp__drawio__start_session, mcp__drawio__create_new_diagram and so on.
+# start_session opens the live preview in the browser.
+#
+# Install through DSH's plugin manager: dsh plugin --profile web add @next-ai-drawio/dsh
+
+- insert:
+    - id: mcp-drawio
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: drawio
+        transport: stdio
+        command: npx
+        args: ['-y', '@next-ai-drawio/mcp-server@latest']
+        # Screenshots and exports can take longer than the 60 s default.
+        toolCallTimeoutMs: 120000

@@ -1,6 +1,6 @@
 # 其他 MCP 客户端
 
-MCP 服务器适用于任何能通过 stdio 运行本地 MCP 服务器的客户端：Codex CLI、VS Code、Cursor、Claude Desktop、Cline 等。需要 Node.js 18 或更高版本。Claude Code 的用法见[在 Claude Code 里使用](./claude-code.md)。
+MCP 服务器适用于任何能通过 stdio 运行本地 MCP 服务器的客户端：Codex CLI、VS Code、DeepSeek Harness、Cursor、Claude Desktop、Cline 等。需要 Node.js 18 或更高版本。Claude Code 的用法见[在 Claude Code 里使用](./claude-code.md)。
 
 ## 让代理来安装
 
@@ -42,6 +42,16 @@ default_tools_approval_mode = "approve"
   }
 }
 ```
+
+## DeepSeek Harness
+
+把插件安装到启动 DSH 时使用的 profile 里（profile 是 DSH 的一套配置，`dsh web` 用的是 `web`）：
+
+```bash
+dsh plugin --profile web add @next-ai-drawio/dsh
+```
+
+插件会用 `npx` 启动这个 MCP 服务器。只有支持图片输入的模型才能看到截图；使用纯文本模型时，DSH 会用一句文字说明代替图片。
 
 ## Cursor、Claude Desktop、Cline 等
 
