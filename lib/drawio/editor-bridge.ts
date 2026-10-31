@@ -198,8 +198,19 @@ export function detachEditor() {
         hasEditor: false,
         selection: [],
         selectionRect: null,
+        isFormatOpen: false,
         isDrawioPopupOpen: false,
     })
+}
+
+/** Opens draw.io's format panel, where the selection's colors are set */
+export function openFormatPanel() {
+    try {
+        if (!isFormatPanelOpen()) ui?.actions?.get?.("format")?.funct()
+    } catch {
+        // ignore
+    }
+    syncAll()
 }
 
 function graph() {
@@ -910,6 +921,7 @@ function syncAll() {
         selection: readSelection(),
         selectionRect: readSelectionRect(),
         isFreehand: !!g?.freehand?.isDrawing?.(),
+        isFormatOpen: isFormatPanelOpen(),
     })
 }
 
@@ -951,6 +963,8 @@ function installListeners(): () => void {
     listen(g.model, mxEvent.CHANGE, syncAll)
     // Drawing started or stopped: the "ask AI" button hides meanwhile
     listen(g, "freehandStateChanged", syncAll)
+    // The format panel opened or closed (its toolbar button, Ctrl+Shift+P)
+    listen(ui, "formatWidthChanged", syncAll)
     listen(g.view, mxEvent.SCALE, onScale)
     listen(g.view, mxEvent.TRANSLATE, syncSelectionRect)
     listen(g.view, mxEvent.SCALE_AND_TRANSLATE, onScale)

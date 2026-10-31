@@ -22,6 +22,8 @@ interface CanvasState {
     selectionRect: CanvasRect | null
     /** Freehand drawing is on */
     isFreehand: boolean
+    /** draw.io's format panel (fill, line, text) is open */
+    isFormatOpen: boolean
     /** One of draw.io's menus or dialogs is open over the canvas */
     isDrawioPopupOpen: boolean
     /** Something is changing the canvas (an answer streams in, a sync
@@ -36,6 +38,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     selection: [],
     selectionRect: null,
     isFreehand: false,
+    isFormatOpen: false,
     isDrawioPopupOpen: false,
     isBusy: false,
     set: (partial) => set(partial),

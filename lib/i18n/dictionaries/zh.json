@@ -559,6 +559,7 @@
         "openFile": "打开 .drawio 文件",
         "canvasLoading": "正在加载画布…",
         "askAi": "让 AI 改这里",
+        "editStyle": "改样式",
         "untitled": "未命名图纸",
         "mobileCanvas": "画布",
         "mobileChat": "对话"
@@ -569,7 +570,7 @@
         "shape": "图形",
         "connector": "连线",
         "remove": "不发送选中的图形",
-        "placeholder": "说说要怎么改，也可以用右上角的“格式”自己改样式"
+        "placeholder": "说说要怎么改，也可以点图形旁边的画笔自己改样式"
     },
     "versions": {
         "strip": "版本",
