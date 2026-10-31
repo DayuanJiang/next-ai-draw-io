@@ -446,7 +446,7 @@ test.describe("Workspace", () => {
             page.locator('[data-testid="selection-chip"]'),
         ).toContainText("Process")
         await expect(
-            page.locator('[data-testid="selection-ask"]'),
+            page.locator('[data-testid="selection-style"]'),
         ).toBeVisible()
         await sendMessage(page, "Make this red")
         await waitForCompleteCount(page, 2)
@@ -691,7 +691,7 @@ test.describe("Workspace", () => {
         ).toBeLessThan(20)
     })
 
-    test("the ask AI button stays off draw.io's menus and dialogs", async ({
+    test("the buttons next to a selection stay off draw.io's menus and dialogs", async ({
         page,
     }) => {
         await page.route("**/api/chat", drawThenEdit())
@@ -700,7 +700,7 @@ test.describe("Workspace", () => {
         await waitForComplete(page)
         const canvas = getIframeContent(page)
         await canvas.getByText("Process", { exact: true }).click()
-        const ask = page.locator('[data-testid="selection-ask"]')
+        const ask = page.locator('[data-testid="selection-style"]')
         await expect(ask).toBeVisible()
         await canvas.locator('.geSimpleMainMenu a[title="Insert"]').click()
         await expect(canvas.locator(".mxPopupMenu").first()).toBeVisible()
@@ -737,6 +737,63 @@ test.describe("Workspace", () => {
         await page.keyboard.press("ControlOrMeta+e")
         await expect(canvas.locator(".geDialog").first()).toBeVisible()
         await expect(ask).toBeHidden()
+    })
+
+    test("the style button next to a selection opens draw.io's format panel", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        const canvas = getIframeContent(page)
+        const formatWidth = () =>
+            canvas
+                .locator(".geFormatContainer")
+                .evaluate((el) => (el as HTMLElement).offsetWidth)
+        expect(await formatWidth()).toBe(0)
+        await canvas.getByText("Process", { exact: true }).click()
+        const style = page.locator('[data-testid="selection-style"]')
+        await expect(style).toBeVisible()
+        // The chat panel is open: its input shows the selection instead
+        await expect(page.locator('[data-testid="selection-ask"]')).toHaveCount(
+            0,
+        )
+        await style.click()
+        await expect.poll(formatWidth).toBeGreaterThan(0)
+        await expect(style).toBeHidden()
+        // Closed from draw.io's own toolbar: the button is back
+        await canvas
+            .locator('.geSimpleMainMenu a[title^="Format"]')
+            .first()
+            .click()
+        await expect.poll(formatWidth).toBe(0)
+        await expect(style).toBeVisible()
+    })
+
+    test("with the chat panel hidden, a selection also offers ask AI, which opens the panel", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        await page.getByRole("button", { name: "Hide chat panel" }).click()
+        await expect(page.locator('[data-testid="show-panel"]')).toBeVisible()
+        await getIframeContent(page)
+            .getByText("Process", { exact: true })
+            .click()
+        const ask = page.locator('[data-testid="selection-ask"]')
+        await expect(ask).toBeVisible()
+        await expect(
+            page.locator('[data-testid="selection-style"]'),
+        ).toBeVisible()
+        await ask.click()
+        await expect(getChatInput(page)).toBeFocused()
+        await expect(
+            page.locator('[data-testid="selection-chip"]'),
+        ).toContainText("Process")
+        await expect(ask).toHaveCount(0)
     })
 
     test("with the chat panel hidden, draw.io's right-hand buttons can be clicked", async ({

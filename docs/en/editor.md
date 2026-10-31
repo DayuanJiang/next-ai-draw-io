@@ -23,7 +23,7 @@ Up to 5 files go with one message.
 
 Ask for a change in the chat, for example "make the database a cluster of three nodes". The AI changes the diagram it sees, including what you changed by hand.
 
-To change only part of the diagram, select those shapes on the canvas first. An "Ask AI to change this" button appears next to them; click it, or just type in the chat. The selection goes with your message, so "make these blue" changes only the selected shapes.
+To change only part of the diagram, select those shapes on the canvas first. The chat input shows them as selected, so just type; with the chat panel hidden, a sparkle button next to them opens it. The selection goes with your message, so "make these blue" changes only the selected shapes.
 
 While an answer is coming, Stop ends it. Under an answer you can regenerate it, and a message you sent can be edited and sent again. Pointing at an answer also shows its input and output tokens and how long it took; point at those numbers for the details, such as tokens read from the prompt cache.
 
@@ -31,7 +31,7 @@ While an answer is coming, Stop ends it. Under an answer you can regenerate it, 
 
 ## Edit by hand
 
-The canvas is the draw.io editor, so everything in draw.io works here: drag shapes, connect them, edit labels with a double click, and change colors, fonts and lines in the Format panel at the top right. Ctrl+Z and Ctrl+Y undo and redo your edits.
+The canvas is the draw.io editor, so everything in draw.io works here: drag shapes, connect them, edit labels with a double click, and change colors, fonts and lines in the Format panel. To open it, select shapes and click the brush button next to them, or click the Format button at the top right. Ctrl+Z and Ctrl+Y undo and redo your edits.
 
 Each change the AI makes is outlined for a few seconds, so you can see what it did. See [Versions and undo](./versions.md) for going back.
 

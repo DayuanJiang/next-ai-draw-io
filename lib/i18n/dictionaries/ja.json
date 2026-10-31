@@ -559,6 +559,7 @@
         "openFile": ".drawio ファイルを開く",
         "canvasLoading": "キャンバスを読み込み中…",
         "askAi": "ここを AI に直してもらう",
+        "editStyle": "スタイルを変更",
         "untitled": "無題の図",
         "mobileCanvas": "キャンバス",
         "mobileChat": "チャット"
@@ -569,7 +570,7 @@
         "shape": "図形",
         "connector": "コネクタ",
         "remove": "選択した図形を送らない",
-        "placeholder": "変更内容を書いてください。右上の「フォーマット」で自分でスタイルを変えることもできます"
+        "placeholder": "変更内容を書いてください。図形の横のブラシで自分でスタイルを変えることもできます"
     },
     "versions": {
         "strip": "バージョン",
