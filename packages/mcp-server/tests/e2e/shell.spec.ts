@@ -606,6 +606,63 @@ test("an edit with coordinates of 0 is not taken for a hand edit, and one undo t
     await expect(frame.getByText("Zero B")).toBeVisible()
 })
 
+test("draw.io's order of the cells is not taken for a hand edit, and one undo takes the drawing back", async ({
+    page,
+}) => {
+    // A session of its own, so History holds only this test's versions
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+    const group = (id: string, label: string, x: number) =>
+        `<mxCell id="${id}" value="${label}" style="swimlane;startSize=24;" vertex="1" x="${x}" y="40" w="180" h="140"/>`
+    const kid = (id: string, label: string, parent: string) =>
+        `<mxCell id="${id}" value="${label}" vertex="1" parent="${parent}" x="20" y="50" w="120" h="50"/>`
+
+    await toolText("create_new_diagram", { xml: box("o1", "Order first", 40) })
+    await expect(frame.getByText("Order first")).toBeVisible({
+        timeout: 10_000,
+    })
+    // Both groups first, their children after them; draw.io writes each
+    // group's children right after it
+    await toolText("create_new_diagram", {
+        xml: [
+            group("g1", "Group one", 40),
+            group("g2", "Group two", 260),
+            kid("k1", "Kid one", "g1"),
+            kid("k2", "Kid two", "g2"),
+        ].join("\n"),
+    })
+    await expect(frame.getByText("Kid two")).toBeVisible({ timeout: 10_000 })
+    // An export sends draw.io's copy of the canvas to the server
+    await toolText("export_diagram", { path: join(dataDir, "order.drawio") })
+    await expect
+        .poll(
+            async () => {
+                const xml = await toolText("get_diagram")
+                const k1 = xml.indexOf('id="k1"')
+                return k1 >= 0 && k1 < xml.indexOf('id="g2"')
+            },
+            { timeout: 10_000 },
+        )
+        .toBe(true)
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+
+    expect(await toolText("restore_version", { steps_back: 1 })).toContain(
+        "Restored the version 1 step(s) back",
+    )
+    await expect(frame.getByText("Kid two")).toHaveCount(0, { timeout: 10_000 })
+    await expect(frame.getByText("Order first")).toBeVisible()
+})
+
 test("the theme toggle switches the page and draw.io, and is remembered", async ({
     page,
 }) => {

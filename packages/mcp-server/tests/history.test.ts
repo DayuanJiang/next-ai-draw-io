@@ -84,6 +84,22 @@ describe("otherVersions", () => {
         expect(isInHistory(id, canvas)).toBe(true)
     })
 
+    it("counts draw.io's copy with each container's children after it as the same version", () => {
+        const id = "history-order"
+        const cells = (order: string[]) =>
+            `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${order
+                .map(
+                    (c) =>
+                        `<mxCell id="${c}" vertex="1" parent="${c.startsWith("g") ? "1" : `g${c.slice(1)}`}"/>`,
+                )
+                .join("")}</root></mxGraphModel></diagram></mxfile>`
+        // The model listed both groups first; draw.io puts k1 under g1
+        fill(id, [A, cells(["g1", "g2", "k1", "k2"])])
+        const canvas = cells(["g1", "k1", "g2", "k2"])
+        expect(otherVersions(id, canvas).map((e) => e.xml)).toEqual([A])
+        expect(isInHistory(id, canvas)).toBe(true)
+    })
+
     it("keeps the newest copy of a repeated version", () => {
         const id = "history-newest"
         fill(id, [A, B, A])

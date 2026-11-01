@@ -42,9 +42,50 @@ const isLeftOutZero = (el: Element, attr: Attr) =>
     Number(attr.value) === 0
 
 /**
+ * The cells of a page in the order draw.io writes them: each cell followed by
+ * its children, siblings in the order they had. A model may list two
+ * containers first and their children after them; draw.io's copy of that
+ * diagram has each container's children right after it.
+ */
+function cellsInDrawioOrder(root: Element): Element[] {
+    const cells = Array.from(root.children)
+    const idOf = (cell: Element) => cell.getAttribute("id") ?? ""
+    // <object> and <UserObject> keep the parent on their inner mxCell
+    const parentOf = (cell: Element) =>
+        (cell.tagName === "mxCell"
+            ? cell
+            : Array.from(cell.children).find((c) => c.tagName === "mxCell")
+        )?.getAttribute("parent") ?? ""
+    const ids = new Set(cells.map(idOf).filter(Boolean))
+    const children = new Map<string, Element[]>()
+    const tops: Element[] = []
+    for (const cell of cells) {
+        const parent = parentOf(cell)
+        if (parent && parent !== idOf(cell) && ids.has(parent)) {
+            children.set(parent, [...(children.get(parent) ?? []), cell])
+        } else {
+            tops.push(cell)
+        }
+    }
+    const ordered: Element[] = []
+    const seen = new Set<Element>()
+    const visit = (cell: Element) => {
+        if (seen.has(cell)) return
+        seen.add(cell)
+        ordered.push(cell)
+        for (const child of children.get(idOf(cell)) ?? []) visit(child)
+    }
+    for (const cell of tops) visit(cell)
+    // Cells in a parent cycle never hang below a top cell
+    for (const cell of cells) visit(cell)
+    return ordered
+}
+
+/**
  * Canonical serialisation of an element subtree: tag + attributes sorted by
- * name + child elements in order + non-whitespace text. Whitespace-only text
- * nodes (pretty-printing) and coordinates of 0 are dropped.
+ * name + child elements in order (a page's cells in draw.io's order) +
+ * non-whitespace text. Whitespace-only text nodes (pretty-printing) and
+ * coordinates of 0 are dropped.
  */
 function canonicalizeElement(el: Element): string {
     const attrs = Array.from(el.attributes)
@@ -53,7 +94,11 @@ function canonicalizeElement(el: Element): string {
         .sort()
         .join(" ")
     let children = ""
-    for (const child of Array.from(el.childNodes)) {
+    const nodes =
+        el.tagName === "root"
+            ? cellsInDrawioOrder(el)
+            : Array.from(el.childNodes)
+    for (const child of nodes) {
         if (child.nodeType === 1) {
             children += canonicalizeElement(child as Element)
         } else if (child.nodeType === 3 || child.nodeType === 4) {
