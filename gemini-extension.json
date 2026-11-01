@@ -1,6 +1,6 @@
 {
     "name": "next-ai-drawio",
-    "version": "0.4.10",
+    "version": "0.4.11",
     "description": "Draw and edit draw.io diagrams from your project's files on a live browser canvas you can also edit by hand, with version history, undo and PNG or SVG export.",
     "mcpServers": {
         "drawio": {
