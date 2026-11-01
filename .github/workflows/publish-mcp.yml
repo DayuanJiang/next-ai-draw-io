@@ -1,9 +1,10 @@
 name: Publish MCP Server
 
 # Publishes @next-ai-drawio/mcp-server to npm via OIDC trusted publishing
-# (no token, no OTP). Triggers when packages/mcp-server or the web app code
+# (no token, no OTP), then its server.json to the official MCP registry,
+# also via OIDC. Triggers when packages/mcp-server or the web app code
 # bundled into the canvas shell (scripts/build-shell.mjs) changes on main;
-# skips silently if the package.json version is already on npm — so a
+# skips silently if the version is already on npm and in the registry, so a
 # release is just "bump the version in a PR and merge".
 on:
   push:
@@ -21,11 +22,12 @@ on:
       - "package-lock.json"
       # The package's build scripts import the root's scripts/drawio-zip.mjs
       - "scripts/**"
+      - ".github/workflows/publish-mcp.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write # OIDC token for npm trusted publishing
+  id-token: write # OIDC token for npm trusted publishing and the MCP registry
 
 concurrency:
   group: publish-mcp
@@ -92,3 +94,29 @@ jobs:
       - name: Publish to npm
         if: steps.version.outputs.publish == 'true'
         run: npm publish
+
+      # The official MCP registry (registry.modelcontextprotocol.io) lists
+      # server.json. GitHub's OIDC token proves the io.github.DayuanJiang
+      # namespace, so there is no login and no secret. It runs after npm (the
+      # registry checks the npm package), and also when only the registry
+      # lacks the version, so a manual run fills it in
+      - name: Check if version is in the MCP registry
+        id: registry
+        run: |
+          NAME=$(node -p "require('./server.json').name")
+          VERSION=$(node -p "require('./server.json').version")
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.modelcontextprotocol.io/v0/servers/${NAME/\//%2F}/versions/${VERSION}")
+          if [ "$CODE" = "200" ]; then
+            echo "${NAME} ${VERSION} already in the MCP registry"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "${NAME} ${VERSION} not in the MCP registry (HTTP ${CODE}) - publishing"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to the MCP registry
+        if: steps.registry.outputs.publish == 'true'
+        run: |
+          curl -sSfL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.7/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
