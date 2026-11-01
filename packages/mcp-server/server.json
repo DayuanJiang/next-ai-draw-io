@@ -9,12 +9,12 @@
         "subfolder": "packages/mcp-server"
     },
     "websiteUrl": "https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server#readme",
-    "version": "0.4.8",
+    "version": "0.4.9",
     "packages": [
         {
             "registryType": "npm",
             "identifier": "@next-ai-drawio/mcp-server",
-            "version": "0.4.8",
+            "version": "0.4.9",
             "transport": {
                 "type": "stdio"
             }

@@ -1011,6 +1011,15 @@ describe("canvas shell page", () => {
         expect(slash.headers.location).toBe("/shell/?mcp=mcp-shell-recent")
     })
 
+    it("goes to the session id a link starts with when text is glued onto it", async () => {
+        // DSH's chat made "…?mcp=mcp-mvx2w3vx-njlslo。截图…" one link
+        const res = await request(
+            `/shell/?mcp=${encodeURIComponent("mcp-mvx2w3vx-njlslo。截图因为预览页没打开")}`,
+        )
+        expect(res.status).toBe(302)
+        expect(res.headers.location).toBe("/shell/?mcp=mcp-mvx2w3vx-njlslo")
+    })
+
     it("serves the shell's files with their MIME types, without a token", async () => {
         const js = await request("/shell/shell.js", {
             headers: { "x-drawio-token": "" },
