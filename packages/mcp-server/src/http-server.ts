@@ -758,6 +758,14 @@ function servePage(
     }
     const sessionId = url.searchParams.get("mcp") || ""
     if (sessionId && !isValidSessionId(sessionId)) {
+        // A chat app can make the text after a bare link part of it
+        // ("?mcp=mcp-abc。Next sentence"): go to the id it starts with
+        const start = sessionId.match(/^mcp-[a-z0-9-]{1,64}/)?.[0]
+        if (start) {
+            res.writeHead(302, { Location: `${pagePath}?mcp=${start}` })
+            res.end()
+            return
+        }
         res.writeHead(400)
         res.end("Invalid session id")
         return
