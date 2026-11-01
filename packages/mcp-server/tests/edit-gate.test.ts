@@ -126,6 +126,31 @@ describe("contentFingerprint", () => {
         expect(contentFingerprint(XML_A)).not.toBe(contentFingerprint(twoPages))
     })
 
+    it("treats coordinates of 0 like left-out ones, as draw.io writes them", () => {
+        const withEdge = (point: string) =>
+            XML_A.replace(
+                "</root>",
+                `<mxCell id="e1" edge="1" parent="1" source="box1" target="box1"><mxGeometry relative="1" as="geometry">${point}</mxGeometry></mxCell></root>`,
+            )
+        const written = withEdge('<mxPoint x="0" y="-18" as="offset"/>')
+        expect(contentFingerprint(written)).toBe(
+            contentFingerprint(withEdge('<mxPoint y="-18" as="offset"/>')),
+        )
+        expect(contentFingerprint(written)).not.toBe(
+            contentFingerprint(
+                withEdge('<mxPoint x="5" y="-18" as="offset"/>'),
+            ),
+        )
+        const atOrigin = XML_A.replace('x="40" y="40"', 'x="0" y="0"')
+        expect(contentFingerprint(atOrigin)).toBe(
+            contentFingerprint(XML_A.replace('x="40" y="40" ', "")),
+        )
+        // Other attributes of 0 are kept: a label "0" is not an empty label
+        expect(
+            contentFingerprint(XML_A.replace('value="Hello"', 'value="0"')),
+        ).not.toBe(contentFingerprint(XML_A.replace('value="Hello" ', "")))
+    })
+
     it("falls back to the raw string for unparseable input", () => {
         expect(contentFingerprint("not xml at all")).toBe("not xml at all")
     })
