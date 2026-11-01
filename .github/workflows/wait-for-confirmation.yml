@@ -19,7 +19,7 @@ jobs:
     if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@v11
         with:
           only-issue-labels: "wait for confrim"
           days-before-issue-stale: 15
