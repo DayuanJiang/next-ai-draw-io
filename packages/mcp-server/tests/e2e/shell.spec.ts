@@ -548,6 +548,64 @@ test("the version cards follow the server's History; undo, redo and restore go t
     await expect(cards).toHaveCount(4)
 })
 
+test("an edit with coordinates of 0 is not taken for a hand edit, and one undo takes it back", async ({
+    page,
+}) => {
+    // A session of its own, so History holds only this test's versions
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+    // draw.io writes these label offsets back without x="0"
+    const edge = (id: string, source: string, target: string) =>
+        `<mxCell id="${id}" value="${id}" edge="1" parent="1" source="${source}" target="${target}"><mxGeometry relative="1" as="geometry"><mxPoint x="0" y="-18" as="offset"/></mxGeometry></mxCell>`
+
+    await toolText("create_new_diagram", {
+        xml: [
+            box("z1", "Zero A", 40),
+            box("z2", "Zero B", 240),
+            edge("ze1", "z1", "z2"),
+        ].join("\n"),
+    })
+    await expect(frame.getByText("Zero B")).toBeVisible({ timeout: 10_000 })
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "z3",
+                new_xml: box("z3", "Zero C", 440),
+            },
+            {
+                operation: "add",
+                cell_id: "ze2",
+                new_xml: edge("ze2", "z2", "z3"),
+            },
+        ],
+    })
+    await expect(frame.getByText("Zero C")).toBeVisible({ timeout: 10_000 })
+    // draw.io's copy of the canvas reached the server
+    await expect
+        .poll(async () => (await toolText("get_diagram")).includes('x="0"'), {
+            timeout: 10_000,
+        })
+        .toBe(false)
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+
+    expect(await toolText("restore_version", { steps_back: 1 })).toContain(
+        "Restored the version 1 step(s) back",
+    )
+    await expect(frame.getByText("Zero C")).toHaveCount(0, { timeout: 10_000 })
+    await expect(frame.getByText("Zero B")).toBeVisible()
+})
+
 test("the theme toggle switches the page and draw.io, and is remembered", async ({
     page,
 }) => {

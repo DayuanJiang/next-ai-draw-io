@@ -30,13 +30,25 @@ export type EditGateResult =
     | { ok: true }
     | { ok: false; reason: "no-context" | "stale" }
 
+// draw.io leaves out a point's or geometry's coordinates and sizes that are
+// 0 when it writes a diagram, so x="0" and no x are the same diagram
+const ZERO_DEFAULT_TAGS = new Set(["mxPoint", "mxGeometry", "mxRectangle"])
+const ZERO_DEFAULT_ATTRS = new Set(["x", "y", "width", "height"])
+
+const isLeftOutZero = (el: Element, attr: Attr) =>
+    ZERO_DEFAULT_TAGS.has(el.tagName) &&
+    ZERO_DEFAULT_ATTRS.has(attr.name) &&
+    attr.value.trim() !== "" &&
+    Number(attr.value) === 0
+
 /**
  * Canonical serialisation of an element subtree: tag + attributes sorted by
  * name + child elements in order + non-whitespace text. Whitespace-only text
- * nodes (pretty-printing) are dropped.
+ * nodes (pretty-printing) and coordinates of 0 are dropped.
  */
 function canonicalizeElement(el: Element): string {
     const attrs = Array.from(el.attributes)
+        .filter((a) => !isLeftOutZero(el, a))
         .map((a) => `${a.name}=${JSON.stringify(a.value)}`)
         .sort()
         .join(" ")

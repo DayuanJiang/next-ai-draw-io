@@ -1,6 +1,6 @@
 {
     "name": "@next-ai-drawio/mcp-server",
-    "version": "0.4.9",
+    "version": "0.4.10",
     "description": "draw.io MCP server for Claude Code, Cursor, Codex and VS Code: the AI draws on a live browser canvas you can also edit by hand, with versions and undo",
     "mcpName": "io.github.DayuanJiang/next-ai-drawio",
     "type": "module",

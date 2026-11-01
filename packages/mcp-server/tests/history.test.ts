@@ -69,6 +69,21 @@ describe("otherVersions", () => {
         expect(otherVersions(id, B_COPY).map((e) => e.xml)).toEqual([A])
     })
 
+    it("counts draw.io's copy without coordinates of 0 as the same version", () => {
+        const id = "history-zero"
+        const withOffset = (point: string) =>
+            B.replace(
+                "</root>",
+                `<mxCell id="e" edge="1" parent="1" source="b" target="b"><mxGeometry relative="1" as="geometry">${point}</mxGeometry></mxCell></root>`,
+            )
+        // The model wrote x="0"; the canvas holds draw.io's copy without it,
+        // and one step back is the version before the model's write
+        fill(id, [A, withOffset('<mxPoint x="0" y="-18" as="offset"/>')])
+        const canvas = withOffset('<mxPoint y="-18" as="offset"/>')
+        expect(otherVersions(id, canvas).map((e) => e.xml)).toEqual([A])
+        expect(isInHistory(id, canvas)).toBe(true)
+    })
+
     it("keeps the newest copy of a repeated version", () => {
         const id = "history-newest"
         fill(id, [A, B, A])
