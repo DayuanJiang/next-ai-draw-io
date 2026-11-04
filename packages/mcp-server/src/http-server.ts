@@ -126,6 +126,50 @@ export function previewUiFromEnv(
 
 export const PREVIEW_UI: PreviewUi = previewUiFromEnv()
 
+/** One explicitly trusted preview origin, never a path or proxy header. */
+export function previewOriginFromEnv(
+    env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+    const value = env.DRAWIO_PREVIEW_URL
+    if (value === undefined) return undefined
+    let url: URL
+    try {
+        url = new URL(value)
+    } catch {
+        throw new Error("DRAWIO_PREVIEW_URL must be an absolute origin URL")
+    }
+    if (
+        value !== value.trim() ||
+        !/^https?:\/\//.test(value) ||
+        url.username ||
+        url.password ||
+        url.pathname !== "/" ||
+        url.search ||
+        url.hash ||
+        value.includes("?") ||
+        value.includes("#") ||
+        value.includes("\\") ||
+        (url.protocol !== "https:" &&
+            !(
+                url.protocol === "http:" &&
+                ["localhost", "127.0.0.1"].includes(url.hostname)
+            ))
+    ) {
+        throw new Error(
+            "DRAWIO_PREVIEW_URL must be an HTTPS origin without credentials, path, query or fragment (HTTP is allowed only for localhost or 127.0.0.1)",
+        )
+    }
+    // Reject normalized paths (e.g. /a/..) as well as actual subpaths.
+    if (value !== url.origin && value !== `${url.origin}/`) {
+        throw new Error(
+            "DRAWIO_PREVIEW_URL must use its canonical origin, optionally followed by /",
+        )
+    }
+    return url.origin
+}
+
+const PREVIEW_ORIGIN = previewOriginFromEnv()
+
 /**
  * The page start_session actually opens: the classic page stands in while
  * the shell is not built (a run from the sources), as embed.diagrams.net
@@ -141,7 +185,7 @@ export function previewUrl(
     ui: PreviewUi = PREVIEW_UI,
 ): string {
     const path = activePreviewUi(ui) === "shell" ? "/shell/" : ""
-    return `http://localhost:${port}${path}?mcp=${sessionId}`
+    return `${PREVIEW_ORIGIN ?? `http://localhost:${port}`}${path}?mcp=${sessionId}`
 }
 
 /**
@@ -639,7 +683,8 @@ function handleRequest(
     }
 }
 
-// Serve only requests addressed to localhost, sent by the preview page
+// Serve only requests addressed to localhost or the explicit preview origin,
+// sent by the preview page
 // itself (Origin is the address it was opened at, the Host) or by a
 // non-browser client (no Origin header). This blocks DNS rebinding, other
 // websites, and pages on other localhost ports, whose plain text POSTs need
@@ -647,6 +692,9 @@ function handleRequest(
 function isLocalRequest(req: http.IncomingMessage): boolean {
     const host = req.headers.host ?? ""
     const origin = req.headers.origin
+    if (PREVIEW_ORIGIN && host === new URL(PREVIEW_ORIGIN).host) {
+        return origin === undefined || origin === PREVIEW_ORIGIN
+    }
     return (
         /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) &&
         (origin === undefined || origin === `http://${host}`)
@@ -674,7 +722,10 @@ function routeRequest(
     }
 
     const requestOrigin = req.headers.origin
-    if (requestOrigin === `http://localhost:${serverPort}`) {
+    if (
+        requestOrigin === `http://localhost:${serverPort}` ||
+        (PREVIEW_ORIGIN !== undefined && requestOrigin === PREVIEW_ORIGIN)
+    ) {
         res.setHeader("Access-Control-Allow-Origin", requestOrigin)
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         res.setHeader(
