@@ -390,19 +390,21 @@ function AssistantMessage({
         return () => clearTimeout(timer)
     }, [reasonsStep])
 
-    // One request at a time, in the order of the clicks: each replaces the
-    // answer's score, so an earlier one landing last would undo a later one
-    const feedbackQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+    // Votes in order of the clicks, also across a remount (another chat
+    // and back): each replaces the answer's score
     const postFeedback = (
         value: "good" | "bad",
         why?: { reasons: FeedbackReason[]; note: string },
     ): Promise<boolean> => {
-        const run = feedbackQueueRef.current.then(() =>
-            sendFeedback(value, why),
+        const run = (feedbackQueues.get(message.id) ?? Promise.resolve()).then(
+            () => sendFeedback(value, why),
         )
-        feedbackQueueRef.current = run
+        feedbackQueues.set(message.id, run)
         return run
     }
+    // Bumped on each click, so an answer that comes back late changes
+    // nothing the user has done since
+    const voteSeqRef = useRef(0)
 
     const sendFeedback = async (
         value: "good" | "bad",
@@ -430,6 +432,7 @@ function AssistantMessage({
     }
 
     const submitFeedback = async (value: "good" | "bad") => {
+        const seq = ++voteSeqRef.current
         setReasonsStep(null)
         if (feedback === value) {
             setFeedback(null)
@@ -437,17 +440,17 @@ function AssistantMessage({
         }
         setFeedback(value)
         if (value === "bad") setReasonsStep("ask")
-        if (!(await postFeedback(value))) {
-            // Unless the user voted again meanwhile
-            setFeedback((current) => (current === value ? null : current))
-            if (value === "bad") setReasonsStep(null)
+        const sent = await postFeedback(value)
+        if (!sent && voteSeqRef.current === seq) {
+            setFeedback(null)
+            setReasonsStep(null)
         }
     }
 
     const submitReasons = async (reasons: FeedbackReason[], note: string) => {
-        if (await postFeedback("bad", { reasons, note })) {
-            setReasonsStep("thanks")
-        }
+        const seq = voteSeqRef.current
+        const sent = await postFeedback("bad", { reasons, note })
+        if (sent && voteSeqRef.current === seq) setReasonsStep("thanks")
     }
 
     // Text parts with nothing shown between them render together (a step
@@ -610,6 +613,9 @@ const FEEDBACK_REASONS = [
 ] as const
 
 type FeedbackReason = (typeof FEEDBACK_REASONS)[number][0]
+
+// The last vote request of each answer, by message id
+const feedbackQueues = new Map<string, Promise<boolean>>()
 
 /** Below an answer voted down: why, by a few choices and a line of text */
 function FeedbackReasons({

@@ -127,4 +127,44 @@ describe("githubIssueUrl", () => {
         })
         expect(url.length).toBeLessThan(8000)
     })
+
+    it("shortens the note first and keeps the error and the browser", async () => {
+        const { githubIssueUrl } = await load()
+        const body =
+            new URL(
+                githubIssueUrl({
+                    kind: "chat-error",
+                    message: "Server error\nsecond line",
+                    note: "界".repeat(2000),
+                }),
+            ).searchParams.get("body") ?? ""
+        expect(body).toContain("Server error\nsecond line")
+        expect(body).toContain("Version:")
+        expect(body).toContain("Browser:")
+    })
+
+    it("never cuts an emoji in half", async () => {
+        const { githubIssueUrl } = await load()
+        expect(() =>
+            githubIssueUrl({
+                kind: "crash",
+                message: "boom",
+                note: "😀".repeat(800),
+            }),
+        ).not.toThrow()
+    })
+})
+
+describe("sendErrorReport", () => {
+    it("sends the stack's call lines without the message line", async () => {
+        const { sendErrorReport } = await load()
+        await sendErrorReport({
+            kind: "uncaught",
+            message: "short",
+            stack: "Error: PRIVATE long message\n    at f (http://localhost/_next/static/chunks/a.js:1:2)",
+        })
+        expect(posts()[0].stack).toBe(
+            "    at f (http://localhost/_next/static/chunks/a.js:1:2)",
+        )
+    })
 })

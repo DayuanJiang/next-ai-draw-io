@@ -97,28 +97,35 @@ export function isAppError(error: unknown): error is Error {
 /** A new GitHub issue with the error filled in, for servers that do not
  * keep reports (the desktop app, most self-hosted ones) */
 export function githubIssueUrl(report: ErrorReport): string {
-    const lines = [
-        "**What I was doing**",
-        "",
-        report.note?.trim() || "",
-        "",
-        "**Error**",
-        "",
-        "```",
-        report.message,
-        shortStack(report.stack, 6) ?? "",
-        "```",
-        "",
-        `Version: ${process.env.APP_VERSION ?? "unknown"}${window.electronAPI?.isElectron ? " (desktop app)" : ""}`,
-        `Page: ${location.pathname}`,
-        `Browser: ${navigator.userAgent}`,
-    ]
-    let body = lines.join("\n")
-    // GitHub refuses very long addresses; Chinese text grows ninefold
-    while (encodeURIComponent(body).length > 6000) {
-        body = body.slice(0, Math.floor(body.length * 0.8))
+    const build = (note: string, message: string) =>
+        [
+            "**What I was doing**",
+            "",
+            note,
+            "",
+            "**Error**",
+            "",
+            "```",
+            message,
+            shortStack(report.stack, 6) ?? "",
+            "```",
+            "",
+            `Version: ${process.env.APP_VERSION ?? "unknown"}${window.electronAPI?.isElectron ? " (desktop app)" : ""}`,
+            `Page: ${location.pathname}`,
+            `Browser: ${navigator.userAgent}`,
+        ].join("\n")
+    // GitHub refuses very long addresses, and Chinese text grows ninefold
+    // when encoded: the note gets shorter first, then the message; the
+    // version and browser always stay
+    let note = report.note?.trim() ?? ""
+    let message = report.message
+    while (encodeURIComponent(build(note, message)).length > 6000) {
+        if (note) note = shorten(note, 0.8)
+        else if (message) message = shorten(message, 0.8)
+        else break
     }
-    const title = `Error: ${report.message.split("\n")[0].slice(0, 80)}`
+    const body = build(note, message)
+    const title = `Error: ${Array.from(report.message.split("\n")[0]).slice(0, 80).join("")}`
     return `${ISSUES_URL}?${new URLSearchParams({ title, body })}`
 }
 
@@ -151,8 +158,20 @@ export function toastUnexpectedError(
     })
 }
 
+// The stack's call lines only: Chrome's first line repeats the message,
+// which goes cut short on its own
 function shortStack(stack: string | undefined, lines = 12) {
-    return stack?.split("\n").slice(0, lines).join("\n")
+    return stack
+        ?.split("\n")
+        .filter((line) => /^\s*at\s|@.*:\d+:\d+$/.test(line))
+        .slice(0, lines)
+        .join("\n")
+}
+
+/** The text cut to a share of its characters, never inside one */
+function shorten(text: string, share: number): string {
+    const chars = Array.from(text)
+    return chars.slice(0, Math.floor(chars.length * share)).join("")
 }
 
 // The chat's Langfuse session, so a report sits next to its chat traces
