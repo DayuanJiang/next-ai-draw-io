@@ -44,7 +44,9 @@ import {
 } from "@/lib/chat-message"
 import { buildChatHeaders } from "@/lib/chat-request"
 import {
+    isNetworkFailure,
     noteAction,
+    recentActions,
     recordError,
     toastUnexpectedError,
 } from "@/lib/client-error-report"
@@ -529,13 +531,6 @@ export function ChatEngineProvider({
             await handleToolCall({ toolCall }, addToolOutputSafely)
         },
         onFinish: ({ message, isAbort, isError, finishReason }) => {
-            noteAction(
-                isAbort
-                    ? "answer stopped"
-                    : isError
-                      ? "answer failed"
-                      : "answer finished",
-            )
             // Stopped, failed, or the reply just ended (a closed connection):
             // tool calls still streaming never reach the tool handler. Mark
             // them handled so a later render of the stream does not draw
@@ -553,12 +548,19 @@ export function ChatEngineProvider({
             if (isAbort && getChatGeneration() === turnChatRef.current) {
                 for (const part of cut) stopToolCall(part)
             }
-            if (isAbort || isError) return
+            if (isAbort || isError) {
+                noteAction(isAbort ? "answer stopped" : "answer failed")
+                return
+            }
             // The output budget ran out before the model called a tool (its
             // thinking took it all): nothing was drawn
             const outOfTokens =
                 finishReason === "length" && !message.parts.some(isToolUIPart)
-            if (cut.length === 0 && !outOfTokens) return
+            if (cut.length === 0 && !outOfTokens) {
+                noteAction("answer finished")
+                return
+            }
+            noteAction(outOfTokens ? "answer cut off" : "answer ended early")
             // Ended with no error and no diagram: undo the preview, and say
             // so, as an error does (with Retry)
             const [originalXml] = editDiagramOriginalXmlRef.current.values()
@@ -578,7 +580,7 @@ export function ChatEngineProvider({
             if (getChatGeneration() !== turnChatRef.current) return
             setMessages((currentMessages) => [
                 ...currentMessages,
-                noticeMessage({ text }),
+                noticeMessage({ text, actions: recentActions() }),
             ])
         },
         onError: (error) => {
@@ -636,7 +638,7 @@ export function ChatEngineProvider({
                 ].includes(data.code)
             } else if (typeof data?.error === "string") {
                 text = data.error
-            } else if (error.message === "Failed to fetch") {
+            } else if (isNetworkFailure(error.message)) {
                 text = dict.errors.networkError
             }
 
@@ -648,7 +650,7 @@ export function ChatEngineProvider({
                     data?.code ??
                     (isAccessCodeError
                         ? "access_code"
-                        : error.message === "Failed to fetch"
+                        : isNetworkFailure(error.message)
                           ? "network"
                           : undefined),
                 model: requestModelRef.current,
@@ -670,6 +672,7 @@ export function ChatEngineProvider({
                     text,
                     ...(openModelConfig && { openModelConfig, providerId }),
                     ...(isAccessCodeError && { accessCode: true }),
+                    actions: recentActions(),
                 }),
             ])
 
@@ -748,6 +751,7 @@ export function ChatEngineProvider({
                 return false
             }
             continuationRetryCountRef.current++
+            noteAction("auto continue")
         } else {
             if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
                 toastUnexpectedError(
@@ -761,6 +765,7 @@ export function ChatEngineProvider({
                 return false
             }
             autoRetryCountRef.current++
+            noteAction("auto retry")
         }
         return true
     }

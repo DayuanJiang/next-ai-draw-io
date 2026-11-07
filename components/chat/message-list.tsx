@@ -948,6 +948,7 @@ export function MessageList() {
                                               openProblemReport({
                                                   kind: "chat-error",
                                                   message: notice.text,
+                                                  actions: notice.actions,
                                               })
                                 }
                             />

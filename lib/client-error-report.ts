@@ -20,6 +20,8 @@ export interface ErrorReport {
      * "network") and the model the request went to */
     code?: string
     model?: string
+    /** The user's last actions when it happened (else those of now) */
+    actions?: string[]
 }
 
 const ENDPOINT = "/api/log-client-error"
@@ -77,7 +79,7 @@ export async function sendErrorReport(report: ErrorReport): Promise<boolean> {
                 note: report.note?.slice(0, 2000),
                 code: report.code?.slice(0, 100),
                 model: report.model?.slice(0, 200),
-                actions: recentActions(),
+                actions: report.actions ?? recentActions(),
                 page: location.pathname.slice(0, 500),
                 version: process.env.APP_VERSION,
                 sessionId: chatSessionId(),
@@ -99,10 +101,13 @@ export async function sendErrorReport(report: ErrorReport): Promise<boolean> {
 export async function recordError(report: ErrorReport): Promise<void> {
     if (recorded.has(report.message) || recorded.size >= MAX_AUTOMATIC) return
     recorded.add(report.message)
+    // The actions of now, before waiting for the server's answer
+    const actions = report.actions ?? recentActions()
     if (await reportsEnabled()) {
         await sendErrorReport({
             ...report,
             message: report.message.slice(0, MAX_AUTOMATIC_MESSAGE),
+            actions,
         })
     }
 }
@@ -137,7 +142,7 @@ export function githubIssueUrl(report: ErrorReport): string {
             "",
             "**Recent actions**",
             "",
-            recentActions().join("\n") || "(none)",
+            (report.actions ?? recentActions()).join("\n") || "(none)",
             "",
             `Version: ${process.env.APP_VERSION ?? "unknown"}${window.electronAPI?.isElectron ? " (desktop app)" : ""}`,
             `Page: ${location.pathname}`,
@@ -177,6 +182,7 @@ export function toastUnexpectedError(
         // A file read error's text is the toast's own
         message: detail && detail !== text ? `${text}\n${detail}` : text,
         stack: error instanceof Error ? error.stack : undefined,
+        actions: recentActions(),
     }
     void recordError(report)
     toast.error(text, {
@@ -198,6 +204,13 @@ function shortStack(stack: string | undefined, lines = 12) {
         .slice(0, lines)
         .map((line) => line.slice(0, 300))
         .join("\n")
+}
+
+/** A fetch that never reached the server, in Chrome, Firefox and Safari */
+export function isNetworkFailure(message: string): boolean {
+    return /^(Failed to fetch|NetworkError when attempting to fetch resource\.?|Load failed)$/.test(
+        message,
+    )
 }
 
 /** The text cut to a share of its characters, never inside one */

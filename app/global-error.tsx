@@ -25,7 +25,7 @@ const STRINGS = {
         failed: "Could not send the report. Please try again later.",
         openGithub: "Report on GitHub",
         githubDescription:
-            "This server does not collect reports. You can open a GitHub issue instead; the error message is already filled in.",
+            "This server does not collect reports. You can open a GitHub issue instead; the error message and the names of your last few actions are already filled in.",
     },
 }
 

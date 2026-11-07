@@ -4,7 +4,11 @@ import { AlertCircle, RotateCcw } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { ReportForm, type ReportStrings } from "@/components/problem-report"
 import { Button } from "@/components/ui/button"
-import { type ErrorReport, recordError } from "@/lib/client-error-report"
+import {
+    type ErrorReport,
+    recentActions,
+    recordError,
+} from "@/lib/client-error-report"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
 
 export type CrashStrings = Dictionary["crash"]
@@ -28,6 +32,7 @@ export function CrashScreen({
                 ? `${error.message} (digest ${error.digest})`
                 : error.message,
             stack: error.stack,
+            actions: recentActions(),
         }),
         [error],
     )

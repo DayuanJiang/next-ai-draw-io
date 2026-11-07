@@ -666,7 +666,7 @@
         "sent": "已收到您的报告，谢谢。",
         "failed": "报告没有发出去，请稍后再试。",
         "openGithub": "在 GitHub 上报告",
-        "githubDescription": "这里没有开启报告接收。可以在 GitHub 上提交 issue，错误信息已经填好。"
+        "githubDescription": "这里没有开启报告接收。可以在 GitHub 上提交 issue，错误信息和最近几步操作的名称已经填好。"
     },
     "crash": {
         "title": "页面出错了",

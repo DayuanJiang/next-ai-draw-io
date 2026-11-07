@@ -666,7 +666,7 @@
         "sent": "已收到您的回報，謝謝。",
         "failed": "回報沒有送出，請稍後再試。",
         "openGithub": "在 GitHub 上回報",
-        "githubDescription": "這裡沒有開啟回報接收。可以在 GitHub 上提交 issue，錯誤訊息已經填好。"
+        "githubDescription": "這裡沒有開啟回報接收。可以在 GitHub 上提交 issue，錯誤訊息和最近幾步操作的名稱已經填好。"
     },
     "crash": {
         "title": "頁面出錯了",

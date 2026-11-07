@@ -81,6 +81,8 @@ export interface ChatNotice {
     /** The server wants an access code: Settings opens on it, and the card
      * has no Report button (as with openModelConfig, the user can fix it) */
     accessCode?: boolean
+    /** The user's last actions when it happened, for its report */
+    actions?: string[]
 }
 
 export type ChatToolName = keyof InferUITools<typeof chatTools>

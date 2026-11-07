@@ -92,7 +92,7 @@ describe("recordError", () => {
     })
 
     it("sends nothing when the server keeps no reports", async () => {
-        fetchMock.mockImplementation(async () =>
+        fetchMock.mockImplementationOnce(async () =>
             Response.json({ enabled: false }),
         )
         const { recordError } = await load()
@@ -186,6 +186,40 @@ describe("recent actions", () => {
         expect(body).toContain("send (0s ago)\nanswer failed (0s ago)")
         expect(body).toContain("Code: server_error")
         expect(body).toContain("Model: openai/gpt-5.5")
+    })
+})
+
+describe("actions at the time of the error", () => {
+    it("are taken when the error is recorded, not when it is sent", async () => {
+        const { noteAction, recordError } = await load()
+        noteAction("send")
+        const pending = recordError({ kind: "chat-error", message: "boom" })
+        noteAction("new chat")
+        await pending
+        expect(posts()[0].actions).toEqual(["send (0s ago)"])
+    })
+
+    it("go with a report made later from them", async () => {
+        const { sendErrorReport } = await load()
+        await sendErrorReport({
+            kind: "chat-error",
+            message: "boom",
+            note: "",
+            actions: ["send (4s ago)"],
+        })
+        expect(posts()[0].actions).toEqual(["send (4s ago)"])
+    })
+})
+
+describe("isNetworkFailure", () => {
+    it("knows the browsers' texts for a fetch that never got through", async () => {
+        const { isNetworkFailure } = await load()
+        expect(isNetworkFailure("Failed to fetch")).toBe(true)
+        expect(
+            isNetworkFailure("NetworkError when attempting to fetch resource."),
+        ).toBe(true)
+        expect(isNetworkFailure("Load failed")).toBe(true)
+        expect(isNetworkFailure("Internal server error")).toBe(false)
     })
 })
 

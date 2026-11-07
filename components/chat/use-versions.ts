@@ -143,10 +143,10 @@ export function useVersions({
 
     const restoreVersion = (versionId: string) => {
         if (isTurnActive()) return
-        noteAction("restore version")
         const store = useVersionsStore.getState()
         const index = store.versions.findIndex((v) => v.id === versionId)
         if (index < 0) return
+        noteAction("restore version")
         // The canvas before the restore, to go back to it: a multi-page
         // document is loaded in full, which Ctrl+Z cannot undo
         const before = chartXMLRef.current
@@ -169,6 +169,7 @@ export function useVersions({
                         // changing the canvas: the old canvas is not theirs
                         if (!before || isTurnActive()) return
                         if (getChatGeneration() !== generation) return
+                        noteAction("undo restore")
                         apply(before)
                         const now = useVersionsStore.getState()
                         if (wasUndone) now.setUndone(wasUndone, wasOnCanvas)
@@ -182,16 +183,17 @@ export function useVersions({
     /** Undo the change of the latest version, or redo it when undone */
     const undoVersion = (versionId: string) => {
         if (isTurnActive()) return
-        noteAction("undo version")
         const store = useVersionsStore.getState()
         const version = store.versions.find((v) => v.id === versionId)
         if (!version) return
         if (store.undoneVersionId === versionId) {
+            noteAction("redo version")
             apply(version.xml)
             store.setOnCanvas(versionId)
             return
         }
         if (version.beforeXml === undefined) return
+        noteAction("undo version")
         const before = version.beforeXml || BLANK_MXFILE
         apply(before)
         store.setUndone(versionId, olderVersionShowing(before)?.id)
