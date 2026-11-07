@@ -10,7 +10,7 @@ Next AI Draw.io では、AI とチャットしながら draw.io の図を描い�
 |---|---|---|
 | ブラウザで | next-ai-drawio.jiang.jp のエディタです。インストールは不要で、自分の API キーを追加するとデモの 1 日の上限がなくなります | [エディタを開く](https://next-ai-drawio.jiang.jp/) |
 | デスクトップで | 同じアプリを Windows、macOS、Linux で使えます | [最新リリース](https://github.com/DayuanJiang/next-ai-draw-io/releases/latest) |
-| AI エージェントから | MCP サーバーです。Claude Code、Cursor、Codex、VS Code が、プロジェクトのファイルをもとに、ブラウザの同じキャンバスに描きます | [Claude Code から使う](./claude-code.md) |
+| AI エージェントから | MCP サーバーです。Claude Code、Cursor、Codex、VS Code が、プロジェクトのファイルをもとに、ブラウザの同じキャンバスに描きます | [Claude Code で draw.io の図を描く](./claude-code.md) |
 
 ## できること
 

@@ -1,6 +1,6 @@
 # 其他 MCP 用戶端
 
-MCP 伺服器適用於任何能透過 stdio 執行本機 MCP 伺服器的用戶端：Codex CLI、VS Code、DeepSeek Harness、Cursor、Claude Desktop、Cline 等。需要 Node.js 18 或更新版本。Claude Code 的用法見[在 Claude Code 裡使用](./claude-code.md)。
+MCP 伺服器適用於任何能透過 stdio 執行本機 MCP 伺服器的用戶端：Codex CLI、VS Code、DeepSeek Harness、Cursor、Claude Desktop、Cline 等。需要 Node.js 18 或更新版本。Claude Code 的用法見[在 Claude Code 裡畫 draw.io 圖表](./claude-code.md)。
 
 ## 讓代理來安裝
 
@@ -67,7 +67,7 @@ dsh plugin --profile web add @next-ai-drawio/dsh
 }
 ```
 
-設定寫在伺服器的 `env` 裡，例如 `"env": { "DRAWIO_LANG": "ja" }`。所有變數列在[在 Claude Code 裡使用](./claude-code.md)頁面中。
+設定寫在伺服器的 `env` 裡，例如 `"env": { "DRAWIO_LANG": "ja" }`。所有變數列在[在 Claude Code 裡畫 draw.io 圖表](./claude-code.md)頁面中。
 
 ## 安裝之後
 

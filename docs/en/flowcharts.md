@@ -35,7 +35,7 @@ Name retries, timeouts and asynchronous replies; otherwise the diagram may show 
 
 Attach a photo of a whiteboard, a screenshot or a PDF, and ask the AI to redraw it. The result is an editable diagram, with real shapes and connectors in place of the picture. Then ask for changes as usual: "merge the two approval steps", "add an error path after the payment".
 
-With the MCP server, the agent can also draw from your code: "Draw the request flow of the checkout API as a sequence diagram". See [Use it from Claude Code](./claude-code.md).
+With the MCP server, the agent can also draw from your code: "Draw the request flow of the checkout API as a sequence diagram". See [draw.io diagrams in Claude Code](./claude-code.md).
 
 ## Make it readable
 
