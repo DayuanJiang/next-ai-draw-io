@@ -1,6 +1,6 @@
 # ほかの MCP クライアント
 
-MCP サーバーは、ローカルの MCP サーバーを stdio で動かせるクライアントならどれでも使えます。Codex CLI、VS Code、DeepSeek Harness、Cursor、Claude Desktop、Cline などです。Node.js 18 以降が必要です。Claude Code については [Claude Code から使う](./claude-code.md)を参照してください。
+MCP サーバーは、ローカルの MCP サーバーを stdio で動かせるクライアントならどれでも使えます。Codex CLI、VS Code、DeepSeek Harness、Cursor、Claude Desktop、Cline などです。Node.js 18 以降が必要です。Claude Code については [Claude Code で draw.io の図を描く](./claude-code.md)を参照してください。
 
 ## エージェントにインストールしてもらう
 
@@ -67,7 +67,7 @@ AI がスクリーンショットで図を確認できるのは、プレビュ�
 }
 ```
 
-設定はサーバーの `env` に書きます。たとえば `"env": { "DRAWIO_LANG": "ja" }` です。変数の一覧は [Claude Code から使う](./claude-code.md)の「設定」にあります。
+設定はサーバーの `env` に書きます。たとえば `"env": { "DRAWIO_LANG": "ja" }` です。変数の一覧は [Claude Code で draw.io の図を描く](./claude-code.md)の「設定」にあります。
 
 ## インストールのあと
 

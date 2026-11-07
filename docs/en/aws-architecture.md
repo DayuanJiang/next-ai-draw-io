@@ -25,7 +25,7 @@ What helps:
 
 - **A screenshot or a whiteboard photo**: upload it and ask the AI to redraw it with AWS icons.
 - **A PDF or a design document**: upload it and ask for the architecture it describes.
-- **Your infrastructure code**: with the MCP server, Claude Code or Cursor reads your Terraform, CDK or CloudFormation files and draws what they define. See [Use it from Claude Code](./claude-code.md).
+- **Your infrastructure code**: with the MCP server, Claude Code or Cursor reads your Terraform, CDK or CloudFormation files and draws what they define. See [draw.io diagrams in Claude Code](./claude-code.md).
 
 ```text
 Read the Terraform files in infra/ and draw the AWS architecture they create, grouped by VPC and subnet

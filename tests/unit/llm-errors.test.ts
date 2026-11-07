@@ -55,6 +55,12 @@ describe("classifyLLMError", () => {
                 apiError(400, "bad", '{"message":"toolUse.input is invalid"}'),
             ).code,
         ).toBe("output_truncated")
+        // OpenRouter, for a model that reads no images
+        expect(
+            classifyLLMError(
+                apiError(404, "No endpoints found that support image input"),
+            ).code,
+        ).toBe("images_unsupported")
     })
 
     it("does not call a 403 an invalid key", () => {

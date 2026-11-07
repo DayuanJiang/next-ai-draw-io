@@ -163,6 +163,18 @@ export function ollamaApiUrl(baseUrl: string): string {
     return `${normalizeBaseUrl(baseUrl).replace(/\/(?:api|v1)$/, "")}/api`
 }
 
+/**
+ * OpenAI's own endpoint, which the settings form fills in for a new
+ * provider. It gets the Responses API, as no base URL does: GPT-5.5 and
+ * later refuse tools with reasoning on Chat Completions.
+ */
+export function isOfficialOpenAIUrl(baseUrl: string | undefined): boolean {
+    return (
+        !!baseUrl &&
+        normalizeBaseUrl(baseUrl) === PROVIDERS.openai.defaultBaseUrl
+    )
+}
+
 /** Where a chat request goes for a base URL, or null when the SDK decides */
 export function chatRequestUrl(
     provider: ProviderName,
@@ -172,6 +184,7 @@ export function chatRequestUrl(
     if (!url) return null
     const { sdk, ownRequestPath } = PROVIDERS[provider]
     if (sdk === "anthropic") return `${url}/messages`
+    if (sdk === "openai" && isOfficialOpenAIUrl(url)) return `${url}/responses`
     if (sdk === "ollama") return `${ollamaApiUrl(url)}/chat`
     // These SDKs build their own paths (or, for MiniMax, pick the protocol
     // from the URL)

@@ -25,7 +25,7 @@ AI 在画图之前会先查阅 AWS 图形库，所以每个服务都会用上它
 
 - **截图或白板照片**：上传后，让 AI 用 AWS 图标重画。
 - **PDF 或设计文档**：上传后，让 AI 画出其中描述的架构。
-- **您的基础设施代码**：借助 MCP 服务器，Claude Code 或 Cursor 可以读取您的 Terraform、CDK 或 CloudFormation 文件，并画出其中定义的内容。见[在 Claude Code 里使用](./claude-code.md)。
+- **您的基础设施代码**：借助 MCP 服务器，Claude Code 或 Cursor 可以读取您的 Terraform、CDK 或 CloudFormation 文件，并画出其中定义的内容。见[在 Claude Code 里画 draw.io 图表](./claude-code.md)。
 
 ```text
 读取 infra/ 里的 Terraform 文件，画出它们创建的 AWS 架构，按 VPC 和子网分组

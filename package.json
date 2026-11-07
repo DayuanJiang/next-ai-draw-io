@@ -45,7 +45,7 @@
         "@aws-sdk/client-dynamodb": "^3.957.0",
         "@aws-sdk/credential-providers": "^3.943.0",
         "@extractus/article-extractor": "^8.0.18",
-        "@formatjs/intl-localematcher": "^0.9.0",
+        "@formatjs/intl-localematcher": "^0.10.0",
         "@langfuse/client": "^4.4.9",
         "@langfuse/otel": "^4.4.4",
         "@langfuse/tracing": "^4.4.9",
@@ -73,7 +73,7 @@
         "lucide-react": "^0.577.0",
         "nanoid": "^5.0.0",
         "negotiator": "^1.0.0",
-        "next": "^16.0.7",
+        "next": "^16.4.5",
         "ollama-ai-provider-v2": "^3.6.0",
         "pako": "^2.1.0",
         "prism-react-renderer": "^2.4.1",
@@ -103,7 +103,7 @@
         ]
     },
     "devDependencies": {
-        "@biomejs/biome": "2.5.15",
+        "@biomejs/biome": "2.6.6",
         "@opennextjs/cloudflare": "^1.17.1",
         "@playwright/test": "^1.57.0",
         "@tailwindcss/postcss": "^4",
@@ -119,7 +119,7 @@
         "@vitejs/plugin-react": "^5.1.2",
         "cross-env": "^10.1.0",
         "dotenv": "^16.6.1",
-        "electron": "^42.0.0",
+        "electron": "^45.0.0",
         "electron-builder": "^26.0.12",
         "esbuild": "^0.28.0",
         "husky": "^9.1.7",
@@ -129,7 +129,7 @@
         "tailwindcss": "^4",
         "typescript": "^5",
         "vite-tsconfig-paths": "^6.0.3",
-        "vitest": "^4.0.16",
+        "vitest": "^4.1.12",
         "wrangler": "^4.60.0"
     },
     "overrides": {

@@ -31,7 +31,11 @@ import {
 } from "@/lib/providers"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
 import { thinkingSwitchOf } from "@/lib/thinking-capabilities"
-import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
+import {
+    isOfficialOpenAIUrl,
+    normalizeBaseUrl,
+    ollamaApiUrl,
+} from "@/lib/types/model-config"
 
 const AIHUBMIX_APP_CODE = "MSBS9675"
 
@@ -986,11 +990,23 @@ function createModel(
         case "openai": {
             const openaiProvider = createOpenAI(opts)
             // A configured base URL is usually a proxy that only has Chat
-            // Completions; without one the Responses API is used, which
-            // returns reasoning for the o-series and gpt-5 or later
-            return e.configuredBaseURL
-                ? openaiProvider.chat(modelId)
-                : openaiProvider(modelId)
+            // Completions; without one, or with OpenAI's own, the Responses
+            // API is used, which returns reasoning for the o-series and
+            // gpt-5 or later
+            if (e.configuredBaseURL && !isOfficialOpenAIUrl(e.baseURL)) {
+                return openaiProvider.chat(modelId)
+            }
+            // With store on (the SDK's default) the history refers to the
+            // answers OpenAI stored, which it keeps for 30 days and for the
+            // key's project only. Off, the history goes along as on Chat
+            // Completions (reasoning encrypted), so an old chat or a new key
+            // still works.
+            return wrapLanguageModel({
+                model: openaiProvider(modelId),
+                middleware: defaultSettingsMiddleware({
+                    settings: { providerOptions: { openai: { store: false } } },
+                }),
+            })
         }
         case "anthropic":
             // The provider streams tool input per tool (eager_input_streaming),

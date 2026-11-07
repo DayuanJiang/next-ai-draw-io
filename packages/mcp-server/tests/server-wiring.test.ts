@@ -241,7 +241,12 @@ describe("MCP server wiring with a session, without a preview tab", () => {
     it("get_selection says the preview tab is not connected", async () => {
         const started = await callTool("start_session", {})
         expect(started.isError).toBeFalsy()
-        expect(textOf(started)).toContain("Browser URL:")
+        const url = textOf(started).match(/Browser URL: (\S+)/)?.[1]
+        expect(url).toBeDefined()
+        // BROWSER=none: the reminder sits right under the link (#1058)
+        expect(textOf(started)).toContain(
+            `Browser URL: ${url}\nPut this link in your reply`,
+        )
         const result = await callTool("get_selection", {})
         // Without the built shell (tests run before the build on CI and on
         // a fresh clone) start_session opens the classic page, which cannot
@@ -251,8 +256,8 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         )
         if (shellBuilt) {
             expect(result.isError).toBe(true)
-            expect(textOf(result)).toBe(
-                "Error: The preview tab is not open, or has not connected yet.",
+            expect(textOf(result)).toContain(
+                `Error: The preview tab is not open, or has not connected yet. Give the user the preview link ${url}`,
             )
         } else {
             expect(result.isError).toBeFalsy()
@@ -269,6 +274,14 @@ describe("MCP server wiring with a session, without a preview tab", () => {
             await callTool("create_new_diagram", { xml: box("2", "A", 40) }),
         )
         expect(created).toContain("never edit the diagram to remove it")
+        // Without a tab an image export fails at once and gives the link
+        const exported = await callTool("export_diagram", {
+            path: join(dataDir, "wiring.png"),
+        })
+        expect(exported.isError).toBe(true)
+        expect(textOf(exported)).toMatch(
+            /has not connected yet\. Give the user the preview link http:\/\/localhost:\d+\S*\?mcp=mcp-\S+ in your reply/,
+        )
         // An update that sends the cell as it is changes nothing
         const edited = textOf(
             await callTool("edit_diagram", {

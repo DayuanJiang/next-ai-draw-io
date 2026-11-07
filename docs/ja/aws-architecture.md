@@ -25,7 +25,7 @@ AI は描く前に AWS の図形ライブラリを調べるので、各サービ
 
 - **スクリーンショットやホワイトボードの写真**：アップロードして、AWS アイコンで描き直すよう AI に頼みます。
 - **PDF や設計ドキュメント**：アップロードして、そこに書かれているアーキテクチャを図にするよう頼みます。
-- **インフラのコード**：MCP サーバーを使うと、Claude Code や Cursor が Terraform、CDK、CloudFormation のファイルを読み、そこで定義されている構成を描きます。[Claude Code から使う](./claude-code.md)を参照してください。
+- **インフラのコード**：MCP サーバーを使うと、Claude Code や Cursor が Terraform、CDK、CloudFormation のファイルを読み、そこで定義されている構成を描きます。[Claude Code で draw.io の図を描く](./claude-code.md)を参照してください。
 
 ```text
 infra/ の Terraform ファイルを読んで、作成される AWS 構成を VPC とサブネットごとにまとめて図にして

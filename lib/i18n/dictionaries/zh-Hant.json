@@ -141,6 +141,7 @@
         "maxFiles": "檔案太多。最多允許 {max} 個。",
         "onlyMoreAllowed": "只能再新增 {slots} 個檔案",
         "fileExceeds": "「{name}」大小為 {size}（超過 {max}MB）",
+        "fileEmpty": "「{name}」是空檔案（0 位元組），請重新複製或儲存後再加入。",
         "unsupportedType": "「{name}」不是支援的檔案類型",
         "imagesUnsupportedModel": "{model} 不能讀取圖片，這則訊息很可能傳送失敗。請換一個能讀圖片的模型，或者刪掉圖片。",
         "filesRejected": "{count} 個檔案被拒絕：",

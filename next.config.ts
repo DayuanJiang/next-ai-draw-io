@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
     env: {
         APP_VERSION: packageJson.version,
     },
+    experimental: {
+        // proxy.ts runs on /api/*, and Next keeps only this much of a
+        // request body it passed: a cut chat request is unreadable JSON.
+        // The default 10 MB is less than one message with five 2 MB images.
+        proxyClientMaxBodySize: "32mb",
+    },
     // Include instrumentation.ts in standalone build for Langfuse telemetry,
     // the shape library docs get_shape_library reads at run time, and the
     // docs pages' Markdown

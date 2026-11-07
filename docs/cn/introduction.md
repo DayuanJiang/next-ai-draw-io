@@ -10,7 +10,7 @@ Next AI Draw.io 让您通过和 AI 对话来绘制和修改 draw.io 图表。您
 |---|---|---|
 | 在浏览器里 | next-ai-drawio.jiang.jp 上的编辑器。无需安装；填入自己的 API Key，就不受演示站每日额度的限制 | [打开编辑器](https://next-ai-drawio.jiang.jp/) |
 | 在桌面上 | 同一个应用，支持 Windows、macOS 和 Linux | [最新版本](https://github.com/DayuanJiang/next-ai-draw-io/releases/latest) |
-| 在 AI 代理里 | 一个 MCP 服务器：Claude Code、Cursor、Codex 和 VS Code 根据您项目里的文件，在您浏览器里的同一块画布上画图 | [在 Claude Code 里使用](./claude-code.md) |
+| 在 AI 代理里 | 一个 MCP 服务器：Claude Code、Cursor、Codex 和 VS Code 根据您项目里的文件，在您浏览器里的同一块画布上画图 | [在 Claude Code 里画 draw.io 图表](./claude-code.md) |
 
 ## 您可以做什么
 
@@ -38,7 +38,7 @@ Next AI Draw.io 让您通过和 AI 对话来绘制和修改 draw.io 图表。您
 
 - 在网页版里[绘制和编辑](./editor.md)
 - [版本与撤销](./versions.md)
-- [在 Claude Code 里使用](./claude-code.md)，或在[其他 MCP 客户端](./mcp-clients.md)里使用
+- [在 Claude Code 里画 draw.io 图表](./claude-code.md)，或在[其他 MCP 客户端](./mcp-clients.md)里使用
 - [AWS 架构图](./aws-architecture.md)，以及[流程图和时序图](./flowcharts.md)
 - [使用 Docker 运行](./docker.md)
 - [常见问题解答](./FAQ.md)

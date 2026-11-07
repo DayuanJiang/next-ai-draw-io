@@ -69,21 +69,50 @@ const isImagePart = (part: any) =>
     part.type === "image" ||
     (part.type === "file" && String(part.mediaType).startsWith("image/"))
 
+// The chat request leaves out the images of the user messages before the
+// newest one: the model gets them with their own turn only, and sent with
+// every request they soon pass the 10 MB the server reads of a request
+export function withoutOldImageParts<T extends { role: string; parts: any[] }>(
+    messages: T[],
+): T[] {
+    let newest = -1
+    messages.forEach((msg, i) => {
+        if (msg.role === "user") newest = i
+    })
+    return messages.map((msg, i) =>
+        msg.role === "user" && i < newest && msg.parts.some(isImagePart)
+            ? { ...msg, parts: msg.parts.filter((part) => !isImagePart(part)) }
+            : msg,
+    )
+}
+
+// Claude's thinking on Anthropic's API, signed for the messages before it
+const isAnthropicThinking = (part: any) =>
+    part.type === "reasoning" && !!part.providerOptions?.anthropic
+
 // An attached document or image goes to the model with its own turn only:
 // the user messages before the newest one keep just a document's name line
+// (the browser leaves out their images already).
+// Anthropic refuses thinking once a message before it changed ("bound to a
+// different conversation"), so the earlier turns go without theirs. The
+// answers after the newest user message are the turn running now and keep
+// their thinking.
 export function withoutOldAttachments(messages: any[]): any[] {
     let newest = -1
     messages.forEach((msg, i) => {
         if (msg.role === "user") newest = i
     })
-    return messages.map((msg, i) => {
-        if (
-            msg.role !== "user" ||
-            i === newest ||
-            !Array.isArray(msg.content)
-        ) {
-            return msg
+    return messages.flatMap((msg, i) => {
+        if (i >= newest || !Array.isArray(msg.content)) return [msg]
+        if (msg.role === "assistant") {
+            const content = msg.content.filter(
+                (part: any) => !isAnthropicThinking(part),
+            )
+            if (content.length === msg.content.length) return [msg]
+            // An answer that was only thinking (stopped early) goes too
+            return content.length > 0 ? [{ ...msg, content }] : []
         }
+        if (msg.role !== "user") return [msg]
         const content = msg.content
             .filter((part: any) => !isImagePart(part))
             .map((part: any) =>
@@ -92,7 +121,7 @@ export function withoutOldAttachments(messages: any[]): any[] {
                     : part,
             )
         // Providers reject an empty message (the app always sends text)
-        return content.length > 0 ? { ...msg, content } : msg
+        return [content.length > 0 ? { ...msg, content } : msg]
     })
 }
 

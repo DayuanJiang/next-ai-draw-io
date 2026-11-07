@@ -20,6 +20,16 @@
         "indentStyle": "space",
         "indentWidth": 4
     },
+    "markdown": {
+        "formatter": {
+            "enabled": false
+        }
+    },
+    "yaml": {
+        "formatter": {
+            "enabled": false
+        }
+    },
     "linter": {
         "enabled": true,
         "rules": {

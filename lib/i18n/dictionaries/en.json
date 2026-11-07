@@ -141,6 +141,7 @@
         "maxFiles": "Too many files. Maximum {max} allowed.",
         "onlyMoreAllowed": "Only {slots} more file(s) allowed",
         "fileExceeds": "\"{name}\" is {size} (exceeds {max}MB)",
+        "fileEmpty": "\"{name}\" is empty (0 bytes). Copy or save it again, then attach it.",
         "unsupportedType": "\"{name}\" is not a supported file type",
         "imagesUnsupportedModel": "{model} can't read images, so this message will likely fail. Pick a model that reads images, or remove the image.",
         "filesRejected": "{count} files rejected:",

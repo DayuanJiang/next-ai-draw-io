@@ -401,15 +401,26 @@ describe("whose keys a request uses", () => {
         expect(provider.chat).not.toHaveBeenCalled()
     })
 
-    it("uses Chat Completions for any configured base URL", () => {
-        // The settings form fills in the official URL for a new provider
+    it("uses the Responses API on OpenAI's own URL, Chat Completions on others", () => {
+        // The settings form fills in the official URL for a new provider,
+        // and GPT-5.5 refuses tools with reasoning on Chat Completions
         getAIModel({
             provider: "openai",
             apiKey: "user-key",
-            baseUrl: "https://api.openai.com/v1",
+            baseUrl: "https://api.openai.com/v1/",
             modelId: "gpt-5.5",
         })
-        const provider = vi.mocked(createOpenAI).mock.results.at(-1)?.value
+        let provider = vi.mocked(createOpenAI).mock.results.at(-1)?.value
+        expect(provider.chat).not.toHaveBeenCalled()
+        expect(provider).toHaveBeenCalledWith("gpt-5.5")
+
+        getAIModel({
+            provider: "openai",
+            apiKey: "user-key",
+            baseUrl: "https://proxy.example.com/v1",
+            modelId: "gpt-5.5",
+        })
+        provider = vi.mocked(createOpenAI).mock.results.at(-1)?.value
         expect(provider.chat).toHaveBeenCalledWith("gpt-5.5")
     })
 
