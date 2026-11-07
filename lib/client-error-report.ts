@@ -24,6 +24,8 @@ const ISSUES_URL = "https://github.com/DayuanJiang/next-ai-draw-io/issues/new"
 // each message
 const MAX_AUTOMATIC = 5
 const MAX_AUTOMATIC_MESSAGE = 500
+// A stack line naming a file, line and column
+const FRAME = /:\d+:\d+\)?\s*$/
 
 let enabled: Promise<boolean> | undefined
 const recorded = new Set<string>()
@@ -88,9 +90,7 @@ export async function recordError(report: ErrorReport): Promise<void> {
  */
 export function isAppError(error: unknown): error is Error {
     if (!(error instanceof Error) || error.name === "AbortError") return false
-    const frame = error.stack
-        ?.split("\n")
-        .find((line) => /:\d+:\d+\)?\s*$/.test(line))
+    const frame = error.stack?.split("\n").find((line) => FRAME.test(line))
     return !!frame && frame.includes("/_next/")
 }
 
@@ -158,13 +158,14 @@ export function toastUnexpectedError(
     })
 }
 
-// The stack's call lines only: Chrome's first line repeats the message,
-// which goes cut short on its own
+// The stack's call lines only (Chrome's first line repeats the message,
+// which goes cut short on its own), each at most 300 characters
 function shortStack(stack: string | undefined, lines = 12) {
     return stack
         ?.split("\n")
-        .filter((line) => /^\s*at\s|@.*:\d+:\d+$/.test(line))
+        .filter((line) => FRAME.test(line))
         .slice(0, lines)
+        .map((line) => line.slice(0, 300))
         .join("\n")
 }
 

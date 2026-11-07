@@ -448,7 +448,8 @@ function AssistantMessage({
     }
 
     const submitReasons = async (reasons: FeedbackReason[], note: string) => {
-        const seq = voteSeqRef.current
+        // Also a click: a failed vote before it leaves the form alone
+        const seq = ++voteSeqRef.current
         const sent = await postFeedback("bad", { reasons, note })
         if (sent && voteSeqRef.current === seq) setReasonsStep("thanks")
     }

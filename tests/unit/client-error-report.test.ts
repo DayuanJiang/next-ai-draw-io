@@ -167,4 +167,16 @@ describe("sendErrorReport", () => {
             "    at f (http://localhost/_next/static/chunks/a.js:1:2)",
         )
     })
+
+    it("drops message lines that only look like call lines", async () => {
+        const { sendErrorReport } = await load()
+        await sendErrorReport({
+            kind: "uncaught",
+            message: "short",
+            stack: "Error: x\nat PRIVATE text\n    at f (http://localhost/_next/a.js:1:2)\ng@http://localhost/_next/b.js:3:4",
+        })
+        expect(posts()[0].stack).toBe(
+            "    at f (http://localhost/_next/a.js:1:2)\ng@http://localhost/_next/b.js:3:4",
+        )
+    })
 })
