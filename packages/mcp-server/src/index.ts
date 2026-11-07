@@ -510,12 +510,16 @@ registerTool(
 
         // A tab that opens by itself surprises the user unless the agent
         // says what it is; last, after the long guide, so it is not missed
-        const tabNote =
-            process.env.BROWSER === "none"
-                ? "Give the user the Browser URL above: the live preview of the diagram, where they can also edit it by hand; you see their edits."
-                : "A browser tab with the live preview just opened. In your reply, tell the user in one sentence that it shows the diagram as you draw and that you see the edits they make there."
+        const noBrowser = process.env.BROWSER === "none"
+        // Also right under the link: the guide in between is long (#1058)
+        const linkNote = noBrowser
+            ? "\nPut this link in your reply, even if a screenshot fails later: the user opens it to see the preview."
+            : ""
+        const tabNote = noBrowser
+            ? "Give the user the Browser URL above: the live preview of the diagram, where they can also edit it by hand; you see their edits."
+            : "A browser tab with the live preview just opened. In your reply, tell the user in one sentence that it shows the diagram as you draw and that you see the edits they make there."
         return ok(
-            `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}${originNote}${saveNote}${rulesNote}\n\n${guideText()}\n\n${tabNote}`,
+            `${intro}\n\nSession ID: ${sessionId}\nBrowser URL: ${browserUrl}${linkNote}${originNote}${saveNote}${rulesNote}\n\n${guideText()}\n\n${tabNote}`,
         )
     },
     { write: true },
@@ -1082,9 +1086,7 @@ registerTool(
         if (previewStalled(sessionId))
             return fail(previewStalledNote(sessionId))
         if (sessionState(sessionId)?.lastPolled === undefined) {
-            return fail(
-                "The preview tab is not open, or has not connected yet.",
-            )
+            return fail(previewNotOpenNote(sessionId))
         }
         const answer = await readSelection(sessionId)
         if (!answer) {
@@ -1165,6 +1167,12 @@ function previewStalledNote(sessionId: string, next = "then retry") {
     return `The preview tab is not responding (browsers pause background tabs). Ask the user to bring the preview tab to the front (${previewUrl(getServerPort(), sessionId)}), ${next}.`
 }
 
+// The link again, as an agent that only sees "not open" tends to tell the
+// user the preview is broken and leave the link out of its reply (#1058)
+function previewNotOpenNote(sessionId: string) {
+    return `The preview tab is not open, or has not connected yet. Give the user the preview link ${previewUrl(getServerPort(), sessionId)} in your reply and ask them to open it; screenshots and exports work once it is open.`
+}
+
 // Exported images get a margin, and a PNG a white background unless asked
 // otherwise (draw.io keeps a page's own background color over it); the
 // preview passes these on to draw.io's export
@@ -1242,7 +1250,7 @@ async function captureScreenshot(
     if (getState(sessionId)?.lastPolled === undefined) {
         return {
             ok: false,
-            note: "The preview tab is not open, or has not connected yet.",
+            note: previewNotOpenNote(sessionId),
         }
     }
     if (!hasCells(xml)) {
@@ -1472,6 +1480,10 @@ registerTool(
         }
         if (previewStalled(session.id)) {
             return fail(previewStalledNote(session.id))
+        }
+        // The tab never polled, so the export would only time out
+        if (browserState.lastPolled === undefined) {
+            return fail(previewNotOpenNote(session.id))
         }
         // -----------------------------------------------------------------
         // Page-targeted PNG/SVG export.
