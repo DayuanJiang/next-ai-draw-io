@@ -659,7 +659,7 @@
     "report": {
         "button": "报告问题",
         "title": "报告问题",
-        "description": "发送的内容是下面的错误信息和您写的话。",
+        "description": "发送的内容是下面的错误信息、您写的话，以及最近几步操作的名称。",
         "notePlaceholder": "出错前您在做什么？（可不填）",
         "errorLabel": "错误信息",
         "send": "发送",

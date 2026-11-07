@@ -51,6 +51,27 @@ describe("/api/log-client-error", () => {
         expect(trace.metadata.stack).toContain("/_next/")
     })
 
+    it("keeps a chat error's code, model and the last actions", async () => {
+        await POST(
+            post({
+                kind: "chat-error",
+                message: "Network error",
+                code: "network",
+                model: "server default",
+                actions: ["send (3s ago)", "answer failed (0s ago)"],
+            }),
+        )
+        expect(sentTrace()).toMatchObject({
+            name: "client-error",
+            metadata: {
+                code: "network",
+                model: "server default",
+                actions: ["send (3s ago)", "answer failed (0s ago)"],
+            },
+            tags: ["chat-error", "network"],
+        })
+    })
+
     it("names a report the user sent, even without a note", async () => {
         await POST(post({ kind: "chat-error", message: "boom", note: "" }))
         expect(sentTrace()).toMatchObject({

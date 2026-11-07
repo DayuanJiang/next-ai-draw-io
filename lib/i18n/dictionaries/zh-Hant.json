@@ -659,7 +659,7 @@
     "report": {
         "button": "回報問題",
         "title": "回報問題",
-        "description": "傳送的內容是下面的錯誤訊息和您寫的話。",
+        "description": "傳送的內容是下面的錯誤訊息、您寫的話，以及最近幾步操作的名稱。",
         "notePlaceholder": "出錯前您在做什麼？（可不填）",
         "errorLabel": "錯誤訊息",
         "send": "傳送",

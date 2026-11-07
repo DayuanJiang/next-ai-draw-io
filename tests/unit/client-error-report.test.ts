@@ -155,6 +155,40 @@ describe("githubIssueUrl", () => {
     })
 })
 
+describe("recent actions", () => {
+    it("keeps the last ten, oldest first, with how long ago", async () => {
+        const { noteAction, recentActions } = await load()
+        for (let i = 1; i <= 12; i++) noteAction(`action ${i}`)
+        const actions = recentActions(Date.now() + 5000)
+        expect(actions).toHaveLength(10)
+        expect(actions[0]).toBe("action 3 (5s ago)")
+        expect(actions[9]).toBe("action 12 (5s ago)")
+    })
+
+    it("go with every report and into the GitHub issue", async () => {
+        const { noteAction, sendErrorReport, githubIssueUrl } = await load()
+        noteAction("send")
+        noteAction("answer failed")
+        const report = {
+            kind: "chat-error" as const,
+            message: "Server error",
+            code: "server_error",
+            model: "openai/gpt-5.5",
+        }
+        await sendErrorReport(report)
+        expect(posts()[0]).toMatchObject({
+            code: "server_error",
+            model: "openai/gpt-5.5",
+            actions: ["send (0s ago)", "answer failed (0s ago)"],
+        })
+        const body =
+            new URL(githubIssueUrl(report)).searchParams.get("body") ?? ""
+        expect(body).toContain("send (0s ago)\nanswer failed (0s ago)")
+        expect(body).toContain("Code: server_error")
+        expect(body).toContain("Model: openai/gpt-5.5")
+    })
+})
+
 describe("sendErrorReport", () => {
     it("sends the stack's call lines without the message line", async () => {
         const { sendErrorReport } = await load()

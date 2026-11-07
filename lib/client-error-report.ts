@@ -16,6 +16,10 @@ export interface ErrorReport {
     /** What the user was doing, in their words; set on reports they send
      * (an empty note is a report sent without one) */
     note?: string
+    /** A chat error's code (the provider's, or the app's own such as
+     * "network") and the model the request went to */
+    code?: string
+    model?: string
 }
 
 const ENDPOINT = "/api/log-client-error"
@@ -29,6 +33,24 @@ const FRAME = /:\d+:\d+\)?\s*$/
 
 let enabled: Promise<boolean> | undefined
 const recorded = new Set<string>()
+// The user's last actions, names only, sent with every report so it shows
+// what led to the error
+const MAX_ACTIONS = 10
+const actions: { name: string; at: number }[] = []
+
+/** Notes something the user did (or an answer ended), for the reports of
+ * errors that follow. Names only, never what was typed or drawn. */
+export function noteAction(name: string) {
+    actions.push({ name, at: Date.now() })
+    if (actions.length > MAX_ACTIONS) actions.shift()
+}
+
+/** The recent actions, oldest first, with how long ago each was */
+export function recentActions(now = Date.now()): string[] {
+    return actions.map(
+        (a) => `${a.name} (${Math.round((now - a.at) / 1000)}s ago)`,
+    )
+}
 
 /** Whether the server keeps reports (Langfuse is set up); asked once per
  * page load. Without it the page offers a GitHub issue instead. */
@@ -53,6 +75,9 @@ export async function sendErrorReport(report: ErrorReport): Promise<boolean> {
                 message: report.message.slice(0, 2000),
                 stack: shortStack(report.stack)?.slice(0, 4000),
                 note: report.note?.slice(0, 2000),
+                code: report.code?.slice(0, 100),
+                model: report.model?.slice(0, 200),
+                actions: recentActions(),
                 page: location.pathname.slice(0, 500),
                 version: process.env.APP_VERSION,
                 sessionId: chatSessionId(),
@@ -110,9 +135,15 @@ export function githubIssueUrl(report: ErrorReport): string {
             shortStack(report.stack, 6) ?? "",
             "```",
             "",
+            "**Recent actions**",
+            "",
+            recentActions().join("\n") || "(none)",
+            "",
             `Version: ${process.env.APP_VERSION ?? "unknown"}${window.electronAPI?.isElectron ? " (desktop app)" : ""}`,
             `Page: ${location.pathname}`,
             `Browser: ${navigator.userAgent}`,
+            ...(report.code ? [`Code: ${report.code}`] : []),
+            ...(report.model ? [`Model: ${report.model}`] : []),
         ].join("\n")
     // GitHub refuses very long addresses, and Chinese text grows ninefold
     // when encoded: the note gets shorter first, then the message; the

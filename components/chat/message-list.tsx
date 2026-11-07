@@ -552,8 +552,10 @@ function AssistantMessage({
                 <div
                     className={cn(
                         "-ml-1.5 flex items-center transition-opacity [@media(hover:hover)]:opacity-0 group-hover/message:opacity-100 focus-within:opacity-100",
-                        // Shows the vote the open question is about
-                        reasonsStep && "[@media(hover:hover)]:opacity-100",
+                        // Always under the latest answer; elsewhere while its
+                        // question shows the vote it is about
+                        (isLastAssistant || reasonsStep) &&
+                            "[@media(hover:hover)]:opacity-100",
                     )}
                 >
                     {text && <CopyButton text={text} />}

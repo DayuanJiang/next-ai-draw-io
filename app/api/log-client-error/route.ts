@@ -13,6 +13,10 @@ const reportSchema = z.object({
     stack: z.string().max(4000).optional(),
     note: z.string().max(2000).optional(),
     page: z.string().max(500).optional(),
+    // A chat error's code and model, and the user's last actions (names)
+    code: z.string().max(100).optional(),
+    model: z.string().max(200).optional(),
+    actions: z.array(z.string().max(100)).max(10).optional(),
     version: z.string().max(50).optional(),
     sessionId: z.string().min(1).max(200).optional(),
 })
@@ -41,7 +45,18 @@ export async function POST(req: Request) {
         )
     }
 
-    const { kind, message, stack, note, page, version, sessionId } = data
+    const {
+        kind,
+        message,
+        stack,
+        note,
+        page,
+        version,
+        sessionId,
+        code,
+        model,
+        actions,
+    } = data
     const reported = note !== undefined
     const timestamp = new Date().toISOString()
     try {
@@ -59,12 +74,15 @@ export async function POST(req: Request) {
                         input: reported ? { note, message } : { message },
                         metadata: {
                             kind,
+                            code,
+                            model,
+                            actions,
                             page,
                             version,
                             stack,
                             userAgent: req.headers.get("user-agent"),
                         },
-                        tags: [kind],
+                        tags: code ? [kind, code] : [kind],
                         timestamp,
                     },
                 },

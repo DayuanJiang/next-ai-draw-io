@@ -43,7 +43,11 @@ import {
     noticeMessage,
 } from "@/lib/chat-message"
 import { buildChatHeaders } from "@/lib/chat-request"
-import { toastUnexpectedError } from "@/lib/client-error-report"
+import {
+    noteAction,
+    recordError,
+    toastUnexpectedError,
+} from "@/lib/client-error-report"
 import {
     type AiCanvasState,
     diagramFingerprint,
@@ -407,6 +411,8 @@ export function ChatEngineProvider({
     const [isLeaving, setIsLeaving] = useState(false)
     // The user's provider the current turn was sent to, for its errors
     const requestProviderIdRef = useRef<string | undefined>(undefined)
+    // The model of this turn's requests, for error reports
+    const requestModelRef = useRef<string | undefined>(undefined)
     // Presses of Stop: a check that began before one still knows of it after
     // the next message clears stoppedRef
     const stopCountRef = useRef(0)
@@ -523,6 +529,13 @@ export function ChatEngineProvider({
             await handleToolCall({ toolCall }, addToolOutputSafely)
         },
         onFinish: ({ message, isAbort, isError, finishReason }) => {
+            noteAction(
+                isAbort
+                    ? "answer stopped"
+                    : isError
+                      ? "answer failed"
+                      : "answer finished",
+            )
             // Stopped, failed, or the reply just ended (a closed connection):
             // tool calls still streaming never reach the tool handler. Mark
             // them handled so a later render of the stream does not draw
@@ -552,15 +565,20 @@ export function ChatEngineProvider({
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             editDiagramOriginalXmlRef.current.clear()
             abandonContinuation()
+            const text = outOfTokens
+                ? dict.errors.llm.output_truncated
+                : dict.errors.answerEndedEarly
+            void recordError({
+                kind: "chat-error",
+                message: text,
+                code: outOfTokens ? "output_truncated" : "ended_early",
+                model: requestModelRef.current,
+            })
             // Not in another chat that came on screen meanwhile
             if (getChatGeneration() !== turnChatRef.current) return
             setMessages((currentMessages) => [
                 ...currentMessages,
-                noticeMessage({
-                    text: outOfTokens
-                        ? dict.errors.llm.output_truncated
-                        : dict.errors.answerEndedEarly,
-                }),
+                noticeMessage({ text }),
             ])
         },
         onError: (error) => {
@@ -621,6 +639,20 @@ export function ChatEngineProvider({
             } else if (error.message === "Failed to fetch") {
                 text = dict.errors.networkError
             }
+
+            // Every error card is recorded; Report on it adds a note
+            void recordError({
+                kind: "chat-error",
+                message: text,
+                code:
+                    data?.code ??
+                    (isAccessCodeError
+                        ? "access_code"
+                        : error.message === "Failed to fetch"
+                          ? "network"
+                          : undefined),
+                model: requestModelRef.current,
+            })
 
             // Not in another chat that came on screen meanwhile
             if (getChatGeneration() !== turnChatRef.current) return
@@ -705,10 +737,11 @@ export function ChatEngineProvider({
                 continuationRetryCountRef.current >=
                 MAX_CONTINUATION_RETRY_COUNT
             ) {
-                toast.error(
+                toastUnexpectedError(
                     formatMessage(dict.errors.continuationRetryLimit, {
                         max: MAX_CONTINUATION_RETRY_COUNT,
                     }),
+                    dict.report.button,
                 )
                 continuationRetryCountRef.current = 0
                 partialXmlRef.current = ""
@@ -717,10 +750,11 @@ export function ChatEngineProvider({
             continuationRetryCountRef.current++
         } else {
             if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
-                toast.error(
+                toastUnexpectedError(
                     formatMessage(dict.errors.retryLimit, {
                         max: MAX_AUTO_RETRY_COUNT,
                     }),
+                    dict.report.button,
                 )
                 autoRetryCountRef.current = 0
                 partialXmlRef.current = ""
@@ -1237,6 +1271,9 @@ export function ChatEngineProvider({
         // For this turn's errors: the provider these headers name (read with
         // them, from storage: another tab may have changed it meanwhile)
         requestProviderIdRef.current = config.providerId || undefined
+        requestModelRef.current = config.aiProvider
+            ? `${config.aiProvider}/${config.aiModel}`
+            : config.selectedModelId || "server default"
 
         const selected = selectedCells.map(({ id, label }) => ({ id, label }))
         // The canvas goes with the message only when the model's own calls
@@ -1479,6 +1516,7 @@ export function ChatEngineProvider({
             return false
         }
         preparingSendRef.current = true
+        noteAction("send")
         try {
             return await submitInput()
         } finally {
@@ -1488,6 +1526,7 @@ export function ChatEngineProvider({
 
     const improveWithSuggestions = async (feedback: string) => {
         if (!canStartTurn()) return
+        noteAction("improve diagram")
         // Like submit: the diagram export comes first
         preparingSendRef.current = true
         try {
@@ -1537,6 +1576,7 @@ export function ChatEngineProvider({
 
     const regenerate = async (messageIndex: number) => {
         if (!canStartTurn()) return
+        noteAction("regenerate")
         let userMessageIndex = messageIndex - 1
         while (
             userMessageIndex >= 0 &&
@@ -1552,6 +1592,7 @@ export function ChatEngineProvider({
 
     const editMessage = async (messageIndex: number, newText: string) => {
         if (!canStartTurn()) return false
+        noteAction("edit message")
         const message = messages[messageIndex]
         if (message?.role !== "user") return false
         // The edit box only shows the typed text; keep appended file content
@@ -1575,6 +1616,7 @@ export function ChatEngineProvider({
      */
     const retryLastMessage = async () => {
         if (!canStartTurn()) return
+        noteAction("retry")
         const index = messagesRef.current.map((m) => m.role).lastIndexOf("user")
         if (index < 0) return
         const message = messagesRef.current[index]
@@ -1615,6 +1657,7 @@ export function ChatEngineProvider({
     }
 
     const handleStop = useCallback(() => {
+        noteAction("stop")
         stoppedRef.current = true
         stopCountRef.current++
         // A running screenshot check holds up the chat (the SDK waits for
@@ -1782,6 +1825,7 @@ export function ChatEngineProvider({
 
     const selectSession = async (id: string) => {
         if (!sessionManager.isAvailable || !canStartTurn()) return
+        noteAction("open chat")
         const open = async () => {
             if (isTurnActive()) return
             const sessionData = await sessionManager.switchSession(id)
@@ -1863,6 +1907,7 @@ export function ChatEngineProvider({
 
     const newChat = async () => {
         if (!canStartTurn()) return
+        noteAction("new chat")
         const start = () => {
             if (isTurnActive()) return
             startNewChat()
@@ -1907,6 +1952,7 @@ export function ChatEngineProvider({
         file: File,
         { keepComposer = false }: { keepComposer?: boolean } = {},
     ) => {
+        noteAction("open file")
         // It would start a new chat while the answer still goes to this
         // one: a toast asks the user to open it again after the answer
         if (isTurnActive()) {

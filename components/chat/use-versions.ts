@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { noteAction } from "@/lib/client-error-report"
 import { diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
 import {
     clearHighlights,
@@ -142,6 +143,7 @@ export function useVersions({
 
     const restoreVersion = (versionId: string) => {
         if (isTurnActive()) return
+        noteAction("restore version")
         const store = useVersionsStore.getState()
         const index = store.versions.findIndex((v) => v.id === versionId)
         if (index < 0) return
@@ -180,6 +182,7 @@ export function useVersions({
     /** Undo the change of the latest version, or redo it when undone */
     const undoVersion = (versionId: string) => {
         if (isTurnActive()) return
+        noteAction("undo version")
         const store = useVersionsStore.getState()
         const version = store.versions.find((v) => v.id === versionId)
         if (!version) return
