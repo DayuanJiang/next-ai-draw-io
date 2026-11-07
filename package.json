@@ -130,7 +130,7 @@
         "typescript": "^5",
         "vite-tsconfig-paths": "^6.0.3",
         "vitest": "^4.1.12",
-        "wrangler": "^4.60.0"
+        "wrangler": "^4.158.0"
     },
     "overrides": {
         "@openrouter/ai-sdk-provider": {
