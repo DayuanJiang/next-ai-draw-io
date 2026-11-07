@@ -559,10 +559,13 @@ describe("provider behavior snapshot", () => {
             modelId: "gpt-4o",
             apiKeyEnv: ["KEY_A", "KEY_B", "KEY_C"],
         }
+        // The Responses model comes wrapped (store off)
+        const keyOf = () =>
+            (getAIModel(overrides).model as any).wrapped.options.apiKey
         vi.mocked(Math.random).mockReturnValue(0)
-        expect((getAIModel(overrides).model as any).options.apiKey).toBe("a")
+        expect(keyOf()).toBe("a")
         vi.mocked(Math.random).mockReturnValue(0.999)
-        expect((getAIModel(overrides).model as any).options.apiKey).toBe("c")
+        expect(keyOf()).toBe("c")
         vi.mocked(Math.random).mockReturnValue(0)
         // None set: the server credential check refuses before any fallback
         setEnv({ OPENAI_API_KEY: "default-key" })

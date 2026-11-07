@@ -141,6 +141,7 @@
         "maxFiles": "文件太多。最多允许 {max} 个。",
         "onlyMoreAllowed": "只能再添加 {slots} 个文件",
         "fileExceeds": "\"{name}\" 大小为 {size}（超过 {max}MB）",
+        "fileEmpty": "\"{name}\" 是空文件（0 字节），请重新复制或保存后再添加。",
         "unsupportedType": "\"{name}\" 不是支持的文件类型",
         "imagesUnsupportedModel": "{model} 不能读取图片，这条消息很可能发送失败。请换一个能读图片的模型，或者删掉图片。",
         "filesRejected": "{count} 个文件被拒绝：",

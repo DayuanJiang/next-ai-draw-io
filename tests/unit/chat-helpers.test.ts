@@ -9,6 +9,7 @@ import {
     fixToolInputJson,
     parseStringifiedArrays,
     validateFileParts,
+    withoutOldImageParts,
 } from "@/lib/chat-helpers"
 
 describe("validateFileParts", () => {
@@ -91,6 +92,41 @@ describe("validateFileParts", () => {
             { role: "user", parts: [{ type: "text", text: "hello" }] },
         ]
         expect(validateFileParts(messages).valid).toBe(false)
+    })
+})
+
+describe("withoutOldImageParts", () => {
+    const image = (name: string) => ({
+        type: "file",
+        mediaType: "image/png",
+        url: `data:image/png;base64,${name}`,
+    })
+    const user = (text: string, ...files: any[]) => ({
+        role: "user",
+        parts: [{ type: "text", text }, ...files],
+    })
+    const answer = { role: "assistant", parts: [{ type: "text", text: "ok" }] }
+
+    it("sends the images of the newest user message only", () => {
+        const pdf = { type: "file", mediaType: "application/pdf", url: "x" }
+        const sent = withoutOldImageParts([
+            user("first", image("OLD1"), image("OLD2"), pdf),
+            answer,
+            user("second", image("NEW")),
+            answer,
+        ])
+        expect(JSON.stringify(sent)).not.toContain("OLD")
+        expect(sent[0].parts).toEqual([{ type: "text", text: "first" }, pdf])
+        expect(sent[2].parts).toEqual(user("second", image("NEW")).parts)
+        expect(sent[1]).toBe(answer)
+    })
+
+    it("leaves a chat without older images as it is", () => {
+        const messages = [user("first"), answer, user("second", image("NEW"))]
+        const sent = withoutOldImageParts(messages)
+        sent.forEach((msg, i) => {
+            expect(msg).toBe(messages[i])
+        })
     })
 })
 

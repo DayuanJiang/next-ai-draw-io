@@ -39,6 +39,13 @@ describe("chatRequestUrl", () => {
         expect(chatRequestUrl("ollama", "http://localhost:11434")).toBe(
             "http://localhost:11434/api/chat",
         )
+        // OpenAI's own URL gets the Responses API, a proxy Chat Completions
+        expect(chatRequestUrl("openai", "https://api.openai.com/v1")).toBe(
+            "https://api.openai.com/v1/responses",
+        )
+        expect(chatRequestUrl("openai", "https://proxy.example.com/v1")).toBe(
+            "https://proxy.example.com/v1/chat/completions",
+        )
     })
 
     it("stays out of the way for SDKs that build their own paths", () => {

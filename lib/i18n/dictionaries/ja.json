@@ -141,6 +141,7 @@
         "maxFiles": "ファイルが多すぎます。最大 {max} 個まで許可されています。",
         "onlyMoreAllowed": "あと {slots} 個のファイルのみ許可されています",
         "fileExceeds": "「{name}」は {size} です（{max}MB を超えています）",
+        "fileEmpty": "「{name}」は空のファイルです（0 バイト）。コピーまたは保存し直してから、もう一度添付してください。",
         "unsupportedType": "「{name}」はサポートされていないファイルタイプです",
         "imagesUnsupportedModel": "{model} は画像を読めないため、このメッセージは失敗する可能性が高いです。画像を読めるモデルに切り替えるか、画像を削除してください。",
         "filesRejected": "{count} 個のファイルが拒否されました：",
