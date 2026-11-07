@@ -117,6 +117,15 @@ jobs:
       - name: Publish to the MCP registry
         if: steps.registry.outputs.publish == 'true'
         run: |
+          # npm can take a few minutes to serve a version it just accepted,
+          # and the registry rejects one npm does not serve yet (0.4.12 got a
+          # 404 right after npm publish); wait up to 10 minutes
+          VERSION=$(node -p "require('./package.json').version")
+          for i in $(seq 1 40); do
+            curl -sf -o /dev/null "https://registry.npmjs.org/@next-ai-drawio/mcp-server/${VERSION}" && break
+            echo "npm does not serve ${VERSION} yet, waiting ($i)"
+            sleep 15
+          done
           curl -sSfL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.7/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
