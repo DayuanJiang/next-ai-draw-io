@@ -35,6 +35,11 @@
             "automerge": false
         },
         {
+            "matchPackagePatterns": ["^@opentelemetry/"],
+            "groupName": "OpenTelemetry packages",
+            "automerge": false
+        },
+        {
             "matchPackageNames": ["@biomejs/biome"],
             "groupName": "Biome",
             "automerge": false
