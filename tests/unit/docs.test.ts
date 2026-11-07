@@ -88,7 +88,9 @@ describe("docs files", () => {
             text: "Install",
             id: "install",
         })
-        expect(doc.summary).toMatch(/^The MCP server lets Claude Code/)
+        expect(doc.summary).toMatch(
+            /^Add the draw.io MCP server to Claude Code/,
+        )
     })
 
     it("has every page in every language", () => {

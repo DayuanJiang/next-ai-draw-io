@@ -1,6 +1,6 @@
 # Other MCP clients
 
-The MCP server works with any client that runs local MCP servers over stdio: Codex CLI, VS Code, DeepSeek Harness, Cursor, Claude Desktop, Cline and more. You need Node.js 18 or later. For Claude Code, see [Use it from Claude Code](./claude-code.md).
+The MCP server works with any client that runs local MCP servers over stdio: Codex CLI, VS Code, DeepSeek Harness, Cursor, Claude Desktop, Cline and more. You need Node.js 18 or later. For Claude Code, see [draw.io diagrams in Claude Code](./claude-code.md).
 
 ## Let your agent install it
 
@@ -67,7 +67,7 @@ Most clients use the same format, in `~/.cursor/mcp.json`, `claude_desktop_confi
 }
 ```
 
-Settings go in the server's `env`, for example `"env": { "DRAWIO_LANG": "ja" }`. The variables are listed in [Use it from Claude Code](./claude-code.md#settings).
+Settings go in the server's `env`, for example `"env": { "DRAWIO_LANG": "ja" }`. The variables are listed in [draw.io diagrams in Claude Code](./claude-code.md#settings).
 
 ## After installing
 

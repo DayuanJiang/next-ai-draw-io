@@ -1,6 +1,6 @@
-# 在 Claude Code 里使用
+# 在 Claude Code 里画 draw.io 图表（MCP）
 
-MCP 服务器让 Claude Code 根据您项目里的文件绘制 draw.io 图表。图表显示在您浏览器里的一块实时画布上，这块画布和网页版的一样：您可以手动编辑，Claude 再次修改图表之前会先读取您的改动。
+一条命令就能把 draw.io MCP 服务器加到 Claude Code 里。Claude 在您浏览器里的实时画布上画图；您可以手动修改，Claude 会读取您的改动。
 
 ## 安装
 
