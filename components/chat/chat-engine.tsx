@@ -45,6 +45,13 @@ import {
 } from "@/lib/chat-message"
 import { buildChatHeaders } from "@/lib/chat-request"
 import {
+    isNetworkFailure,
+    noteAction,
+    recentActions,
+    recordError,
+    toastUnexpectedError,
+} from "@/lib/client-error-report"
+import {
     type AiCanvasState,
     diagramFingerprint,
     diagramForMessage,
@@ -297,6 +304,7 @@ export function ChatEngineProvider({
     const { files, pdfData, handleFileChange, setFiles } = useFileProcessor({
         tooLong: dict.errors.fileTooLong,
         readFailed: dict.errors.fileReadFailed,
+        report: dict.report.button,
     })
     const [urlData, setUrlData] = useState<Map<string, UrlData>>(new Map())
     const filesRef = useRef(files)
@@ -406,6 +414,8 @@ export function ChatEngineProvider({
     const [isLeaving, setIsLeaving] = useState(false)
     // The user's provider the current turn was sent to, for its errors
     const requestProviderIdRef = useRef<string | undefined>(undefined)
+    // The model of this turn's requests, for error reports
+    const requestModelRef = useRef<string | undefined>(undefined)
     // Presses of Stop: a check that began before one still knows of it after
     // the next message clears stoppedRef
     const stopCountRef = useRef(0)
@@ -539,7 +549,16 @@ export function ChatEngineProvider({
             if (isAbort && getChatGeneration() === turnChatRef.current) {
                 for (const part of cut) stopToolCall(part)
             }
+            // A failure was noted by onError, which comes first
+            if (isAbort) noteAction("answer stopped")
             if (isAbort || isError) return
+            noteAction(
+                finishReason === "length"
+                    ? "answer cut off"
+                    : cut.length > 0
+                      ? "answer ended early"
+                      : "answer finished",
+            )
             // The output budget ran out before the model called a tool (its
             // thinking took it all): nothing was drawn
             const outOfTokens =
@@ -551,18 +570,25 @@ export function ChatEngineProvider({
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             editDiagramOriginalXmlRef.current.clear()
             abandonContinuation()
+            const text = outOfTokens
+                ? dict.errors.llm.output_truncated
+                : dict.errors.answerEndedEarly
+            void recordError({
+                kind: "chat-error",
+                message: text,
+                code: outOfTokens ? "output_truncated" : "ended_early",
+                model: requestModelRef.current,
+            })
             // Not in another chat that came on screen meanwhile
             if (getChatGeneration() !== turnChatRef.current) return
             setMessages((currentMessages) => [
                 ...currentMessages,
-                noticeMessage({
-                    text: outOfTokens
-                        ? dict.errors.llm.output_truncated
-                        : dict.errors.answerEndedEarly,
-                }),
+                noticeMessage({ text, actions: recentActions() }),
             ])
         },
         onError: (error) => {
+            // Before the error's record takes the recent actions
+            noteAction("answer failed")
             // A diagram still streaming when the request failed never
             // reaches the tool handler: undo its preview. Only previews not
             // handled yet are stored, and the first one holds the diagram
@@ -617,9 +643,23 @@ export function ChatEngineProvider({
                 ].includes(data.code)
             } else if (typeof data?.error === "string") {
                 text = data.error
-            } else if (error.message === "Failed to fetch") {
+            } else if (isNetworkFailure(error.message)) {
                 text = dict.errors.networkError
             }
+
+            // Every error card is recorded; Report on it adds a note
+            void recordError({
+                kind: "chat-error",
+                message: text,
+                code:
+                    data?.code ??
+                    (isAccessCodeError
+                        ? "access_code"
+                        : isNetworkFailure(error.message)
+                          ? "network"
+                          : undefined),
+                model: requestModelRef.current,
+            })
 
             // Not in another chat that came on screen meanwhile
             if (getChatGeneration() !== turnChatRef.current) return
@@ -636,6 +676,8 @@ export function ChatEngineProvider({
                 noticeMessage({
                     text,
                     ...(openModelConfig && { openModelConfig, providerId }),
+                    ...(isAccessCodeError && { accessCode: true }),
+                    actions: recentActions(),
                 }),
             ])
 
@@ -703,28 +745,32 @@ export function ChatEngineProvider({
                 continuationRetryCountRef.current >=
                 MAX_CONTINUATION_RETRY_COUNT
             ) {
-                toast.error(
+                toastUnexpectedError(
                     formatMessage(dict.errors.continuationRetryLimit, {
                         max: MAX_CONTINUATION_RETRY_COUNT,
                     }),
+                    dict.report.button,
                 )
                 continuationRetryCountRef.current = 0
                 partialXmlRef.current = ""
                 return false
             }
             continuationRetryCountRef.current++
+            noteAction("auto continue")
         } else {
             if (autoRetryCountRef.current >= MAX_AUTO_RETRY_COUNT) {
-                toast.error(
+                toastUnexpectedError(
                     formatMessage(dict.errors.retryLimit, {
                         max: MAX_AUTO_RETRY_COUNT,
                     }),
+                    dict.report.button,
                 )
                 autoRetryCountRef.current = 0
                 partialXmlRef.current = ""
                 return false
             }
             autoRetryCountRef.current++
+            noteAction("auto retry")
         }
         return true
     }
@@ -969,7 +1015,11 @@ export function ChatEngineProvider({
             lastSyncedSessionIdRef.current = sessionManager.currentSessionId
         } catch (error) {
             console.error("Failed to restore session:", error)
-            toast.error(dict.errors.sessionCorrupted)
+            toastUnexpectedError(
+                dict.errors.sessionCorrupted,
+                dict.report.button,
+                error,
+            )
         } finally {
             setIsRestored(true)
         }
@@ -978,6 +1028,7 @@ export function ChatEngineProvider({
         sessionManager.currentSession,
         syncUIWithSession,
         dict.errors.sessionCorrupted,
+        dict.report.button,
     ])
 
     // Sync UI when the session changes externally (URL back/forward)
@@ -1230,6 +1281,9 @@ export function ChatEngineProvider({
         // For this turn's errors: the provider these headers name (read with
         // them, from storage: another tab may have changed it meanwhile)
         requestProviderIdRef.current = config.providerId || undefined
+        requestModelRef.current = config.aiProvider
+            ? `${config.aiProvider}/${config.aiModel}`
+            : config.selectedModelId || "server default"
 
         const selected = selectedCells.map(({ id, label }) => ({ id, label }))
         // The canvas goes with the message only when the model's own calls
@@ -1425,10 +1479,12 @@ export function ChatEngineProvider({
             }
         } catch (error) {
             console.warn("Error preparing the message:", error)
-            toast.error(
+            toastUnexpectedError(
                 error instanceof FileReadError
                     ? error.message
                     : dict.errors.failedToExport,
+                dict.report.button,
+                error,
             )
         }
         if (sent) {
@@ -1470,6 +1526,7 @@ export function ChatEngineProvider({
             return false
         }
         preparingSendRef.current = true
+        noteAction("send")
         try {
             return await submitInput()
         } finally {
@@ -1479,13 +1536,18 @@ export function ChatEngineProvider({
 
     const improveWithSuggestions = async (feedback: string) => {
         if (!canStartTurn()) return
+        noteAction("improve diagram")
         // Like submit: the diagram export comes first
         preparingSendRef.current = true
         try {
             await sendWithCurrentDiagram([{ type: "text", text: feedback }])
         } catch (error) {
             console.error("Error fetching chart data:", error)
-            toast.error(dict.errors.failedToExport)
+            toastUnexpectedError(
+                dict.errors.failedToExport,
+                dict.report.button,
+                error,
+            )
         } finally {
             preparingSendRef.current = false
         }
@@ -1524,6 +1586,7 @@ export function ChatEngineProvider({
 
     const regenerate = async (messageIndex: number) => {
         if (!canStartTurn()) return
+        noteAction("regenerate")
         let userMessageIndex = messageIndex - 1
         while (
             userMessageIndex >= 0 &&
@@ -1539,6 +1602,7 @@ export function ChatEngineProvider({
 
     const editMessage = async (messageIndex: number, newText: string) => {
         if (!canStartTurn()) return false
+        noteAction("edit message")
         const message = messages[messageIndex]
         if (message?.role !== "user") return false
         // The edit box only shows the typed text; keep appended file content
@@ -1562,6 +1626,7 @@ export function ChatEngineProvider({
      */
     const retryLastMessage = async () => {
         if (!canStartTurn()) return
+        noteAction("retry")
         const index = messagesRef.current.map((m) => m.role).lastIndexOf("user")
         if (index < 0) return
         const message = messagesRef.current[index]
@@ -1591,13 +1656,18 @@ export function ChatEngineProvider({
             )
         } catch (error) {
             console.error("Error fetching chart data:", error)
-            toast.error(dict.errors.failedToExport)
+            toastUnexpectedError(
+                dict.errors.failedToExport,
+                dict.report.button,
+                error,
+            )
         } finally {
             preparingSendRef.current = false
         }
     }
 
     const handleStop = useCallback(() => {
+        noteAction("stop")
         stoppedRef.current = true
         stopCountRef.current++
         // A running screenshot check holds up the chat (the SDK waits for
@@ -1765,6 +1835,7 @@ export function ChatEngineProvider({
 
     const selectSession = async (id: string) => {
         if (!sessionManager.isAvailable || !canStartTurn()) return
+        noteAction("open chat")
         const open = async () => {
             if (isTurnActive()) return
             const sessionData = await sessionManager.switchSession(id)
@@ -1846,6 +1917,7 @@ export function ChatEngineProvider({
 
     const newChat = async () => {
         if (!canStartTurn()) return
+        noteAction("new chat")
         const start = () => {
             if (isTurnActive()) return
             startNewChat()
@@ -1890,6 +1962,7 @@ export function ChatEngineProvider({
         file: File,
         { keepComposer = false }: { keepComposer?: boolean } = {},
     ) => {
+        noteAction("open file")
         // It would start a new chat while the answer still goes to this
         // one: a toast asks the user to open it again after the answer
         if (isTurnActive()) {

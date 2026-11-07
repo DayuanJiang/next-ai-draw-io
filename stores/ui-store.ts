@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import type { ErrorReport } from "@/lib/client-error-report"
 
 export type SettingsTab = "models" | "general" | "drawing" | "about"
 /** The models tab: its provider list, the provider picker or a provider */
@@ -18,6 +19,8 @@ interface UiState {
     /** Version shown in the compare dialog, or null when closed */
     compareVersionId: string | null
     saveDialogOpen: boolean
+    /** The error the report dialog is open for, or null when closed */
+    problemReport: ErrorReport | null
     /** Bumped to ask the composer to take focus */
     focusComposerToken: number
     setPanelOpen: (open: boolean) => void
@@ -33,6 +36,8 @@ interface UiState {
     openCompare: (versionId: string) => void
     closeCompare: () => void
     setSaveDialogOpen: (open: boolean) => void
+    openProblemReport: (report: ErrorReport) => void
+    closeProblemReport: () => void
     focusComposer: () => void
 }
 
@@ -45,6 +50,7 @@ export const useUiStore = create<UiState>((set) => ({
     modelsPage: "list",
     compareVersionId: null,
     saveDialogOpen: false,
+    problemReport: null,
     focusComposerToken: 0,
     setPanelOpen: (open) => set({ panelOpen: open }),
     setHeroDismissed: (dismissed) => set({ heroDismissed: dismissed }),
@@ -62,6 +68,8 @@ export const useUiStore = create<UiState>((set) => ({
     openCompare: (versionId) => set({ compareVersionId: versionId }),
     closeCompare: () => set({ compareVersionId: null }),
     setSaveDialogOpen: (open) => set({ saveDialogOpen: open }),
+    openProblemReport: (report) => set({ problemReport: report }),
+    closeProblemReport: () => set({ problemReport: null }),
     focusComposer: () =>
         set((state) => ({
             panelOpen: true,

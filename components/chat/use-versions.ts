@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { noteAction } from "@/lib/client-error-report"
 import { diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
 import {
     clearHighlights,
@@ -145,6 +146,7 @@ export function useVersions({
         const store = useVersionsStore.getState()
         const index = store.versions.findIndex((v) => v.id === versionId)
         if (index < 0) return
+        noteAction("restore version")
         // The canvas before the restore, to go back to it: a multi-page
         // document is loaded in full, which Ctrl+Z cannot undo
         const before = chartXMLRef.current
@@ -167,6 +169,7 @@ export function useVersions({
                         // changing the canvas: the old canvas is not theirs
                         if (!before || isTurnActive()) return
                         if (getChatGeneration() !== generation) return
+                        noteAction("undo restore")
                         apply(before)
                         const now = useVersionsStore.getState()
                         if (wasUndone) now.setUndone(wasUndone, wasOnCanvas)
@@ -184,11 +187,13 @@ export function useVersions({
         const version = store.versions.find((v) => v.id === versionId)
         if (!version) return
         if (store.undoneVersionId === versionId) {
+            noteAction("redo version")
             apply(version.xml)
             store.setOnCanvas(versionId)
             return
         }
         if (version.beforeXml === undefined) return
+        noteAction("undo version")
         const before = version.beforeXml || BLANK_MXFILE
         apply(before)
         store.setUndone(versionId, olderVersionShowing(before)?.id)

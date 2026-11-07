@@ -654,6 +654,34 @@
         "openedFile": "打开了文件",
         "addedPage": "添加了一页",
         "fileChanged": "有未保存的修改",
-        "fileChangedHint": "打开或保存这个文件之后的修改还没有写入文件。请让 AI 把图表保存到这个文件。"
+        "fileChangedHint": "打开或保存这个文件之后的修改还没有写入文件。请让 AI 把图表保存到这个文件。",
+        "feedback": "在 GitHub 上反馈问题"
+    },
+    "report": {
+        "button": "报告问题",
+        "title": "报告问题",
+        "description": "发送的内容是下面的错误信息、您写的话，以及最近几步操作的名称。",
+        "notePlaceholder": "出错前您在做什么？（可不填）",
+        "errorLabel": "错误信息",
+        "send": "发送",
+        "sent": "已收到您的报告，谢谢。",
+        "failed": "报告没有发出去，请稍后再试。",
+        "openGithub": "在 GitHub 上报告",
+        "githubDescription": "这里没有开启报告接收。可以在 GitHub 上提交 issue，错误信息和最近几步操作的名称已经填好。"
+    },
+    "crash": {
+        "title": "页面出错了",
+        "description": "重新加载页面就可以继续使用。",
+        "reload": "重新加载"
+    },
+    "feedback": {
+        "question": "哪里不满意？",
+        "wrongDiagram": "图画错了",
+        "messyLayout": "布局乱",
+        "ignoredRequest": "没按要求做",
+        "tooSlow": "太慢",
+        "notePlaceholder": "想补充的话（可不填）",
+        "send": "发送",
+        "thanks": "谢谢您的反馈"
     }
 }

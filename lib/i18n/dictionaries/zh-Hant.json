@@ -654,6 +654,34 @@
         "openedFile": "開啟了檔案",
         "addedPage": "新增了一頁",
         "fileChanged": "有未儲存的修改",
-        "fileChangedHint": "開啟或儲存這個檔案之後的修改還沒有寫入檔案。請讓 AI 把圖表儲存到這個檔案。"
+        "fileChangedHint": "開啟或儲存這個檔案之後的修改還沒有寫入檔案。請讓 AI 把圖表儲存到這個檔案。",
+        "feedback": "在 GitHub 上回報問題"
+    },
+    "report": {
+        "button": "回報問題",
+        "title": "回報問題",
+        "description": "傳送的內容是下面的錯誤訊息、您寫的話，以及最近幾步操作的名稱。",
+        "notePlaceholder": "出錯前您在做什麼？（可不填）",
+        "errorLabel": "錯誤訊息",
+        "send": "傳送",
+        "sent": "已收到您的回報，謝謝。",
+        "failed": "回報沒有送出，請稍後再試。",
+        "openGithub": "在 GitHub 上回報",
+        "githubDescription": "這裡沒有開啟回報接收。可以在 GitHub 上提交 issue，錯誤訊息和最近幾步操作的名稱已經填好。"
+    },
+    "crash": {
+        "title": "頁面出錯了",
+        "description": "重新載入頁面就可以繼續使用。",
+        "reload": "重新載入"
+    },
+    "feedback": {
+        "question": "哪裡不滿意？",
+        "wrongDiagram": "圖畫錯了",
+        "messyLayout": "版面亂",
+        "ignoredRequest": "沒按要求做",
+        "tooSlow": "太慢",
+        "notePlaceholder": "想補充的話（可不填）",
+        "send": "傳送",
+        "thanks": "謝謝您的回饋"
     }
 }

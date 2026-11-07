@@ -654,6 +654,34 @@
         "openedFile": "ファイルを開きました",
         "addedPage": "ページを追加しました",
         "fileChanged": "未保存の変更あり",
-        "fileChangedHint": "このファイルを開いた、または保存した後の変更は、まだファイルに入っていません。図をこのファイルに保存するよう AI に頼んでください。"
+        "fileChangedHint": "このファイルを開いた、または保存した後の変更は、まだファイルに入っていません。図をこのファイルに保存するよう AI に頼んでください。",
+        "feedback": "GitHub で問題を報告"
+    },
+    "report": {
+        "button": "問題を報告",
+        "title": "問題を報告",
+        "description": "送信されるのは、下のエラーメッセージ、入力した内容、直近の操作の名前です。",
+        "notePlaceholder": "エラーが起きる前に何をしていましたか？（任意）",
+        "errorLabel": "エラーメッセージ",
+        "send": "送信",
+        "sent": "報告を受け取りました。ありがとうございます。",
+        "failed": "報告を送信できませんでした。しばらくしてからもう一度お試しください。",
+        "openGithub": "GitHub で報告",
+        "githubDescription": "このサーバーは報告を受け付けていません。GitHub で issue を作成できます。エラーメッセージと直近の操作の名前は入力済みです。"
+    },
+    "crash": {
+        "title": "エラーが発生しました",
+        "description": "ページを再読み込みすると続けられます。",
+        "reload": "再読み込み"
+    },
+    "feedback": {
+        "question": "どこが良くなかったですか？",
+        "wrongDiagram": "図が間違っている",
+        "messyLayout": "レイアウトが乱れている",
+        "ignoredRequest": "指示どおりでない",
+        "tooSlow": "遅すぎる",
+        "notePlaceholder": "補足があれば（任意）",
+        "send": "送信",
+        "thanks": "フィードバックありがとうございます"
     }
 }

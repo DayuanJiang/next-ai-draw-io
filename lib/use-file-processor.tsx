@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { toastUnexpectedError } from "@/lib/client-error-report"
 import { formatMessage } from "@/lib/i18n/utils"
 import {
     extractPdfText,
@@ -21,6 +22,8 @@ export interface FileData {
 export interface FileProcessorMessages {
     tooLong: string
     readFailed: string
+    /** The Report button of the read failure */
+    report: string
 }
 
 /**
@@ -95,8 +98,10 @@ export function useFileProcessor(messages: FileProcessorMessages) {
                 })
             } catch (error) {
                 console.error("Failed to extract text:", error)
-                toast.error(
+                toastUnexpectedError(
                     formatMessage(messages.readFailed, { name: file.name }),
+                    messages.report,
+                    error,
                 )
                 setPdfData((prev) => {
                     const next = new Map(prev)

@@ -21,6 +21,7 @@ import { IconButton } from "@/components/workspace/icon-button"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { usePanelWidth } from "@/hooks/use-panel-width"
+import { noteAction } from "@/lib/client-error-report"
 import { setAppShortcutHandler, setFileTitle } from "@/lib/drawio/editor-bridge"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { modKey } from "@/lib/platform"
@@ -405,14 +406,15 @@ function WorkspaceLayout() {
             <SaveDialog
                 open={saveDialogOpen}
                 onOpenChange={setSaveDialogOpen}
-                onSave={(filename, format) =>
+                onSave={(filename, format) => {
+                    noteAction(`export ${format}`)
                     saveDiagramToFile(
                         filename,
                         format,
                         engine.langfuseSessionId,
                         dict.save.savedSuccessfully,
                     )
-                }
+                }}
                 defaultFilename={exportFilename(engine.currentTitle)}
             />
         </div>
