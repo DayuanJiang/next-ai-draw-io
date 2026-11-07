@@ -63,6 +63,14 @@ export function validateFiles(
             )
             continue
         }
+        // An empty file (some pasted images are) holds nothing for the
+        // model, and an empty image fails the whole request
+        if (file.size === 0) {
+            errors.push(
+                formatMessage(dict.errors.fileEmpty, { name: file.name }),
+            )
+            continue
+        }
         // PDFs and text files are extracted in the browser, so only images
         // have a size limit
         const isExtractedFile = isPdfFile(file) || isTextFile(file)

@@ -14,7 +14,13 @@ vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
 import { POST as chat } from "@/app/api/chat/route"
 import { diagramForMessage } from "@/lib/diagram-context"
 
-const ENV = ["AI_PROVIDER", "AI_MODEL", "OPENAI_API_KEY", "ACCESS_CODE_LIST"]
+const ENV = [
+    "AI_PROVIDER",
+    "AI_MODEL",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ACCESS_CODE_LIST",
+]
 const saved: Record<string, string | undefined> = {}
 
 beforeEach(() => {
@@ -361,5 +367,51 @@ describe("the diagram in the request to the model", () => {
         expect(first).toContain("[URL: https://example.test/a]")
         expect(first).not.toContain("SPEC-BODY-TEXT")
         expect(first).not.toContain("PAGE-BODY-TEXT")
+    })
+
+    it("leaves out Claude's thinking of earlier turns", async () => {
+        // Their messages are cut since (attachments), and Anthropic refuses
+        // thinking whose earlier messages changed: "The block is bound to a
+        // different conversation"
+        process.env.AI_PROVIDER = "anthropic"
+        process.env.AI_MODEL = "claude-opus-5-5"
+        process.env.ANTHROPIC_API_KEY = "test-key"
+        const answer = (id: string) => ({
+            ...drawing(id),
+            parts: [
+                {
+                    type: "reasoning",
+                    text: "Plan the boxes",
+                    providerMetadata: { anthropic: { signature: `sig-${id}` } },
+                },
+                ...drawing(id).parts,
+            ],
+        })
+        const signed = async (messages: unknown[]) =>
+            JSON.stringify(await promptFor({ messages, xml: BOXES })).match(
+                /sig-a\d/g,
+            ) ?? []
+        const withDoc = userMessage(
+            "u1",
+            "Draw this\n\n[PDF: spec.pdf]\nSPEC-BODY-TEXT",
+            { diagram: { xml: "", pageId: null } },
+        )
+        const next = userMessage("u2", "Make it blue", {
+            diagram: { unchanged: true },
+        })
+
+        // The document's own turn, a request after a tool result too
+        expect(await signed([withDoc, answer("a1")])).toEqual(["sig-a1"])
+        // The next turn cuts the document: the earlier thinking goes, the
+        // thinking of the turn running now stays
+        expect(
+            await signed([withDoc, answer("a1"), next, answer("a2")]),
+        ).toEqual(["sig-a2"])
+        // The browser leaves out the images of earlier messages, so the
+        // server cannot tell a cut message: earlier thinking always goes
+        const plain = userMessage("u1", "Draw a box", {
+            diagram: { xml: "", pageId: null },
+        })
+        expect(await signed([plain, answer("a1"), next])).toEqual([])
     })
 })

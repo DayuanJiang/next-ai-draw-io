@@ -43,7 +43,8 @@ const SPECIFIC_TEXTS: Array<[RegExp, LLMErrorCode]> = [
         "context_too_long",
     ],
     [
-        /image content block|image_url|does not support image|image input is not supported/i,
+        // OpenRouter: "No endpoints found that support image input"
+        /image content block|image_url|does not support image|image input is not supported|support image input/i,
         "images_unsupported",
     ],
     [

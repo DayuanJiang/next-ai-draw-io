@@ -6,7 +6,7 @@ import {
     sendMessage,
     test,
 } from "./lib/fixtures"
-import { createMockSSEResponse } from "./lib/helpers"
+import { createMockSSEResponse, createTextOnlyResponse } from "./lib/helpers"
 
 const ONE_PIXEL_PNG = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
@@ -99,6 +99,57 @@ test.describe("File Upload", () => {
             page.getByText('"large-image.png" is 3.00MB (exceeds 2MB)'),
         ).toBeVisible({ timeout: 5000 })
         await expect(page.getByAltText("large-image.png")).toHaveCount(0)
+    })
+
+    test("turns away an empty file", async ({ page }) => {
+        // Some pasted images are 0 bytes, and an empty image fails the
+        // request
+        await openApp(page)
+        await getAttachmentInput(page).setInputFiles({
+            name: "pasted.png",
+            mimeType: "image/png",
+            buffer: Buffer.alloc(0),
+        })
+        await expect(
+            page.getByText('"pasted.png" is empty (0 bytes)', { exact: false }),
+        ).toBeVisible({ timeout: 5000 })
+        await expect(page.getByAltText("pasted.png")).toHaveCount(0)
+    })
+
+    test("sends an image with its own turn only", async ({ page }) => {
+        // The model gets it with that turn only, and every image sent again
+        // with each request soon passed the 10 MB the server reads
+        const bodies: any[] = []
+        await page.route("**/api/chat", async (route) => {
+            bodies.push(route.request().postDataJSON())
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse(`Answer ${bodies.length}`),
+            })
+        })
+        await openApp(page)
+
+        for (const [i, name] of ["first.png", "second.png"].entries()) {
+            await getAttachmentInput(page).setInputFiles({
+                name,
+                mimeType: "image/png",
+                buffer: ONE_PIXEL_PNG,
+            })
+            await expect(page.getByAltText(name)).toBeVisible({ timeout: 3000 })
+            await sendMessage(page, `Message ${i + 1}`)
+            await expect(page.getByText(`Answer ${i + 1}`)).toBeVisible({
+                timeout: 15000,
+            })
+        }
+
+        const users = bodies[1].messages.filter((m: any) => m.role === "user")
+        const files = (m: any) => m.parts.filter((p: any) => p.type === "file")
+        expect(users).toHaveLength(2)
+        expect(files(users[0])).toHaveLength(0)
+        expect(files(users[1])).toHaveLength(1)
+        // The chat itself keeps both images
+        await expect(page.getByAltText("Attached image")).toHaveCount(2)
     })
 
     test("drag and drop file upload works", async ({ page }) => {

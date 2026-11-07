@@ -31,7 +31,11 @@ import {
 } from "@/lib/providers"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
 import { thinkingSwitchOf } from "@/lib/thinking-capabilities"
-import { normalizeBaseUrl, ollamaApiUrl } from "@/lib/types/model-config"
+import {
+    isOfficialOpenAIUrl,
+    normalizeBaseUrl,
+    ollamaApiUrl,
+} from "@/lib/types/model-config"
 
 const AIHUBMIX_APP_CODE = "MSBS9675"
 
@@ -986,9 +990,10 @@ function createModel(
         case "openai": {
             const openaiProvider = createOpenAI(opts)
             // A configured base URL is usually a proxy that only has Chat
-            // Completions; without one the Responses API is used, which
-            // returns reasoning for the o-series and gpt-5 or later
-            return e.configuredBaseURL
+            // Completions; without one, or with OpenAI's own, the Responses
+            // API is used, which returns reasoning for the o-series and
+            // gpt-5 or later
+            return e.configuredBaseURL && !isOfficialOpenAIUrl(e.baseURL)
                 ? openaiProvider.chat(modelId)
                 : openaiProvider(modelId)
         }

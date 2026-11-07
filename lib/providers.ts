@@ -10,7 +10,7 @@ import type { Locale } from "@/lib/i18n/config"
 
 /** Which AI SDK factory createModel() calls */
 export type Sdk =
-    | "openai" // @ai-sdk/openai: Responses API, Chat Completions behind a configured URL
+    | "openai" // @ai-sdk/openai: Responses API, Chat Completions behind a URL other than OpenAI's
     | "openai-compatible" // @ai-sdk/openai-compatible plus <think> tag extraction
     | "deepseek" // @ai-sdk/deepseek: reasoning_content round trip (deepseek, kimi, mimo)
     | "doubao" // deepseek for DeepSeek and Kimi model ids, openai-compatible otherwise
