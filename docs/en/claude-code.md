@@ -1,6 +1,6 @@
-# Use it from Claude Code
+# draw.io diagrams in Claude Code (MCP)
 
-The MCP server lets Claude Code draw draw.io diagrams from your project's files. The diagram appears on a live canvas in your browser, the same canvas as the web app: you can edit it by hand, and Claude reads your edits before it changes the diagram again.
+Add the draw.io MCP server to Claude Code with one command. Claude draws on a live canvas in your browser; edit it by hand and Claude reads your edits.
 
 ## Install
 

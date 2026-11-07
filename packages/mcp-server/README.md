@@ -142,8 +142,32 @@ Environment variables, set in the client's `env` for the server:
 | `DRAWIO_DARK` | `auto` | `1` starts dark, `0` starts light, `auto` follows the system |
 | `BROWSER` | unset | `none` does not open the preview by itself; `start_session` still returns the URL |
 | `DRAWIO_ALLOW_EMBED` | unset | `true` lets pages on this machine (`localhost`, `127.0.0.1`) show the preview in a frame, such as DeepSeek Harness's sidebar browser |
+| `DRAWIO_PREVIEW_URL` | unset | Explicit trusted preview origin behind a private HTTPS reverse proxy (see below) |
 | `DRAWIO_PREVIEW_UI` | `shell` | `classic` opens the previous preview page, without outlines, Ctrl+Z or `get_selection` |
 | `DEBUG` | unset | `true` logs debug messages to stderr |
+
+### Remote preview behind a private proxy
+
+Set `DRAWIO_PREVIEW_URL=https://diagram.example.net` in the MCP server's environment.
+`start_session` returns that origin with the session's preview path and query.
+The server still listens only on `127.0.0.1`; configure a private or authenticated
+HTTPS reverse proxy to its actual `PORT`, preserving the external `Host` and
+browser `Origin` headers. Forward the whole origin, including `/shell/`,
+`/drawio/` and `/api/`, without a path prefix. If the chosen port is occupied,
+the server may choose another port, so check the listener before configuring the proxy.
+
+Only this exact additional Host and matching Origin are trusted. Forwarded headers
+are not used to establish trust; the default localhost checks and API token remain.
+The value must be a canonical HTTPS origin, optionally ending in `/`, without
+credentials, a path, query or fragment. HTTP is accepted only for `localhost` or
+`127.0.0.1`. Invalid values fail startup rather than silently falling back.
+
+**The hostname is not authentication.** Anyone who can reach the preview can read
+its embedded API token and edit diagrams. Restrict proxy access to trusted users
+with network policy or authentication. Do not expose this listener publicly.
+`DRAWIO_ALLOW_EMBED` is separate and does not permit arbitrary remote framing.
+This setting changes only the browser preview, not the stdio MCP transport or
+`DRAWIO_BASE_URL` (the draw.io editor).
 
 ### Self-hosted draw.io
 
