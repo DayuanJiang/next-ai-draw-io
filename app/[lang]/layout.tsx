@@ -4,6 +4,7 @@ import { Instrument_Sans, JetBrains_Mono } from "next/font/google"
 import { notFound } from "next/navigation"
 import Script from "next/script"
 import { LocaleProvider } from "@/components/canvas/locale-context"
+import { ProblemReports } from "@/components/problem-report"
 import { AppToaster } from "@/components/workspace/app-toaster"
 import { DiagramProvider } from "@/contexts/diagram-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
@@ -177,6 +178,7 @@ export default async function RootLayout({
                     </LocaleProvider>
                     {/* Inside: toasts such as the quota one read the dictionary */}
                     <AppToaster />
+                    <ProblemReports />
                 </DictionaryProvider>
             </body>
             {process.env.NEXT_PUBLIC_GA_ID && (

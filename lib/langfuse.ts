@@ -11,16 +11,21 @@ type IngestionBatch = Parameters<
     LangfuseClient["api"]["ingestion"]["batch"]
 >[0]["batch"]
 
-// Attach a score to the session's most recent chat trace. When the session
-// has no trace yet, a fallbackTrace creates a standalone trace to carry the
-// score; without one the score is skipped. Returns whether a score was written.
+// Attach a score to the given trace, else to the session's most recent chat
+// trace. When the session has no trace yet, a fallbackTrace creates a
+// standalone trace to carry the score; without one the score is skipped. A
+// scoreId replaces the score sent before with that id. Returns whether a
+// score was written.
 export async function scoreLatestTrace(
     langfuse: LangfuseClient,
     opts: {
         sessionId: string
+        traceId?: string
+        scoreId?: string
         name: string
         value: number
         comment: string
+        metadata?: Record<string, unknown>
         fallbackTrace?: {
             name: string
             userId: string
@@ -29,9 +34,12 @@ export async function scoreLatestTrace(
         }
     },
 ): Promise<boolean> {
-    const { sessionId, name, value, comment, fallbackTrace } = opts
-    const traces = await langfuse.api.trace.list({ sessionId, limit: 1 })
-    let traceId = traces.data?.[0]?.id
+    const { sessionId, name, value, comment, metadata, fallbackTrace } = opts
+    let traceId = opts.traceId
+    if (!traceId) {
+        const traces = await langfuse.api.trace.list({ sessionId, limit: 1 })
+        traceId = traces.data?.[0]?.id
+    }
     const timestamp = new Date().toISOString()
     const batch: IngestionBatch = []
 
@@ -49,7 +57,14 @@ export async function scoreLatestTrace(
         type: "score-create",
         id: randomUUID(),
         timestamp,
-        body: { id: randomUUID(), traceId, name, value, comment },
+        body: {
+            id: opts.scoreId ?? randomUUID(),
+            traceId,
+            name,
+            value,
+            comment,
+            metadata,
+        },
     })
     await langfuse.api.ingestion.batch({ batch })
     return true
@@ -76,6 +91,16 @@ function isLangfuseEnabled(): boolean {
     return !!(
         process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY
     )
+}
+
+/** The Langfuse trace of the current request: its answer carries it, so a
+ * vote on the answer scores this trace */
+export function getActiveTraceId(): string | undefined {
+    if (!isLangfuseEnabled()) return undefined
+    const context = api.trace.getActiveSpan()?.spanContext()
+    return context && api.isSpanContextValid(context)
+        ? context.traceId
+        : undefined
 }
 
 // Update trace with input data at the start of request

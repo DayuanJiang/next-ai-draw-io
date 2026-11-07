@@ -40,6 +40,7 @@ import {
 } from "@/lib/dynamo-quota-manager"
 import {
     endTrace,
+    getActiveTraceId,
     getTelemetryConfig,
     setTraceInput,
     setTraceOutput,
@@ -148,6 +149,8 @@ async function handleChatRequest(req: Request): Promise<Response> {
         sessionId: validSessionId,
         userId: userId,
     })
+    // Sent with the answer, so a vote on it scores this request's trace
+    const traceId = getActiveTraceId()
 
     // === FILE VALIDATION START ===
     const fileValidation = validateFileParts(messages)
@@ -556,10 +559,12 @@ async function handleChatRequest(req: Request): Promise<Response> {
     const response = withHeartbeat(
         result.toUIMessageStreamResponse<ChatUIMessage>({
             sendReasoning: true,
-            // The answer's tokens, time and cost so far, shown under it in the chat
+            // The answer's tokens, time and cost so far, shown under it in the
+            // chat; and its trace from the start (an answer cut off has no finish)
             messageMetadata: ({ part }) =>
                 part.type === "finish"
                     ? {
+                          traceId,
                           usage: addReplyUsage(
                               usedBefore,
                               part.totalUsage,
@@ -567,7 +572,9 @@ async function handleChatRequest(req: Request): Promise<Response> {
                               requestCost,
                           ),
                       }
-                    : undefined,
+                    : part.type === "start" && traceId
+                      ? { traceId }
+                      : undefined,
             // On the server's keys the provider's text can name its account.
             // Keyless endpoints keep theirs: the desktop app's Ollama is the
             // user's own, and EdgeOne's text is our function's explanation.

@@ -43,6 +43,7 @@ import {
     noticeMessage,
 } from "@/lib/chat-message"
 import { buildChatHeaders } from "@/lib/chat-request"
+import { toastUnexpectedError } from "@/lib/client-error-report"
 import {
     type AiCanvasState,
     diagramFingerprint,
@@ -296,6 +297,7 @@ export function ChatEngineProvider({
     const { files, pdfData, handleFileChange, setFiles } = useFileProcessor({
         tooLong: dict.errors.fileTooLong,
         readFailed: dict.errors.fileReadFailed,
+        report: dict.report.button,
     })
     const [urlData, setUrlData] = useState<Map<string, UrlData>>(new Map())
     const filesRef = useRef(files)
@@ -635,6 +637,7 @@ export function ChatEngineProvider({
                 noticeMessage({
                     text,
                     ...(openModelConfig && { openModelConfig, providerId }),
+                    ...(isAccessCodeError && { accessCode: true }),
                 }),
             ])
 
@@ -968,7 +971,11 @@ export function ChatEngineProvider({
             lastSyncedSessionIdRef.current = sessionManager.currentSessionId
         } catch (error) {
             console.error("Failed to restore session:", error)
-            toast.error(dict.errors.sessionCorrupted)
+            toastUnexpectedError(
+                dict.errors.sessionCorrupted,
+                dict.report.button,
+                error,
+            )
         } finally {
             setIsRestored(true)
         }
@@ -977,6 +984,7 @@ export function ChatEngineProvider({
         sessionManager.currentSession,
         syncUIWithSession,
         dict.errors.sessionCorrupted,
+        dict.report.button,
     ])
 
     // Sync UI when the session changes externally (URL back/forward)
@@ -1484,7 +1492,11 @@ export function ChatEngineProvider({
             await sendWithCurrentDiagram([{ type: "text", text: feedback }])
         } catch (error) {
             console.error("Error fetching chart data:", error)
-            toast.error(dict.errors.failedToExport)
+            toastUnexpectedError(
+                dict.errors.failedToExport,
+                dict.report.button,
+                error,
+            )
         } finally {
             preparingSendRef.current = false
         }
@@ -1590,7 +1602,11 @@ export function ChatEngineProvider({
             )
         } catch (error) {
             console.error("Error fetching chart data:", error)
-            toast.error(dict.errors.failedToExport)
+            toastUnexpectedError(
+                dict.errors.failedToExport,
+                dict.report.button,
+                error,
+            )
         } finally {
             preparingSendRef.current = false
         }

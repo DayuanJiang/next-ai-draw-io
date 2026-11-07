@@ -7,12 +7,14 @@ import {
     Copy,
     FileCode,
     FileText,
+    Flag,
     Link,
     Pencil,
     RotateCcw,
     SquareDashedMousePointer,
     ThumbsDown,
     ThumbsUp,
+    X,
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
@@ -378,26 +380,58 @@ function AssistantMessage({
     // None on cached examples and on answers saved before it was recorded
     const usage = (message.metadata as ChatMessageMetadata | undefined)?.usage
 
-    const submitFeedback = async (value: "good" | "bad") => {
-        if (feedback === value) {
-            setFeedback(null)
-            return
-        }
-        setFeedback(value)
+    // After a thumbs down: asking why, then thanks once sent
+    const [reasonsStep, setReasonsStep] = useState<"ask" | "thanks" | null>(
+        null,
+    )
+    useEffect(() => {
+        if (reasonsStep !== "thanks") return
+        const timer = setTimeout(() => setReasonsStep(null), 3000)
+        return () => clearTimeout(timer)
+    }, [reasonsStep])
+
+    const postFeedback = async (
+        value: "good" | "bad",
+        why?: { reasons: FeedbackReason[]; note: string },
+    ): Promise<boolean> => {
         try {
-            await fetch(getApiEndpoint("/api/log-feedback"), {
+            const res = await fetch(getApiEndpoint("/api/log-feedback"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     messageId: message.id,
                     feedback: value,
                     sessionId: engine.langfuseSessionId,
+                    traceId: (message.metadata as ChatMessageMetadata)?.traceId,
+                    ...why,
                 }),
             })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            return true
         } catch (error) {
             console.error("Failed to log feedback:", error)
             toast.error(dict.errors.failedToRecordFeedback)
+            return false
+        }
+    }
+
+    const submitFeedback = async (value: "good" | "bad") => {
+        setReasonsStep(null)
+        if (feedback === value) {
             setFeedback(null)
+            return
+        }
+        setFeedback(value)
+        if (value === "bad") setReasonsStep("ask")
+        if (!(await postFeedback(value))) {
+            setFeedback(null)
+            setReasonsStep(null)
+        }
+    }
+
+    const submitReasons = async (reasons: FeedbackReason[], note: string) => {
+        if (await postFeedback("bad", { reasons, note })) {
+            setReasonsStep("thanks")
         }
     }
 
@@ -496,7 +530,13 @@ function AssistantMessage({
             })}
 
             {!(engine.isBusy && isLastMessage) && (
-                <div className="-ml-1.5 flex items-center transition-opacity [@media(hover:hover)]:opacity-0 group-hover/message:opacity-100 focus-within:opacity-100">
+                <div
+                    className={cn(
+                        "-ml-1.5 flex items-center transition-opacity [@media(hover:hover)]:opacity-0 group-hover/message:opacity-100 focus-within:opacity-100",
+                        // Shows the vote the open question is about
+                        reasonsStep && "[@media(hover:hover)]:opacity-100",
+                    )}
+                >
                     {text && <CopyButton text={text} />}
                     {isLastAssistant && !isCachedExample && (
                         <ActionButton
@@ -529,6 +569,125 @@ function AssistantMessage({
                     {usage && <ReplyUsageNote usage={usage} />}
                 </div>
             )}
+            {reasonsStep === "ask" && (
+                <FeedbackReasons
+                    onSubmit={submitReasons}
+                    onClose={() => setReasonsStep(null)}
+                />
+            )}
+            {reasonsStep === "thanks" && (
+                <p
+                    className="px-1 text-[13px] text-muted-foreground"
+                    aria-live="polite"
+                >
+                    {dict.feedback.thanks}
+                </p>
+            )}
+        </div>
+    )
+}
+
+const FEEDBACK_REASONS = [
+    ["wrong-diagram", "wrongDiagram"],
+    ["messy-layout", "messyLayout"],
+    ["ignored-request", "ignoredRequest"],
+    ["too-slow", "tooSlow"],
+] as const
+
+type FeedbackReason = (typeof FEEDBACK_REASONS)[number][0]
+
+/** Below an answer voted down: why, by a few choices and a line of text */
+function FeedbackReasons({
+    onSubmit,
+    onClose,
+}: {
+    onSubmit: (reasons: FeedbackReason[], note: string) => Promise<void>
+    onClose: () => void
+}) {
+    const dict = useDictionary()
+    const [picked, setPicked] = useState<FeedbackReason[]>([])
+    const [note, setNote] = useState("")
+    const [sending, setSending] = useState(false)
+    const canSend = (picked.length > 0 || note.trim() !== "") && !sending
+
+    const send = async () => {
+        if (!canSend) return
+        setSending(true)
+        await onSubmit(picked, note.trim())
+        setSending(false)
+    }
+
+    return (
+        <div
+            className="space-y-2.5 rounded-xl border border-border bg-card px-3.5 py-3 text-[13px]"
+            data-testid="feedback-reasons"
+        >
+            <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-foreground">
+                    {dict.feedback.question}
+                </p>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label={dict.common.close}
+                    title={dict.common.close}
+                    className="inline-flex size-6 items-center justify-center rounded-md text-faint hover:bg-accent hover:text-foreground"
+                >
+                    <X className="size-3.5" />
+                </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+                {FEEDBACK_REASONS.map(([reason, key]) => {
+                    const on = picked.includes(reason)
+                    return (
+                        <button
+                            key={reason}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() =>
+                                setPicked((current) =>
+                                    on
+                                        ? current.filter((r) => r !== reason)
+                                        : [...current, reason],
+                                )
+                            }
+                            className={cn(
+                                "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                                on
+                                    ? "border-primary bg-primary/10 text-foreground"
+                                    : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+                            )}
+                        >
+                            {dict.feedback[key]}
+                        </button>
+                    )
+                })}
+            </div>
+            <div className="flex gap-2">
+                <input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                            e.preventDefault()
+                            void send()
+                        }
+                    }}
+                    placeholder={dict.feedback.notePlaceholder}
+                    aria-label={dict.feedback.notePlaceholder}
+                    maxLength={1000}
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:border-ring"
+                />
+                <button
+                    type="button"
+                    onClick={() => void send()}
+                    disabled={!canSend}
+                    className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                    data-testid="feedback-send"
+                >
+                    {dict.feedback.send}
+                </button>
+            </div>
         </div>
     )
 }
@@ -542,11 +701,14 @@ function ErrorNotice({
     openModelConfig,
     onOpenModelConfig,
     onRetry,
+    onReport,
 }: {
     text: string
     openModelConfig: boolean
     onOpenModelConfig: () => void
     onRetry?: () => void
+    /** None on errors the user can fix in settings */
+    onReport?: () => void
 }) {
     const dict = useDictionary()
     // Provider errors are "hint\n\nprovider message"
@@ -571,8 +733,8 @@ function ErrorNotice({
                             {detail}
                         </p>
                     )}
-                    {(openModelConfig || onRetry) && (
-                        <div className="mt-2.5 flex flex-wrap gap-2">
+                    {(openModelConfig || onRetry || onReport) && (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
                             {openModelConfig && (
                                 <button
                                     type="button"
@@ -597,6 +759,20 @@ function ErrorNotice({
                                 >
                                     <RotateCcw className="size-3.5" />
                                     {dict.chat.retry}
+                                </button>
+                            )}
+                            {onReport && (
+                                <button
+                                    type="button"
+                                    onClick={onReport}
+                                    className={cn(
+                                        button,
+                                        "text-muted-foreground hover:bg-accent hover:text-foreground",
+                                    )}
+                                    data-testid="report-button"
+                                >
+                                    <Flag className="size-3.5" />
+                                    {dict.report.button}
                                 </button>
                             )}
                         </div>
@@ -641,6 +817,7 @@ function useAnswerClock(busy: boolean, signature: string) {
 export function MessageList() {
     const dict = useDictionary()
     const openSettings = useUiStore((s) => s.openSettings)
+    const openProblemReport = useUiStore((s) => s.openProblemReport)
     const engine = useChatEngine()
     const { messages } = engine
     const endRef = useRef<HTMLDivElement>(null)
@@ -739,6 +916,15 @@ export function MessageList() {
                                     lastUserIndex >= 0
                                         ? engine.retryLastMessage
                                         : undefined
+                                }
+                                onReport={
+                                    notice.openModelConfig || notice.accessCode
+                                        ? undefined
+                                        : () =>
+                                              openProblemReport({
+                                                  kind: "chat-error",
+                                                  message: notice.text,
+                                              })
                                 }
                             />
                         ) : (

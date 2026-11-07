@@ -653,6 +653,34 @@
         "openedFile": "Opened the file",
         "addedPage": "Added a page",
         "fileChanged": "unsaved changes",
-        "fileChangedHint": "Changes since this file was opened or saved are not in it yet. Ask the AI to save the diagram to the file."
+        "fileChangedHint": "Changes since this file was opened or saved are not in it yet. Ask the AI to save the diagram to the file.",
+        "feedback": "Report a problem on GitHub"
+    },
+    "report": {
+        "button": "Report",
+        "title": "Report a problem",
+        "description": "The error message is sent with what you write. Your diagram and chat are not sent.",
+        "notePlaceholder": "What were you doing when it happened? (optional)",
+        "errorLabel": "Error message",
+        "send": "Send",
+        "sent": "Thanks, we got your report.",
+        "failed": "Could not send the report. Please try again later.",
+        "openGithub": "Report on GitHub",
+        "githubDescription": "This server does not collect reports. You can open a GitHub issue instead; the error message is already filled in."
+    },
+    "crash": {
+        "title": "Something went wrong",
+        "description": "Reload the page to continue.",
+        "reload": "Reload"
+    },
+    "feedback": {
+        "question": "What went wrong?",
+        "wrongDiagram": "Wrong diagram",
+        "messyLayout": "Messy layout",
+        "ignoredRequest": "Didn't do what I asked",
+        "tooSlow": "Too slow",
+        "notePlaceholder": "Anything to add? (optional)",
+        "send": "Send",
+        "thanks": "Thanks for the feedback"
     }
 }

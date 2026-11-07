@@ -12,6 +12,7 @@ import {
     matchLocale,
     pickLocale,
 } from "@/packages/mcp-server/shell/dictionary"
+import { feedbackIssueUrl } from "@/packages/mcp-server/shell/feedback"
 import { readShellConfig } from "@/packages/mcp-server/shell/runtime-config"
 import {
     isDarkPreferred,
@@ -48,6 +49,7 @@ describe("shell runtime config", () => {
             drawioLang: "",
             drawioDark: "auto",
             lang: "",
+            version: "",
         })
         const odd = readShellConfig({
             sessionId: 42,
@@ -57,6 +59,28 @@ describe("shell runtime config", () => {
         expect(odd.sessionId).toBe("")
         expect(odd.drawioDark).toBe("auto")
         expect(odd.token).toBe("t")
+    })
+})
+
+describe("shell feedback issue", () => {
+    it("fills in the server version, draw.io and the browser", () => {
+        const url = new URL(
+            feedbackIssueUrl(
+                readShellConfig({
+                    version: "0.4.11",
+                    drawioBaseUrl: "/drawio/index.html",
+                }),
+                "TestBrowser/1.0",
+            ),
+        )
+        expect(url.origin + url.pathname).toBe(
+            "https://github.com/DayuanJiang/next-ai-draw-io/issues/new",
+        )
+        expect(url.searchParams.get("title")).toBe("[MCP] ")
+        const body = url.searchParams.get("body")
+        expect(body).toContain("- MCP server: 0.4.11")
+        expect(body).toContain("- draw.io: bundled copy")
+        expect(body).toContain("- Browser: TestBrowser/1.0")
     })
 })
 
@@ -121,6 +145,7 @@ describe("shell language", () => {
                 "addedPage",
                 "aiChanged",
                 "connected",
+                "feedback",
                 "fileChanged",
                 "fileChangedHint",
                 "hideVersions",

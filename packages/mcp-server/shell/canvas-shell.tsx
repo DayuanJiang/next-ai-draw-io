@@ -1,4 +1,10 @@
-import { Download, History, Moon, Sun } from "lucide-react"
+import {
+    Download,
+    History,
+    MessageSquareWarning,
+    Moon,
+    Sun,
+} from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { CanvasStage } from "@/components/canvas/canvas-stage"
 import { CompareDialog } from "@/components/canvas/compare-dialog"
@@ -10,6 +16,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import type { DrawioSource } from "@/lib/drawio/drawio-config"
 import { cn } from "@/lib/utils"
 import { useSettingsStore } from "@/stores/settings-store"
+import { feedbackIssueUrl } from "./feedback"
 import { useNodeVersions } from "./node-versions-source"
 import type { ShellConfig } from "./runtime-config"
 import { setDark } from "./theme"
@@ -158,6 +165,17 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     >
                         <Download />
                     </button>
+                    <a
+                        href={feedbackIssueUrl(config, navigator.userAgent)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={dict.shell.feedback}
+                        title={dict.shell.feedback}
+                        className={iconButton}
+                        data-testid="feedback"
+                    >
+                        <MessageSquareWarning />
+                    </a>
                     <button
                         type="button"
                         onClick={() => setDark(!isDark)}

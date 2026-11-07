@@ -1364,6 +1364,7 @@ export function shellConfig(
         drawioLang: settings.lang,
         drawioDark: settings.dark,
         lang: env.DRAWIO_LANG ?? "",
+        version: PACKAGE_VERSION,
     }
 }
 

@@ -23,7 +23,11 @@ const pdfFile = () =>
     new File(["%PDF"], "slow.pdf", { type: "application/pdf" })
 const textFile = () => new File(["notes"], "notes.txt", { type: "text/plain" })
 // The toast texts the hook formats; toast is mocked, so any texts do
-const messages = { tooLong: "{name} too long", readFailed: "failed {name}" }
+const messages = {
+    tooLong: "{name} too long",
+    readFailed: "failed {name}",
+    report: "Report",
+}
 
 describe("useFileProcessor", () => {
     beforeEach(() => {

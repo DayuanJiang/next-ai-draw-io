@@ -20,6 +20,8 @@ export interface ShellConfig {
     drawioDark: "dark" | "light" | "auto"
     /** DRAWIO_LANG as given, for the shell's own texts */
     lang: string
+    /** The MCP server's package version, for the feedback issue */
+    version: string
 }
 
 const DEFAULTS: ShellConfig = {
@@ -31,6 +33,7 @@ const DEFAULTS: ShellConfig = {
     drawioLang: "",
     drawioDark: "auto",
     lang: "",
+    version: "",
 }
 
 /**

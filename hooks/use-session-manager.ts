@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
 import { useDictionary } from "@/hooks/use-dictionary"
+import { toastUnexpectedError } from "@/lib/client-error-report"
+import type { Dictionary } from "@/lib/i18n/dictionaries"
 import {
     type ChatSession,
     createEmptySession,
@@ -82,9 +83,16 @@ export interface UseSessionManagerReturn {
 // focus also fires each time the user clicks back from the draw.io iframe
 const FOCUS_REFRESH_INTERVAL_MS = 30_000
 
-function notifySaveFailed(message: string) {
+function notifySaveFailed(dict: Dictionary) {
     // Same id, so repeated failures update one toast instead of stacking
-    toast.error(message, { id: "session-save-failed", duration: 8000 })
+    toastUnexpectedError(
+        dict.errors.sessionSaveFailed,
+        dict.report.button,
+        undefined,
+        {
+            id: "session-save-failed",
+        },
+    )
 }
 
 interface UseSessionManagerOptions {
@@ -367,7 +375,7 @@ export function useSessionManager(
                     // Without a stored session, keep no session id (it would end
                     // up in the URL and point to nothing after a reload)
                     if (!(await saveSession(newSession))) {
-                        notifySaveFailed(dict.errors.sessionSaveFailed)
+                        notifySaveFailed(dict)
                         return false
                     }
                     savedSeqRef.current = seq
@@ -403,7 +411,7 @@ export function useSessionManager(
                 }
 
                 if (!(await saveSession(updatedSession))) {
-                    notifySaveFailed(dict.errors.sessionSaveFailed)
+                    notifySaveFailed(dict)
                     return false
                 }
                 savedSeqRef.current = seq
@@ -475,7 +483,7 @@ export function useSessionManager(
                     setCurrentSession(currentSessionRef.current)
                 }
                 if (!updated) {
-                    notifySaveFailed(dict.errors.sessionSaveFailed)
+                    notifySaveFailed(dict)
                     return
                 }
                 setSessions((prev) =>
