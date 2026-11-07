@@ -10,7 +10,7 @@ Next AI Draw.io draws and edits draw.io diagrams by chatting with an AI. You des
 |---|---|---|
 | In the browser | The editor at next-ai-drawio.jiang.jp. Nothing to install; add your own API key to lift the demo's daily limit | [Open the editor](https://next-ai-drawio.jiang.jp/) |
 | On your desktop | The same app for Windows, macOS and Linux | [Latest release](https://github.com/DayuanJiang/next-ai-draw-io/releases/latest) |
-| In your AI agent | An MCP server: Claude Code, Cursor, Codex and VS Code draw from your project's files on the same canvas, in your browser | [Use it from Claude Code](./claude-code.md) |
+| In your AI agent | An MCP server: Claude Code, Cursor, Codex and VS Code draw from your project's files on the same canvas, in your browser | [draw.io diagrams in Claude Code](./claude-code.md) |
 
 ## What you can do
 
@@ -38,7 +38,7 @@ The demo site has a daily usage limit. In Settings you can pick another provider
 
 - [Draw and edit](./editor.md) in the web app
 - [Versions and undo](./versions.md)
-- [Use it from Claude Code](./claude-code.md) or [other MCP clients](./mcp-clients.md)
+- [draw.io diagrams in Claude Code](./claude-code.md) or [other MCP clients](./mcp-clients.md)
 - [AWS architecture diagrams](./aws-architecture.md) and [flowcharts and sequence diagrams](./flowcharts.md)
 - [Run with Docker](./docker.md)
 - [FAQ](./FAQ.md)

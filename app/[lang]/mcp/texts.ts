@@ -55,9 +55,9 @@ const README =
 
 export const TEXTS: Record<Locale, McpTexts> = {
     en: {
-        title: "draw.io MCP server for Claude Code, Cursor, Codex and VS Code",
+        title: "draw.io MCP server for Claude Code, Codex and Cursor",
         description:
-            "An MCP server that lets Claude Code, Cursor, Codex, VS Code and other AI agents draw draw.io diagrams from your project's files on a live canvas in your browser. Edit by hand at any time; every AI change is outlined and can be undone.",
+            "Free, open-source draw.io MCP server. Your AI agent draws on a live canvas in your browser; edit by hand any time, and every AI change can be undone.",
         keywords: [
             "draw.io MCP server",
             "drawio MCP",
@@ -184,9 +184,9 @@ Then tell me how to reload so its tools show up.`,
         moreReadme: "MCP server README",
     },
     zh: {
-        title: "draw.io MCP 服务器：适用于 Claude Code、Cursor、Codex 和 VS Code",
+        title: "draw.io MCP 服务器：适用于 Claude Code、Codex 和 Cursor",
         description:
-            "一个 MCP 服务器，让 Claude Code、Cursor、Codex、VS Code 等 AI 代理根据您项目里的文件，在浏览器里的实时画布上绘制 draw.io 图表。随时可以手动修改，AI 的每次修改都会被框出来，并且可以撤销。",
+            "免费开源的 draw.io MCP 服务器。AI 代理在您浏览器里的实时画布上画图；您随时可以手动修改，AI 的每次修改都可以撤销。",
         keywords: [
             "draw.io MCP",
             "drawio MCP 服务器",
@@ -309,9 +309,9 @@ Then tell me how to reload so its tools show up.`,
         moreReadme: "MCP 服务器 README",
     },
     ja: {
-        title: "Claude Code、Cursor、Codex、VS Code 向け draw.io MCP サーバー",
+        title: "draw.io MCP サーバー：Claude Code、Codex、Cursor 向け",
         description:
-            "Claude Code、Cursor、Codex、VS Code などの AI エージェントが、プロジェクトのファイルをもとに、ブラウザのライブキャンバスに draw.io の図を描ける MCP サーバーです。いつでも手で編集でき、AI の変更はすべて枠で示され、取り消せます。",
+            "無料でオープンソースの draw.io MCP サーバーです。AI エージェントがブラウザのライブキャンバスに図を描き、いつでも手で編集できます。AI の変更はすべて取り消せます。",
         keywords: [
             "draw.io MCP",
             "drawio MCP サーバー",
@@ -434,9 +434,9 @@ Then tell me how to reload so its tools show up.`,
         moreReadme: "MCP サーバーの README",
     },
     "zh-Hant": {
-        title: "draw.io MCP 伺服器：適用於 Claude Code、Cursor、Codex 和 VS Code",
+        title: "draw.io MCP 伺服器：適用於 Claude Code、Codex 和 Cursor",
         description:
-            "一個 MCP 伺服器，讓 Claude Code、Cursor、Codex、VS Code 等 AI 代理根據您專案裡的檔案，在瀏覽器裡的即時畫布上繪製 draw.io 圖表。隨時可以手動修改，AI 的每次修改都會被框出來，並且可以復原。",
+            "免費開源的 draw.io MCP 伺服器。AI 代理在您瀏覽器裡的即時畫布上畫圖；您隨時可以手動修改，AI 的每次修改都可以復原。",
         keywords: [
             "draw.io MCP",
             "drawio MCP 伺服器",

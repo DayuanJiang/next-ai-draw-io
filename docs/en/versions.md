@@ -30,4 +30,4 @@ Once there are two versions or more, the Versions row under the chat's header sh
 
 ## In the MCP server
 
-The MCP server keeps the same version cards next to its canvas, with its last 20 versions. You can also ask the AI to undo; see [Use it from Claude Code](./claude-code.md).
+The MCP server keeps the same version cards next to its canvas, with its last 20 versions. You can also ask the AI to undo; see [draw.io diagrams in Claude Code](./claude-code.md).
