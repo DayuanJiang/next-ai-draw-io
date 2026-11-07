@@ -548,19 +548,21 @@ export function ChatEngineProvider({
             if (isAbort && getChatGeneration() === turnChatRef.current) {
                 for (const part of cut) stopToolCall(part)
             }
-            if (isAbort || isError) {
-                noteAction(isAbort ? "answer stopped" : "answer failed")
-                return
-            }
+            // A failure was noted by onError, which comes first
+            if (isAbort) noteAction("answer stopped")
+            if (isAbort || isError) return
+            noteAction(
+                finishReason === "length"
+                    ? "answer cut off"
+                    : cut.length > 0
+                      ? "answer ended early"
+                      : "answer finished",
+            )
             // The output budget ran out before the model called a tool (its
             // thinking took it all): nothing was drawn
             const outOfTokens =
                 finishReason === "length" && !message.parts.some(isToolUIPart)
-            if (cut.length === 0 && !outOfTokens) {
-                noteAction("answer finished")
-                return
-            }
-            noteAction(outOfTokens ? "answer cut off" : "answer ended early")
+            if (cut.length === 0 && !outOfTokens) return
             // Ended with no error and no diagram: undo the preview, and say
             // so, as an error does (with Retry)
             const [originalXml] = editDiagramOriginalXmlRef.current.values()
@@ -584,6 +586,8 @@ export function ChatEngineProvider({
             ])
         },
         onError: (error) => {
+            // Before the error's record takes the recent actions
+            noteAction("answer failed")
             // A diagram still streaming when the request failed never
             // reaches the tool handler: undo its preview. Only previews not
             // handled yet are stored, and the first one holds the diagram

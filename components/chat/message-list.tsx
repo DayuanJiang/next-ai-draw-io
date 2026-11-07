@@ -948,7 +948,9 @@ export function MessageList() {
                                               openProblemReport({
                                                   kind: "chat-error",
                                                   message: notice.text,
-                                                  actions: notice.actions,
+                                                  // None on cards saved
+                                                  // before they kept them
+                                                  actions: notice.actions ?? [],
                                               })
                                 }
                             />
