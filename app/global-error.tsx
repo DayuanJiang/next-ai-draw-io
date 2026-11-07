@@ -17,7 +17,7 @@ const STRINGS = {
         button: "Report",
         title: "Report a problem",
         description:
-            "The error message is sent with what you write. Your diagram and chat are not sent.",
+            "What is sent: the error message below and what you write.",
         notePlaceholder: "What were you doing when it happened? (optional)",
         errorLabel: "Error message",
         send: "Send",

@@ -1432,10 +1432,12 @@ export function ChatEngineProvider({
             }
         } catch (error) {
             console.warn("Error preparing the message:", error)
-            toast.error(
+            toastUnexpectedError(
                 error instanceof FileReadError
                     ? error.message
                     : dict.errors.failedToExport,
+                dict.report.button,
+                error,
             )
         }
         if (sent) {

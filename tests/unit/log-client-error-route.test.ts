@@ -59,6 +59,15 @@ describe("/api/log-client-error", () => {
         })
     })
 
+    it("fails when Langfuse rejects the event", async () => {
+        batch.mockResolvedValueOnce({
+            successes: [],
+            errors: [{ id: "e1", status: 400, message: "invalid" }],
+        } as any)
+        const res = await POST(post({ kind: "toast", message: "boom" }))
+        expect(res.status).toBe(500)
+    })
+
     it("keeps nothing when Langfuse is not set up", async () => {
         langfuse = null
         const res = await POST(post({ kind: "toast", message: "boom" }))

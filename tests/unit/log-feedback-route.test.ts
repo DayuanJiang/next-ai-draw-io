@@ -38,7 +38,7 @@ describe("POST /api/log-feedback", () => {
         expect(await res.json()).toEqual({ success: true, logged: true })
         expect(list).not.toHaveBeenCalled()
         expect(sentScore()).toMatchObject({
-            id: "feedback-s1-m1",
+            id: `feedback-${TRACE}-m1`,
             traceId: TRACE,
             value: 1,
         })
@@ -46,7 +46,17 @@ describe("POST /api/log-feedback", () => {
 
     it("scores the session's latest trace for an answer without one", async () => {
         await logFeedback(post({ feedback: "bad" }))
-        expect(sentScore()).toMatchObject({ traceId: "latest", value: 0 })
+        // A chat trace: error reports in the same session are not answers
+        expect(list).toHaveBeenCalledWith({
+            sessionId: "s1",
+            name: "chat",
+            limit: 1,
+        })
+        expect(sentScore()).toMatchObject({
+            id: "feedback-s1-m1",
+            traceId: "latest",
+            value: 0,
+        })
         expect(sentScore().metadata).toBeUndefined()
     })
 
@@ -60,7 +70,7 @@ describe("POST /api/log-feedback", () => {
             }),
         )
         const score = sentScore()
-        expect(score.id).toBe("feedback-s1-m1")
+        expect(score.id).toBe(`feedback-${TRACE}-m1`)
         expect(score.comment).toBe(
             "User gave bad feedback. Reasons: wrong-diagram, too-slow. Note: the arrows cross",
         )

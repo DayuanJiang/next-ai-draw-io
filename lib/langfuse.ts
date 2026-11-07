@@ -37,7 +37,12 @@ export async function scoreLatestTrace(
     const { sessionId, name, value, comment, metadata, fallbackTrace } = opts
     let traceId = opts.traceId
     if (!traceId) {
-        const traces = await langfuse.api.trace.list({ sessionId, limit: 1 })
+        // Chat traces only: the session also holds error reports
+        const traces = await langfuse.api.trace.list({
+            sessionId,
+            name: "chat",
+            limit: 1,
+        })
         traceId = traces.data?.[0]?.id
     }
     const timestamp = new Date().toISOString()

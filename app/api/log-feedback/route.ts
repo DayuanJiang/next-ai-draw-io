@@ -69,7 +69,9 @@ export async function POST(req: Request) {
         await scoreLatestTrace(langfuse, {
             sessionId,
             traceId,
-            scoreId: `feedback-${sessionId}-${messageId}`,
+            // By the answer's trace when known: an old chat opened again runs
+            // in a new session
+            scoreId: `feedback-${traceId ?? sessionId}-${messageId}`,
             name: "user-feedback",
             value: feedback === "good" ? 1 : 0,
             comment,

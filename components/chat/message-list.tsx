@@ -390,7 +390,21 @@ function AssistantMessage({
         return () => clearTimeout(timer)
     }, [reasonsStep])
 
-    const postFeedback = async (
+    // One request at a time, in the order of the clicks: each replaces the
+    // answer's score, so an earlier one landing last would undo a later one
+    const feedbackQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+    const postFeedback = (
+        value: "good" | "bad",
+        why?: { reasons: FeedbackReason[]; note: string },
+    ): Promise<boolean> => {
+        const run = feedbackQueueRef.current.then(() =>
+            sendFeedback(value, why),
+        )
+        feedbackQueueRef.current = run
+        return run
+    }
+
+    const sendFeedback = async (
         value: "good" | "bad",
         why?: { reasons: FeedbackReason[]; note: string },
     ): Promise<boolean> => {
@@ -424,8 +438,9 @@ function AssistantMessage({
         setFeedback(value)
         if (value === "bad") setReasonsStep("ask")
         if (!(await postFeedback(value))) {
-            setFeedback(null)
-            setReasonsStep(null)
+            // Unless the user voted again meanwhile
+            setFeedback((current) => (current === value ? null : current))
+            if (value === "bad") setReasonsStep(null)
         }
     }
 

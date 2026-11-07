@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     const reported = note !== undefined
     const timestamp = new Date().toISOString()
     try {
-        await langfuse.api.ingestion.batch({
+        const result = await langfuse.api.ingestion.batch({
             batch: [
                 {
                     type: "trace-create",
@@ -70,6 +70,10 @@ export async function POST(req: Request) {
                 },
             ],
         })
+        // Langfuse answers a rejected event with 207 and lists it here
+        if (result?.errors?.length) {
+            throw new Error(JSON.stringify(result.errors))
+        }
         return Response.json({ success: true, logged: true })
     } catch (error) {
         console.error("Langfuse client error report failed:", error)

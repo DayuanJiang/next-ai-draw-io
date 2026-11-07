@@ -659,7 +659,7 @@
     "report": {
         "button": "报告问题",
         "title": "报告问题",
-        "description": "错误信息会和您写的内容一起发送，图表和对话内容不会发送。",
+        "description": "发送的内容是下面的错误信息和您写的话。",
         "notePlaceholder": "出错前您在做什么？（可不填）",
         "errorLabel": "错误信息",
         "send": "发送",

@@ -1,7 +1,7 @@
 "use client"
 
 import { ExternalLink, Loader2, Send } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -50,13 +50,15 @@ export function ReportForm({
     const [sending, setSending] = useState(false)
     const [failed, setFailed] = useState(false)
 
+    // A form closed while sending: its answer must not close the next one
+    const mountedRef = useRef(false)
     useEffect(() => {
-        let current = true
+        mountedRef.current = true
         reportsEnabled().then((value) => {
-            if (current) setEnabled(value)
+            if (mountedRef.current) setEnabled(value)
         })
         return () => {
-            current = false
+            mountedRef.current = false
         }
     }, [])
 
@@ -64,6 +66,7 @@ export function ReportForm({
         setSending(true)
         setFailed(false)
         const sent = await sendErrorReport({ ...report, note: note.trim() })
+        if (!mountedRef.current) return
         setSending(false)
         if (sent) onDone(true)
         else setFailed(true)
@@ -173,6 +176,8 @@ export function ProblemReports() {
                     </DialogDescription>
                 </DialogHeader>
                 <ReportForm
+                    // A new form (and an empty note) for another error
+                    key={report.message}
                     report={report}
                     strings={dict.report}
                     onDone={(kept) => {

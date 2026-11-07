@@ -928,6 +928,8 @@ describe("canvas shell page", () => {
             drawioLang: "",
             drawioDark: "auto",
             lang: "",
+            // The package version, for the feedback issue
+            version: expect.stringMatching(/^\d+\.\d+\.\d+/),
         })
         // The page creates the session, as the classic page does
         expect(getState("mcp-shell-page")).toBeDefined()

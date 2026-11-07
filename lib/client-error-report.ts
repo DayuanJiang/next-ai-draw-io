@@ -20,8 +20,10 @@ export interface ErrorReport {
 
 const ENDPOINT = "/api/log-client-error"
 const ISSUES_URL = "https://github.com/DayuanJiang/next-ai-draw-io/issues/new"
-// Errors recorded without the user asking, per page load
+// Errors recorded without the user asking, per page load, and how much of
+// each message
 const MAX_AUTOMATIC = 5
+const MAX_AUTOMATIC_MESSAGE = 500
 
 let enabled: Promise<boolean> | undefined
 const recorded = new Set<string>()
@@ -64,13 +66,18 @@ export async function sendErrorReport(report: ErrorReport): Promise<boolean> {
 /**
  * Records an error the user did not report: each message once per page
  * load, and at most MAX_AUTOMATIC of them. Nothing is sent when the server
- * does not keep reports.
+ * does not keep reports. The message is cut short: the user does not see
+ * what goes, and some errors quote what the model sent.
  */
 export async function recordError(report: ErrorReport): Promise<void> {
-    const key = `${report.kind}:${report.message}`
-    if (recorded.has(key) || recorded.size >= MAX_AUTOMATIC) return
-    recorded.add(key)
-    if (await reportsEnabled()) await sendErrorReport(report)
+    if (recorded.has(report.message) || recorded.size >= MAX_AUTOMATIC) return
+    recorded.add(report.message)
+    if (await reportsEnabled()) {
+        await sendErrorReport({
+            ...report,
+            message: report.message.slice(0, MAX_AUTOMATIC_MESSAGE),
+        })
+    }
 }
 
 /**
@@ -129,7 +136,8 @@ export function toastUnexpectedError(
     const detail = error instanceof Error ? error.message : ""
     const report: ErrorReport = {
         kind: "toast",
-        message: detail ? `${text}\n${detail}` : text,
+        // A file read error's text is the toast's own
+        message: detail && detail !== text ? `${text}\n${detail}` : text,
         stack: error instanceof Error ? error.stack : undefined,
     }
     void recordError(report)

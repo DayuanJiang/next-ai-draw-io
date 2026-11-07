@@ -67,6 +67,8 @@ describe("recordError", () => {
         const { recordError } = await load()
         await recordError({ kind: "uncaught", message: "a" })
         await recordError({ kind: "uncaught", message: "a" })
+        // The same message seen another way (a crash) is not sent again
+        await recordError({ kind: "crash", message: "a" })
         for (const message of ["b", "c", "d", "e", "f", "g"]) {
             await recordError({ kind: "uncaught", message })
         }
@@ -81,6 +83,12 @@ describe("recordError", () => {
         expect(
             fetchMock.mock.calls.filter(([, init]) => !init?.method),
         ).toHaveLength(1)
+    })
+
+    it("cuts a long message short", async () => {
+        const { recordError } = await load()
+        await recordError({ kind: "toast", message: "x".repeat(3000) })
+        expect(posts()[0].message).toHaveLength(500)
     })
 
     it("sends nothing when the server keeps no reports", async () => {
