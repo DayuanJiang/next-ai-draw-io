@@ -245,6 +245,21 @@ AI_MODEL=your_model_id
 ATLASCLOUD_BASE_URL=https://your-custom-endpoint
 ```
 
+### Runcrate
+
+```bash
+RUNCRATE_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+应用没有内置 Runcrate 的模型列表。在“设置”的“模型”标签页里，应用会用您的 Key 从 Runcrate 读取模型列表。
+
+也可以设置自定义端点。不设置时使用 `https://api.runcrate.ai/v1`：
+
+```bash
+RUNCRATE_BASE_URL=https://your-custom-endpoint
+```
+
 ### Qiniu（七牛云）
 
 ```bash
@@ -406,7 +421,7 @@ AI_MODEL=your_model_id
 如果您设置了多家服务商的 API Key，就必须设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # 或：openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, runcrate, custom
 ```
 
 ## 为所有用户提供多个模型

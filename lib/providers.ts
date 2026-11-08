@@ -315,6 +315,17 @@ const defs = {
         modelList: "openai",
         logo: "openai",
     },
+    runcrate: {
+        label: "Runcrate",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "RUNCRATE",
+        defaultBaseUrl: "https://api.runcrate.ai/v1",
+        apiKeyUrl: "https://www.runcrate.ai/",
+        modelList: "openai",
+        icon: "cloud",
+    },
     qiniu: {
         label: "Qiniu",
         sdk: "openai-compatible",

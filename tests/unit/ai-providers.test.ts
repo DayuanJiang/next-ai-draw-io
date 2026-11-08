@@ -237,6 +237,52 @@ describe("Atlas Cloud provider", () => {
     })
 })
 
+describe("Runcrate provider", () => {
+    let createCompatibleMock: ReturnType<typeof vi.fn>
+    beforeEach(async () => {
+        vi.stubEnv("RUNCRATE_BASE_URL", undefined)
+
+        const mod = await import("@ai-sdk/openai-compatible")
+        createCompatibleMock = mod.createOpenAICompatible as ReturnType<
+            typeof vi.fn
+        >
+        createCompatibleMock.mockClear()
+    })
+
+    it("uses the Runcrate default endpoint with RUNCRATE_API_KEY", () => {
+        vi.stubEnv("RUNCRATE_API_KEY", "server-runcrate-key")
+
+        getAIModel({
+            provider: "runcrate",
+            modelId: "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        })
+
+        // An OpenAI-compatible API; includeUsage keeps quota tracking working
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "runcrate",
+            apiKey: "server-runcrate-key",
+            baseURL: "https://api.runcrate.ai/v1",
+            includeUsage: true,
+        })
+    })
+
+    it("uses custom Runcrate base URL when provided", () => {
+        getAIModel({
+            provider: "runcrate",
+            apiKey: "client-runcrate-key",
+            baseUrl: "https://proxy.example.com/v1",
+            modelId: "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "runcrate",
+            apiKey: "client-runcrate-key",
+            baseURL: "https://proxy.example.com/v1",
+            includeUsage: true,
+        })
+    })
+})
+
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
     let createDeepSeekMock: ReturnType<typeof vi.fn>
     beforeEach(async () => {
