@@ -245,6 +245,21 @@ Optionally, set a custom endpoint. Without one, `https://api.atlascloud.ai/v1` i
 ATLASCLOUD_BASE_URL=https://your-custom-endpoint
 ```
 
+### Runcrate
+
+```bash
+RUNCRATE_API_KEY=your_api_key
+AI_MODEL=your_model_id
+```
+
+The app has no built-in model list for Runcrate. In the Models tab of Settings, it loads the list from Runcrate with your key.
+
+Optionally, set a custom endpoint. Without one, `https://api.runcrate.ai/v1` is used:
+
+```bash
+RUNCRATE_BASE_URL=https://your-custom-endpoint
+```
+
 ### Qiniu (Qiniu Cloud)
 
 ```bash
@@ -406,7 +421,7 @@ If you set the API key of only one provider, the server detects that provider an
 If you set API keys for several providers, you must set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, runcrate, custom
 ```
 
 ## Offer several models to all users

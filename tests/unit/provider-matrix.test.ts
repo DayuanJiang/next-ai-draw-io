@@ -156,6 +156,7 @@ const MATRIX_PROVIDERS: ProviderName[] = [
     "novita",
     "mimo",
     "atlascloud",
+    "runcrate",
     "custom",
 ]
 
@@ -185,6 +186,7 @@ const MATRIX_MODEL_IDS: Record<ProviderName, string> = {
     novita: "minimax/minimax-m3",
     mimo: "mimo-v2.5-pro",
     atlascloud: "qwen/qwen3.5-flash",
+    runcrate: "Qwen/Qwen3-235B-A22B-Instruct-2507",
     custom: "test-model",
 }
 
@@ -483,7 +485,7 @@ describe("provider behavior snapshot", () => {
     })
 
     it("matches the recorded behavior", async () => {
-        // The matrix: 25 providers, 22 shapes, 9 environments
+        // The matrix: 26 providers, 22 shapes, 9 environments
         for (const provider of MATRIX_PROVIDERS) {
             await matrix(provider, MATRIX_MODEL_IDS[provider])
         }

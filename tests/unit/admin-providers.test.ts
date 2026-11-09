@@ -489,6 +489,7 @@ describe("credEnvNames", () => {
             modelscope: "MODELSCOPE",
             novita: "NOVITA",
             atlascloud: "ATLASCLOUD",
+            runcrate: "RUNCRATE",
             qiniu: "QINIU",
             gateway: "AI_GATEWAY",
             bedrock: null,
