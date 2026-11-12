@@ -543,11 +543,15 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // One system message with the instructions, the same in every request
     // of the chat: the diagram goes with the user messages (above). One
     // message also suits the providers that accept only one (MiniMax, chat
-    // templates of open models behind OpenAI-compatible endpoints).
+    // templates of open models behind OpenAI-compatible endpoints). The
+    // reply language is named once, in the system prompt: a second sentence
+    // about it at the end of this message makes GPT-6 Luna answer an
+    // English request that quotes its labels in Spanish or Russian (11 of
+    // 68 first replies, none of 42 without it).
     const systemMessages = [
         {
             role: "system" as const,
-            content: `${finalSystemMessage}\n\nWrite your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or the canvas notes in square brackets.`,
+            content: finalSystemMessage,
             ...(shouldCache && { providerOptions: CACHE_POINT }),
         },
     ]
