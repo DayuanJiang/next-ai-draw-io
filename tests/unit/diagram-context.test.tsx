@@ -116,23 +116,32 @@ describe("exports in flight at the same time", () => {
 })
 
 describe("exported files", () => {
+    // The requests the last save sent to our own server
+    let fetched: string[] = []
     // Every save asked for, and the toast after a download
-    async function save(format: "drawio" | "png" | "svg" | "xmlsvg") {
+    async function save(
+        format: "drawio" | "png" | "svg" | "xmlsvg",
+        sessionId?: string,
+    ) {
         const { result, requests, reply } = setup()
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
             () => {},
         )
         URL.createObjectURL = vi.fn(() => "blob:test")
         URL.revokeObjectURL = vi.fn()
+        fetched = []
         vi.stubGlobal(
             "fetch",
-            vi.fn(async () => new Response("{}")),
+            vi.fn(async (url: string) => {
+                fetched.push(url)
+                return new Response("{}")
+            }),
         )
         act(() => {
             result.current.saveDiagramToFile(
                 "pic",
                 format,
-                undefined,
+                sessionId,
                 "Exported {name}",
             )
         })
@@ -183,6 +192,15 @@ describe("exported files", () => {
         expect(toast.success).toHaveBeenCalledWith("Exported pic.png", {
             duration: 4000,
         })
+    })
+
+    it("flag the chat's trace as saved, and ask nothing of a server without a chat", async () => {
+        await save("png", "chat-session-1")
+        expect(fetched).toEqual(["/api/log-save"])
+        // The MCP preview saves without a chat session, and its server has
+        // no such route (it answered 403 to every export)
+        await save("png")
+        expect(fetched).toEqual([])
     })
 
     it("give SVG pictures the margin, and the draw.io file none", async () => {

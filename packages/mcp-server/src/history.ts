@@ -202,8 +202,9 @@ function sameVersion(a: Version, b: Version): boolean {
 }
 
 /**
- * Give the last entry the image the browser took of shownXml, the diagram
- * it just loaded, when that entry is this diagram
+ * Give the newest entry of shownXml, the diagram the browser just loaded,
+ * the image it took of it. That entry is the last one, or the one before a
+ * hand edit that lost the race with this write (kept after it)
  */
 export function updateLastHistorySvg(
     sessionId: string,
@@ -211,10 +212,9 @@ export function updateLastHistorySvg(
     shownXml: string,
 ): boolean {
     const history = historyStore.get(sessionId)
-    if (!history || history.length === 0) return false
-    const last = history[history.length - 1]
-    if (!last.svg && last.xml === shownXml) {
-        last.svg = svg
+    const entry = history?.filter((e) => e.xml === shownXml).at(-1)
+    if (entry && !entry.svg) {
+        entry.svg = svg
         return true
     }
     return false

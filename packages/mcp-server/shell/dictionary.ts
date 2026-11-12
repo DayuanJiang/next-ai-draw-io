@@ -44,3 +44,32 @@ export function pickLocale(
 export function getShellDictionary(locale: Locale): Dictionary {
     return DICTIONARIES[locale]
 }
+
+// localStorage key of draw.io's own settings (its Editor.settingsKey); the
+// bundled copy is on this origin
+const DRAWIO_SETTINGS_KEY = ".drawio-config"
+
+/**
+ * Start draw.io in the shell's language when nothing else picks one. Without
+ * DRAWIO_LANG (the lang parameter) draw.io takes the language stored in its
+ * settings (Extras > Language) and is English when there is none, whatever
+ * the browser's language: the shell would be Chinese around English menus.
+ * The locale is written into those settings while they name no language, so
+ * the menu stays and a language picked there is kept. Call it before the
+ * editor's frame is made.
+ */
+export function shareLocaleWithDrawio(locale: Locale) {
+    if (locale === "en") return
+    try {
+        const settings = JSON.parse(
+            localStorage.getItem(DRAWIO_SETTINGS_KEY) ?? "{}",
+        )
+        if (settings.language) return
+        // draw.io names Traditional Chinese "zh-tw"
+        settings.language = locale === "zh-Hant" ? "zh-tw" : locale
+        localStorage.setItem(DRAWIO_SETTINGS_KEY, JSON.stringify(settings))
+    } catch {
+        // Storage can be unavailable (private mode, quota): draw.io stays
+        // English
+    }
+}

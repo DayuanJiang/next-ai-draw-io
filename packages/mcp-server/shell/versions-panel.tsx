@@ -23,11 +23,14 @@ export function VersionsPanel({ versions }: { versions: NodeVersion[] }) {
     const { editedSinceId } = useVersionsContext()
     const listRef = useRef<HTMLDivElement>(null)
 
-    // Keep the newest version in view, and the note about hand edits
+    // Keep the newest version in view, and the note about hand edits. By
+    // the newest card's id: the server keeps 20 entries, so from then on a
+    // new version comes while the count stays the same
+    const newestId = versions.at(-1)?.id
     useEffect(() => {
         const el = listRef.current
         if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
-    }, [versions.length, editedSinceId])
+    }, [newestId, editedSinceId])
 
     return (
         <aside

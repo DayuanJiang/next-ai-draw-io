@@ -696,6 +696,13 @@ test("the version cards follow the server's History; undo, redo and restore go t
     await expect(latestCard.getByTestId("version-undo")).toHaveText(
         /Undo change/,
     )
+    // In the narrow panel the title has its row to itself: not cut short
+    // beside the button
+    expect(
+        await latestCard
+            .getByTitle("Changed the diagram")
+            .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true)
 
     // Undo: the server restores the version before; the card says so
     await latestCard.getByTestId("version-undo").click()
@@ -1040,4 +1047,143 @@ test("the theme toggle switches the page and draw.io, and is remembered", async 
     await expect(html).toHaveClass(/dark/)
     await page.getByTestId("theme-toggle").click()
     await expect(html).not.toHaveClass(/dark/)
+})
+
+// --- draw.io inside the shell (lib/drawio/drawio-config.ts DRAWIO_CSS) ---
+
+test("the editor stays in place when draw.io brings a page's tab into view", async ({
+    page,
+}) => {
+    // A session of its own: the tools write to the one started last
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+    await toolText("create_new_diagram", { xml: box("2", "Tab first", 40) })
+    await expect(frame.getByText("Tab first")).toBeVisible({ timeout: 10_000 })
+    // More tabs than the tab bar shows at once
+    for (let i = 1; i <= 8; i++) {
+        await toolText("add_page", { name: `Service ${i} overview` })
+    }
+    await expect(
+        frame
+            .locator(".geTabContainer")
+            .getByText("Service 8 overview", { exact: true }),
+    ).toBeAttached({ timeout: 10_000 })
+    // draw.io scrolls the selected page's tab into view. Its classic
+    // theme's menubar is 32 px wider than the window, and the whole editor
+    // went left with the tab (the File menu cut off)
+    const scrolled = await frame.locator("body").evaluate(
+        (body) =>
+            new Promise<number[]>((resolve) => {
+                const doc = body.ownerDocument
+                const w = doc.defaultView as any
+                w.Draw.loadPlugin((ui: any) => {
+                    ui.selectPage(ui.pages[ui.pages.length - 1])
+                    setTimeout(
+                        () =>
+                            resolve([
+                                doc.documentElement.scrollLeft,
+                                body.scrollLeft,
+                            ]),
+                        500,
+                    )
+                })
+            }),
+    )
+    expect(scrolled).toEqual([0, 0])
+    await expect(frame.locator(".geTabContainer .geActivePage")).toHaveText(
+        "Service 8 overview",
+    )
+})
+
+test("draw.io starts in the browser's language, as the shell's own texts do", async ({
+    browser,
+}) => {
+    const context = await browser.newContext({ locale: "ja-JP" })
+    try {
+        const page = await context.newPage()
+        await page.goto(shellUrl)
+        await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+            timeout: 60_000,
+        })
+        await expect(page.getByTestId("shell-status")).toHaveText(
+            "MCP サーバーに接続しました",
+        )
+        // Without DRAWIO_LANG draw.io takes the language of its own
+        // settings, which the shell fills in (shareLocaleWithDrawio): the
+        // menus were English around the Japanese page
+        const menubar = page
+            .frameLocator("iframe[title='draw.io']")
+            .locator(".geMenubar")
+        await expect(menubar.getByText("ファイル")).toBeVisible()
+        await expect(menubar.getByText("File")).toHaveCount(0)
+    } finally {
+        await context.close()
+    }
+})
+
+test("the sketch theme shows no empty box at the top right of the canvas", async ({
+    page,
+}) => {
+    // DRAWIO_UI fixes the theme for the whole process: a server of its own
+    const dir = mkdtempSync(join(tmpdir(), "mcp-shell-sketch-"))
+    const sketch = new Client({ name: "shell-e2e-sketch", version: "0.0.1" })
+    try {
+        await sketch.connect(
+            new StdioClientTransport({
+                command: process.execPath,
+                args: [
+                    process.env.MCP_SERVER_ENTRY ?? join(pkg, "dist/index.js"),
+                ],
+                env: {
+                    ...process.env,
+                    DRAWIO_DATA_DIR: dir,
+                    // Another range than the other server's
+                    PORT: String(6500 + Math.floor(Math.random() * 400)),
+                    BROWSER: "none",
+                    DRAWIO_UI: "sketch",
+                },
+                stderr: "pipe",
+            }),
+        )
+        const started = await sketch.callTool({
+            name: "start_session",
+            arguments: {},
+        })
+        const url = (started.content as { type: string; text?: string }[])
+            .map((c) => c.text ?? "")
+            .join("\n")
+            .match(/Browser URL: (\S+)/)?.[1]
+        if (!url) throw new Error("start_session gave no URL")
+        await page.goto(url)
+        await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+            timeout: 60_000,
+        })
+        const frame = page.frameLocator("iframe[title='draw.io']")
+        await expect(frame.locator("body")).toHaveClass(/geSketch/)
+        // The box of the status text and of the save and exit buttons,
+        // which the embed parameters leave out
+        const statusBox = frame.locator(
+            ".geToolbarContainer:has(> .geButtonContainer)",
+        )
+        await expect(statusBox).toHaveCount(1)
+        await expect(statusBox).toBeHidden()
+        // It is back when draw.io has something to say there
+        await statusBox.locator(".geStatus").evaluate((el) => {
+            el.textContent = "All changes saved"
+        })
+        await expect(statusBox).toBeVisible()
+    } finally {
+        await sketch.close()
+        rmSync(dir, { recursive: true, force: true })
+    }
 })

@@ -11,6 +11,7 @@ import {
     getShellDictionary,
     matchLocale,
     pickLocale,
+    shareLocaleWithDrawio,
 } from "@/packages/mcp-server/shell/dictionary"
 import { feedbackIssueUrl } from "@/packages/mcp-server/shell/feedback"
 import { readShellConfig } from "@/packages/mcp-server/shell/runtime-config"
@@ -138,6 +139,29 @@ describe("shell language", () => {
         expect(pickLocale("", [])).toBe("en")
     })
 
+    it("gives draw.io the shell's language while its own settings name none", () => {
+        // draw.io reads the language of its settings (Extras > Language)
+        // when it starts, and is English without one
+        const stored = () =>
+            JSON.parse(localStorage.getItem(".drawio-config") ?? "null")
+        localStorage.clear()
+        shareLocaleWithDrawio("en")
+        expect(stored()).toBeNull()
+        shareLocaleWithDrawio("ja")
+        expect(stored()).toEqual({ language: "ja" })
+        // A language is there (picked in draw.io's menu, or ours): kept
+        shareLocaleWithDrawio("zh")
+        expect(stored()).toEqual({ language: "ja" })
+        // draw.io's settings without a language keep their other fields
+        localStorage.setItem(
+            ".drawio-config",
+            JSON.stringify({ language: "", ui: "sketch" }),
+        )
+        shareLocaleWithDrawio("zh-Hant")
+        expect(stored()).toEqual({ language: "zh-tw", ui: "sketch" })
+        localStorage.clear()
+    })
+
     it("has every dictionary, with the shell's own texts", () => {
         for (const locale of i18n.locales) {
             const dict = getShellDictionary(locale)
@@ -150,6 +174,7 @@ describe("shell language", () => {
                 "fileChangedHint",
                 "hideVersions",
                 "historyChanged",
+                "noSession",
                 "offline",
                 "openedFile",
                 "renamedPage",

@@ -1,6 +1,7 @@
-import { act, cleanup, renderHook } from "@testing-library/react"
+import { act, cleanup, render, renderHook } from "@testing-library/react"
 import type React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { VersionsProvider } from "@/components/canvas/versions-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
 import en from "@/lib/i18n/dictionaries/en.json"
@@ -14,7 +15,10 @@ import {
     newVersionCache as cache,
     useNodeVersions,
 } from "@/packages/mcp-server/shell/node-versions-source"
-import { versionLabel } from "@/packages/mcp-server/shell/versions-panel"
+import {
+    VersionsPanel,
+    versionLabel,
+} from "@/packages/mcp-server/shell/versions-panel"
 import { useCanvasStore } from "@/stores/canvas-store"
 
 // The shell's version cards come from the MCP server's History (GET
@@ -687,6 +691,57 @@ describe("useNodeVersions", () => {
         ])
     })
 
+    it("does not call a hand edit undone that lost to the AI's write", async () => {
+        // The AI wrote AB while the user was editing A: the server keeps
+        // the AI's write on the canvas and the user's edit after it
+        const manual = doc(cell("a", "A") + cell("m", "M"))
+        const server = fakeSync(
+            list(
+                [
+                    entry(0, A),
+                    entry(1, AB),
+                    entry(2, manual, { source: "user" }),
+                ],
+                1,
+            ),
+        )
+        const { result } = renderHook(() => useNodeVersions(server.sync), {
+            wrapper,
+        })
+        await flush()
+        expect(result.current.onCanvasId).toBe("1")
+        expect(result.current.undoneId).toBeNull()
+        expect(result.current.canRedo).toBe(false)
+        expect(result.current.canUndo).toBe(false)
+        // The same for what a tab showed when the session came back from
+        // its file
+        await act(async () =>
+            server.serve(
+                list(
+                    [entry(0, AB), entry(1, manual, { source: "recover" })],
+                    0,
+                ),
+            ),
+        )
+        expect(result.current.undoneId).toBeNull()
+        // A hand edit taken back with a restore is undone: the canvas
+        // shows the restore's copy, newer than the edit
+        await act(async () =>
+            server.serve(
+                list(
+                    [
+                        entry(0, AB),
+                        entry(1, manual, { source: "user" }),
+                        entry(2, AB, { firstId: 0, source: "restore" }),
+                    ],
+                    2,
+                ),
+            ),
+        )
+        expect(result.current.undoneId).toBe("1")
+        expect(result.current.canRedo).toBe(true)
+    })
+
     it("names the version a hand edit was made on: the one on the canvas last", async () => {
         const server = fakeSync(list([entry(0, A), entry(1, AB)], 0))
         const { result } = renderHook(() => useNodeVersions(server.sync), {
@@ -749,5 +804,42 @@ describe("useNodeVersions", () => {
             (server.sync.fetchHistory as ReturnType<typeof vi.fn>).mock.calls
                 .length,
         ).toBe(reads + 1)
+    })
+})
+
+describe("VersionsPanel", () => {
+    it("scrolls to the newest card, also once the server's buffer is full and the count stays the same", () => {
+        // jsdom has no scrolling
+        const scrollTo = vi.fn()
+        Element.prototype.scrollTo = scrollTo
+        const source = (versions: ReturnType<typeof buildVersions>) => ({
+            versions: versions.versions,
+            onCanvasId: versions.onCanvasId,
+            undoneId: null,
+            isBusy: false,
+            canUndo: false,
+            canRedo: false,
+            restore: vi.fn(),
+            undo: vi.fn(),
+            redo: vi.fn(),
+        })
+        const panel = (versions: ReturnType<typeof buildVersions>) => (
+            <DictionaryProvider dictionary={en as unknown as Dictionary}>
+                <VersionsProvider value={source(versions)}>
+                    <VersionsPanel versions={versions.versions} />
+                </VersionsProvider>
+            </DictionaryProvider>
+        )
+        const kept = cache()
+        const first = buildVersions(list([entry(0, A), entry(1, AB)], 1), kept)
+        const { rerender } = render(panel(first))
+        expect(scrollTo).toHaveBeenCalledTimes(1)
+        // The oldest entry dropped out as the new one came: two cards still
+        const next = buildVersions(list([entry(1, AB), entry(2, ABC)], 2), kept)
+        rerender(panel(next))
+        expect(scrollTo).toHaveBeenCalledTimes(2)
+        // The same list again: nothing to scroll to
+        rerender(panel(next))
+        expect(scrollTo).toHaveBeenCalledTimes(2)
     })
 })

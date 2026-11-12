@@ -1228,6 +1228,27 @@ describe("history restore", () => {
         expect(getState(id)?.svg).toBe("SVG-OF-SHOWN")
     })
 
+    it("gives the AI's write its thumbnail when a hand edit that lost the race is kept after it", async () => {
+        const id = "mcp-history-thumb-race"
+        const before = setState(id, page("before"))
+        const version = setState(id, page("ai"))
+        addHistory(id, page("ai"))
+        // The user edited the canvas before it showed the AI's write
+        const push = await postJson("/api/state", {
+            sessionId: id,
+            xml: page("user"),
+            svg: "SVG-OF-USER",
+            baseVersion: before,
+            stateId: getState(id)?.stateId,
+        })
+        expect(push.status).toBe(409)
+        await thumbnail(id, "SVG-OF-AI", version)
+        expect(getHistory(id).map((e) => [e.xml, e.svg])).toEqual([
+            [page("ai"), "SVG-OF-AI"],
+            [page("user"), "SVG-OF-USER"],
+        ])
+    })
+
     it("drops a thumbnail that arrives after the next AI write", async () => {
         const id = "mcp-history-thumb-late"
         const first = setState(id, page("first"))

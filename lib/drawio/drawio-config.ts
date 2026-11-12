@@ -112,8 +112,16 @@ export const DRAWIO_CONFIG = {
  * while draw.io is light (it puts geDarkMode on the body), so they need no
  * change when the theme switches. draw.io's link to its GitHub page (by
  * the page tabs) is hidden: on a phone it sits right above the tab bar.
+ * The editor's document never scrolls: draw.io scrolls a page's tab into
+ * view when the page changes, and where the document is wider than the
+ * window (the menubar of the classic themes, by 32 px) the whole editor
+ * moved left with it and stayed there. The sketch theme's box at the top
+ * right holds the status text and the save and exit buttons, which the
+ * embed parameters leave out: hidden while it is empty.
  */
 export const DRAWIO_CSS = `
+html, body { overflow: clip !important; }
+.geSketch > .geToolbarContainer:has(> .geStatus:empty):has(> .geButtonContainer:empty) { display: none !important; }
 body:not(.geDarkMode) {
     --workspace-color: #f4f5f7;
     --focus-color: #14181d;

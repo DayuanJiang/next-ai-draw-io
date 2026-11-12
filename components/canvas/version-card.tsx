@@ -228,7 +228,7 @@ export function VersionCard({
     return (
         <div
             className={cn(
-                "overflow-hidden rounded-xl border border-border bg-card",
+                "@container overflow-hidden rounded-xl border border-border bg-card",
                 isOnCanvas && "border-foreground/15",
                 className,
             )}
@@ -250,11 +250,15 @@ export function VersionCard({
                     {t.compare}
                 </span>
             </button>
-            {/* Title row with the action; the summary runs under both */}
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-2.5">
+            {/* Title row with the action; the summary runs under both. In
+                a narrow card (the MCP shell's panel) the title would be
+                cut off: it gets the row, and the action goes beside the
+                summary, which starts under the number, as on the older
+                cards */}
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-2.5 [&>button]:col-start-3 [&>button]:row-start-2 @xs:[&>button]:row-start-1">
                 {badge}
                 <div
-                    className="truncate text-[13px] font-medium text-foreground"
+                    className="col-span-2 truncate text-[13px] font-medium text-foreground @xs:col-span-1"
                     title={title}
                 >
                     {title}
@@ -279,7 +283,7 @@ export function VersionCard({
                 ) : (
                     restoreButton
                 )}
-                <div className="col-span-2 col-start-2 mt-0.5">
+                <div className="col-span-2 row-start-2 mt-0.5 @xs:col-start-2">
                     {summaryLine}
                 </div>
             </div>

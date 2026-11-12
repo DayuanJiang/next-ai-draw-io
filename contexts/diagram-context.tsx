@@ -544,8 +544,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             extension = ".svg"
         }
 
-        // Log save event to Langfuse (flags the trace)
-        logSaveToLangfuse(filename, format, sessionId)
+        // Log save event to Langfuse (flags the chat's trace). The MCP
+        // preview has no chat session, and its server no such route
+        if (sessionId) logSaveToLangfuse(filename, format, sessionId)
 
         // Handle download
         let url: string
