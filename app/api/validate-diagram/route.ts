@@ -29,8 +29,10 @@ interface ValidateDiagramRequest {
 // A check that did not run is an error, never "valid": the chat shows the
 // result on the diagram's card, and "valid" there must mean a model looked
 // at the screenshot. The diagram is drawn before the check, so the user
-// loses nothing.
-const notChecked = (error: string) => Response.json({ error }, { status: 503 })
+// loses nothing. The card shows its own text for the code, in the page's
+// language (dict.validation); `error` is for other callers and the logs.
+const notChecked = (code: string, error: string) =>
+    Response.json({ error, code }, { status: 503 })
 
 export async function POST(req: Request): Promise<Response> {
     const crossSite = rejectCrossSite(req)
@@ -44,6 +46,7 @@ export async function POST(req: Request): Promise<Response> {
         const enableValidation = process.env.ENABLE_VLM_VALIDATION !== "false"
         if (!enableValidation) {
             return notChecked(
+                "checksDisabled",
                 "Screenshot checks are turned off on this server.",
             )
         }
@@ -112,6 +115,7 @@ export async function POST(req: Request): Promise<Response> {
                 error,
             )
             return notChecked(
+                "noCheckModel",
                 "This server has no model for screenshot checks (VALIDATION_MODEL or AI_MODEL).",
             )
         }
@@ -170,6 +174,9 @@ export async function POST(req: Request): Promise<Response> {
 
         // The model's own words stay in the log: on the server's key they
         // can name its account
-        return notChecked("The model could not check the screenshot.")
+        return notChecked(
+            "checkFailed",
+            "The model could not check the screenshot.",
+        )
     }
 }

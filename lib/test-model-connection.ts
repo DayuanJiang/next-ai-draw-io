@@ -189,6 +189,24 @@ export async function testModelConnection(
                 { status: 400 },
             )
         }
+        // Nor on the server's keyless Ollama when private URLs are blocked:
+        // it is an internal address, reached without the request naming
+        // it, where chat runs only the models the server offers
+        if (
+            !trustedBaseUrl &&
+            !allowPrivateUrls() &&
+            credential === "optionalKey" &&
+            !baseUrl &&
+            !apiKey
+        ) {
+            return NextResponse.json(
+                {
+                    valid: false,
+                    error: "A base URL or an API key is required",
+                },
+                { status: 400 },
+            )
+        }
 
         // On the deployment's own endpoints a Test runs a model as a chat
         // does, so with the quota on it counts as a chat request (an
@@ -293,17 +311,16 @@ export async function testModelConnection(
         // A 404 that is not in the provider's error format (no data) and
         // names no model comes from the address, most often a base URL
         // without its /v1. Classified, it would be "model not found" and
-        // send the user to check the model ID.
+        // send the user to check the model ID. The code alone: its text is
+        // in the page's dictionary (errors.llm), and a 404 page says
+        // nothing worth showing.
         if (
             APICallError.isInstance(error) &&
             error.statusCode === 404 &&
             error.data === undefined &&
             !/model/i.test(`${error.message} ${error.responseBody ?? ""}`)
         ) {
-            return NextResponse.json({
-                valid: false,
-                error: "Nothing at this address answers as a model API (404). Check the base URL: OpenAI-compatible servers usually need /v1 at the end.",
-            })
+            return NextResponse.json({ valid: false, code: "wrong_base_url" })
         }
 
         const { code, message } = classifyLLMError(error)

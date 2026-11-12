@@ -64,12 +64,14 @@ interface QuotaCheckResult {
  * Uses composite key (PK=user, SK=date) for per-day tracking.
  * Each day automatically gets a new item - no explicit reset needed.
  * A request limit of 0 means none; increment 0 checks the limits without
- * counting a request (the screenshot check).
+ * counting a request (the screenshot check). followUps is how many
+ * follow-up requests (checkFollowUpRequest) this request allows.
  */
 export async function checkAndIncrementRequest(
     ip: string,
     limits: QuotaLimits,
     increment = 1,
+    followUps = 0,
 ): Promise<QuotaCheckResult> {
     // Skip if quota tracking not enabled
     if (!client) {
@@ -91,7 +93,10 @@ export async function checkAndIncrementRequest(
                     PK: { S: pk },
                     SK: { S: sk },
                 },
-                UpdateExpression: "ADD reqCount :one",
+                UpdateExpression:
+                    followUps > 0
+                        ? "SET followUpsLeft = :followUps ADD reqCount :one"
+                        : "ADD reqCount :one",
                 // Check all limits before allowing increment
                 // TPM check: allow if new minute OR under limit
                 ConditionExpression: `
@@ -106,6 +111,9 @@ export async function checkAndIncrementRequest(
                     ":reqLimit": { N: String(limits.requests || 999999) },
                     ":tokenLimit": { N: String(limits.tokens || 999999) },
                     ":tpmLimit": { N: String(limits.tpm || 999999) },
+                    ...(followUps > 0 && {
+                        ":followUps": { N: String(followUps) },
+                    }),
                 },
                 // On a failed condition the exception carries the item as it
                 // was, so no second read is needed to tell which limit was hit
@@ -169,6 +177,53 @@ export async function checkAndIncrementRequest(
             `[quota] DynamoDB error (fail-open), IP prefix: ${ip.slice(0, 8)}..., error: ${e.message}`,
         )
         return { allowed: true }
+    }
+}
+
+/**
+ * Check a turn's automatic follow-up request: the browser's retry after a
+ * rejected tool call, or the rest of a drawing that was cut off. It belongs
+ * to the message the user already sent, so it counts no request and skips
+ * the per-minute limit, which the turn's first step alone can use up; the
+ * daily token limit applies. The browser says which request is a follow-up,
+ * so the server keeps count: each counted request allows as many as its
+ * followUps says, and one more is checked and counted as a request like any
+ * other.
+ */
+export async function checkFollowUpRequest(
+    ip: string,
+    limits: QuotaLimits,
+): Promise<QuotaCheckResult> {
+    if (!client) {
+        return { allowed: true }
+    }
+
+    try {
+        await client.send(
+            new UpdateItemCommand({
+                TableName: TABLE,
+                Key: {
+                    PK: { S: ip },
+                    SK: { S: getTodayInTimezone() },
+                },
+                UpdateExpression: "ADD followUpsLeft :minusOne",
+                ConditionExpression: `
+                    attribute_exists(followUpsLeft) AND followUpsLeft > :zero AND
+                    (attribute_not_exists(tokenCount) OR tokenCount < :tokenLimit)
+                `,
+                ExpressionAttributeValues: {
+                    ":minusOne": { N: "-1" },
+                    ":zero": { N: "0" },
+                    ":tokenLimit": { N: String(limits.tokens || 999999) },
+                },
+            }),
+        )
+        return { allowed: true }
+    } catch {
+        // None left, or the day's tokens are used up: the full check counts
+        // the request and names the limit (and fails open when DynamoDB
+        // itself is down)
+        return checkAndIncrementRequest(ip, limits)
     }
 }
 

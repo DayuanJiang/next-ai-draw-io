@@ -192,6 +192,7 @@
             "output_truncated_thinking": "輸出上限大部分被思考用掉了，圖表沒有完成。請在模型設定中關閉這個模型的「思考模式」，或簡化請求。",
             "provider_unavailable": "服務商發生問題，請稍後再試。",
             "cannot_connect": "無法連線到服務商，請檢查 Base URL 和網路。",
+            "wrong_base_url": "這個位址上沒有模型介面（404）。請檢查 Base URL：相容 OpenAI 的服務通常要以 /v1 結尾。",
             "timeout": "服務商沒有及時回應。",
             "bad_response": "服務商的回覆讀不出來：它的格式和模型介面的不一樣。請檢查 Base URL，或重試。",
             "openModelSettings": "開啟模型設定"
@@ -317,6 +318,9 @@
         "issuesFound": "發現問題",
         "error": "錯誤",
         "skipped": "已跳過",
+        "checksDisabled": "這台伺服器關閉了截圖檢查。",
+        "noCheckModel": "這台伺服器沒有可以檢查截圖的模型（VALIDATION_MODEL 或 AI_MODEL）。",
+        "checkFailed": "模型沒能檢查這張截圖。",
         "capturedScreenshot": "截圖預覽：",
         "issuesFoundLabel": "發現的問題：",
         "suggestions": "建議：",

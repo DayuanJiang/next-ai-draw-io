@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest"
+import { chatTools } from "@/lib/chat-tools"
+import { getSystemPrompt } from "@/lib/system-prompts"
 import { isMxCellXmlComplete } from "@/lib/utils"
 import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
@@ -510,5 +512,31 @@ describe("edge labels and empty definitions", () => {
         expect(outcome.ok).toBe(false)
         if (!outcome.ok)
             expect(outcome.errors[0]).toContain("not available in edit_diagram")
+    })
+})
+
+describe("what the web chat tells the model about named styles in edits", () => {
+    it("is what an edit does with the name of an earlier drawing", () => {
+        const drawn = prepareNewDiagram(
+            '<mxStyle name="step" value="fillColor=#dae8fc;"/><mxCell id="2" value="A" style="step;" x="40" y="40" w="120" h="60"/>',
+        )
+        const edited = editDiagram(
+            drawn.ok ? drawn.xml : "",
+            [
+                {
+                    operation: "add",
+                    cell_id: "3",
+                    new_xml:
+                        '<mxCell id="3" value="B" style="step;" x="240" y="40" w="120" h="60"/>',
+                },
+            ],
+            {},
+        )
+        expect(edited.ok && edited.xml).toMatch(/id="3"[^>]*fillColor=#dae8fc/)
+        // The tool's description and the prompt say so
+        const told =
+            "can use the named styles of an earlier display_diagram call"
+        expect(chatTools.edit_diagram.description).toContain(told)
+        expect(getSystemPrompt("m", false)).toContain(told)
     })
 })

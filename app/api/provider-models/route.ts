@@ -47,6 +47,17 @@ export async function POST(req: Request) {
     if (baseUrl && !allowPrivateUrls() && (await isPrivateUrl(baseUrl))) {
         return NextResponse.json({ error: "Invalid base URL" }, { status: 400 })
     }
+    // Without a key or a URL the list comes from the server's own Ollama,
+    // an internal address the request does not name: no list then, as for
+    // a provider that cannot list
+    if (
+        !allowPrivateUrls() &&
+        PROVIDERS[provider].credential === "optionalKey" &&
+        !apiKey &&
+        !baseUrl
+    ) {
+        return NextResponse.json({ models: null })
+    }
     // Public and local lists need no key
     if (!apiKey && !PROVIDERS[provider].listNeedsNoKey) {
         return NextResponse.json(
@@ -71,7 +82,9 @@ export async function POST(req: Request) {
             e instanceof ModelListError || e instanceof RedirectRefusedError
         const cause = (error as { cause?: unknown })?.cause
         const own = isOwn(error) ? error : isOwn(cause) ? cause : null
-        const { code } = classifyLLMError(own ?? error)
+        const code =
+            (own instanceof ModelListError && own.code) ||
+            classifyLLMError(own ?? error).code
         return NextResponse.json({
             code,
             error: own?.message ?? "The model list request failed.",

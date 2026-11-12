@@ -162,6 +162,37 @@ describe("POST /api/validate-model", () => {
         expect((await res.json()).error).toMatch(/API key/)
     })
 
+    it("runs on the server's keyless Ollama only while private URLs are allowed", async () => {
+        vi.stubEnv("OLLAMA_BASE_URL", undefined)
+        const fetchMock = vi.fn(async (_url: string) => {
+            throw new Error("no network in tests")
+        })
+        vi.stubGlobal("fetch", fetchMock)
+        const test = () =>
+            validateModel(
+                new Request("http://localhost/api/validate-model", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider: "ollama",
+                        modelId: "deepseek-r1:70b",
+                    }),
+                }),
+            )
+        // An internal address that the request does not name
+        vi.stubEnv("ALLOW_PRIVATE_URLS", "false")
+        const res = await test()
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toMatch(/base URL or an API key/)
+        expect(fetchMock).not.toHaveBeenCalled()
+        // A home server's users test the models installed on it
+        vi.stubEnv("ALLOW_PRIVATE_URLS", undefined)
+        await test()
+        expect(String(fetchMock.mock.calls[0][0])).toBe(
+            "http://127.0.0.1:11434/api/chat",
+        )
+    })
+
     it("warns when the model answers without a tool call", async () => {
         streamReply({ role: "assistant", content: "OK" })
         const data = await testGlm()
@@ -218,11 +249,12 @@ describe("a Test that gets a 404", () => {
 
     it("points at the base URL when the answer is not the provider's", async () => {
         // A base URL without its /v1: vLLM and LM Studio answer so
-        const data = await test404('{"detail":"Not Found"}')
-        expect(data.valid).toBe(false)
-        expect(data.error).toMatch(/Check the base URL/)
-        // No code: the "check the model ID" hint would mislead
-        expect(data.code).toBeUndefined()
+        // The code alone: the page shows its own text for it, in its
+        // language (the "check the model ID" hint would mislead)
+        expect(await test404('{"detail":"Not Found"}')).toEqual({
+            valid: false,
+            code: "wrong_base_url",
+        })
     })
 
     it("still says model not found when the provider says so", async () => {
@@ -418,6 +450,51 @@ describe("the admin Test of an entry on the server's key", () => {
         const [, init] = vi.mocked(fetch).mock.calls[0]
         expect(new Headers(init?.headers).get("authorization")).toBe(
             "Bearer sk-env-key",
+        )
+    })
+
+    // The requests a Test sends; none gets an answer
+    const requests = () => {
+        const calls: Array<{ url: string; headers: Headers }> = []
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string, init?: RequestInit) => {
+                calls.push({
+                    url: String(url),
+                    headers: new Headers(init?.headers),
+                })
+                throw new Error("no network in tests")
+            }),
+        )
+        return calls
+    }
+
+    it("sends the server's Ollama and Vertex AI key to the server's URL, as chat on the entry does", async () => {
+        vi.stubEnv("ADMIN_PASSWORD", "admin-pw")
+        vi.stubEnv("OLLAMA_API_KEY", "ollama-env-key")
+        vi.stubEnv("OLLAMA_BASE_URL", "https://ollama.example/api")
+        vi.stubEnv("GOOGLE_VERTEX_API_KEY", "vertex-env-key")
+        vi.stubEnv("GOOGLE_VERTEX_BASE_URL", "https://vertex-proxy.example/v1")
+        const calls = requests()
+        await adminTest({ provider: "ollama" })
+        await adminTest({ provider: "vertexai" })
+        expect(calls[0].url).toBe("https://ollama.example/api/chat")
+        expect(calls[0].headers.get("authorization")).toBe(
+            "Bearer ollama-env-key",
+        )
+        expect(calls[1].url).toMatch(/^https:\/\/vertex-proxy\.example\/v1\//)
+        expect(calls[1].headers.get("x-goog-api-key")).toBe("vertex-env-key")
+    })
+
+    it("runs on the server's Anthropic token, as chat on the entry does", async () => {
+        vi.stubEnv("ADMIN_PASSWORD", "admin-pw")
+        vi.stubEnv("ANTHROPIC_API_KEY", undefined)
+        vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "anthropic-env-token")
+        const calls = requests()
+        await adminTest({ provider: "anthropic" })
+        expect(calls[0].url).toBe("https://api.anthropic.com/v1/messages")
+        expect(calls[0].headers.get("authorization")).toBe(
+            "Bearer anthropic-env-token",
         )
     })
 

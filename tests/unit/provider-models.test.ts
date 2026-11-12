@@ -186,6 +186,22 @@ describe("POST /api/provider-models", () => {
         expect(res.status).toBe(400)
     })
 
+    it("lists the server's own Ollama only while private URLs are allowed", async () => {
+        vi.stubEnv("OLLAMA_BASE_URL", undefined)
+        const { fn, calls } = answer({ models: [{ name: "llama3.2" }] })
+        vi.stubGlobal("fetch", fn)
+        // An internal address that the request does not name
+        vi.stubEnv("ALLOW_PRIVATE_URLS", "false")
+        const blocked = await post({ provider: "ollama" })
+        expect(await blocked.json()).toEqual({ models: null })
+        expect(calls).toHaveLength(0)
+        // A home server's users list the models installed on it
+        vi.stubEnv("ALLOW_PRIVATE_URLS", undefined)
+        const listed = await post({ provider: "ollama" })
+        expect((await listed.json()).models).toMatchObject([{ id: "llama3.2" }])
+        expect(calls[0].url).toBe("http://127.0.0.1:11434/api/tags")
+    })
+
     it("refuses a key or URL that is not text", async () => {
         const fetchMock = vi.fn()
         vi.stubGlobal("fetch", fetchMock)
@@ -228,9 +244,9 @@ describe("POST /api/provider-models", () => {
         })
         const data = await res.json()
         expect(data.error).toMatch(/^No model list at this address \(404\)/)
-        expect(data.error).toMatch(/Check the base URL/)
-        // No model ID was sent, so not the hint to check one
-        expect(data.code).not.toBe("model_not_found")
+        // The page shows its own text for the code, in its language. No
+        // model ID was sent, so not the hint to check one
+        expect(data.code).toBe("wrong_base_url")
     })
 
     // The base URL is the caller's, and private addresses are allowed by

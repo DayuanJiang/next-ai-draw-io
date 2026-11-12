@@ -116,6 +116,46 @@ describe("saving an entry whose key is kept", () => {
         })
     })
 
+    it("refuses two entries with one id, which could move a kept key to another base URL", async () => {
+        const first = await save({
+            name: "Real",
+            apiKey: "sk-stored-secret-0001",
+            baseUrl: official,
+        })
+        const marker = (await first.json()).providers[0].apiKey
+        // The check would compare the first entry's URL with the stored
+        // one, and the kept key would be the last entry's
+        const res = await PUT(
+            new Request("http://localhost/api/admin/providers", {
+                method: "PUT",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    providers: [
+                        {
+                            id: "p1",
+                            provider: "openai",
+                            name: "Elsewhere",
+                            apiKey: "sk-any",
+                            baseUrl: "https://elsewhere.example/v1",
+                            models: ["gpt-a"],
+                        },
+                        {
+                            id: "p1",
+                            provider: "openai",
+                            name: "Real",
+                            apiKey: marker,
+                            baseUrl: official,
+                            models: ["gpt-panel"],
+                        },
+                    ],
+                }),
+            }),
+        )
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe("Provider ids must be unique.")
+        expect(loadAdminProviders()).toHaveLength(1)
+    })
+
     it("lets a Bedrock region change", async () => {
         const first = await save({
             provider: "bedrock",

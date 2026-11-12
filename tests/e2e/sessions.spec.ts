@@ -10,7 +10,7 @@ import {
     test,
     waitForComplete,
 } from "./lib/fixtures"
-import { createMockSSEResponse } from "./lib/helpers"
+import { createMockSSEResponse, sse, toolCallEvents } from "./lib/helpers"
 
 /** Every chat request is answered with the flowchart */
 const drawFlowchart = (route: Route) =>
@@ -183,6 +183,66 @@ test.describe("Saved chats", () => {
         await page.waitForTimeout(1500)
         expect(await samePage()).toBe(true)
         await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
+    })
+
+    test("an edit after a reload gets the named style that the chat's drawing defined", async ({
+        page,
+    }) => {
+        // A model goes on using the name it defined in its later edits
+        const calls = [
+            toolCallEvents("d1", "display_diagram", {
+                xml: '<mxStyle name="stepbox" value="rounded=1;fillColor=#dae8fc;"/><mxCell id="2" value="Plan" style="stepbox;" x="40" y="40" w="120" h="60"/>',
+            }),
+            toolCallEvents("e1", "edit_diagram", {
+                operations: [
+                    {
+                        operation: "add",
+                        cell_id: "3",
+                        new_xml:
+                            '<mxCell id="3" value="Build" style="stepbox;" x="240" y="40" w="120" h="60"/>',
+                    },
+                ],
+            }),
+        ]
+        let request = 0
+        await page.route("**/api/chat", (route) => {
+            const call = calls[request++]
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: sse([
+                    { type: "start", messageId: `m${request}` },
+                    call.start,
+                    ...call.deltas,
+                    call.done,
+                    { type: "finish" },
+                ]),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Draw a step")
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Plan", { exact: true })).toBeVisible({
+            timeout: 15000,
+        })
+        await expect
+            .poll(async () => Object.keys(await storedChats(page)))
+            .toHaveLength(1)
+        // The page that is loaded again has not seen the drawing's call
+        await page.reload({ waitUntil: "networkidle" })
+        await expect(canvas.getByText("Plan", { exact: true })).toBeVisible({
+            timeout: 30000,
+        })
+        await sendMessage(page, "Add a step")
+        await expect(canvas.getByText("Build", { exact: true })).toBeVisible({
+            timeout: 15000,
+        })
+        await expect
+            .poll(
+                async () =>
+                    Object.values(await storedChats(page))[0].diagramXml,
+            )
+            .toMatch(/id="3"[^>]*fillColor=#dae8fc/)
     })
 
     test("a chat started from a link to a chat this browser does not hold gets its own address", async ({

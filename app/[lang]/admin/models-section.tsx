@@ -108,7 +108,13 @@ function ProviderDetail({
                     : {
                           ok: false,
                           message: dict.admin.testFailed,
-                          detail: data.error,
+                          // A code without a text has its text in the
+                          // dictionary (a base URL without its /v1)
+                          detail:
+                              data.error ??
+                              (dict.errors.llm as Record<string, string>)[
+                                  data.code
+                              ],
                       },
             }))
         } catch (err) {

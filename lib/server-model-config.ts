@@ -68,22 +68,22 @@ function getConfigPath(): string {
  * Synthesize a config from a comma-separated AI_MODEL value (Priority 3 fallback).
  * Lets users expose multiple models without authoring AI_MODELS_CONFIG / ai-models.json.
  * Triggers only when AI_MODEL contains a comma AND AI_PROVIDER is set to a known provider.
- * With lone, only when AI_MODEL is one model instead (see
- * loadRawServerModelsConfig); without AI_PROVIDER that model runs on
- * detected, the one provider the server has a key for.
+ * With unlisted (see loadRawServerModelsConfig), also when AI_MODEL is one
+ * model, and without AI_PROVIDER on detected, the one provider the server
+ * has a key for.
  * Reads the environment's own values: a default set in the admin panel
  * overlays AI_PROVIDER and AI_MODEL on process.env with its one model.
  */
 function configFromAiModel(
-    lone = false,
+    unlisted = false,
     detected: ProviderName | null = null,
 ): ServerModelsConfig | null {
     const aiModel = getEnvFallback("AI_MODEL")
-    if (!aiModel || aiModel.includes(",") === lone) return null
+    if (!aiModel || (!unlisted && !aiModel.includes(","))) return null
 
     const aiProvider = getEnvFallback("AI_PROVIDER") ?? detected
     if (!aiProvider) {
-        if (!lone) {
+        if (!unlisted) {
             console.warn(
                 "[server-model-config] AI_MODEL contains commas but AI_PROVIDER is not set; " +
                     "skipping multi-model fallback. Set AI_PROVIDER, or use AI_MODELS_CONFIG / ai-models.json.",
@@ -173,25 +173,28 @@ export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | 
 
     if (adminConfig.providers.length === 0) return envConfig
 
-    // A lone AI_MODEL is in no list: clients use it by selecting nothing,
-    // which they only do while the server lists no models. The panel's
-    // providers end that, so the environment's model joins the list as its
-    // default; without it the model would leave the picker and every user
-    // would move to the panel's first model. Left out when a panel provider
-    // of the same name already lists it (it would have the same id).
+    // An AI_MODEL that made no list (one model, or several without
+    // AI_PROVIDER) is used by selecting nothing, which clients only do
+    // while the server lists no models. The panel's providers end that, so
+    // the environment's models join the list, the first as its default;
+    // without them they would leave the picker and every user would move
+    // to the panel's first model. Left out when a panel provider of the
+    // same name already lists the first (it would have the same id).
     let env = envConfig
     if (!env) {
-        // Dynamic import: lib/ai-providers imports lib/admin/providers
+        // Dynamic import: lib/ai-providers imports lib/admin/providers.
+        // The provider by the environment's own keys, not the panel's
         const { detectProvider } = await import("./ai-providers")
-        const lone = configFromAiModel(true, detectProvider())?.providers[0]
+        const unlisted = configFromAiModel(true, detectProvider(getEnvFallback))
+            ?.providers[0]
         const listed =
-            lone &&
+            unlisted &&
             adminConfig.providers.some(
                 (p) =>
-                    slugify(p.name) === slugify(lone.name) &&
-                    p.models.includes(lone.models[0]),
+                    slugify(p.name) === slugify(unlisted.name) &&
+                    p.models.includes(unlisted.models[0]),
             )
-        if (lone && !listed) env = { providers: [lone] }
+        if (unlisted && !listed) env = { providers: [unlisted] }
     }
     if (!env) return adminConfig
 

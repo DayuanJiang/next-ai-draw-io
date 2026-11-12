@@ -384,6 +384,18 @@ describe("the chat route", () => {
         expect(body.output_config).toEqual({ effort: "medium" })
     })
 
+    it("leaves a Claude model's thinking off when the server turned it off", async () => {
+        vi.stubEnv("AI_PROVIDER", "anthropic")
+        vi.stubEnv("AI_MODEL", "claude-sonnet-5")
+        vi.stubEnv("ANTHROPIC_API_KEY", "server-key")
+        vi.stubEnv("ANTHROPIC_THINKING_TYPE", "disabled")
+        vi.stubEnv("ANTHROPIC_THINKING_BUDGET_TOKENS", "1024")
+        const body = await sentBody({})
+        expect(body.model).toBe("claude-sonnet-5")
+        expect(body.thinking).toEqual({ type: "disabled" })
+        expect(body.output_config).toBeUndefined()
+    })
+
     it("ignores it on an endpoint of the server's network", async () => {
         const body = await sentBody({
             "x-ai-provider": "deepseek",

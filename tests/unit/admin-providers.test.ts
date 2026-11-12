@@ -388,7 +388,9 @@ describe("loadRawServerModelsConfig merge", () => {
             ])
         })
 
-        it("lists it on the provider that has a key when AI_PROVIDER is not set", async () => {
+        // No AI_PROVIDER: the provider is the one the environment has a
+        // key for
+        const openAiByKeyOnly = () => {
             for (const key of Object.keys(process.env)) {
                 if (/_API_KEY$|_AUTH_TOKEN$/.test(key)) {
                     vi.stubEnv(key, undefined)
@@ -396,10 +398,41 @@ describe("loadRawServerModelsConfig merge", () => {
             }
             vi.stubEnv("AI_PROVIDER", undefined)
             vi.stubEnv("OPENAI_API_KEY", "sk-env")
+        }
+
+        it("lists it on the provider that has a key when AI_PROVIDER is not set", async () => {
+            openAiByKeyOnly()
             // The panel's own key is not one the server detects a provider by
             panel({ provider: "anthropic", models: ["claude-panel"] })
             expect(await flagged()).toEqual([
                 "server:openai:gpt-env (default)",
+                "server:anthropic:claude-panel",
+            ])
+        })
+
+        it("lists it next to a Vertex AI entry, whose key the panel writes into the standard variable", async () => {
+            openAiByKeyOnly()
+            panel({
+                provider: "vertexai",
+                vertexApiKey: "vertex-panel-key",
+                models: ["gemini-panel"],
+            })
+            expect(process.env.GOOGLE_VERTEX_API_KEY).toBe("vertex-panel-key")
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-env (default)",
+                "server:google-vertex-ai:gemini-panel",
+            ])
+        })
+
+        it("lists several models the same way", async () => {
+            openAiByKeyOnly()
+            // Without AI_PROVIDER the commas make no list of their own
+            vi.stubEnv("AI_MODEL", "gpt-a,gpt-b")
+            expect(await flagged()).toEqual([])
+            panel({ provider: "anthropic", models: ["claude-panel"] })
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-a (default)",
+                "server:openai:gpt-b",
                 "server:anthropic:claude-panel",
             ])
         })

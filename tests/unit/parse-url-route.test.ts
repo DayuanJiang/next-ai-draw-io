@@ -163,6 +163,23 @@ describe("POST /api/parse-url", () => {
         }
     })
 
+    it("does not take a meta tag in a Markdown file for the file's encoding", async () => {
+        // A UTF-8 tutorial served without a charset, with an HTML example
+        const tutorial =
+            '# HTML の書き方\n\n```html\n<meta charset="Shift_JIS">\n```\n\n文字コードを指定します。\n'
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(
+                async () =>
+                    new Response(tutorial, {
+                        headers: { "content-type": "text/markdown" },
+                    }),
+            ),
+        )
+        const res = await post("https://docs.example.jp/html.md")
+        expect((await res.json()).content).toBe(tutorial)
+    })
+
     it("decodes a page whose Content-Type quotes the charset", async () => {
         // The bytes of あ in Shift_JIS, inside an otherwise ASCII page
         const [before, after] = article(

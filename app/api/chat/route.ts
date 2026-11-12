@@ -38,6 +38,7 @@ import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
 import { diagramOf } from "@/lib/diagram-context"
 import {
     checkAndIncrementRequest,
+    checkFollowUpRequest,
     isQuotaEnabled,
     recordTokenUsage,
 } from "@/lib/dynamo-quota-manager"
@@ -78,6 +79,11 @@ const modelStreamResponses = new WeakSet<Response>()
 // Each request is kept as long as its answer streams.
 const requestOfResponse = new WeakMap<Response, Request>()
 
+// The most requests the browser sends by itself after a user message: 3
+// retries of a rejected tool call and 2 continuations of a cut-off drawing
+// (MAX_AUTO_RETRY_COUNT and MAX_CONTINUATION_RETRY_COUNT in chat-engine.tsx)
+const FOLLOW_UPS_PER_TURN = 5
+
 // Inner handler function
 const DEBUG_LLM_PAYLOAD = process.env.DEBUG_LLM_PAYLOAD === "true"
 
@@ -98,7 +104,7 @@ const describeMessages = (msgs: any[]) =>
 
 // A gateway that speaks Anthropic's format can stream thinking deltas without
 // opening a thinking block first (seen with a GPT model behind one), and the
-// SDK passes them on as they are. Every answer then failed: the SDK's own
+// SDK passes them on as they are. Left so, every answer fails: the SDK's own
 // bookkeeping adds a "reasoning part 0 not found" error to the stream, and
 // the browser's stream reader stops at a reasoning-delta whose part never
 // started. The part is opened here, before either sees the delta, and closed
@@ -354,23 +360,25 @@ async function handleChatRequest(req: Request): Promise<Response> {
         (onServerCredentials || onServerEndpoint) &&
         userId !== "anonymous"
     if (countsQuota) {
+        const limits = {
+            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+            tpm: Number(process.env.TPM_LIMIT) || 20000,
+        }
         // A turn's later requests (the retry after a tool error, the rest
-        // of a diagram that was cut off) belong to the message the user
-        // already sent. They count no request and skip the per-minute
-        // limit, which the turn's first step alone can use up; the daily
-        // token limit still applies.
-        const followUp = lastMessage?.role === "assistant"
-        const quotaCheck = await checkAndIncrementRequest(
-            userId,
-            {
-                requests: followUp
-                    ? 0
-                    : Number(process.env.DAILY_REQUEST_LIMIT) || 10,
-                tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
-                tpm: followUp ? 0 : Number(process.env.TPM_LIMIT) || 20000,
-            },
-            followUp ? 0 : 1,
-        )
+        // of a diagram that was cut off) end with the assistant's message
+        // and belong to the message the user already sent. The messages
+        // are the browser's word, so the quota allows each user message a
+        // fixed number of them.
+        const quotaCheck =
+            lastMessage?.role === "assistant"
+                ? await checkFollowUpRequest(userId, limits)
+                : await checkAndIncrementRequest(
+                      userId,
+                      limits,
+                      1,
+                      FOLLOW_UPS_PER_TURN,
+                  )
         if (!quotaCheck.allowed) {
             return Response.json(
                 {
@@ -428,10 +436,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
         ? `${systemMessage}\n\n## Custom Instructions\n${customSystemMessage}`
         : systemMessage
 
-    // Note: we used to pre-emptively reject images for models we guessed were
-    // text-only (by name matching). That heuristic misfired on newer models
-    // (see issue #874), so we now let the request through and surface the real
-    // provider error if the model genuinely can't accept images.
+    // Images are not refused by the model's name: guessing which models are
+    // text-only misfires on newer models (see issue #874). The request goes
+    // through, and a model that cannot take images answers with the
+    // provider's own error.
 
     // Each user message ends with a note on the canvas when it was sent
     // (lib/diagram-context.ts): the canvas itself when the model's own calls

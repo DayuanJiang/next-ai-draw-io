@@ -113,8 +113,8 @@ const GENERAL_TEXTS: Array<[RegExp, LLMErrorCode]> = [
     ],
     [
         // The SDK's words for a 200 it cannot read, e.g. a base URL that
-        // points at a website
-        /Response stream ended without a finish reason|JSON parsing failed|Invalid JSON response/i,
+        // points at a website, or at an API that answers with other JSON
+        /Response stream ended without a finish reason|JSON parsing failed|Invalid JSON response|Type validation failed/i,
         "bad_response",
     ],
 ]

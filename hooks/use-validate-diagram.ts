@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useRef } from "react"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { getSelectedAIConfig } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/lib/validation-schema"
 
 export function useValidateDiagram() {
+    const dict = useDictionary()
     // The running check's controller; a new check or cancel() aborts it
     const controllerRef = useRef<AbortController | null>(null)
 
@@ -45,8 +47,15 @@ export function useValidateDiagram() {
                     },
                 )
                 if (!res.ok) {
-                    // The server says why as { error }
-                    const reason = (await res.json().catch(() => null))?.error
+                    // The server says why as { error, code }: the
+                    // dictionary's text for the code, in the page's
+                    // language, else the server's words (the quota, a
+                    // wrong access code)
+                    const { error, code } =
+                        (await res.json().catch(() => null)) ?? {}
+                    const reason =
+                        (dict.validation as Record<string, string>)[code] ??
+                        error
                     throw new Error(
                         typeof reason === "string"
                             ? reason
@@ -60,7 +69,7 @@ export function useValidateDiagram() {
                 }
             }
         },
-        [],
+        [dict],
     )
 
     /**

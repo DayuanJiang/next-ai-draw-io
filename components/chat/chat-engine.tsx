@@ -72,6 +72,10 @@ import { rememberImages } from "@/packages/mcp-server/src/embedded-images.ts"
 import { parseDrawioFileContent } from "@/packages/mcp-server/src/load-diagram.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 import { BLANK_MXFILE, hasCells } from "@/packages/mcp-server/src/pages.ts"
+import {
+    readStyleClasses,
+    rememberStyleClasses,
+} from "@/packages/mcp-server/src/style-classes.ts"
 import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 import { useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
@@ -1090,6 +1094,18 @@ export function ChatEngineProvider({
                 // of them (embedded-images.ts)
                 for (const xml of xmlSnapshotsRef.current.values()) {
                     rememberImages(xml)
+                }
+                // So are the named styles its drawings defined: the model
+                // goes on using their names in its edits (style-classes.ts)
+                for (const part of shown.flatMap((m) => m.parts)) {
+                    if (
+                        part.type === "tool-display_diagram" &&
+                        part.input?.xml
+                    ) {
+                        rememberStyleClasses(
+                            readStyleClasses(part.input.xml).classes,
+                        )
+                    }
                 }
                 if (data.diagramXml) onDisplayChart(data.diagramXml, true)
                 else clearDiagram()

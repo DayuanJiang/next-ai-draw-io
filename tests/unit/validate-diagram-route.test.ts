@@ -2,6 +2,10 @@
 import { MockLanguageModelV3 } from "ai/test"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { POST as validateDiagram } from "@/app/api/validate-diagram/route"
+import en from "@/lib/i18n/dictionaries/en.json"
+import ja from "@/lib/i18n/dictionaries/ja.json"
+import zh from "@/lib/i18n/dictionaries/zh.json"
+import zhHant from "@/lib/i18n/dictionaries/zh-Hant.json"
 
 const RESULT = {
     valid: false,
@@ -142,6 +146,12 @@ describe("a check that did not run", () => {
         expect(res.status).toBe(503)
         const body = await res.json()
         expect(body.valid).toBeUndefined()
+        // The card shows its own text for the code, in every language
+        for (const dict of [en, zh, ja, zhHant]) {
+            expect(
+                (dict.validation as Record<string, string>)[body.code],
+            ).toBeTruthy()
+        }
         return body.error as string
     }
 

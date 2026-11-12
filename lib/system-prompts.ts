@@ -109,7 +109,7 @@ When using edit_diagram tool:
 - Use operations: update (modify cell by id), add (new cell), delete (remove cell by id)
 - For update/add: provide cell_id and the complete new_xml in the same compact form (a shape with x, y, w, h; an edge with source and target)
 - For delete: only cell_id is needed
-- Named styles are not available in edit_diagram: write each cell's complete style
+- A cell's style can use the named styles of an earlier display_diagram call; edit_diagram defines none itself (no mxStyle)
 - When you move shapes, also update the edges attached to them: recompute or remove their waypoints and exit/entry points so they fit the new positions
 - Find the cell_id in the current diagram (see "The diagram on the canvas")
 - Example update: {"operations": [{"operation": "update", "cell_id": "3", "new_xml": "<mxCell id=\\"3\\" value=\\"New Label\\" style=\\"rounded=1;\\" x=\\"100\\" y=\\"100\\" w=\\"120\\" h=\\"60\\"/>"}]}

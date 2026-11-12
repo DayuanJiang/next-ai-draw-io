@@ -5,21 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 // a test allows its request
 const quota = vi.hoisted(() => ({
     checks: 0,
-    // The limits and the request increment of each check
-    calls: [] as Array<{ limits: unknown; increment: unknown }>,
+    // Each check: its limits, and the follow-up requests a counted request
+    // allows ("follow-up" for the check of a follow-up request itself)
+    calls: [] as Array<{ limits: unknown; followUps: unknown }>,
     allowed: false,
     // The tokens recorded for each step
     recorded: [] as number[],
 }))
-vi.mock("@/lib/dynamo-quota-manager", () => ({
-    isQuotaEnabled: () => true,
-    checkAndIncrementRequest: async (
-        _user: string,
-        limits: unknown,
-        increment?: number,
-    ) => {
+vi.mock("@/lib/dynamo-quota-manager", () => {
+    const check = (limits: unknown, followUps: unknown) => {
         quota.checks++
-        quota.calls.push({ limits, increment })
+        quota.calls.push({ limits, followUps })
         if (quota.allowed) return { allowed: true }
         return {
             allowed: false,
@@ -28,11 +24,22 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
             used: 10,
             limit: 10,
         }
-    },
-    recordTokenUsage: async (_user: string, tokens: number) => {
-        quota.recorded.push(tokens)
-    },
-}))
+    }
+    return {
+        isQuotaEnabled: () => true,
+        checkAndIncrementRequest: async (
+            _user: string,
+            limits: unknown,
+            _increment?: number,
+            followUps?: number,
+        ) => check(limits, followUps),
+        checkFollowUpRequest: async (_user: string, limits: unknown) =>
+            check(limits, "follow-up"),
+        recordTokenUsage: async (_user: string, tokens: number) => {
+            quota.recorded.push(tokens)
+        },
+    }
+})
 
 // No DNS in tests: only loopback addresses are private
 vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
@@ -84,11 +91,10 @@ const send = (headers: Record<string, string>, messages = [FIRST_MESSAGE]) =>
     )
 
 describe("chat quota", () => {
-    it("counts a turn's follow-up request as part of the user's message", async () => {
+    it("allows a user message five follow-up requests, and checks a request that ends with the assistant's message as one", async () => {
         const limits = { requests: 10, tokens: 200000, tpm: 20000 }
         await send({ "x-ai-provider": "openai" })
-        // What the browser sends by itself after a diagram was cut off: the
-        // step before used up the minute's tokens, and it is no new request
+        // What the browser sends by itself after a diagram was cut off
         await send({ "x-ai-provider": "openai" }, [
             FIRST_MESSAGE,
             {
@@ -106,8 +112,8 @@ describe("chat quota", () => {
             },
         ])
         expect(quota.calls).toEqual([
-            { limits, increment: 1 },
-            { limits: { ...limits, requests: 0, tpm: 0 }, increment: 0 },
+            { limits, followUps: 5 },
+            { limits, followUps: "follow-up" },
         ])
     })
 

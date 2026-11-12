@@ -186,6 +186,12 @@ export function validateAdminProviders(
     envConfig: ServerModelsConfig | null = null,
 ): string | null {
     const envProviders = envConfig?.providers ?? []
+    // An entry's stored secrets are found by its id (movedSecretError,
+    // mergeSecrets): with two entries of one id, the base URL of one would
+    // be checked and the key of the other kept
+    if (new Set(list.map((p) => p.id)).size !== list.length) {
+        return "Provider ids must be unique."
+    }
     // Providers whose credentials live in fixed variables can have one entry
     const fixed = PROVIDER_NAMES.filter((p) => PROVIDERS[p].fixedCredentials)
     for (const single of fixed) {

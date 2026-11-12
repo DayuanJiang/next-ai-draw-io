@@ -14,18 +14,23 @@ const USER_AGENT = "Mozilla/5.0 (compatible; NextAIDrawio/1.0)"
 // Detect the page's charset so non-UTF-8 pages (Shift_JIS/GBK/EUC/Big5, common
 // on CJK sites) are decoded correctly. Response.text() always assumes UTF-8 and
 // would produce mojibake; the article-extractor library does the same detection
-// when it fetches the page itself, which we no longer rely on.
+// only when it fetches the page itself, and the page is fetched here.
 function detectCharset(
     contentType: string | null,
     buffer: ArrayBuffer,
+    html: boolean,
 ): string {
     // 1. HTTP Content-Type header charset (most authoritative). HTTP allows
     // the value in quotes, which TextDecoder would not know as a label.
     const headerCharset = contentType
         ?.match(/charset=["']?([^;"']+)/i)?.[1]
         ?.trim()
-    // 2. <meta charset> / <meta http-equiv> in the first bytes of the document.
-    const head = new TextDecoder("utf-8").decode(buffer.slice(0, 4096))
+    // 2. <meta charset> / <meta http-equiv> in the first bytes of an HTML
+    // document. In plain text or Markdown such a tag is part of the text
+    // (an HTML example), not the file's encoding.
+    const head = html
+        ? new TextDecoder("utf-8").decode(buffer.slice(0, 4096))
+        : ""
     const metaCharset =
         head.match(/<meta[^>]+charset=["']?\s*([\w-]+)/i)?.[1] ||
         head.match(/<meta[^>]+content=["'][^"']*charset=([\w-]+)/i)?.[1]
@@ -165,9 +170,9 @@ export async function POST(req: Request) {
                     { status: 413 },
                 )
             }
-            const charset = detectCharset(contentType, buffer)
-            body = new TextDecoder(charset).decode(buffer)
             plainText = /^text\/(plain|markdown)\b/i.test(contentType ?? "")
+            const charset = detectCharset(contentType, buffer, !plainText)
+            body = new TextDecoder(charset).decode(buffer)
         } catch (err: any) {
             if (err?.name === "AbortError") {
                 return NextResponse.json(

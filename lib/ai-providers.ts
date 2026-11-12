@@ -584,11 +584,12 @@ const SERVER_THINKING_EFFORT = "medium"
 /**
  * The provider options for a model on the server's keys, where the user's
  * thinking switch does not apply. A Claude model that thinks by default
- * (lib/thinking-capabilities.ts) leaves the text of its thinking out, so
- * the chat showed nothing while it thought (Haiku 5.5: 80 seconds for a
+ * (lib/thinking-capabilities.ts) leaves the text of its thinking out, and
+ * the chat would show nothing while it thinks (Haiku 5.5: 80 seconds for a
  * 12 step flowchart, four minutes for 40 nodes). It is asked for a summary
  * of its thinking as it goes, at the effort above. These models take no
- * thinking budget, so one from the environment gives way.
+ * thinking budget, so one from the environment gives way. Thinking that the
+ * server turned off (ANTHROPIC_THINKING_TYPE=disabled) stays off.
  */
 export function serverThinkingDefaults(
     providerOptions: Record<string, any> | undefined,
@@ -596,6 +597,9 @@ export function serverThinkingDefaults(
     modelId: string,
 ): Record<string, any> | undefined {
     if (!thinksByDefault(provider, modelId)) return providerOptions
+    if (providerOptions?.anthropic?.thinking?.type === "disabled") {
+        return providerOptions
+    }
     const thinking = { type: "adaptive", display: "summarized" }
     if (provider === "bedrock") {
         const effort =
@@ -636,6 +640,8 @@ export function envVarsOf(provider: ProviderName): {
     }
 }
 
+type EnvReader = (name: string) => string | null | undefined
+
 // The key variable the server must have for each provider; null where it
 // needs none of this kind: Bedrock (the AWS SDK uses an IAM role or the
 // AWS_* variables), local Ollama, EdgeOne (the site's own function)
@@ -657,15 +663,16 @@ const REQUIRED_KEY_VARS = Object.fromEntries(
  * back to the default one; a provider with a resourceNameEnv (Azure) then
  * needs its base URL variable, the server model's own URL variable or the
  * resource name. Providers with no required key variable pass unless a
- * custom variable was given.
+ * custom variable was given. env reads a variable (see detectProvider).
  */
 function serverCredentialError(
     provider: ProviderName,
     customApiKeyEnv?: string | string[],
     customBaseUrlEnv?: string,
+    env: EnvReader = (name) => process.env[name],
 ): string | null {
     if (Array.isArray(customApiKeyEnv)) {
-        const hasAnyKey = customApiKeyEnv.some((envVar) => process.env[envVar])
+        const hasAnyKey = customApiKeyEnv.some((envVar) => env(envVar))
         if (!hasAnyKey) {
             return (
                 `At least one of [${customApiKeyEnv.join(", ")}] environment variables is required for ${provider} provider. ` +
@@ -679,8 +686,8 @@ function serverCredentialError(
     const requiredKeyEnv = REQUIRED_KEY_VARS[provider]
     if (altKeyEnv && !customApiKeyEnv) {
         const hasCredential = !!(
-            (requiredKeyEnv && process.env[requiredKeyEnv]) ||
-            process.env[altKeyEnv]
+            (requiredKeyEnv && env(requiredKeyEnv)) ||
+            env(altKeyEnv)
         )
         if (!hasCredential) {
             return (
@@ -690,7 +697,7 @@ function serverCredentialError(
         }
     } else {
         const requiredVar = customApiKeyEnv || requiredKeyEnv
-        if (requiredVar && !process.env[requiredVar]) {
+        if (requiredVar && !env(requiredVar)) {
             return (
                 `${requiredVar} environment variable is required for ${provider} provider. ` +
                 `Please set it in your .env.local file.`
@@ -703,9 +710,8 @@ function serverCredentialError(
     if (resourceNameEnv) {
         const baseUrlEnv = envVarsOf(provider).baseUrl as string
         const hasBaseUrl =
-            !!process.env[baseUrlEnv] ||
-            !!(customBaseUrlEnv && process.env[customBaseUrlEnv])
-        const hasResourceName = !!process.env[resourceNameEnv]
+            !!env(baseUrlEnv) || !!(customBaseUrlEnv && env(customBaseUrlEnv))
+        const hasResourceName = !!env(resourceNameEnv)
         if (!hasBaseUrl && !hasResourceName) {
             return (
                 `Azure requires either ${baseUrlEnv} or ${resourceNameEnv} to be set. ` +
@@ -718,12 +724,16 @@ function serverCredentialError(
 
 /**
  * Auto-detect provider based on available API keys
- * Returns the provider if exactly one is configured, otherwise null
+ * Returns the provider if exactly one is configured, otherwise null.
+ * env reads a variable: process.env by default, which includes the keys
+ * the admin panel writes into standard variables (a Vertex AI entry's goes
+ * into GOOGLE_VERTEX_API_KEY); getEnvFallback reads the environment's own.
  */
-export function detectProvider(): ProviderName | null {
+export function detectProvider(env?: EnvReader): ProviderName | null {
     const configuredProviders = PROVIDER_NAMES.filter(
         (p) =>
-            REQUIRED_KEY_VARS[p] !== null && serverCredentialError(p) === null,
+            REQUIRED_KEY_VARS[p] !== null &&
+            serverCredentialError(p, undefined, undefined, env) === null,
     )
     return configuredProviders.length === 1 ? configuredProviders[0] : null
 }

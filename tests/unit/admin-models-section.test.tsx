@@ -68,6 +68,12 @@ describe("the admin panel's model Test result", () => {
         expect(screen.getByText("Failed")).toBeTruthy()
     })
 
+    it("shows the dictionary's text for a failure that comes as a code alone", async () => {
+        // A base URL without its /v1
+        await testModel({ valid: false, code: "wrong_base_url" })
+        await waitFor(() => screen.getByText(en.errors.llm.wrong_base_url))
+    })
+
     it("keeps a clean pass on the model's line", async () => {
         await testModel({ valid: true, responseTime: 21 })
         const passed = await waitFor(() => screen.getByText("Passed (21 ms)"))

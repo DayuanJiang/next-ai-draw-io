@@ -192,6 +192,7 @@
             "output_truncated_thinking": "出力上限の大部分が思考に使われ、ダイアグラムが完成しませんでした。モデル設定でこのモデルの「思考モード」をオフにするか、リクエストを簡単にしてください。",
             "provider_unavailable": "プロバイダーで問題が発生しています。しばらくしてから再試行してください。",
             "cannot_connect": "プロバイダーに接続できません。Base URL とネットワークを確認してください。",
+            "wrong_base_url": "このアドレスにはモデル API がありません（404）。Base URL を確認してください。OpenAI 互換のサーバーでは、多くの場合、末尾に /v1 が必要です。",
             "timeout": "プロバイダーから時間内に応答がありませんでした。",
             "bad_response": "プロバイダーの応答を読み取れませんでした。モデル API の形式ではありません。Base URL を確認するか、もう一度お試しください。",
             "openModelSettings": "モデル設定を開く"
@@ -268,6 +269,9 @@
         "issuesFound": "問題が見つかりました",
         "error": "エラー",
         "skipped": "スキップ",
+        "checksDisabled": "このサーバーではスクリーンショットによるチェックがオフになっています。",
+        "noCheckModel": "このサーバーにはスクリーンショットをチェックするモデルがありません（VALIDATION_MODEL または AI_MODEL）。",
+        "checkFailed": "モデルがスクリーンショットをチェックできませんでした。",
         "capturedScreenshot": "キャプチャした画像：",
         "issuesFoundLabel": "検出された問題：",
         "suggestions": "提案：",

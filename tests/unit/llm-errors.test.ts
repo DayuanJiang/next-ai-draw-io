@@ -5,6 +5,7 @@ import {
     RetryError,
     simulateReadableStream,
     streamText,
+    TypeValidationError,
     tool,
 } from "ai"
 import { MockLanguageModelV3 } from "ai/test"
@@ -191,6 +192,15 @@ describe("classifyLLMError", () => {
         ).toBe("bad_response")
         expect(
             classifyLLMError(apiError(200, "Invalid JSON response")).code,
+        ).toBe("bad_response")
+        // A base URL that points at another API: 200 and JSON of its own
+        expect(
+            classifyLLMError(
+                TypeValidationError.wrap({
+                    value: { status: "ok", data: [] },
+                    cause: new Error("expected choices"),
+                }),
+            ).code,
         ).toBe("bad_response")
     })
 

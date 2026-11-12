@@ -192,6 +192,7 @@
             "output_truncated_thinking": "输出上限大部分被思考用掉了，图没有画完。请在模型设置里关闭这个模型的“思考模式”，或者简化请求。",
             "provider_unavailable": "服务商出了问题，请稍后再试。",
             "cannot_connect": "连接不上服务商，请检查 Base URL 和网络。",
+            "wrong_base_url": "这个地址上没有模型接口（404）。请检查 Base URL：兼容 OpenAI 的服务通常要以 /v1 结尾。",
             "timeout": "服务商没有及时响应。",
             "bad_response": "服务商的回复读不出来：它的格式和模型接口的不一样。请检查 Base URL，或重试。",
             "openModelSettings": "打开模型设置"
@@ -317,6 +318,9 @@
         "issuesFound": "发现问题",
         "error": "错误",
         "skipped": "已跳过",
+        "checksDisabled": "这台服务器关闭了截图检查。",
+        "noCheckModel": "这台服务器没有可以检查截图的模型（VALIDATION_MODEL 或 AI_MODEL）。",
+        "checkFailed": "模型没能检查这张截图。",
         "capturedScreenshot": "截图预览：",
         "issuesFoundLabel": "发现的问题：",
         "suggestions": "建议：",
