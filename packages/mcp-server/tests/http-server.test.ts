@@ -1013,6 +1013,23 @@ describe("canvas shell page", () => {
         expect(slash.headers.location).toBe("/shell/?mcp=mcp-shell-recent")
     })
 
+    it("is where an address without a path goes, unless the classic page is what start_session opens", async () => {
+        // Typed by hand as "localhost:6002": the classic page there does
+        // not answer get_selection
+        setState("mcp-root-recent", "<mxfile>recent</mxfile>")
+        const res = await request("/")
+        expect(res.status).toBe(302)
+        expect(res.headers.location).toMatch(/^\/shell\/\?mcp=mcp-/)
+        setShellDir(null)
+        try {
+            const classic = await request("/")
+            expect(classic.status).toBe(302)
+            expect(classic.headers.location).toMatch(/^\/\?mcp=mcp-/)
+        } finally {
+            setShellDir(shellDir)
+        }
+    })
+
     it("goes to the session id a link starts with when text is glued onto it", async () => {
         // DSH's chat made "…?mcp=mcp-mvx2w3vx-njlslo。截图…" one link
         const res = await request(
@@ -1572,45 +1589,78 @@ describe("GET /api/history for the version cards", () => {
 })
 
 describe("bodies over the size limit", () => {
-    it("answers 413 after reading the whole body", async () => {
-        const mib = Buffer.alloc(1024 * 1024, "x")
-        // Still sending when the limit is passed, as a browser would be.
-        // A browser whose upload is cut off reports a network error.
-        const result = await new Promise<{ status?: number; sent: boolean }>(
-            (resolve) => {
-                let sent = false
-                const req = http.request(
-                    {
-                        host: "127.0.0.1",
-                        port,
-                        path: "/api/state",
-                        method: "POST",
-                        headers: {
-                            host: `localhost:${port}`,
-                            "x-drawio-token": getApiToken(),
-                            "content-type": "application/json",
-                        },
+    const mib = Buffer.alloc(1024 * 1024, "x")
+    const mibs = (count: number) => Array.from({ length: count }, () => mib)
+    // Still sending when the limit is passed, as a browser would be.
+    // A browser whose upload is cut off reports a network error.
+    const upload = (path: string, parts: Buffer[]) =>
+        new Promise<{ status?: number; sent: boolean }>((resolve) => {
+            let sent = false
+            const req = http.request(
+                {
+                    host: "127.0.0.1",
+                    port,
+                    path,
+                    method: "POST",
+                    headers: {
+                        host: `localhost:${port}`,
+                        "x-drawio-token": getApiToken(),
+                        "content-type": "application/json",
                     },
-                    (res) => {
-                        res.resume()
-                        res.on("end", () =>
-                            resolve({ status: res.statusCode, sent }),
-                        )
-                    },
-                )
-                req.on("error", () => resolve({ sent }))
-                const writeNext = (i: number) => {
-                    if (i === 15) {
-                        req.end(() => {
-                            sent = true
-                        })
-                        return
-                    }
-                    req.write(mib, () => setTimeout(() => writeNext(i + 1), 10))
+                },
+                (res) => {
+                    res.resume()
+                    res.on("end", () =>
+                        resolve({ status: res.statusCode, sent }),
+                    )
+                },
+            )
+            req.on("error", () => resolve({ sent }))
+            const writeNext = (i: number) => {
+                if (i === parts.length) {
+                    req.end(() => {
+                        sent = true
+                    })
+                    return
                 }
-                writeNext(0)
-            },
-        )
+                req.write(parts[i], () =>
+                    setTimeout(() => writeNext(i + 1), 10),
+                )
+            }
+            writeNext(0)
+        })
+
+    it("answers 413 after reading the whole body", async () => {
+        expect(await upload("/api/history-svg", mibs(15))).toEqual({
+            status: 413,
+            sent: true,
+        })
+    })
+
+    it("answers 413 to a diagram over the limit, which the page then tells the user", async () => {
+        const result = await upload("/api/state", [
+            Buffer.from('{"sessionId":"mcp-large-diagram","xml":"'),
+            ...mibs(15),
+            Buffer.from('"}'),
+        ])
         expect(result).toEqual({ status: 413, sent: true })
+        expect(getState("mcp-large-diagram")).toBeUndefined()
+    })
+
+    it("takes an export result larger than a diagram may be", async () => {
+        // A .drawio.svg holds the diagram's pictures twice: 11 MiB used to
+        // get 413, and export_diagram reported a timeout
+        const id = "mcp-large-export"
+        setState(id, "<mxfile/>")
+        requestExport(id, "svg")
+        const result = await upload("/api/state", [
+            Buffer.from(
+                `{"sessionId":"${id}","exportId":"${getState(id)?.exportId}","exportData":"`,
+            ),
+            ...mibs(11),
+            Buffer.from('"}'),
+        ])
+        expect(result).toEqual({ status: 200, sent: true })
+        expect(getState(id)?.exportData?.length).toBe(11 * 1024 * 1024)
     })
 })

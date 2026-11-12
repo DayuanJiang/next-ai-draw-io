@@ -151,6 +151,41 @@ describe("contentFingerprint", () => {
         ).not.toBe(contentFingerprint(XML_A.replace('value="Hello" ', "")))
     })
 
+    it("treats long numbers and written-out defaults like draw.io's copy without them", () => {
+        // As a model may write the box of XML_A, and as draw.io saves it
+        const written = XML_A.replace(
+            'vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60"',
+            'vertex="1" edge="0" connectable="1" visible="1" collapsed="0" parent="1"><mxGeometry x="40.0" y="40.00" width="120.0" height="60" relative="0"',
+        )
+        expect(written).not.toBe(XML_A)
+        expect(contentFingerprint(written)).toBe(contentFingerprint(XML_A))
+        expect(checkEditGate(written, XML_A_RESERIALIZED)).toEqual({ ok: true })
+        expect(describeChanges(written, XML_A_RESERIALIZED)).toBe("")
+        expect(countChanges(written, XML_A_RESERIALIZED)).toBe("")
+        // Any other value of these attributes is a change
+        for (const [from, to] of [
+            ['x="40"', 'x="40.5"'],
+            ['vertex="1"', 'vertex="1" connectable="0"'],
+            ['vertex="1"', 'vertex="1" visible="0"'],
+            ['vertex="1"', 'vertex="1" collapsed="1"'],
+            ['height="60"', 'height="60" relative="1"'],
+        ]) {
+            expect(contentFingerprint(XML_A.replace(from, to)), to).not.toBe(
+                contentFingerprint(XML_A),
+            )
+        }
+        // Only on the elements draw.io reads them from: a wrapper's own
+        // "x" or "visible" is the user's data, kept as written
+        const wrapped = (data: string) =>
+            XML_A.replace(
+                /<mxCell id="box1".*<\/mxCell>/,
+                `<object id="box1" label="Hello" ${data}><mxCell vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></object>`,
+            )
+        expect(contentFingerprint(wrapped('x="40.0" visible="1"'))).not.toBe(
+            contentFingerprint(wrapped('x="40"')),
+        )
+    })
+
     it("reads draw.io's order of the cells, each container followed by its children, as the same diagram", () => {
         const page = (cells: string) =>
             `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram></mxfile>`

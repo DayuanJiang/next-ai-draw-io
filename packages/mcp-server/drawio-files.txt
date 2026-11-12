@@ -19,6 +19,7 @@ templates/**
 
 # Requested by the editor; rewritten by scripts/check-drawio-files.mjs --update
 images/droptarget.png
+images/github-logo-white.svg
 images/github-logo.svg
 images/logo-flat-small.png
 images/sidebar-general.png

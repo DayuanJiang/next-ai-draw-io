@@ -31,16 +31,37 @@ export type EditGateResult =
     | { ok: true }
     | { ok: false; reason: "no-context" | "stale" }
 
-// draw.io leaves out a point's or geometry's coordinates and sizes that are
-// 0 when it writes a diagram, so x="0" and no x are the same diagram
-const ZERO_DEFAULT_TAGS = new Set(["mxPoint", "mxGeometry", "mxRectangle"])
-const ZERO_DEFAULT_ATTRS = new Set(["x", "y", "width", "height"])
+// draw.io reads a position or size as a number and writes it back in its
+// shortest form ("40.0" comes back as "40"), and it leaves out every value
+// that is the default: a coordinate or size of 0 and the flags below. A
+// model may write them, and it is the same diagram.
+const GEOMETRY_TAGS = new Set(["mxPoint", "mxGeometry", "mxRectangle"])
+const NUMBER_ATTRS = new Set(["x", "y", "width", "height"])
+const DEFAULT_VALUES: Record<string, Record<string, string>> = {
+    mxCell: {
+        vertex: "0",
+        edge: "0",
+        connectable: "1",
+        visible: "1",
+        collapsed: "0",
+    },
+    mxGeometry: { relative: "0" },
+}
 
-const isLeftOutZero = (el: Element, attr: Attr) =>
-    ZERO_DEFAULT_TAGS.has(el.tagName) &&
-    ZERO_DEFAULT_ATTRS.has(attr.name) &&
-    attr.value.trim() !== "" &&
-    Number(attr.value) === 0
+/** An attribute's value as draw.io saves it; null when it leaves it out */
+function savedValue(el: Element, attr: Attr): string | null {
+    let value = attr.value
+    if (
+        GEOMETRY_TAGS.has(el.tagName) &&
+        NUMBER_ATTRS.has(attr.name) &&
+        value.trim() !== ""
+    ) {
+        const n = Number(value)
+        if (n === 0) return null
+        if (Number.isFinite(n)) value = String(n)
+    }
+    return DEFAULT_VALUES[el.tagName]?.[attr.name] === value ? null : value
+}
 
 /**
  * The cells of a page in the order draw.io writes them: each cell followed by
@@ -63,7 +84,11 @@ function cellsInDrawioOrder(root: Element): Element[] {
     for (const cell of cells) {
         const parent = parentOf(cell)
         if (parent && parent !== idOf(cell) && ids.has(parent)) {
-            children.set(parent, [...(children.get(parent) ?? []), cell])
+            // Appended in place: copying the list for every cell took
+            // seconds on a layer with tens of thousands of cells
+            const siblings = children.get(parent)
+            if (siblings) siblings.push(cell)
+            else children.set(parent, [cell])
         } else {
             tops.push(cell)
         }
@@ -86,12 +111,14 @@ function cellsInDrawioOrder(root: Element): Element[] {
  * Canonical serialisation of an element subtree: tag + attributes sorted by
  * name + child elements in order (a page's cells in draw.io's order) +
  * non-whitespace text. Whitespace-only text nodes (pretty-printing) and
- * coordinates of 0 are dropped.
+ * the values draw.io leaves out are dropped.
  */
 function canonicalizeElement(el: Element): string {
     const attrs = Array.from(el.attributes)
-        .filter((a) => !isLeftOutZero(el, a))
-        .map((a) => `${a.name}=${JSON.stringify(a.value)}`)
+        .flatMap((a) => {
+            const value = savedValue(el, a)
+            return value === null ? [] : [`${a.name}=${JSON.stringify(value)}`]
+        })
         .sort()
         .join(" ")
     let children = ""

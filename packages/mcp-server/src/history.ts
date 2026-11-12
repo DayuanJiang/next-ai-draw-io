@@ -86,6 +86,7 @@ export function getHistoryEntry(
 
 export function clearHistory(sessionId: string): void {
     historyStore.delete(sessionId)
+    canvasVersions.delete(sessionId)
 }
 
 /**
@@ -123,7 +124,12 @@ export function isInHistory(sessionId: string, xml: string): boolean {
  * rule of otherVersions), or null when the canvas is in none of them
  */
 export function currentEntryId(sessionId: string, xml: string): number | null {
-    const version = versionOf(xml)
+    let canvas = canvasVersions.get(sessionId)
+    if (canvas?.xml !== xml) {
+        canvas = { xml, version: versionOf(xml) }
+        canvasVersions.set(sessionId, canvas)
+    }
+    const { version } = canvas
     const history = getHistory(sessionId)
     for (let i = history.length - 1; i >= 0; i--) {
         if (sameVersion(version, entryVersion(history[i]))) {
@@ -171,6 +177,12 @@ function versionOf(xml: string): Version {
         cells: contentFingerprint(xml, false),
     }
 }
+
+// Each session's canvas as currentEntryId last saw it. Every open preview
+// tab asks which entry the canvas shows every 2 seconds, and fingerprinting
+// parses the whole diagram twice (0.1 s for one with a few MB of pictures),
+// so an unchanged canvas is not fingerprinted again.
+const canvasVersions = new Map<string, { xml: string; version: Version }>()
 
 // An entry's XML never changes: its fingerprints are computed once
 const entryVersions = new WeakMap<HistoryEntry, Version>()

@@ -642,6 +642,62 @@ test("an edit with coordinates of 0 is not taken for a hand edit, and one undo t
     await expect(frame.getByText("Zero B")).toBeVisible()
 })
 
+test("an edit with written-out defaults and long numbers is not taken for a hand edit, and one undo takes it back", async ({
+    page,
+}) => {
+    // A session of its own, so History holds only this test's versions
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+
+    await toolText("create_new_diagram", {
+        xml: [box("k1", "Kiwi A", 40), box("k2", "Kiwi B", 240)].join("\n"),
+    })
+    await expect(frame.getByText("Kiwi B")).toBeVisible({ timeout: 10_000 })
+    // draw.io writes this cell back without the flags and relative="0",
+    // and its numbers as 440, 40.5 and 120
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "k3",
+                new_xml: `<mxCell id="k3" value="Kiwi C" vertex="1" connectable="1" collapsed="0" visible="1" parent="1"><mxGeometry x="440.0" y="40.50" width="120.0" height="60" relative="0" as="geometry"/></mxCell>`,
+            },
+        ],
+    })
+    await expect(frame.getByText("Kiwi C")).toBeVisible({ timeout: 10_000 })
+    // draw.io's copy of the canvas reached the server, and is no hand edit
+    let read = ""
+    await expect
+        .poll(
+            async () => {
+                read = await toolText("get_diagram")
+                return read.includes("40.50")
+            },
+            { timeout: 10_000 },
+        )
+        .toBe(false)
+    expect(read).not.toContain("the user changed the diagram")
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+
+    expect(await toolText("restore_version", { steps_back: 1 })).toContain(
+        "Restored the version 1 step(s) back",
+    )
+    await expect(frame.getByText("Kiwi C")).toHaveCount(0, {
+        timeout: 10_000,
+    })
+    await expect(frame.getByText("Kiwi B")).toBeVisible()
+})
+
 test("draw.io's order of the cells is not taken for a hand edit, and one undo takes the drawing back", async ({
     page,
 }) => {

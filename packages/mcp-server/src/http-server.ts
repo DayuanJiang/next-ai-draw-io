@@ -11,10 +11,20 @@ import { pipeline } from "node:stream"
 import { fileURLToPath } from "node:url"
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024 // 10 MiB
+// An image the preview made for export_diagram can be larger than the
+// diagram: it holds the embedded pictures again (a .drawio.svg twice, drawn
+// and as diagram data), and a PNG is drawn at twice the size
+const MAX_EXPORT_BYTES = 64 * 1024 * 1024
+
+function sendTooLarge(res: http.ServerResponse): void {
+    res.writeHead(413, { "Content-Type": "application/json" })
+    res.end(JSON.stringify({ error: "Payload too large" }))
+}
 
 function readBody(
     req: http.IncomingMessage,
     res: http.ServerResponse,
+    maxBytes: number,
     cb: (body: string) => void,
 ): void {
     // Decode once at the end: a multi-byte UTF-8 character can be split
@@ -25,7 +35,7 @@ function readBody(
     req.on("data", (chunk: Buffer) => {
         if (tooLarge) return
         size += chunk.length
-        if (size > MAX_BODY_BYTES) {
+        if (size > maxBytes) {
             // Read the rest without keeping it and answer at the end: a
             // connection closed mid-upload reaches the browser as a network
             // error, without this answer
@@ -37,8 +47,7 @@ function readBody(
     })
     req.on("end", () => {
         if (tooLarge) {
-            res.writeHead(413, { "Content-Type": "application/json" })
-            res.end(JSON.stringify({ error: "Payload too large" }))
+            sendTooLarge(res)
             return
         }
         cb(Buffer.concat(chunks).toString("utf8"))
@@ -586,38 +595,45 @@ function handleSelectionResult(
     log.debug(`Selection received for session=${sessionId}`)
 }
 
-export function startHttpServer(port = 6002): Promise<number> {
+export function startHttpServer(
+    port = 6002,
+    firstPort = port,
+): Promise<number> {
     return new Promise((resolve, reject) => {
         if (server) {
             resolve(serverPort)
             return
         }
 
-        serverPort = port
-        server = http.createServer(handleRequest)
+        const starting = http.createServer(handleRequest)
 
-        server.on("error", (err: NodeJS.ErrnoException) => {
-            if (err.code === "EADDRINUSE") {
-                if (port >= MAX_PORT) {
-                    reject(
-                        new Error(
-                            `No available ports in range 6002-${MAX_PORT}`,
-                        ),
-                    )
-                    return
-                }
-                log.info(`Port ${port} in use, trying ${port + 1}`)
-                server = null
-                startHttpServer(port + 1)
-                    .then(resolve)
-                    .catch(reject)
-            } else {
+        starting.on("error", (err: NodeJS.ErrnoException) => {
+            // A server that did not start is forgotten, so the next
+            // start_session tries again; kept, that call answered with the
+            // port as if the preview were served there. (A running server
+            // can report an error too, and stays.)
+            if (!starting.listening) server = null
+            if (err.code !== "EADDRINUSE") {
                 reject(err)
+                return
             }
+            if (port >= MAX_PORT) {
+                reject(
+                    new Error(
+                        port === firstPort
+                            ? `Port ${port} is in use. The next free port is tried only up to ${MAX_PORT}: set PORT to a free port.`
+                            : `Ports ${firstPort} to ${port} are all in use. Set PORT to a free port.`,
+                    ),
+                )
+                return
+            }
+            log.info(`Port ${port} in use, trying ${port + 1}`)
+            startHttpServer(port + 1, firstPort)
+                .then(resolve)
+                .catch(reject)
         })
 
-        server.listen(port, "127.0.0.1", () => {
-            serverPort = port
+        starting.listen(port, "127.0.0.1", () => {
             log.info(`HTTP server running on http://localhost:${port}`)
             if (!EXTERNAL_DRAWIO && drawioDir === null) {
                 log.warn(
@@ -631,6 +647,10 @@ export function startHttpServer(port = 6002): Promise<number> {
             }
             resolve(port)
         })
+        // Kept once listen() has taken the port number: for a PORT that is
+        // no port it throws, and the next call must not find a server
+        server = starting
+        serverPort = port
     })
 }
 
@@ -826,8 +846,12 @@ function servePage(
     if (!sessionId) {
         const recentSessionId = getMostRecentSessionId()
         if (recentSessionId) {
+            // An address typed without a path ("localhost:6002") opens the
+            // page start_session opens: on the classic page at "/" the
+            // changes are not outlined and get_selection gets no answer
+            const path = activePreviewUi() === "shell" ? "/shell/" : pagePath
             res.writeHead(302, {
-                Location: `${pagePath}?mcp=${encodeURIComponent(recentSessionId)}`,
+                Location: `${path}?mcp=${encodeURIComponent(recentSessionId)}`,
             })
             res.end()
             return
@@ -889,7 +913,9 @@ function handleStateApi(
             }),
         )
     } else if (req.method === "POST") {
-        readBody(req, res, (body) => {
+        // Read up to the size of an export result: what the body is shows
+        // only once it is read, and anything else keeps the usual limit
+        readBody(req, res, MAX_EXPORT_BYTES, (body) => {
             try {
                 const data = JSON.parse(body)
                 const { sessionId } = data
@@ -920,6 +946,12 @@ function handleStateApi(
                     }
                     res.writeHead(200, { "Content-Type": "application/json" })
                     res.end(JSON.stringify({ success: true }))
+                    return
+                }
+
+                // A diagram over the limit; the page tells the user
+                if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+                    sendTooLarge(res)
                     return
                 }
 
@@ -1125,7 +1157,7 @@ function handleRestoreApi(
         return
     }
 
-    readBody(req, res, (body) => {
+    readBody(req, res, MAX_BODY_BYTES, (body) => {
         try {
             const data = JSON.parse(body)
             const { sessionId, id } = data
@@ -1173,7 +1205,7 @@ function handleHistorySvgApi(
         return
     }
 
-    readBody(req, res, (body) => {
+    readBody(req, res, MAX_BODY_BYTES, (body) => {
         try {
             const { sessionId, svg, stateId, version } = JSON.parse(body)
             if (!sessionId || !svg) {
