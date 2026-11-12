@@ -21,6 +21,7 @@ import {
     edgeIdsOf,
     plainLabelsOf,
 } from "./style-classes.ts"
+import { readAttributes } from "./xml-attributes.ts"
 import {
     stripWrapping,
     validateAndFixXml,
@@ -39,6 +40,14 @@ export type EditOutcome =
           notes: string[]
       }
     | { ok: false; errors: string[]; pageError: boolean }
+
+/**
+ * An operation as the model sends it. In a long list a model sometimes
+ * leaves cell_id out of an add or update; the cell in new_xml carries the id.
+ */
+export type EditOperation = Omit<DiagramOperation, "cell_id"> & {
+    cell_id?: string
+}
 
 /** Number of top-level elements in an XML fragment. */
 function countTopLevelElements(fragment: string): number {
@@ -63,7 +72,7 @@ export function targetPageXml(xml: string, selector: PageSelector): string {
 
 export function editDiagram(
     xml: string,
-    operations: DiagramOperation[],
+    operations: EditOperation[],
     selector: PageSelector,
 ): EditOutcome {
     const errors: string[] = []
@@ -77,7 +86,20 @@ export function editDiagram(
     const edges = edgeIdsOf(page)
     const plainLabels = plainLabelsOf(page)
     const layer = defaultLayerOf(page)
-    for (const op of operations) {
+    for (const [index, sent] of operations.entries()) {
+        // Without cell_id, the id written on the cell says which cell is
+        // meant (the first id in new_xml: the cell's own, or its wrapper's)
+        const cellId =
+            sent.cell_id ||
+            readAttributes(sent.new_xml ?? "").find((a) => a.name === "id")
+                ?.value
+        if (!cellId) {
+            errors.push(
+                `${sent.operation} (operation ${index + 1} of ${operations.length}): cell_id is missing${sent.new_xml ? " and the cell in new_xml has no id" : ""}`,
+            )
+            continue
+        }
+        const op: DiagramOperation = { ...sent, cell_id: cellId }
         if (op.operation === "delete" || !op.new_xml) {
             prepared.push(op)
             continue

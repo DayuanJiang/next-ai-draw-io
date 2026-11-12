@@ -470,16 +470,27 @@ export function validateMxCellStructure(
  * @returns Object with fixed XML and list of fixes applied
  */
 /**
- * A compact cell's last attribute is a number, and the model sometimes
- * drops its closing quote: h="112/>. Only a cell whose earlier attributes
- * are all properly quoted is touched, so a label that happens to contain
- * such text is left alone.
+ * The model sometimes drops the closing quote of a number attribute:
+ * h="112/> at the end of a compact cell, w="78 h="38" between two
+ * attributes, <mxPoint x="150" y="244/> on a waypoint. The value then runs
+ * on into the tags that follow and the whole drawing is rejected. The quote
+ * is added only where the tag's attributes up to that number are properly
+ * quoted, so a label that happens to contain such text is left alone.
  */
-export function repairQuoteBeforeSlash(xml: string): string {
-    return xml.replace(
-        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)(\s+(?:x|y|w|h|width|height)="-?\d+(?:\.\d+)?)\s*\/>/g,
-        '<mxCell$1$2"/>',
-    )
+export function repairNumberQuotes(xml: string): string {
+    // A tag's quoted attributes, then a number left open before the next
+    // attribute or the end of the tag
+    const openNumber =
+        /(<(?:mxCell|mxGeometry|mxPoint)\b(?:\s+[\w:.-]+="[^"]*")*?\s+(?:x|y|w|h|width|height)="-?\d+(?:\.\d+)?)(?=\s+[\w:.-]+="|\s*\/>)/g
+    // Each pass closes the first open number of every tag, and a tag may
+    // have two: w="24 h="25/>
+    let before: string
+    let after = xml
+    do {
+        before = after
+        after = before.replace(openNumber, '$1"')
+    } while (after !== before)
+    return after
 }
 
 /**
@@ -544,6 +555,16 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Removed text before XML root")
     }
 
+    // 2b. Missing closing quote of a number attribute (h="112/>), see
+    // repairNumberQuotes. Before the steps below, which read attributes by
+    // their quotes: one missing quote makes them pair every later quote
+    // wrongly and escape the tags that follow as if they were a label.
+    const quoted = repairNumberQuotes(fixed)
+    if (quoted !== fixed) {
+        fixed = quoted
+        fixes.push("Added the missing closing quote of number attributes")
+    }
+
     // 3. Fix duplicate attributes
     let dupAttrFixed = false
     const structural = new Set(STRUCTURAL_ATTRS)
@@ -595,14 +616,6 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     )
     if (quotesFixed) {
         fixes.push("Fixed malformed attribute quotes")
-    }
-
-    // 6b. Missing closing quote on the last attribute of a compact cell
-    // (h="112/>), see repairQuoteBeforeSlash
-    const quoted = repairQuoteBeforeSlash(fixed)
-    if (quoted !== fixed) {
-        fixed = quoted
-        fixes.push("Added a missing closing quote before />")
     }
 
     // 6c. A compact cell written without the slash, see closeSlashlessCells

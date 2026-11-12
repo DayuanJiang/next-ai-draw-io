@@ -23,7 +23,7 @@ import { readAttributes } from "./xml-attributes.ts"
 import { getXmlSyntaxError } from "./xml-syntax.ts"
 import {
     closeSlashlessCells,
-    repairQuoteBeforeSlash,
+    repairNumberQuotes,
     stripWrapping,
     validateAndFixXml,
 } from "./xml-validation.ts"
@@ -86,7 +86,7 @@ export function isMxCellXmlComplete(xml: string): boolean {
     // right after them is incomplete. A compact cell whose last quote is
     // missing is complete; prepareNewDiagram repairs it. A code fence, a
     // CDATA section or a sentence around complete cells is no cut either.
-    const trimmed = repairQuoteBeforeSlash(
+    const trimmed = repairNumberQuotes(
         readStyleClasses(stripWrapping(xml)).xml,
     ).trim()
     if (!trimmed) return false

@@ -1,6 +1,5 @@
 import type { ChatAddToolOutputFunction } from "ai"
 import type { RefObject } from "react"
-import type { DiagramOperation } from "@/components/chat/types"
 import type {
     ValidationState,
     ValidationStatus,
@@ -13,7 +12,10 @@ import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete } from "@/lib/utils"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
-import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
+import {
+    type EditOperation,
+    editDiagram,
+} from "@/packages/mcp-server/src/edit-diagram.ts"
 import { restoreImageData } from "@/packages/mcp-server/src/embedded-images.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
@@ -432,7 +434,7 @@ ${finalXml}
         originalXml: string | undefined,
     ) => {
         const { operations } = toolCall.input as {
-            operations: DiagramOperation[]
+            operations: EditOperation[]
         }
 
         let currentXml = ""

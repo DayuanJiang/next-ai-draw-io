@@ -116,6 +116,63 @@ describe("editDiagram", () => {
         ])
     })
 
+    it("reads the id from new_xml when an add or update has no cell_id", () => {
+        // As on the demo site: the last add of a long list came without it,
+        // and the whole call was rejected
+        const out = editDiagram(
+            DOC,
+            [
+                { operation: "add", cell_id: "c", new_xml: cell("c") },
+                {
+                    operation: "add",
+                    new_xml: '<mxCell id="e1" source="a" target="c"/>',
+                },
+                {
+                    operation: "update",
+                    cell_id: "",
+                    new_xml:
+                        '<mxCell id="b" value="Renamed" x="0" y="0" w="80" h="40"/>',
+                },
+                {
+                    operation: "add",
+                    new_xml:
+                        '<object id="d" label="Data" owner="Ops"><mxCell x="0" y="100" w="80" h="40"/></object>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.applied).toBe(4)
+        expect(out.xml).toContain(
+            '<mxCell id="e1" edge="1" parent="1" source="a" target="c"',
+        )
+        expect(out.xml).toContain('<mxCell id="b" value="Renamed"')
+        expect(out.xml).toContain('<object id="d" label="Data" owner="Ops">')
+    })
+
+    it("rejects an operation when neither cell_id nor new_xml gives an id", () => {
+        const out = editDiagram(
+            DOC,
+            [
+                { operation: "add", cell_id: "c", new_xml: cell("c") },
+                { operation: "delete" },
+                {
+                    operation: "add",
+                    new_xml:
+                        '<mxCell value="No id" x="0" y="0" w="80" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.errors).toEqual([
+            "delete (operation 2 of 3): cell_id is missing",
+            "add (operation 3 of 3): cell_id is missing and the cell in new_xml has no id",
+        ])
+    })
+
     it("applies the rest when a delete names a cell that is already gone", () => {
         const out = editDiagram(
             DOC,

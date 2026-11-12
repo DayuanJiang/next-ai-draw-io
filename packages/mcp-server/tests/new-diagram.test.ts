@@ -10,6 +10,7 @@ import {
     prepareNewDiagram,
     truncatedCellError,
 } from "../src/new-diagram.ts"
+import { repairNumberQuotes } from "../src/xml-validation.ts"
 
 describe("isMxCellXmlComplete", () => {
     it("returns false for empty input", () => {
@@ -359,5 +360,83 @@ describe("what a drawing tells the model about its cells", () => {
         expect(out.notes[0]).toMatch(
             /^Page 2: Drawn without the end that names no cell on this page: 5 \(target "9"\)/,
         )
+    })
+})
+
+describe("a number attribute written without its closing quote", () => {
+    // Cells as the models wrote them on the demo site, where the browser
+    // rejected every drawing that had one
+    const A = '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>\n'
+    const geometryOf = (xml: string, id: string) =>
+        xml.match(
+            new RegExp(`<mxCell id="${id}"[^>]*>(<mxGeometry[^>]*>)`),
+        )?.[1]
+
+    it("closes the last number of a cell, also after a label with &quot;", () => {
+        const out = prepareNewDiagram(
+            `<mxCell id="21" value="理论认识&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;多源不确定性作用下&lt;/font&gt;" style="rounded=1;fontSize=13;" x="660" y="68" w="127" h="105/>
+<mxCell id="22" value="模型与方法&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;状态表征&lt;/font&gt;" style="rounded=1;fontSize=13;" x="660" y="193" w="127" h="105/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.fixes).toEqual([
+            "Added the missing closing quote of number attributes",
+        ])
+        expect(geometryOf(out.xml, "22")).toBe(
+            '<mxGeometry x="660" y="193" width="127" height="105" as="geometry"/>',
+        )
+        // The label's own quotes stay entities
+        expect(out.xml).toContain(
+            "&lt;font style=&quot;font-size: 11px;&quot;&gt;状态表征",
+        )
+    })
+
+    it("closes a number followed by the next attribute", () => {
+        const out = prepareNewDiagram(
+            `${A}<mxCell id="39" value="PGW" style="rounded=1;" x="478" y="492" w="78 h="38"/>
+<mxCell id="141" value="" style="ellipse;fillColor=#b9ded0;" x="745" y="406" w="24 h="25/>
+<mxCell id="80" source="2" target="39"/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(geometryOf(out.xml, "39")).toBe(
+            '<mxGeometry x="478" y="492" width="78" height="38" as="geometry"/>',
+        )
+        expect(geometryOf(out.xml, "141")).toBe(
+            '<mxGeometry x="745" y="406" width="24" height="25" as="geometry"/>',
+        )
+        expect(out.xml).toContain('source="2" target="39"')
+    })
+
+    it("closes the last number of a waypoint", () => {
+        const out = prepareNewDiagram(
+            `${A}<mxCell id="3" value="B" x="240" y="300" w="120" h="60"/>
+<mxCell id="14" value="first" style="exitX=0.85;exitY=0;" source="2" target="3"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="15" y="320"/><mxPoint x="15" y="215/><mxPoint x="220" y="215"/></Array></mxGeometry></mxCell>
+<mxCell id="16" value="second" style="exitX=0;exitY=0.8;" source="3" target="2"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="165"/><mxPoint x="300" y="305/></Array></mxGeometry></mxCell>
+<mxCell id="17" value="C" x="440" y="40" w="120" h="60"/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<Array as="points"><mxPoint x="15" y="320"/><mxPoint x="15" y="215"/><mxPoint x="220" y="215"/></Array>',
+        )
+        expect(out.xml).toContain(
+            '<Array as="points"><mxPoint x="300" y="165"/><mxPoint x="300" y="305"/></Array>',
+        )
+        // The cells after the open quotes stay cells of their own
+        expect(out.xml).toContain('<mxCell id="16" value="second"')
+        expect(out.xml).toContain('<mxCell id="17" value="C"')
+    })
+
+    it("reads such a last cell as complete output", () => {
+        const slip = `${A}<mxCell id="39" value="PGW" x="478" y="492" w="78 h="38"/>`
+        expect(isMxCellXmlComplete(slip)).toBe(true)
+        expect(truncatedCellError(slip)).toBeNull()
+    })
+
+    it("leaves a label that holds such text as it is", () => {
+        const cells = `<mxCell id="2" value='Write w="78 h="38"/> like this' x="40" y="40" w="120" h="60"/>
+<mxCell id="3" value="5 &lt; 6" style="rounded=1;" x="40" y="140" w="120" h="60"/>`
+        expect(repairNumberQuotes(cells)).toBe(cells)
     })
 })

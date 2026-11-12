@@ -141,6 +141,53 @@ test("an edit with a fixable cell is fixed, not rejected", async ({
     await expect(p.getByText(/exactly one cell/)).toHaveCount(0)
 })
 
+test("a drawing whose numbers lack their closing quote is drawn", async ({
+    page: p,
+}) => {
+    // The three forms models wrote on the demo site: before />, before
+    // the next attribute, and on a waypoint
+    const canvas = await mockReplies(p, [
+        streamedToolCall("display_diagram", {
+            xml: `<mxCell id="2" value="Gateway" style="rounded=1;" x="40" y="40" w="120" h="60/>
+<mxCell id="3" value="Billing" style="rounded=1;" x="300" y="40" w="120 h="60"/>
+<mxCell id="4" value="Ledger" style="rounded=1;" x="300" y="200" w="120 h="60/>
+<mxCell id="5" value="posts" source="2" target="4"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="100" y="230/></Array></mxGeometry></mxCell>`,
+        }),
+    ])
+    await sendMessage(p, "Draw the payment flow")
+    await waitForCompleteCount(p, 1)
+    for (const label of ["Gateway", "Billing", "Ledger", "posts"]) {
+        await expect(canvas.getByText(label, { exact: true })).toBeVisible({
+            timeout: 15000,
+        })
+    }
+})
+
+test("an add or update without cell_id uses the id of its cell", async ({
+    page: p,
+}) => {
+    const canvas = await mockReplies(p, [
+        streamedToolCall("display_diagram", {
+            xml: cell("a", "Alpha", 40) + cell("b", "Beta", 220),
+        }),
+        streamedToolCall("edit_diagram", {
+            operations: [
+                { operation: "update", new_xml: cell("b", "Beta two", 220) },
+                { operation: "add", new_xml: cell("c", "Gamma", 400) },
+            ],
+        }),
+    ])
+    await sendMessage(p, "Draw two boxes")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Change them")
+    await waitForCompleteCount(p, 2)
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Beta two", { exact: true })).toBeVisible()
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
 test("edit_diagram applies all operations or none", async ({ page: p }) => {
     const canvas = await mockReplies(p, [
         streamedToolCall("display_diagram", {

@@ -40,7 +40,7 @@ import {
     customInstructionsPath,
     guideWithCustomInstructions,
 } from "./custom-instructions.ts"
-import { type DiagramOperation, notesText } from "./diagram-operations.ts"
+import { notesText } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
@@ -888,10 +888,14 @@ registerTool(
                             .describe(
                                 "Operation to perform: add, update, or delete",
                             ),
+                        // Optional, so that a call with one add or update
+                        // that lacks it passes the input check: editDiagram
+                        // then reads the id from new_xml
                         cell_id: z
                             .string()
+                            .optional()
                             .describe(
-                                "The id of the mxCell. Must match the id attribute in new_xml.",
+                                "The id of the mxCell. Must match the id attribute in new_xml. Required for delete.",
                             ),
                         new_xml: z
                             .string()
@@ -966,11 +970,7 @@ registerTool(
             `Editing diagram with ${operations.length} operation(s) on ${describeSelector(pageSelector)}`,
         )
 
-        const outcome = editDiagram(
-            session.xml,
-            operations as DiagramOperation[],
-            pageSelector,
-        )
+        const outcome = editDiagram(session.xml, operations, pageSelector)
         if (!outcome.ok) {
             log.warn(`Edit rejected: ${outcome.errors.join("; ")}`)
             return fail(

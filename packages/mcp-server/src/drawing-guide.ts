@@ -47,7 +47,7 @@ Single page (create_new_diagram, add_page): send ONLY the named styles and the m
 
 Several pages at once (create_new_diagram only): send a full <mxfile> with one <diagram id="..." name="..."> per page. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-Rules (XML that breaks them is rejected):
+Rules (XML that breaks them is rejected or repaired with a note):
 1. All mxCell elements are siblings. NEVER nest an mxCell inside another mxCell.
 2. Ids are unique within a page and start from "2" ("0" and "1" are the root cells).
 3. parent="<container id>" for shapes inside a container; top-level cells need no parent.
@@ -120,7 +120,7 @@ When the user asks for a minimal, plain, black-and-white or unstyled diagram, us
 - Keep at least 50px between elements, and follow all edge routing rules strictly.
 
 ## Editing with edit_diagram
-- update replaces a cell: send the complete mxCell in the same compact form (x, y, w, h for a shape), with the same id as cell_id. Named styles are not available here: write each cell's complete style.
+- update replaces a cell: send the complete mxCell in the same compact form (x, y, w, h for a shape), with the same id as cell_id. Named styles defined earlier work here too.
 - add inserts a new cell with a new id. One cell per operation.
 - delete removes a cell. Its children and every edge connected to it are deleted too, so give only the container's id.
 - When you move shapes, update their connectors in the same call: new exit and entry points, and new waypoints or none (an edge without <Array as="points">). Old waypoints keep pulling the edge to where the shapes were.

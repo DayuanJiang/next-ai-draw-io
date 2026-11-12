@@ -71,10 +71,14 @@ Example - Delete container (children & edges auto-deleted):
                             .describe(
                                 "Operation to perform: add, update, or delete",
                             ),
+                        // Optional, so that a call with one add or update
+                        // that lacks it passes the input check: editDiagram
+                        // then reads the id from new_xml
                         cell_id: z
                             .string()
+                            .optional()
                             .describe(
-                                "The id of the mxCell. Must match the id attribute in new_xml.",
+                                "The id of the mxCell. Must match the id attribute in new_xml. Required for delete.",
                             ),
                         new_xml: z
                             .string()

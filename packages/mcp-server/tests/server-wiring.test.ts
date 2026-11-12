@@ -492,6 +492,33 @@ describe("MCP server wiring: auto-fixed XML", () => {
     })
 })
 
+describe("MCP server wiring: an operation without cell_id", () => {
+    it("reads the id from new_xml, or says which operation has none", async () => {
+        await callTool("create_new_diagram", { xml: box("2", "Web") })
+        const edited = await callTool("edit_diagram", {
+            operations: [
+                addBox("3", "API"),
+                {
+                    operation: "add",
+                    new_xml: '<mxCell id="4" source="2" target="3"/>',
+                },
+            ],
+        })
+        expect(edited.isError).toBeFalsy()
+        expect(textOf(edited)).toContain("Applied 2 operation(s)")
+        expect(textOf(await callTool("get_diagram", {}))).toContain(
+            '<mxCell id="4" source="2" target="3"',
+        )
+        const missing = await callTool("edit_diagram", {
+            operations: [{ operation: "delete" }],
+        })
+        expect(missing.isError).toBe(true)
+        expect(textOf(missing)).toContain(
+            "delete (operation 1 of 1): cell_id is missing",
+        )
+    })
+})
+
 describe("MCP server wiring: pages", () => {
     it("selects a page by a name with & and lists the pages when none matches", async () => {
         const drawn = await callTool("create_new_diagram", {
