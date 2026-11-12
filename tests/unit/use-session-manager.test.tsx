@@ -11,6 +11,10 @@ vi.mock("@/hooks/use-dictionary", () => ({
     useDictionary: () => ({ errors: { sessionSaveFailed: "Not saved" } }),
 }))
 
+vi.mock("@/lib/client-error-report", () => ({
+    toastUnexpectedError: vi.fn(),
+}))
+
 vi.mock("@/lib/session-storage", async (importActual) => {
     const actual = await importActual<typeof import("@/lib/session-storage")>()
     return {
@@ -27,7 +31,20 @@ vi.mock("@/lib/session-storage", async (importActual) => {
             stored.delete(id)
         },
         getAllSessionMetadata: async () =>
-            [...stored.values()].map((s) => ({ id: s.id, title: s.title })),
+            [...stored.values()]
+                .map((s) => ({
+                    id: s.id,
+                    title: s.title,
+                    updatedAt: s.updatedAt,
+                }))
+                .sort((a, b) => b.updatedAt - a.updatedAt),
+        renameSession: async (id: string, title: string) => {
+            const session = stored.get(id)
+            if (!session) return null
+            const updated = { ...session, title, updatedAt: Date.now() }
+            stored.set(id, updated)
+            return updated
+        },
         saveSession: vi.fn(
             (session: any) =>
                 new Promise<boolean>((resolve) => {
@@ -41,6 +58,7 @@ vi.mock("@/lib/session-storage", async (importActual) => {
 })
 
 import { useSessionManager } from "@/hooks/use-session-manager"
+import { toastUnexpectedError } from "@/lib/client-error-report"
 
 const data = {
     messages: [
@@ -227,5 +245,135 @@ describe("save tickets", () => {
         await late
         expect(textOf(stored.get("other"))).toBe("other chat")
         expect(stored.size).toBe(1)
+    })
+})
+
+describe("a chat that was only opened", () => {
+    beforeEach(() => {
+        stored.clear()
+        pendingWrites = []
+    })
+    const chat = (id: string, updatedAt: number, texts: string[]) => ({
+        id,
+        title: id,
+        createdAt: 1000,
+        updatedAt,
+        messages: texts.map((text, i) => ({
+            id: `${id}-${i}`,
+            role: "user" as const,
+            parts: [{ type: "text", text }],
+        })),
+        xmlSnapshots: [],
+        diagramXml: "",
+    })
+
+    it("is not written again when another chat is opened", async () => {
+        stored.set("X", chat("X", 1000, ["first"]))
+        stored.set("Y", chat("Y", 500, ["other"]))
+        const { result } = renderHook(() =>
+            useSessionManager({ initialSessionId: "X" }),
+        )
+        await waitFor(() => expect(result.current.currentSessionId).toBe("X"))
+        // Another tab saves a newer copy of X
+        stored.set("X", chat("X", 2000, ["first", "second"]))
+        let open!: Promise<unknown>
+        act(() => {
+            open = result.current.switchSession("Y")
+        })
+        await finishWrites()
+        await open
+        expect(result.current.currentSessionId).toBe("Y")
+        expect(stored.get("X").messages).toHaveLength(2)
+        expect(stored.get("X").updatedAt).toBe(2000)
+    })
+})
+
+describe("the chat list", () => {
+    beforeEach(() => {
+        stored.clear()
+        pendingWrites = []
+    })
+    const chat = (id: string, updatedAt: number) => ({
+        id,
+        title: id,
+        createdAt: 1000,
+        updatedAt,
+        messages: data.messages,
+        xmlSnapshots: [],
+        diagramXml: "",
+    })
+    const order = (result: { current: { sessions: { id: string }[] } }) =>
+        result.current.sessions.map((s) => s.id)
+
+    it("puts a chat first once it is saved", async () => {
+        stored.set("old", chat("old", 1000))
+        stored.set("new", chat("new", 2000))
+        const { result } = renderHook(() =>
+            useSessionManager({ initialSessionId: "old" }),
+        )
+        await waitFor(() => expect(result.current.currentSessionId).toBe("old"))
+        expect(order(result)).toEqual(["new", "old"])
+        let save!: Promise<boolean>
+        act(() => {
+            save = result.current.saveCurrentSession(data)
+        })
+        await finishWrites()
+        await save
+        expect(order(result)).toEqual(["old", "new"])
+    })
+
+    it("shows a renamed chat first, with the time storage gave it", async () => {
+        stored.set("old", chat("old", 1000))
+        stored.set("new", chat("new", 2000))
+        const { result } = renderHook(() =>
+            useSessionManager({ initialSessionId: "old" }),
+        )
+        await waitFor(() => expect(result.current.currentSessionId).toBe("old"))
+        await act(() => result.current.renameSession("old", "Renamed"))
+        expect(order(result)).toEqual(["old", "new"])
+        expect(result.current.sessions[0]).toMatchObject({
+            title: "Renamed",
+            updatedAt: stored.get("old").updatedAt,
+        })
+    })
+})
+
+describe("renaming the chat on screen", () => {
+    beforeEach(() => {
+        stored.clear()
+        pendingWrites = []
+        vi.mocked(toastUnexpectedError).mockClear()
+    })
+
+    it("writes it again when storage no longer holds it", async () => {
+        stored.set("X", {
+            id: "X",
+            title: "Old name",
+            createdAt: 1000,
+            updatedAt: 1000,
+            messages: data.messages,
+            xmlSnapshots: [],
+            diagramXml: "",
+        })
+        const { result } = renderHook(() =>
+            useSessionManager({ initialSessionId: "X" }),
+        )
+        await waitFor(() => expect(result.current.currentSessionId).toBe("X"))
+        // The site's data is cleared while the chat is open
+        stored.clear()
+        let rename!: Promise<void>
+        act(() => {
+            rename = result.current.renameSession("X", "New name")
+        })
+        await finishWrites()
+        await rename
+        expect(stored.get("X")).toMatchObject({
+            title: "New name",
+            messages: data.messages,
+        })
+        expect(result.current.sessions.map((s) => s.title)).toEqual([
+            "New name",
+        ])
+        expect(toastUnexpectedError).not.toHaveBeenCalled()
     })
 })

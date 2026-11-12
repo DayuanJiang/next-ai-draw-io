@@ -7,7 +7,7 @@ import {
     getToolName,
     isToolUIPart,
 } from "ai"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import type React from "react"
 import {
     createContext,
@@ -146,6 +146,23 @@ function withReasoningSeconds(
     }
 }
 
+/**
+ * Whether a saved chat ends in the middle of an answer: with the user's
+ * message (it is saved when it is sent), or with a part of the answer that
+ * was still coming in. The page was reloaded or closed during the answer,
+ * or the answer was stopped.
+ */
+function endsMidAnswer(messages: StoredMessage[]): boolean {
+    const last = messages.at(-1)
+    if (!last) return false
+    if (last.role === "user") return true
+    return last.parts.some((part) =>
+        ["streaming", "input-streaming", "input-available"].includes(
+            part.state as string,
+        ),
+    )
+}
+
 function newLangfuseSessionId() {
     return `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
@@ -200,6 +217,21 @@ function withUniquePageIds(xml: string): string {
 
 // An attachment that could not be read (its file went away meanwhile)
 class FileReadError extends Error {}
+
+/**
+ * Puts the chat's session id into the address (null: the plain page),
+ * through the browser's history, which Next follows on its own. Its router
+ * asks the server for the page on every change of the address, and loads
+ * the address anew when the server does not answer: a server restart
+ * during a chat's first answer took the editor off screen.
+ */
+function setUrlSession(id: string | null) {
+    window.history.replaceState(
+        null,
+        "",
+        id ? `?session=${id}` : window.location.pathname,
+    )
+}
 
 export interface ChatEngine {
     messages: ChatUIMessage[]
@@ -292,8 +324,6 @@ export function ChatEngineProvider({
     } = useDiagram()
 
     const dict = useDictionary()
-    const router = useRouter()
-    const pathname = usePathname()
     const searchParams = useSearchParams()
     const urlSessionId = searchParams.get("session")
 
@@ -866,6 +896,26 @@ export function ChatEngineProvider({
     const savedMessagesRef = useRef(new WeakSet<object>())
     // Session was just loaded (skip the auto-save that would reorder it)
     const justLoadedSessionRef = useRef(false)
+    // Changes of the chat on screen, counted by the auto-save effect, and
+    // the count at which the last save that went through read the chat.
+    // Equal counts: storage holds what is on screen.
+    const changesRef = useRef(0)
+    const savedChangesRef = useRef(0)
+    // (A save that began earlier can end later)
+    const markSaved = (changes: number) => {
+        savedChangesRef.current = Math.max(savedChangesRef.current, changes)
+    }
+    // Whether hiding the tab or leaving the chat has something to save: a
+    // chat with content (also just a title, of an opened blank file) that
+    // has no session yet, or changed since it was loaded or saved. A chat
+    // that was only looked at keeps its stored copy, its time and its place
+    // in the list; another tab may have saved a newer copy since.
+    const hasUnsavedChanges = () =>
+        (messagesRef.current.length > 0 ||
+            isRealDiagram(chartXMLRef.current) ||
+            pendingTitleRef.current !== null) &&
+        (sessionManager.getCurrentSessionId() === null ||
+            savedChangesRef.current !== changesRef.current)
 
     const abandonContinuationRef = useRef(abandonContinuation)
     abandonContinuationRef.current = abandonContinuation
@@ -906,6 +956,8 @@ export function ChatEngineProvider({
             toast.dismiss("version-restored")
             toast.dismiss("session-save-leave")
             setPendingTitle(null)
+            // What comes on screen is what storage holds
+            savedChangesRef.current = changesRef.current
             // A saved chat shows its canvas (it can hold just a blank
             // file); one with nothing in it, or none, shows the start screen
             useUiStore
@@ -929,10 +981,18 @@ export function ChatEngineProvider({
             continuationOriginalRef.current = null
             stoppedRef.current = false
             if (data) {
-                loadedMessageIdsRef.current = new Set(
-                    (data.messages as { id: string }[]).map((m) => m.id),
-                )
-                setMessages(data.messages as unknown as ChatUIMessage[])
+                let shown = data.messages as unknown as ChatUIMessage[]
+                // Saved in the middle of an answer: the chat says that the
+                // answer did not finish, with Retry. Shown with the chat,
+                // so looking at it saves nothing.
+                if (endsMidAnswer(data.messages)) {
+                    shown = [
+                        ...shown,
+                        noticeMessage({ text: dict.errors.answerEndedEarly }),
+                    ]
+                }
+                loadedMessageIdsRef.current = new Set(shown.map((m) => m.id))
+                setMessages(shown)
                 xmlSnapshotsRef.current = new Map(data.xmlSnapshots)
                 // The chat's messages show the model the canvas they were
                 // sent with, pictures as references: its XML may name any
@@ -952,7 +1012,13 @@ export function ChatEngineProvider({
                 useVersionsStore.getState().clear()
             }
         },
-        [setMessages, onDisplayChart, clearDiagram, stopAnswerOfChatLeft],
+        [
+            setMessages,
+            onDisplayChart,
+            clearDiagram,
+            stopAnswerOfChatLeft,
+            dict.errors.answerEndedEarly,
+        ],
     )
 
     const buildSessionData = useCallback(
@@ -1048,6 +1114,16 @@ export function ChatEngineProvider({
             if (title && title !== newSession.title) {
                 sessionManager.renameSession(newSession.id, title)
             }
+            // The address still names a chat this browser does not hold (a
+            // link from another device, a deleted chat): this chat's id
+            // takes its place, so a reload shows this chat
+            if (
+                !leavingRef.current &&
+                urlSessionId &&
+                urlSessionId !== newSession.id
+            ) {
+                setUrlSession(newSession.id)
+            }
             return
         }
         justLoadedSessionRef.current = true
@@ -1071,13 +1147,49 @@ export function ChatEngineProvider({
     const saveCurrentSessionRef = useRef(saveCurrentSession)
     saveCurrentSessionRef.current = saveCurrentSession
 
-    const versions = useVersionsStore((s) => s.versions)
+    // Save the chat on screen as it is now, with the thumbnail it has
+    // (taking a new one takes a moment)
+    const saveNow = async () => {
+        try {
+            const changes = changesRef.current
+            const ticket = getSaveTicket()
+            const sessionData = await buildSessionData()
+            if (await saveCurrentSessionRef.current(sessionData, ticket)) {
+                markSaved(changes)
+            }
+        } catch (error) {
+            console.error("Failed to save session:", error)
+        }
+    }
 
-    // Debounced auto-save, only when not streaming
+    const versions = useVersionsStore((s) => s.versions)
+    // An answer was coming in when the auto-save effect ran last
+    const answeringRef = useRef(false)
+
+    // Auto-save: at once when a message is sent and when its answer ends,
+    // and a second after each change while no answer comes in
     useEffect(() => {
         if (!hasRestoredRef.current) return
         if (!sessionIsAvailable) return
-        if (status === "streaming" || status === "submitted") return
+        if (status === "streaming" || status === "submitted") {
+            // The answer coming in is a change, saved when it ends
+            changesRef.current++
+            answeringRef.current = true
+            // The message is saved the moment it is sent: its answer can
+            // take a minute, and a reload or a closed tab during it lost
+            // the message, and a new chat as a whole. (Once a chat just
+            // loaded shows its own messages.)
+            if (
+                status === "submitted" &&
+                !justLoadedSessionRef.current &&
+                hasUnsavedChanges()
+            ) {
+                void saveNow()
+            }
+            return
+        }
+        const answerEnded = answeringRef.current
+        answeringRef.current = false
         if (justLoadedSessionRef.current) {
             // Not before the render with the loaded chat's own state, its
             // messages included
@@ -1093,6 +1205,13 @@ export function ChatEngineProvider({
             ) {
                 return
             }
+        }
+        changesRef.current++
+        // The answer just ended: saved at once, so leaving the page in the
+        // next second keeps it. The save below adds the thumbnail. (A chat
+        // that is being left stopped its answer, and saves itself.)
+        if (answerEnded && !leavingRef.current && hasUnsavedChanges()) {
+            void saveNow()
         }
         if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current)
 
@@ -1113,6 +1232,7 @@ export function ChatEngineProvider({
                 ) {
                     // Taken before the data is read, for the chat it was
                     // scheduled for
+                    const changes = changesRef.current
                     const ticket = {
                         ...getSaveTicket(),
                         generation: scheduledForChat,
@@ -1120,7 +1240,11 @@ export function ChatEngineProvider({
                     const sessionData = await buildSessionData({
                         withThumbnail: hasDiagramNow && !isNoDiagramSession,
                     })
-                    await saveCurrentSessionRef.current(sessionData, ticket)
+                    if (
+                        await saveCurrentSessionRef.current(sessionData, ticket)
+                    ) {
+                        markSaved(changes)
+                    }
                 }
             } catch (error) {
                 console.error("Failed to save session:", error)
@@ -1151,34 +1275,16 @@ export function ChatEngineProvider({
     useEffect(() => {
         if (leavingRef.current) return
         if (sessionManager.currentSessionId && !urlSessionId) {
-            router.replace(`?session=${sessionManager.currentSessionId}`, {
-                scroll: false,
-            })
+            setUrlSession(sessionManager.currentSessionId)
         }
-    }, [sessionManager.currentSessionId, urlSessionId, router])
+    }, [sessionManager.currentSessionId, urlSessionId])
 
     // Save when the page is hidden (more reliable than beforeunload for IndexedDB)
     useEffect(() => {
         if (!sessionManager.isAvailable) return
-        const handleVisibilityChange = async () => {
-            if (
-                document.visibilityState === "hidden" &&
-                (messagesRef.current.length > 0 ||
-                    isRealDiagram(chartXMLRef.current) ||
-                    pendingTitleRef.current !== null)
-            ) {
-                try {
-                    const ticket = sessionManager.getSaveTicket()
-                    const sessionData = await buildSessionData({
-                        withThumbnail: false,
-                    })
-                    await sessionManager.saveCurrentSession(sessionData, ticket)
-                } catch (error) {
-                    console.error(
-                        "Failed to save session on visibility change:",
-                        error,
-                    )
-                }
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "hidden" && hasUnsavedChanges()) {
+                void saveNow()
             }
         }
         document.addEventListener("visibilitychange", handleVisibilityChange)
@@ -1717,46 +1823,38 @@ export function ChatEngineProvider({
         if (isBusy) toast.dismiss("session-save-leave")
     }, [isBusy])
 
-    // Save the chat on screen before leaving it (also a diagram drawn
-    // without messages, or a chat with just a title, like an opened blank
-    // file). If that failed (storage full), stay on it unless the user goes
-    // on without saving: then proceed runs later. Resolves to whether the
-    // caller can leave now.
+    // Save the chat on screen before leaving it, when it changed since it
+    // was loaded or saved (also a diagram drawn without messages, or a chat
+    // with just a title, like an opened blank file). If that failed
+    // (storage full), stay on it unless the user goes on without saving:
+    // then proceed runs later. Resolves to whether the caller can leave now.
     const saveBeforeLeaving = async (proceed: () => void) => {
         if (!sessionManager.isAvailable) return true
-        if (
-            messagesRef.current.length === 0 &&
-            !isRealDiagram(chartXMLRef.current) &&
-            pendingTitleRef.current === null
-        ) {
-            return true
-        }
+        if (!hasUnsavedChanges()) return true
         // Of the chat on screen now, also if another one comes on screen
         // while the thumbnail is taken
+        const changes = changesRef.current
         const ticket = sessionManager.getSaveTicket()
         const sessionData = await buildSessionData({ withThumbnail: true })
         if (!(await sessionManager.saveCurrentSession(sessionData, ticket))) {
             offerToContinueUnsaved(proceed)
             return false
         }
+        markSaved(changes)
         return true
     }
 
     // Browser back or forward puts another chat on screen without the app's
-    // own leaving: this one is saved first, with what was sent and answered
-    // so far, its answer stopped. A call left unfinished is saved as
-    // stopped. No thumbnail: taking one would hold the switch for seconds
-    // (the old one stays).
+    // own leaving: this one is saved first when it changed, with what was
+    // sent and answered so far, its answer stopped. A call left unfinished
+    // is saved as stopped. No thumbnail: taking one would hold the switch
+    // for seconds (the old one stays).
     // Meanwhile it is being left: nothing can be sent (a message being
     // prepared is given back to the input instead)
     const saveBeforeUrlSwitch = () =>
         whileLeaving(async () => {
             const wasAnswering = busyRef.current
-            const save =
-                sessionManager.isAvailable &&
-                (messagesRef.current.length > 0 ||
-                    isRealDiagram(chartXMLRef.current) ||
-                    pendingTitleRef.current !== null)
+            const save = sessionManager.isAvailable && hasUnsavedChanges()
             // Read before the stop: it puts the diagram from before a cut
             // off drawing back, on the canvas only a moment later
             const ticket = save ? sessionManager.getSaveTicket() : null
@@ -1844,9 +1942,7 @@ export function ChatEngineProvider({
                 // stays, and the save before may have just given it a
                 // session, which the URL skipped while leaving
                 const current = sessionManager.getCurrentSessionId()
-                if (current) {
-                    router.replace(`?session=${current}`, { scroll: false })
-                }
+                if (current) setUrlSession(current)
                 await sessionManager.refreshSessions()
                 return
             }
@@ -1860,7 +1956,7 @@ export function ChatEngineProvider({
             lastSyncedSessionIdRef.current = id
             setValidationStates({})
             syncUIWithSession(sessionData)
-            router.replace(`?session=${id}`, { scroll: false })
+            setUrlSession(id)
         }
         // Going on without saving (storage full) is a leave of its own
         const proceed = () => whileLeaving(open)
@@ -1882,13 +1978,13 @@ export function ChatEngineProvider({
                 const result = await sessionManager.deleteSession(id)
                 if (result.wasCurrentSession) {
                     syncUIWithSession(null)
-                    router.replace(pathname, { scroll: false })
+                    setUrlSession(null)
                 }
             }
             if (isCurrent) await whileLeaving(remove)
             else await remove()
         },
-        [sessionManager, syncUIWithSession, router, pathname, isBusy],
+        [sessionManager, syncUIWithSession, isBusy],
     )
 
     // Clear everything for a new conversation (the old one is saved)
@@ -1912,7 +2008,7 @@ export function ChatEngineProvider({
         setLangfuseSessionId(newLangfuseSessionId())
         xmlSnapshotsRef.current.clear()
         setPendingTitle(null)
-        router.replace(pathname, { scroll: false })
+        setUrlSession(null)
     }
 
     const newChat = async () => {

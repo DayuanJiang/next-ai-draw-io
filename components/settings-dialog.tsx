@@ -210,7 +210,10 @@ function GeneralTab({ open }: { open: boolean }) {
             const params = new URLSearchParams(search.toString())
             if (sessionId) params.set("session", sessionId)
             const query = params.toString() ? `?${params.toString()}` : ""
-            router.push((parts.join("/") || "/") + query)
+            // In place of this page in the browser history. As a step of
+            // its own, Back led to the old language's address, which the
+            // saved language turns into the new one: it seemed to do nothing
+            router.replace((parts.join("/") || "/") + query)
         })
 
     const saveAccessCode = async () => {

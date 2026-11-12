@@ -40,17 +40,21 @@ test.describe("Crossing the mobile breakpoint", () => {
         await expect(page.getByText("Once upon")).toBeVisible({
             timeout: 10000,
         })
+        // The message itself (the chat's title says the same once it is sent)
+        const message = page
+            .getByRole("paragraph")
+            .filter({ hasText: "Tell me a story" })
 
         // Phones show the canvas or the chat, one at a time
         await page.setViewportSize({ width: 600, height: 900 })
         await page.getByRole("button", { name: "Chat", exact: true }).click()
-        await expect(page.getByText("Tell me a story")).toBeVisible()
+        await expect(message).toBeVisible()
 
         await page.setViewportSize({ width: 1280, height: 800 })
         await expect(page.getByText("Once upon a time.")).toBeVisible({
             timeout: 10000,
         })
-        await expect(page.getByText("Tell me a story")).toBeVisible()
+        await expect(message).toBeVisible()
     })
 
     test("reaches a chat hidden on desktop", async ({ page }) => {

@@ -83,6 +83,10 @@ export interface UseSessionManagerReturn {
 // focus also fires each time the user clicks back from the draw.io iframe
 const FOCUS_REFRESH_INTERVAL_MS = 30_000
 
+// The order of the stored list: the chat saved last comes first
+const newestFirst = (a: SessionMetadata, b: SessionMetadata) =>
+    b.updatedAt - a.updatedAt
+
 function notifySaveFailed(dict: Dictionary) {
     // Same id, so repeated failures update one toast instead of stacking
     toastUnexpectedError(
@@ -298,12 +302,7 @@ export function useSessionManager(
         async (id: string): Promise<SessionData | null> => {
             if (id === currentSessionId) return null
 
-            // Save current session first if it has messages (as saved
-            // last: the caller may have just saved it)
-            const current = currentSessionRef.current
-            if (current && current.messages.length > 0) {
-                await saveSession(current)
-            }
+            // The caller saved the chat on screen if it had changes
 
             // Load the target session
             const session = await getSession(id)
@@ -422,22 +421,25 @@ export function useSessionManager(
 
                 // Update sessions list metadata
                 setSessions((prev) =>
-                    prev.map((s) =>
-                        s.id === updatedSession.id
-                            ? {
-                                  ...s,
-                                  title: updatedSession.title,
-                                  updatedAt: updatedSession.updatedAt,
-                                  messageCount: updatedSession.messages.length,
-                                  hasDiagram:
-                                      !!updatedSession.diagramXml &&
-                                      updatedSession.diagramXml.trim().length >
-                                          0,
-                                  thumbnailDataUrl:
-                                      updatedSession.thumbnailDataUrl,
-                              }
-                            : s,
-                    ),
+                    prev
+                        .map((s) =>
+                            s.id === updatedSession.id
+                                ? {
+                                      ...s,
+                                      title: updatedSession.title,
+                                      updatedAt: updatedSession.updatedAt,
+                                      messageCount:
+                                          updatedSession.messages.length,
+                                      hasDiagram:
+                                          !!updatedSession.diagramXml &&
+                                          updatedSession.diagramXml.trim()
+                                              .length > 0,
+                                      thumbnailDataUrl:
+                                          updatedSession.thumbnailDataUrl,
+                                  }
+                                : s,
+                        )
+                        .sort(newestFirst),
                 )
                 return true
             }
@@ -475,28 +477,47 @@ export function useSessionManager(
             // title back
             const run = async () => {
                 const updated = await renameSessionInDB(id, trimmed)
-                // Also when it could not be stored (another tab deleted the
-                // chat): the next save of the chat on screen writes it
                 const current = currentSessionRef.current
-                if (current?.id === id) {
-                    currentSessionRef.current = { ...current, title: trimmed }
-                    setCurrentSession(currentSessionRef.current)
+                const renamed =
+                    current?.id === id ? { ...current, title: trimmed } : null
+                if (renamed) {
+                    currentSessionRef.current = renamed
+                    setCurrentSession(renamed)
                 }
                 if (!updated) {
-                    notifySaveFailed(dict)
+                    // The chat on screen is gone from storage (site data
+                    // was cleared, or another tab deleted it): it is
+                    // written again as this page saved it last, under its
+                    // new title, and the list is read again. What changed
+                    // since goes in with the next save.
+                    if (renamed && (await saveSession(renamed))) {
+                        await refreshSessions()
+                    } else {
+                        notifySaveFailed(dict)
+                    }
                     return
                 }
+                // Storage counts a rename as a change: the list shows the
+                // same time, and the chat first
                 setSessions((prev) =>
-                    prev.map((s) =>
-                        s.id === id ? { ...s, title: trimmed } : s,
-                    ),
+                    prev
+                        .map((s) =>
+                            s.id === id
+                                ? {
+                                      ...s,
+                                      title: trimmed,
+                                      updatedAt: updated.updatedAt,
+                                  }
+                                : s,
+                        )
+                        .sort(newestFirst),
                 )
             }
             const result = saveQueueRef.current.then(run)
             saveQueueRef.current = result.catch(() => {})
             return result
         },
-        [dict],
+        [dict, refreshSessions],
     )
 
     return {

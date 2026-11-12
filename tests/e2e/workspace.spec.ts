@@ -1867,9 +1867,8 @@ test.describe("Workspace", () => {
     }) => {
         await page.route("**/api/chat", drawThenEdit())
         await openApp(page)
-        await sendMessage(page, "Create a flowchart")
-        await waitForComplete(page)
-        // Hold the sessions store: the first save waits to be written
+        // Hold the sessions store: the first save, made when the message
+        // is sent, waits to be written
         await page.evaluate(async () => {
             const w = window as any
             const db: IDBDatabase = await new Promise((resolve) => {
@@ -1885,6 +1884,8 @@ test.describe("Workspace", () => {
             }
             keepBusy()
         })
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
         await page.waitForTimeout(1500)
         await expect(page).not.toHaveURL(/session=/)
         await page.locator('[data-testid="session-title"]').click()
@@ -2866,7 +2867,11 @@ test.describe("Edge cases", () => {
         })
         // The next message waits for its diagram export
         await sendMessage(page, "Second")
-        await page.getByText("First", { exact: true }).hover()
+        // The message (the chat's title says the same)
+        await page
+            .getByRole("paragraph")
+            .filter({ hasText: /^First$/ })
+            .hover()
         await page.getByRole("button", { name: "Edit message" }).click()
         const editor = page.locator("textarea").filter({ hasText: "First" })
         await editor.fill("First, edited")
@@ -4581,11 +4586,16 @@ test.describe("Edge cases", () => {
             }
         })
         await openApp(page)
-        await openSettingsTab(page, "general")
-        await page.locator("#language-select").click()
-        await page.getByRole("option", { name: "日本語", exact: true }).click()
+        // The Japanese page as a step of its own in the browser history,
+        // as a link to it makes one (the language setting puts the new
+        // page in the place of the old one)
+        await page.evaluate(() => {
+            ;(window as any).next.router.push("/ja")
+        })
         await expect(page).toHaveURL(/\/ja/, { timeout: 15000 })
-        await page.keyboard.press("Escape")
+        await expect(getSendButton(page, "送信")).toBeVisible({
+            timeout: 15000,
+        })
         await expect(
             page.locator('[data-testid="canvas-loading"]'),
         ).toHaveCount(0, { timeout: 30000 })
@@ -5074,7 +5084,6 @@ test.describe("Edge cases", () => {
     test("at the chat limit, saving a chat left by browser back keeps the chat gone back to", async ({
         page,
     }) => {
-        await answerWithPause(page)
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("b", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)
         // 50 saved chats; the one gone back to is the oldest
@@ -5113,10 +5122,12 @@ test.describe("Edge cases", () => {
             },
             { doc },
         )
-        await sendMessage(page, "Chat A two")
-        await expect(page.getByText("A is answering.")).toBeVisible({
-            timeout: 15000,
-        })
+        // A file just opened is a new chat that waits for its first save
+        // (a message is saved when it is sent)
+        await openDrawioFile(page, "mine.drawio", TWO_PAGE_FILE)
+        await expect(
+            page.locator('[data-testid="session-title"]'),
+        ).toContainText("mine")
         await page.evaluate(() => {
             ;(window as any).next.router.replace("?session=oldest")
         })
@@ -5353,13 +5364,6 @@ test.describe("Edge cases", () => {
     test("at the chat limit, the oldest chat opened from the list while the new chat waits for its save is kept", async ({
         page,
     }) => {
-        await page.route("**/api/chat", (route) =>
-            route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(boxCell("a", "AyOne", 40), "A."),
-            }),
-        )
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("b", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)
         // 50 saved chats; the one opened from the list is the oldest
@@ -5405,8 +5409,12 @@ test.describe("Edge cases", () => {
         const oldest = page
             .getByRole("dialog")
             .getByRole("button", { name: /The oldest/ })
-        await sendMessage(page, "Chat A")
-        await waitForComplete(page)
+        // A file just opened is a new chat that waits for its first save
+        // (a message is saved when it is sent)
+        await openDrawioFile(page, "mine.drawio", TWO_PAGE_FILE)
+        await expect(
+            page.locator('[data-testid="session-title"]'),
+        ).toContainText("mine")
         // Within the auto-save's wait: opening it saves this chat first
         await page.locator('[data-testid="session-title"]').click()
         await oldest.click()
@@ -5494,13 +5502,6 @@ test.describe("Edge cases", () => {
                 }
             })
         })
-        await page.route("**/api/chat", (route) =>
-            route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(boxCell("a", "AyOne", 40), "A."),
-            }),
-        )
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("b", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)
         await page.evaluate(
@@ -5542,8 +5543,12 @@ test.describe("Edge cases", () => {
         await expect(
             page.locator('[data-testid="canvas-loading"]'),
         ).toHaveCount(0, { timeout: 30000 })
-        await sendMessage(page, "Chat A")
-        await waitForComplete(page)
+        // A file just opened is a new chat that waits for its first save
+        // (a message is saved when it is sent)
+        await openDrawioFile(page, "mine.drawio", TWO_PAGE_FILE)
+        await expect(
+            page.locator('[data-testid="session-title"]'),
+        ).toContainText("mine")
         await page.locator('[data-testid="session-title"]').click()
         await page
             .getByRole("dialog")

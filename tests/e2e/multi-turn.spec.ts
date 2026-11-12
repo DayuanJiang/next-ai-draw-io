@@ -39,7 +39,10 @@ test.describe("Multi-turn Conversation", () => {
         await waitForText(page, "Creating diagram 2...")
 
         // Both messages should be visible
-        await expect(page.locator('text="Draw first box"')).toBeVisible()
+        // (The first one is also the chat's title)
+        await expect(
+            page.getByRole("paragraph").filter({ hasText: "Draw first box" }),
+        ).toBeVisible()
         await expect(page.locator('text="Draw second box"')).toBeVisible()
     })
 
