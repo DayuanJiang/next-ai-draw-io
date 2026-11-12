@@ -52,7 +52,7 @@ Export saves the diagram in one of four formats:
 | SVG image | A picture that scales without blur |
 | Editable SVG | A picture that still opens in draw.io |
 
-A PNG can have a transparent background.
+PNG and both SVG formats can have a transparent background.
 
 ## Saved prompts
 

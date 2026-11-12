@@ -597,8 +597,20 @@ export function serverThinkingDefaults(
     modelId: string,
 ): Record<string, any> | undefined {
     if (!thinksByDefault(provider, modelId)) return providerOptions
-    if (providerOptions?.anthropic?.thinking?.type === "disabled") {
-        return providerOptions
+    // Read from the variable itself: the options carry it only next to a
+    // budget, which these models do not take. They think when the request
+    // says nothing, so off is said explicitly.
+    if (
+        provider === "anthropic" &&
+        process.env.ANTHROPIC_THINKING_TYPE === "disabled"
+    ) {
+        return {
+            ...providerOptions,
+            anthropic: {
+                ...providerOptions?.anthropic,
+                thinking: { type: "disabled" },
+            },
+        }
     }
     const thinking = { type: "adaptive", display: "summarized" }
     if (provider === "bedrock") {

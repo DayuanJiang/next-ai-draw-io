@@ -78,6 +78,16 @@ export async function openApp(
             [MODEL_CONFIGS_KEY, config] as const,
         )
     }
+    // Provider logos come from models.dev; the tests answer for it. A logo
+    // that takes over a second leaves the page without "networkidle" for
+    // good: draw.io's frame is idle by then, fetches one more icon later,
+    // and Playwright does not take a frame for idle a second time.
+    await page.route("https://models.dev/logos/**", (route) =>
+        route.fulfill({
+            contentType: "image/svg+xml",
+            body: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        }),
+    )
     await page.goto(path, { waitUntil: "networkidle" })
     await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
 }

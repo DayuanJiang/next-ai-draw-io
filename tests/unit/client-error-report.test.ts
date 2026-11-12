@@ -148,12 +148,25 @@ describe("reloadForMissingChunk", () => {
     })
 
     it("does not reload again when the chunk still fails after the reload", async () => {
-        const { reloadForMissingChunk } = await load()
-        reloadForMissingChunk(gone)
-        // The page that loaded next: same tab, so the same sessionStorage
-        const next = await load()
-        expect(next.reloadForMissingChunk(gone)).toBe(false)
-        expect(reload).toHaveBeenCalledTimes(1)
+        vi.useFakeTimers()
+        try {
+            const { reloadForMissingChunk } = await load()
+            reloadForMissingChunk(gone)
+            // The page that loaded next: same tab, so the same
+            // sessionStorage. Its chunks are asked for twice, and each
+            // request hangs until a proxy gives up on it; the error names
+            // whichever chunk failed first.
+            vi.advanceTimersByTime(4 * 60_000)
+            const next = await load()
+            const other = new Error(
+                "Failed to load chunk /_next/static/chunks/b.js from module 64893",
+            )
+            other.name = "ChunkLoadError"
+            expect(next.reloadForMissingChunk(other)).toBe(false)
+            expect(reload).toHaveBeenCalledTimes(1)
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
     it("reloads again for a later deployment", async () => {
@@ -161,7 +174,7 @@ describe("reloadForMissingChunk", () => {
         try {
             const { reloadForMissingChunk } = await load()
             reloadForMissingChunk(gone)
-            vi.advanceTimersByTime(61_000)
+            vi.advanceTimersByTime(16 * 60_000)
             expect(reloadForMissingChunk(gone)).toBe(true)
             expect(reload).toHaveBeenCalledTimes(2)
         } finally {

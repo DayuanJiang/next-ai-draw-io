@@ -603,9 +603,10 @@ export function ChatEngineProvider({
             if (isAbort) noteAction("answer stopped")
             // Stop before the answer showed anything, or while it thought or
             // wrote: the chat says that it was stopped, with Retry (a call
-            // that was stopped says so in its own row). The line is kept
-            // with the chat: opened again, a chat that ends with the
-            // question or half an answer reads as cut off.
+            // that was stopped says so in its own row, and a drawing that
+            // was made ends the answer). The line is kept with the chat:
+            // opened again, a chat that ends with the question or half an
+            // answer reads as cut off.
             if (
                 isAbort &&
                 stoppedRef.current &&
@@ -615,7 +616,17 @@ export function ChatEngineProvider({
                     const last = current.at(-1)
                     const lastPart =
                         last?.role === "assistant" ? last.parts.at(-1) : null
-                    return lastPart && isToolUIPart(lastPart)
+                    const lastTool =
+                        lastPart && isToolUIPart(lastPart) ? lastPart : null
+                    // The answer goes on after a shape library lookup (the
+                    // model draws next) and after a failed call (the app
+                    // sends it back): their rows say "loaded" and "failed"
+                    const wentOn =
+                        lastTool?.state === TOOL_ERROR_STATE
+                            ? lastTool.errorText !== "Stopped by user"
+                            : lastTool?.state === "output-available" &&
+                              getToolName(lastTool) === "get_shape_library"
+                    return lastTool && !wentOn
                         ? current
                         : [
                               ...current,
@@ -1130,11 +1141,13 @@ export function ChatEngineProvider({
                     rememberImages(xml)
                 }
                 // So are the named styles its drawings defined: the model
-                // goes on using their names in its edits (style-classes.ts)
+                // goes on using their names in its edits (style-classes.ts).
+                // A call stopped while its input streamed is saved as the
+                // model wrote it, with an xml that may not be text.
                 for (const part of shown.flatMap((m) => m.parts)) {
                     if (
                         part.type === "tool-display_diagram" &&
-                        part.input?.xml
+                        typeof part.input?.xml === "string"
                     ) {
                         rememberStyleClasses(
                             readStyleClasses(part.input.xml).classes,

@@ -178,8 +178,9 @@ export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | 
     // while the server lists no models. The panel's providers end that, so
     // the environment's models join the list, the first as its default;
     // without them they would leave the picker and every user would move
-    // to the panel's first model. Left out when a panel provider of the
-    // same name already lists the first (it would have the same id).
+    // to the panel's first model. A model that a panel provider of the
+    // same name already lists is left out (it would have the same id); the
+    // others stay, the default mark only with the first.
     let env = envConfig
     if (!env) {
         // Dynamic import: lib/ai-providers imports lib/admin/providers.
@@ -187,14 +188,18 @@ export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | 
         const { detectProvider } = await import("./ai-providers")
         const unlisted = configFromAiModel(true, detectProvider(getEnvFallback))
             ?.providers[0]
-        const listed =
-            unlisted &&
-            adminConfig.providers.some(
-                (p) =>
-                    slugify(p.name) === slugify(unlisted.name) &&
-                    p.models.includes(unlisted.models[0]),
-            )
-        if (unlisted && !listed) env = { providers: [unlisted] }
+        const models = unlisted?.models.filter(
+            (model) =>
+                !adminConfig.providers.some(
+                    (p) =>
+                        slugify(p.name) === slugify(unlisted.name) &&
+                        p.models.includes(model),
+                ),
+        )
+        if (unlisted && models?.length) {
+            const first = models[0] === unlisted.models[0]
+            env = { providers: [{ ...unlisted, models, default: first }] }
+        }
     }
     if (!env) return adminConfig
 
@@ -215,7 +220,8 @@ export async function loadFlattenedServerModels(): Promise<
     if (!cfg) return []
 
     const defaultProvider = process.env.AI_PROVIDER as ProviderName | undefined
-    const defaultModelId = process.env.AI_MODEL
+    // The first of several, as chat uses it when nothing is selected
+    const defaultModelId = process.env.AI_MODEL?.split(",")[0].trim()
     const hasDefaultProvider = cfg.providers.some((p) => p.default === true)
 
     const flattened: FlattenedServerModel[] = []

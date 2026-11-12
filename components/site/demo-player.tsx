@@ -245,8 +245,8 @@ export function DemoPlayer({
         }
         for (const id of edges) {
             const { line } = edgeParts(id)
-            // A browser reported "getTotalLength is not a function" here and
-            // the demo never started: there the line shows without being drawn
+            // Some browsers' SVG paths have no getTotalLength: there the line
+            // shows without being drawn
             if (typeof line?.getTotalLength !== "function") continue
             const length = Math.ceil(line.getTotalLength())
             line.style.strokeDasharray = `${length}`

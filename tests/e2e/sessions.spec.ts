@@ -309,6 +309,34 @@ test.describe("Saved chats", () => {
         expect(await fileChat()).not.toContain("fillColor=#dae8fc")
     })
 
+    test("a chat whose stopped drawing call has an xml that is not text opens with its diagram", async ({
+        page,
+    }) => {
+        await openApp(page)
+        // Stopped while the model wrote the call's input, which is saved as
+        // it came
+        await storeChat(page, {
+            ...savedChat("odd", 1000, ["Alpha"]),
+            messages: [
+                asked("odd-u0", "Draw Alpha"),
+                {
+                    id: "odd-a0",
+                    role: "assistant",
+                    parts: [
+                        {
+                            type: "tool-display_diagram",
+                            toolCallId: "odd-call",
+                            state: "output-error",
+                            input: { xml: { broken: true } },
+                            errorText: "Stopped by user",
+                        },
+                    ],
+                },
+            ],
+        })
+        await openChat(page, "odd", "Alpha")
+    })
+
     test("a chat started from a link to a chat this browser does not hold gets its own address", async ({
         page,
     }) => {
@@ -548,6 +576,89 @@ test.describe("A chat left during an answer", () => {
         await waitForComplete(page)
         await expect(page.getByText("Here is the flowchart.")).toBeVisible()
         await expect(stopped).toHaveCount(0)
+    })
+
+    test("an answer stopped after its shape library lookup says Stopped, with Retry", async ({
+        page,
+    }) => {
+        const library = toolCallEvents("s1", "get_shape_library", {
+            library: "aws4",
+        })
+        // The server looked the library up and the model draws next:
+        // nothing more comes before Stop
+        await chunkedReplies(
+            page,
+            [
+                [
+                    sse(
+                        [
+                            { type: "start" },
+                            { type: "start-step" },
+                            library.start,
+                            ...library.deltas,
+                            library.done,
+                            {
+                                type: "tool-output-available",
+                                toolCallId: "s1",
+                                output: "AWS shapes",
+                            },
+                            { type: "finish-step" },
+                            { type: "start-step" },
+                        ],
+                        false,
+                    ),
+                ],
+            ],
+            { holdLast: true },
+        )
+        await openApp(page)
+        await sendMessage(page, "Draw an AWS architecture")
+        await expect(
+            page.locator(
+                '[data-tool-name="get_shape_library"][data-tool-state="output-available"]',
+            ),
+        ).toBeVisible()
+        await page.getByRole("button", { name: "Stop generation" }).click()
+        await expect(page.getByTestId("stopped-notice")).toHaveText(
+            "StoppedRetry",
+        )
+    })
+
+    test("an answer stopped while a failed edit is sent back says Stopped, with Retry", async ({
+        page,
+    }) => {
+        // The edit fails, and the request that sends it back never answers
+        await chunkedReplies(
+            page,
+            [
+                [
+                    sse([
+                        { type: "start" },
+                        {
+                            type: "tool-input-error",
+                            toolCallId: "e1",
+                            toolName: "edit_diagram",
+                            input: "{broken",
+                            errorText: "JSON parsing failed",
+                        },
+                        { type: "finish" },
+                    ]),
+                ],
+                [],
+            ],
+            { holdLast: true },
+        )
+        await openApp(page)
+        await sendMessage(page, "Add a box")
+        await expect(
+            page.locator(
+                '[data-tool-name="edit_diagram"][data-tool-state="output-error"]',
+            ),
+        ).toBeVisible()
+        await page.getByRole("button", { name: "Stop generation" }).click()
+        await expect(page.getByTestId("stopped-notice")).toHaveText(
+            "StoppedRetry",
+        )
     })
 
     test("regenerate in a chat saved before versions were kept starts from the diagram before the answer", async ({

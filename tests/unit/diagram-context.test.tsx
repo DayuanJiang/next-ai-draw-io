@@ -218,12 +218,15 @@ describe("exported files", () => {
     let fetched: string[] = []
     // The file the last save downloaded (a PNG is a data URL, not a file)
     let savedFile: Blob | undefined
-    // Every save asked for, and the toast after a download
+    // Every save asked for, and the toast after a download; xml: the
+    // document on the canvas
     async function save(
         format: "drawio" | "png" | "svg" | "xmlsvg",
         sessionId?: string,
+        xml?: string,
     ) {
         const { result, requests, reply } = setup()
+        if (xml) act(() => void result.current.loadDiagram(xml, true))
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
             () => {},
         )
@@ -367,8 +370,40 @@ describe("exported files", () => {
         }
         // Without a background when the dialog asked for that
         localStorage.setItem("next-ai-draw-io-png-transparent", "true")
-        const request = await save("svg")
-        expect(request).toMatchObject({ theme: "light" })
-        expect(request).not.toHaveProperty("background")
+        for (const format of ["svg", "xmlsvg"] as const) {
+            expect(await save(format)).toMatchObject({
+                theme: "light",
+                background: "none",
+            })
+        }
+    })
+
+    it("draw an SVG on the page's own background color, as draw.io does a PNG", async () => {
+        const navy = oneBox.replace(
+            "<mxGraphModel>",
+            '<mxGraphModel background="#102030">',
+        )
+        for (const format of ["svg", "xmlsvg"] as const) {
+            expect(await save(format, undefined, navy)).toMatchObject({
+                background: "#102030",
+            })
+        }
+        // In a PNG draw.io puts the page's color before this white
+        expect(await save("png", undefined, navy)).toMatchObject({
+            background: "#ffffff",
+        })
+
+        // Without a background when the dialog asked for that: draw.io
+        // gives an editable SVG the page's color back for "none"
+        localStorage.setItem("next-ai-draw-io-png-transparent", "true")
+        expect(await save("svg", undefined, navy)).toMatchObject({
+            background: "none",
+        })
+        expect(await save("xmlsvg", undefined, navy)).toMatchObject({
+            background: "transparent",
+        })
+        expect(await save("png", undefined, navy)).toMatchObject({
+            transparent: true,
+        })
     })
 })

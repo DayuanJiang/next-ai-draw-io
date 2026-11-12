@@ -537,23 +537,43 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // pages as plain XML, which a diff or another tool can read (the
         // xml of an xmlsvg export has each page compressed)
         const drawioFormat = format === "drawio" ? "xml" : format
-        // Pictures get a margin, on white unless the user asked for a
-        // transparent background. A PNG is twice the size, of the page on
-        // screen (draw.io renders the first page otherwise). An SVG keeps
-        // its light colors (draw.io's default follows the viewer's dark
-        // mode: dark shapes on a white web page)
+        // Pictures get a margin, on the page's own background color, else
+        // on white, unless the user asked for a transparent background. A
+        // PNG is twice the size, of the page on screen (draw.io renders the
+        // first page otherwise). An SVG keeps its light colors (draw.io's
+        // default follows the viewer's dark mode: dark shapes on a white
+        // web page)
+        const transparent = prefersTransparentBackground()
+        // draw.io reads the two options by format. For a PNG the page's
+        // own color comes before `background`, and `transparent` removes
+        // both. For an SVG `background` replaces the page's color and
+        // `transparent` is not read: "none" leaves the background out,
+        // except in an editable SVG of a page with its own color, which
+        // gets that color back, so there the color sent is a transparent
+        // one.
+        const pageColor = pageModelXml(
+            chartXMLRef.current,
+            useCanvasStore.getState().currentPageId,
+        )?.match(/<mxGraphModel\b[^>]*\sbackground="([^"]+)"/)?.[1]
+        const ownColor = pageColor === "none" ? undefined : pageColor
+        const svgBackground = !transparent
+            ? (ownColor ?? "#ffffff")
+            : format === "xmlsvg" && ownColor
+              ? "transparent"
+              : "none"
         const imageOptions =
             format === "drawio"
                 ? {}
-                : {
-                      border: 20,
-                      ...(prefersTransparentBackground()
-                          ? { transparent: true }
-                          : { background: "#ffffff" }),
-                      ...(format === "png"
-                          ? { scale: 2, currentPage: true }
-                          : { theme: "light" }),
-                  }
+                : format === "png"
+                  ? {
+                        border: 20,
+                        scale: 2,
+                        currentPage: true,
+                        ...(transparent
+                            ? { transparent: true }
+                            : { background: "#ffffff" }),
+                    }
+                  : { border: 20, theme: "light", background: svgBackground }
 
         // Each save has its own request id, so two at once never swap
         // results. A large PNG takes a while to render.

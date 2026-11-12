@@ -437,6 +437,23 @@ describe("loadRawServerModelsConfig merge", () => {
             ])
         })
 
+        it("keeps the ones that a panel provider of that name does not list", async () => {
+            openAiByKeyOnly()
+            vi.stubEnv("AI_MODEL", "gpt-a,gpt-b")
+            // The first is the panel's: still the default, as chat uses it
+            // when nothing is selected
+            panel({ models: ["gpt-a"] })
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-b",
+                "server:openai:gpt-a (default)",
+            ])
+            panel({ models: ["gpt-b"] })
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-a (default)",
+                "server:openai:gpt-b",
+            ])
+        })
+
         it("keeps it in the list under a panel default", async () => {
             panel({
                 provider: "anthropic",

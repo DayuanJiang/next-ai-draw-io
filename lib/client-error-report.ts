@@ -34,6 +34,11 @@ const MAX_AUTOMATIC_MESSAGE = 500
 const FRAME = /:\d+:\d+\)?\s*$/
 // When the page last reloaded itself for a missing script chunk
 const CHUNK_RELOAD_KEY = "next-ai-draw-io-chunk-reload"
+// How long it does not do so again. A chunk that still fails after the
+// reload can take minutes to fail: its request hangs until a proxy gives up
+// on it (one to two minutes are common), and the page asks for it twice,
+// with its script tag and then with the chunk loader.
+const CHUNK_RELOAD_PAUSE_MS = 15 * 60_000
 
 let enabled: Promise<boolean> | undefined
 const recorded = new Set<string>()
@@ -129,15 +134,15 @@ export function isAppError(error: unknown): error is Error {
 /**
  * Reloads the page when the error is a script chunk that failed to load: a
  * new deployment replaced the files this page was loaded with, and a reload
- * gets the new ones. At most once a minute in a tab (the time is kept in
- * sessionStorage), so a chunk that still fails after the reload shows the
+ * gets the new ones. At most once in 15 minutes in a tab (the time is kept
+ * in sessionStorage), so a chunk that still fails after the reload shows the
  * crash screen. True when the page reloads.
  */
 export function reloadForMissingChunk(error: Error): boolean {
     if (error.name !== "ChunkLoadError") return false
     try {
         const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY))
-        if (Date.now() - last < 60_000) return false
+        if (Date.now() - last < CHUNK_RELOAD_PAUSE_MS) return false
         sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
     } catch {
         // Storage is blocked: nothing would end a reload loop
