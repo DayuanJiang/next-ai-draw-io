@@ -148,6 +148,8 @@
         "andMore": "...and {count} more",
         "invalidAccessCode": "Invalid or missing access code. Please configure it in Settings.",
         "networkError": "Network error. Please check your connection.",
+        "connectionLost": "The connection broke before the answer was complete. Try again.",
+        "serverUnavailable": "The server could not answer. Try again in a moment.",
         "retryLimit": "Auto-retry limit reached ({max}). Please try again manually.",
         "continuationRetryLimit": "Continuation retry limit reached ({max}). The diagram may be too complex.",
         "sessionCorrupted": "Session data was corrupted. Starting fresh.",
@@ -161,8 +163,10 @@
         "fileTooLong": "{name}: Content exceeds {limit}k character limit ({size}k chars)",
         "fileReadFailed": "Failed to read file: {name}",
         "answerEndedEarly": "The answer ended before the diagram was finished.",
+        "emptyAnswer": "The model returned an empty answer. Try again, or pick another model.",
         "sendInProgress": "The last message is still being sent. Try again in a moment.",
         "cannotResend": "This message can't be sent again: the diagram from when it was sent wasn't saved.",
+        "serverModelGone": "This model is no longer on the server. The default model is selected now: send the message again.",
         "llm": {
             "invalid_api_key": "The provider rejected the API key. Check it in model settings.",
             "forbidden": "The provider refused the request. The key may not have access to this model or region.",
@@ -177,6 +181,7 @@
             "provider_unavailable": "The provider is having problems. Try again later.",
             "cannot_connect": "Could not reach the provider. Check the base URL and your network.",
             "timeout": "The provider did not answer in time.",
+            "bad_response": "The provider's reply could not be read: it is not in the format of a model API. Check the base URL, or try again.",
             "openModelSettings": "Open model settings"
         }
     },

@@ -240,3 +240,43 @@ describe("a tool call that never got its result", () => {
         expect(sent[0]).not.toContain("call-without-result")
     })
 })
+
+describe("a server model that is gone", () => {
+    it("is refused with its own code, before any provider is called", async () => {
+        // Its provider was removed or renamed in the admin panel after the
+        // page loaded: the request's provider header is the old name's slug
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    { name: "New Name", provider: "openai", models: ["m1"] },
+                ],
+            }),
+        )
+        const fetchMock = vi.fn()
+        vi.stubGlobal("fetch", fetchMock)
+        const res = await chat(
+            new Request("http://localhost/api/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-selected-model-id": "server:old-name:m1",
+                    "x-ai-provider": "old-name",
+                    "x-ai-model": "m1",
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            id: "u1",
+                            role: "user",
+                            parts: [{ type: "text", text: "Draw two boxes" }],
+                        },
+                    ],
+                }),
+            }),
+        )
+        expect(res.status).toBe(400)
+        expect((await res.json()).code).toBe("server_model_gone")
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+})

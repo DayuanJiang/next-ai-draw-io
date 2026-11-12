@@ -229,7 +229,8 @@ function GeneralTab({ open }: { open: boolean }) {
             )
             const data = await response.json()
             if (!data.valid) {
-                setAccessError(data.message || dict.errors.invalidAccessCode)
+                // The server's message is English
+                setAccessError(dict.errors.invalidAccessCode)
                 return
             }
             localStorage.setItem(STORAGE_KEYS.accessCode, accessCode.trim())

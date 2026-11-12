@@ -12,23 +12,16 @@ import {
     ValidationResultSchema,
 } from "@/lib/validation-schema"
 
-// Default valid result for fallback cases
-const DEFAULT_VALID_RESULT: ValidationResult = {
-    valid: true,
-    issues: [],
-    suggestions: [],
-}
-
 export function useValidateDiagram() {
     // The running check's controller; a new check or cancel() aborts it
     const controllerRef = useRef<AbortController | null>(null)
 
     /**
-     * Validate a diagram image, with fallback: a failed check gives the
-     * default valid result so it never blocks the user. A cancelled check
-     * is passed on as its AbortError.
+     * Validate a diagram image. A check that could not run rejects with the
+     * reason (the tool handler shows it on the diagram's card and goes on:
+     * the diagram is drawn already); a cancelled one with its AbortError.
      */
-    const validateWithFallback = useCallback(
+    const validate = useCallback(
         async (
             imageData: string,
             sessionId?: string,
@@ -52,16 +45,15 @@ export function useValidateDiagram() {
                     },
                 )
                 if (!res.ok) {
-                    throw new Error(`Validation request failed: ${res.status}`)
+                    // The server says why as { error }
+                    const reason = (await res.json().catch(() => null))?.error
+                    throw new Error(
+                        typeof reason === "string"
+                            ? reason
+                            : `Validation request failed: ${res.status}`,
+                    )
                 }
                 return ValidationResultSchema.parse(await res.json())
-            } catch (error) {
-                if ((error as Error)?.name === "AbortError") throw error
-                console.warn(
-                    "[useValidateDiagram] Validation failed, using fallback:",
-                    error,
-                )
-                return DEFAULT_VALID_RESULT
             } finally {
                 if (controllerRef.current === controller) {
                     controllerRef.current = null
@@ -80,5 +72,5 @@ export function useValidateDiagram() {
         controllerRef.current = null
     }, [])
 
-    return { validateWithFallback, cancel }
+    return { validate, cancel }
 }

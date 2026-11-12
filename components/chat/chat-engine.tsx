@@ -92,14 +92,26 @@ const MAX_CONTINUATION_RETRY_COUNT = 2
 const SAVE_DEBOUNCE_MS = 1000
 
 /**
+ * The parts of the answer's latest step. Every request of a turn adds to
+ * the same assistant message, and the SDK starts each step with a
+ * step-start part.
+ */
+function lastStepParts(message: ChatUIMessage) {
+    const start = message.parts.findLastIndex((p) => p.type === "step-start")
+    return message.parts.slice(start + 1)
+}
+
+/**
  * Check if auto-resubmit should happen based on tool errors.
- * Only checks the LAST tool part (most recent tool call), not all tool parts.
+ * Only checks the LAST tool part of the latest step: once the model answers
+ * a failed call with words only, the turn is over, and the failed call of
+ * the step before must not send the request again.
  * A call the user stopped is not one to retry.
  */
 function hasToolErrors(messages: ChatUIMessage[]): boolean {
     const lastMessage = messages[messages.length - 1]
     if (lastMessage?.role !== "assistant") return false
-    const lastToolPart = lastMessage.parts.filter(isToolUIPart).at(-1)
+    const lastToolPart = lastStepParts(lastMessage).filter(isToolUIPart).at(-1)
     return (
         lastToolPart?.state === TOOL_ERROR_STATE &&
         lastToolPart.errorText !== "Stopped by user"
@@ -123,9 +135,18 @@ function viewedPageId(): string | null {
     return useCanvasStore.getState().currentPageId
 }
 
+/**
+ * The shapes a message was sent with, for sending it again. Not while
+ * another page is on screen: the model then reads that page, where the same
+ * ids are other shapes or none.
+ */
 function selectionOf(message: ChatUIMessage): MessageSelection {
-    const selected = message.metadata?.selectedCells
-    return Array.isArray(selected) ? selected : []
+    const { selectedCells, selectionPageId } = message.metadata ?? {}
+    if (!Array.isArray(selectedCells)) return []
+    if (selectionPageId !== undefined && selectionPageId !== viewedPageId()) {
+        return []
+    }
+    return selectedCells
 }
 
 /** The message with the reasoning seconds measured on screen in its metadata */
@@ -467,8 +488,7 @@ export function ChatEngineProvider({
 
     // Failed VLM validations in the current user turn (reset on user action)
     const validationRetryCountRef = useRef(0)
-    const { validateWithFallback, cancel: cancelValidation } =
-        useValidateDiagram()
+    const { validate, cancel: cancelValidation } = useValidateDiagram()
 
     const { handleToolCall } = useDiagramToolHandlers({
         partialXmlRef,
@@ -483,7 +503,7 @@ export function ChatEngineProvider({
         onDisplayChart,
         onFetchChart: fetchDiagramXml,
         captureValidationPng,
-        validateDiagram: validateWithFallback,
+        validateDiagram: validate,
         enableVlmValidation: vlmValidationEnabled,
         sessionId: langfuseSessionId,
         watchStop: () => {
@@ -512,13 +532,9 @@ export function ChatEngineProvider({
         onDisplayChart(original, true, "revert")
     }
 
-    // Requests made in the turn so far. The first carries the diagram the
-    // message was sent with (exported then, or the snapshot it is sent
-    // again from). Each later one, an automatic retry after a tool error,
-    // carries the canvas as it is then: a drawing is committed before its
-    // screenshot check can fail, and the model must go on from that
-    // drawing, not from the one before the turn.
-    const turnRequestsRef = useRef(0)
+    // The canvas reaches the model in the messages: in the user message's
+    // metadata (sendChatMessage), and after a failed call in that call's
+    // error text. The request body has no copy of it.
     const transport = useMemo(
         () =>
             new DefaultChatTransport<ChatUIMessage>({
@@ -532,12 +548,6 @@ export function ChatEngineProvider({
                 }) => ({
                     body: {
                         ...body,
-                        ...(turnRequestsRef.current++ > 0 && {
-                            xml: getPageXml(
-                                chartXMLRef.current,
-                                turnPageIdRef.current,
-                            ),
-                        }),
                         id,
                         messages: withoutOldImagesAndThinking(messages),
                         trigger,
@@ -545,7 +555,7 @@ export function ChatEngineProvider({
                     },
                 }),
             }),
-        [chartXMLRef],
+        [],
     )
 
     const {
@@ -589,24 +599,49 @@ export function ChatEngineProvider({
                       ? "answer ended early"
                       : "answer finished",
             )
-            // The output budget ran out before the model called a tool (its
-            // thinking took it all): nothing was drawn
+            const step = lastStepParts(message)
+            const stepTools = step.filter(isToolUIPart)
+            const lastTool = stepTools.at(-1)
+            // The output budget ran out, and no failed call is left that the
+            // app sends back to the model: its thinking took the budget and
+            // nothing was drawn, or the cut left a call that still ran (the
+            // server repairs cut off JSON, so an edit can lack its last
+            // operations and a drawing its last shapes)
             const outOfTokens =
-                finishReason === "length" && !message.parts.some(isToolUIPart)
-            if (cut.length === 0 && !outOfTokens) return
-            // Ended with no error and no diagram: undo the preview, and say
-            // so, as an error does (with Retry)
+                finishReason === "length" &&
+                lastTool?.state !== TOOL_ERROR_STATE
+            // The server's step limit ended the answer on a step of shape
+            // library lookups, before the model drew with what it found
+            const lookupOnly =
+                finishReason === "tool-calls" &&
+                lastTool?.state === "output-available" &&
+                stepTools.every(
+                    (part) => getToolName(part) === "get_shape_library",
+                )
+            // The model answered with nothing: no words and no tool call
+            // (some providers do when a filter drops the content)
+            const empty =
+                !lastTool &&
+                !step.some((p) => p.type === "text" && p.text.trim())
+            if (cut.length === 0 && !outOfTokens && !lookupOnly && !empty) {
+                return
+            }
+            // Ended with no error, but short of what the model set out to
+            // draw: undo a preview still on the canvas, and say so, as an
+            // error does (with Retry)
             const [originalXml] = editDiagramOriginalXmlRef.current.values()
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             editDiagramOriginalXmlRef.current.clear()
             abandonContinuation()
-            const text = outOfTokens
-                ? dict.errors.llm.output_truncated
-                : dict.errors.answerEndedEarly
+            const [text, code] = outOfTokens
+                ? [dict.errors.llm.output_truncated, "output_truncated"]
+                : empty
+                  ? [dict.errors.emptyAnswer, "empty_answer"]
+                  : [dict.errors.answerEndedEarly, "ended_early"]
             void recordError({
                 kind: "chat-error",
                 message: text,
-                code: outOfTokens ? "output_truncated" : "ended_early",
+                code,
                 model: requestModelRef.current,
             })
             // Not in another chat that came on screen meanwhile
@@ -658,7 +693,11 @@ export function ChatEngineProvider({
             // A hint the user can act on, then the provider's own words
             let text: string = error.message
             let openModelConfig = false
-            if (data?.type === "provider") {
+            if (isAccessCodeError) {
+                // The server's text is English: say it in the interface's
+                // language
+                text = dict.errors.invalidAccessCode
+            } else if (data?.type === "provider") {
                 const hints = dict.errors.llm as Record<string, string>
                 const hint = hints[data.code]
                 text =
@@ -671,10 +710,32 @@ export function ChatEngineProvider({
                     "model_not_found",
                     "server_key_forbidden",
                 ].includes(data.code)
+            } else if (data?.code === "server_model_gone") {
+                // The server no longer has the selected model (its admin
+                // removed or renamed it): the list is loaded again, which
+                // selects the default one, so Retry works
+                text = dict.errors.serverModelGone
+                modelConfig.reloadServerModels()
             } else if (typeof data?.error === "string") {
                 text = data.error
             } else if (isNetworkFailure(error.message)) {
                 text = dict.errors.networkError
+            } else if (error.message === "network error") {
+                // Chrome's words when the connection breaks while the
+                // answer streams: the user's network, a server restart, or
+                // the server's own connection to the provider (Node ends
+                // one that sends nothing for 300 s)
+                text = dict.errors.connectionLost
+            } else if (error.message.trimStart().startsWith("<")) {
+                // A gateway in front of the server (Cloudflare, nginx)
+                // answered with its own HTML error page, e.g. while the
+                // server restarts: its title says what happened
+                const title = error.message
+                    .match(/<title>([^<]*)<\/title>/i)?.[1]
+                    .trim()
+                text = title
+                    ? `${dict.errors.serverUnavailable}\n\n${title}`
+                    : dict.errors.serverUnavailable
             }
 
             // Every error card is recorded; Report on it adds a note
@@ -687,7 +748,9 @@ export function ChatEngineProvider({
                         ? "access_code"
                         : isNetworkFailure(error.message)
                           ? "network"
-                          : undefined),
+                          : error.message === "network error"
+                            ? "connection_lost"
+                            : undefined),
                 model: requestModelRef.current,
             })
 
@@ -1402,7 +1465,6 @@ export function ChatEngineProvider({
         })
         const options = {
             body: {
-                xml,
                 sessionId: langfuseSessionId,
                 customSystemMessage,
                 ...(selected.length > 0 && { selectedCells: selected }),
@@ -1412,7 +1474,6 @@ export function ChatEngineProvider({
                 maxOutputTokens,
             }),
         }
-        turnRequestsRef.current = 0
         // The canvas note and the selection stay with the message: every
         // later request sends them the same way, and regenerate and retry
         // keep the selection. Its chip names a connector as one.
@@ -1430,6 +1491,7 @@ export function ChatEngineProvider({
                                 isEdge: !!isEdge,
                             }),
                         ),
+                        selectionPageId: turnPageIdRef.current,
                     }),
                 },
             },
@@ -1675,13 +1737,26 @@ export function ChatEngineProvider({
             toast.error(dict.errors.cannotResend)
             return false
         }
-        onDisplayChart(savedXml, true)
+        // When the model has drawn nothing since the message was sent, all
+        // that the canvas gained since is the user's own work: it is in no
+        // version, and loading the snapshot would take it away for good (a
+        // load resets undo). The canvas then stays, as on Retry, and is the
+        // diagram the message is sent with from now on.
+        const drawnSince = useVersionsStore
+            .getState()
+            .versions.some((v) => v.turnIndex >= index)
+        const xml = drawnSince ? savedXml : chartXMLRef.current || savedXml
+        if (drawnSince) {
+            onDisplayChart(savedXml, true)
+            useVersionsStore.getState().removeFromTurn(index)
+        } else {
+            xmlSnapshotsRef.current.set(index, xml)
+        }
         dropLaterSnapshots(index)
-        useVersionsStore.getState().removeFromTurn(index)
 
         sendChatMessage(
             parts,
-            getPageXml(savedXml, viewedPageId()),
+            getPageXml(xml, viewedPageId()),
             index,
             selectionOf(messages[index]),
             messages[index].id,

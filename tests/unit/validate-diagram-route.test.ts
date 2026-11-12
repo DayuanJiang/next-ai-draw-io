@@ -16,11 +16,12 @@ const RESULT = {
 }
 
 // A vision model that answers with the result as JSON text; told to wait,
-// it answers only once its call is aborted
-const model = vi.hoisted(() => ({ waitForAbort: false }))
+// it answers only once its call is aborted; missing, the server has none
+const model = vi.hoisted(() => ({ waitForAbort: false, missing: false }))
 vi.mock("@/lib/ai-providers", () => ({
-    getValidationModel: () =>
-        new MockLanguageModelV3({
+    getValidationModel: () => {
+        if (model.missing) throw new Error("No validation model configured.")
+        return new MockLanguageModelV3({
             doGenerate: (async (options: { abortSignal?: AbortSignal }) => {
                 if (model.waitForAbort) {
                     const signal = options.abortSignal
@@ -41,7 +42,8 @@ vi.mock("@/lib/ai-providers", () => ({
                     warnings: [],
                 }
             }) as any,
-        }),
+        })
+    },
 }))
 
 // The quota, off unless a test turns it on
@@ -87,6 +89,7 @@ const post = (signal?: AbortSignal) =>
 
 afterEach(() => {
     model.waitForAbort = false
+    model.missing = false
     quota.enabled = false
     quota.allowed = true
     quota.checks = []
@@ -128,20 +131,40 @@ describe("POST /api/validate-diagram", () => {
         const stop = new AbortController()
         const pending = validateDiagram(post(stop.signal))
         stop.abort()
-        expect(await (await pending).json()).toEqual({
-            valid: true,
-            issues: [],
-            suggestions: [],
-        })
+        expect((await pending).status).toBe(503)
+    })
+})
+
+// The chat shows the result on the diagram's card: "valid" must mean that
+// a model looked at the screenshot
+describe("a check that did not run", () => {
+    const notChecked = async (res: Response) => {
+        expect(res.status).toBe(503)
+        const body = await res.json()
+        expect(body.valid).toBeUndefined()
+        return body.error as string
+    }
+
+    it("is an error when the check is turned off", async () => {
+        vi.stubEnv("ENABLE_VLM_VALIDATION", "false")
+        expect(await notChecked(await validateDiagram(post()))).toMatch(
+            /turned off/,
+        )
     })
 
-    it("answers valid when the check is turned off", async () => {
-        vi.stubEnv("ENABLE_VLM_VALIDATION", "false")
-        const res = await validateDiagram(post())
-        expect(await res.json()).toEqual({
-            valid: true,
-            issues: [],
-            suggestions: [],
-        })
+    it("is an error when the server has no model for it", async () => {
+        model.missing = true
+        expect(await notChecked(await validateDiagram(post()))).toMatch(
+            /no model/,
+        )
+    })
+
+    it("is an error when the model call fails", async () => {
+        // An aborted call fails like one the provider refused
+        model.waitForAbort = true
+        const stop = new AbortController()
+        const pending = validateDiagram(post(stop.signal))
+        stop.abort()
+        expect(await notChecked(await pending)).toMatch(/could not check/)
     })
 })

@@ -161,6 +161,25 @@ describe("classifyLLMError", () => {
         expect(classifyLLMError(error).code).toBe("cannot_connect")
     })
 
+    it("names a reply that is not a model API's", () => {
+        // A base URL that points at a website: 200 and a web page
+        expect(
+            classifyLLMError(
+                new Error("Response stream ended without a finish reason."),
+            ).code,
+        ).toBe("bad_response")
+        expect(
+            classifyLLMError(
+                new Error(
+                    'JSON parsing failed: Text: {"id":"x","choices":[{"delta":{"content":"half.\nError message: Unterminated string in JSON at position 58',
+                ),
+            ).code,
+        ).toBe("bad_response")
+        expect(
+            classifyLLMError(apiError(200, "Invalid JSON response")).code,
+        ).toBe("bad_response")
+    })
+
     it("reads an error object sent in the stream", () => {
         // OpenRouter, when the upstream provider is overloaded
         const error = {

@@ -16,7 +16,12 @@ import {
     waitForComplete,
     waitForCompleteCount,
 } from "./lib/fixtures"
-import { createMockSSEResponse, sse, toolCallEvents } from "./lib/helpers"
+import {
+    createMockSSEResponse,
+    createTextOnlyResponse,
+    sse,
+    toolCallEvents,
+} from "./lib/helpers"
 
 /** An edit_diagram response that adds one node next to "Start" */
 function createEditResponse() {
@@ -1582,10 +1587,55 @@ test.describe("Workspace", () => {
         await expect(canvas.getByText("Review Step")).toBeVisible()
         await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
         // The model was sent the canvas with the copy
-        expect(bodies[2].xml.match(/value="Start"/g)).toHaveLength(2)
+        expect(
+            bodies[2].messages
+                .at(-1)
+                .metadata.diagram.xml.match(/value="Start"/g),
+        ).toHaveLength(2)
         await expect(page.locator('[data-testid="version-undo"]')).toHaveText(
             "Undo change",
         )
+    })
+
+    test("regenerate keeps what was drawn by hand when the answer drew nothing", async ({
+        page,
+    }) => {
+        // The snapshot from before the message has none of the user's work
+        // since: loading it would drop that work, with no undo
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body:
+                    bodies.length === 1
+                        ? createMockSSEResponse(FLOWCHART_XML, "Flowchart.")
+                        : createTextOnlyResponse(`Answer ${bodies.length}.`),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        await sendMessage(page, "What is this?")
+        await expect(page.getByText("Answer 2.")).toBeVisible()
+        // A copy of "Start", made by hand after the answer
+        const canvas = getIframeContent(page)
+        await canvas.getByText("Start", { exact: true }).click()
+        await page.keyboard.press("ControlOrMeta+d")
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        await page.waitForTimeout(1200)
+
+        await page.getByText("Answer 2.").hover()
+        await page.getByRole("button", { name: "Regenerate response" }).click()
+        await expect(page.getByText("Answer 3.")).toBeVisible()
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        // The model was sent the canvas with the copy
+        expect(
+            bodies[2].messages
+                .at(-1)
+                .metadata.diagram.xml.match(/value="Start"/g),
+        ).toHaveLength(2)
     })
 
     test("page settings draw.io keeps in place follow the AI's diagram", async ({
@@ -1723,6 +1773,54 @@ test.describe("Workspace", () => {
         await expect.poll(savedPageId, { timeout: 10000 }).toBe("orig")
     })
 
+    test("a message sent again from another page leaves its selected shapes out", async ({
+        page,
+    }) => {
+        // The model reads the page on screen: the ids selected on the
+        // other page are other shapes there, or none
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse(`Answer ${bodies.length}.`),
+            })
+        })
+        await openApp(page)
+        await openDrawioFile(page, "two.drawio", TWO_PAGE_FILE)
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        await drawioTabs(page).getByText("P1", { exact: true }).click()
+        await canvas.getByText("Old B").click()
+        await expect(
+            page.locator('[data-testid="selection-chip"]'),
+        ).toContainText("Old B")
+        await sendMessage(page, "What is this?")
+        await expect(page.getByText("Answer 1.")).toBeVisible()
+        const sentWith = (body: any) => body.messages.at(-1).metadata
+        expect(sentWith(bodies[0]).selectedCells).toHaveLength(1)
+
+        const regenerate = async () => {
+            await page.getByText(`Answer ${bodies.length}.`).hover()
+            await page
+                .getByRole("button", { name: "Regenerate response" })
+                .click()
+        }
+        // On its own page the message keeps them
+        await regenerate()
+        await expect(page.getByText("Answer 2.")).toBeVisible()
+        expect(sentWith(bodies[1]).selectedCells).toHaveLength(1)
+
+        await drawioTabs(page).getByText("P0", { exact: true }).click()
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        await regenerate()
+        await expect(page.getByText("Answer 3.")).toBeVisible()
+        expect(sentWith(bodies[2]).diagram.xml).toContain("Old A")
+        expect(sentWith(bodies[2]).selectedCells).toBeUndefined()
+        expect(bodies[2].selectedCells).toBeUndefined()
+    })
+
     test("the AI reads and draws the page the user is viewing", async ({
         page,
     }) => {
@@ -1741,8 +1839,9 @@ test.describe("Workspace", () => {
         await sendMessage(page, "Create a flowchart")
         await waitForComplete(page)
         // The model got the page on screen
-        expect(bodies[0].xml).toContain("Old B")
-        expect(bodies[0].xml).not.toContain("Old A")
+        const sent = bodies[0].messages.at(-1).metadata.diagram.xml
+        expect(sent).toContain("Old B")
+        expect(sent).not.toContain("Old A")
         // Its drawing replaced that page, and only that page
         await expect(canvas.getByText("Process", { exact: true })).toBeVisible()
         await expect(canvas.getByText("Old B")).toHaveCount(0)
@@ -2797,7 +2896,9 @@ test.describe("Edge cases", () => {
         ).toBeVisible()
         await sendMessage(page, "Tidy it up")
         await expect.poll(() => bodies.length, { timeout: 15000 }).toBe(1)
-        expect(bodies[0].xml).toContain('value="Lab"')
+        expect(bodies[0].messages.at(-1).metadata.diagram.xml).toContain(
+            'value="Lab"',
+        )
     })
 
     test("variables of the AI's file are applied", async ({ page }) => {
@@ -3194,6 +3295,55 @@ test.describe("Edge cases", () => {
         })
         await expect(page.getByText("First words.")).toBeVisible()
         await expect(page.getByText("Second words.")).toBeVisible()
+    })
+
+    test("a failed call the model answers with words is not sent again", async ({
+        page,
+    }) => {
+        // The retry's reply is a new step of the same answer: the failed
+        // call of the step before it kept sending the request, up to the
+        // retry limit and its error
+        const replies = [
+            sse([
+                { type: "start", messageId: "m1" },
+                { type: "start-step" },
+                {
+                    type: "tool-input-available",
+                    toolCallId: "d1",
+                    toolName: "display_diagram",
+                    input: { xml: boxCell("1", "Bad", 40, "0") },
+                },
+                { type: "finish-step" },
+                { type: "finish" },
+            ]),
+            sse([
+                { type: "start", messageId: "m1" },
+                { type: "start-step" },
+                { type: "text-start", id: "t1" },
+                { type: "text-delta", id: "t1", delta: "Which shape is it?" },
+                { type: "text-end", id: "t1" },
+                { type: "finish-step" },
+                { type: "finish" },
+            ]),
+        ]
+        let n = 0
+        await page.route("**/api/chat", (route) =>
+            route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: replies[n++] ?? replies[1],
+            }),
+        )
+        await openApp(page)
+        await sendMessage(page, "Draw")
+        await expect(page.getByText("Which shape is it?")).toBeVisible({
+            timeout: 15000,
+        })
+        await expect(getSendButton(page)).toBeVisible()
+        // Long enough for the requests that used to follow
+        await page.waitForTimeout(1500)
+        expect(n).toBe(2)
+        await expect(page.getByText("Auto-retry limit reached")).toHaveCount(0)
     })
 
     test("a message stays with its chat when another comes on screen while its image is read", async ({

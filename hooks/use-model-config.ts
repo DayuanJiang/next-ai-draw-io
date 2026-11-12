@@ -103,6 +103,9 @@ export interface UseModelConfigReturn {
 
     // Actions
     setSelectedModelId: (modelId: string | undefined) => void
+    /** Load the server's models again: a selected one that is gone gives
+     * way to the default */
+    reloadServerModels: () => void
     addProvider: (provider: ProviderName) => ProviderConfig
     updateProvider: (
         providerId: string,
@@ -359,6 +362,7 @@ export function useModelConfig(): UseModelConfigReturn {
         models,
         selectedModelId: config.selectedModelId,
         setSelectedModelId,
+        reloadServerModels: loadServerModels,
         addProvider,
         updateProvider,
         deleteProvider,

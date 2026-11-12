@@ -29,6 +29,9 @@ export interface ChatMessageMetadata {
     /** On a user message: what it told the model about the canvas */
     diagram?: MessageDiagram
     selectedCells?: MessageSelection
+    /** The page the selected shapes are on (null: the first page);
+     * messages saved before it was kept have none */
+    selectionPageId?: string | null
     usage?: ReplyUsage
     /** On an answer: the Langfuse trace of its latest request, which a vote
      * on it scores */

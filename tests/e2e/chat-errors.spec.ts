@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test"
 import { getChatInput, openApp, sendMessage } from "./lib/fixtures"
+import { sse } from "./lib/helpers"
 
 /** Answer the chat request with the given response and send a message */
 async function chatWith(
@@ -59,6 +60,57 @@ test("an error before the stream shows its text, not raw JSON", async ({
     ).toBeVisible({ timeout: 15000 })
 })
 
+test("a gateway's HTML error page shows as its title, not its source", async ({
+    page,
+}) => {
+    // What Cloudflare or nginx answer while the server behind them restarts
+    await chatWith(page, {
+        status: 502,
+        contentType: "text/html",
+        body: "<!DOCTYPE html>\n<html>\n<head><title>502 Bad Gateway</title></head>\n<body>\n<center><h1>502 Bad Gateway</h1></center>\n<hr><center>cloudflare</center>\n</body>\n</html>",
+    })
+    // (Next.js has an alert of its own, for route changes)
+    const card = page.getByTestId("chat-panel").getByRole("alert")
+    await expect(card).toContainText("The server could not answer.", {
+        timeout: 15000,
+    })
+    await expect(card).toContainText("502 Bad Gateway")
+    await expect(card).not.toContainText("<html")
+    await expect(card).not.toContainText("cloudflare")
+})
+
+test("a connection that breaks while the answer streams says so in words", async ({
+    page,
+}) => {
+    // Chrome's own text for it is "network error"
+    await page.addInitScript(() => {
+        const realFetch = window.fetch
+        window.fetch = async (input, init) => {
+            const url = input instanceof Request ? input.url : String(input)
+            if (!url.endsWith("/api/chat")) return realFetch(input, init)
+            const body = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(
+                        new TextEncoder().encode('data: {"type":"start"}\n\n'),
+                    )
+                    controller.error(new TypeError("network error"))
+                },
+            })
+            return new Response(body, {
+                headers: { "content-type": "text/event-stream" },
+            })
+        }
+    })
+    await openApp(page)
+    await sendMessage(page, "Draw a box")
+    await expect(
+        page.getByText(
+            "The connection broke before the answer was complete. Try again.",
+        ),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId("retry-button")).toBeVisible()
+})
+
 test("a provider rate limit is not shown as this site's quota", async ({
     page,
 }) => {
@@ -108,6 +160,158 @@ test("a refused server key shows only the quota hint and a settings button", asy
         dialog.getByRole("heading", { name: "Models", exact: true }),
     ).toBeVisible()
     await expect(dialog.getByText("Use your own API key")).toBeVisible()
+})
+
+test("an edit that ran on what arrived before the output limit says it was cut off", async ({
+    page,
+}) => {
+    // The server repairs the cut off JSON of a tool call, so the edit runs
+    // with the operations written before the limit and reports success
+    await chatWith(page, {
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+            { type: "start" },
+            { type: "start-step" },
+            {
+                type: "tool-input-available",
+                toolCallId: "e1",
+                toolName: "edit_diagram",
+                input: {
+                    operations: [
+                        {
+                            operation: "add",
+                            cell_id: "a",
+                            new_xml:
+                                '<mxCell id="a" value="Alpha" style="rounded=1;" x="40" y="40" w="120" h="60"/>',
+                        },
+                    ],
+                },
+            },
+            { type: "finish-step" },
+            { type: "finish", finishReason: "length" },
+        ]),
+    })
+    await expect(page.frameLocator("iframe").getByText("Alpha")).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(
+        page.getByText("The output was cut off before the diagram was"),
+    ).toBeVisible()
+    await expect(page.getByTestId("retry-button")).toBeVisible()
+})
+
+test("an answer that ends on a shape library lookup says it ended early", async ({
+    page,
+}) => {
+    // The server allows five steps a request: a model that spends them
+    // all on lookups never gets to draw
+    await chatWith(page, {
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+            { type: "start" },
+            { type: "start-step" },
+            {
+                type: "tool-input-available",
+                toolCallId: "l1",
+                toolName: "get_shape_library",
+                input: { library: "aws4" },
+            },
+            {
+                type: "tool-output-available",
+                toolCallId: "l1",
+                output: "AWS shapes",
+            },
+            { type: "finish-step" },
+            { type: "finish", finishReason: "tool-calls" },
+        ]),
+    })
+    await expect(
+        page.getByText("The answer ended before the diagram was finished."),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId("retry-button")).toBeVisible()
+})
+
+test("an answer with nothing in it says so, with Retry", async ({ page }) => {
+    // Some providers end a reply like this when a filter drops its content
+    await chatWith(page, {
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+            { type: "start" },
+            { type: "start-step" },
+            { type: "finish-step" },
+            { type: "finish", finishReason: "stop" },
+        ]),
+    })
+    await expect(
+        page.getByText("The model returned an empty answer."),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId("retry-button")).toBeVisible()
+})
+
+test("a server model removed meanwhile gives way to the default, and Retry works", async ({
+    page,
+}) => {
+    const model = (name: string, isDefault = false) => ({
+        id: `server:fake:${name}`,
+        modelId: name,
+        provider: "openai",
+        providerLabel: "Fake",
+        isDefault,
+    })
+    // The admin removes "second" after the page has loaded
+    let lists = 0
+    await page.route("**/api/server-models", (route) =>
+        route.fulfill({
+            json: {
+                models:
+                    lists++ === 0
+                        ? [model("first", true), model("second")]
+                        : [model("first", true)],
+            },
+        }),
+    )
+    const selected: (string | undefined)[] = []
+    await page.route("**/api/chat", (route) => {
+        const id = route.request().headers()["x-selected-model-id"]
+        selected.push(id)
+        return id === "server:fake:second"
+            ? route.fulfill({
+                  status: 400,
+                  json: {
+                      error: "This model is no longer available on this server.",
+                      code: "server_model_gone",
+                  },
+              })
+            : route.fulfill({
+                  status: 200,
+                  contentType: "text/event-stream",
+                  body: sse([
+                      { type: "start" },
+                      { type: "text-start", id: "t" },
+                      { type: "text-delta", id: "t", delta: "Here you are." },
+                      { type: "text-end", id: "t" },
+                      { type: "finish" },
+                  ]),
+              })
+    })
+    await openApp(page, {
+        config: {
+            version: 1,
+            providers: [],
+            selectedModelId: "server:fake:second",
+        },
+    })
+    await sendMessage(page, "Draw a box")
+    await expect(
+        page.getByText("This model is no longer on the server."),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId("model-selector")).toContainText("first")
+    await page.getByTestId("retry-button").click()
+    await expect(page.getByText("Here you are.")).toBeVisible()
+    expect(selected).toEqual(["server:fake:second", "server:fake:first"])
 })
 
 // The quota toast reads the dictionary: outside its provider it threw and

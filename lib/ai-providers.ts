@@ -1479,7 +1479,7 @@ export function supportsPromptCaching(modelId: string): boolean {
  * Note: we no longer guess whether the model supports image input from its
  * name — that heuristic misfired on newer models (see issue #874). If a
  * configured validation model can't handle images, the API call simply errors
- * and the validate-diagram route falls back to "valid".
+ * and the validate-diagram route answers that the check did not run.
  */
 export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
     // AI_MODEL may be comma-separated (multi-model fallback); pick the first.

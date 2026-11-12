@@ -244,6 +244,44 @@ test("an access code error opens the general tab with the code field", async ({
     )
 })
 
+test("an access code error reads in the interface's language", async ({
+    page,
+}) => {
+    // The server's texts are English
+    await page.route("**/api/config", (route) =>
+        route.fulfill({ json: { accessCodeRequired: true } }),
+    )
+    await page.route("**/api/chat", (route) =>
+        route.fulfill({
+            status: 401,
+            contentType: "application/json",
+            body: JSON.stringify({
+                error: "Invalid or missing access code. Please configure it in Settings.",
+            }),
+        }),
+    )
+    await page.route("**/api/verify-access-code", (route) =>
+        route.fulfill({
+            status: 401,
+            json: { valid: false, message: "Invalid or missing access code" },
+        }),
+    )
+    await openApp(page, { path: "/zh" })
+    await sendMessage(page, "画一个方框")
+    const text = "无效或缺少访问码。请在设置中配置。"
+    // The chat's card (behind the settings dialog that opens)
+    await expect(page.locator('[role="alert"]', { hasText: text })).toBeVisible(
+        { timeout: 15000 },
+    )
+    const dialog = page.getByRole("dialog")
+    await dialog.locator("#access-code").fill("wrong")
+    await dialog.locator("#access-code").press("Enter")
+    await expect(dialog.getByText(text)).toBeVisible()
+    await expect(page.getByText("Invalid or missing access code")).toHaveCount(
+        0,
+    )
+})
+
 test("a refused key marks the key field until it changes", async ({ page }) => {
     await page.route("**/api/validate-model", (route) =>
         route.fulfill({

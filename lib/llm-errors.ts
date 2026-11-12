@@ -25,6 +25,8 @@ type LLMErrorCode =
     | "provider_unavailable"
     | "cannot_connect"
     | "timeout"
+    // A reply that is not a model API's: a web page, broken JSON
+    | "bad_response"
     // A 403 on the server's own key, e.g. a daily spend cap blocked it
     | "server_key_forbidden"
     | "unknown"
@@ -99,6 +101,12 @@ const GENERAL_TEXTS: Array<[RegExp, LLMErrorCode]> = [
     [
         /Cannot connect to API|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|fetch failed/i,
         "cannot_connect",
+    ],
+    [
+        // The SDK's words for a 200 it cannot read, e.g. a base URL that
+        // points at a website
+        /Response stream ended without a finish reason|JSON parsing failed|Invalid JSON response/i,
+        "bad_response",
     ],
 ]
 

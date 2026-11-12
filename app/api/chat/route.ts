@@ -184,6 +184,17 @@ async function handleChatRequest(req: Request): Promise<Response> {
                 // Use actual provider from config (client header may have incorrect value due to ID format change)
                 provider: serverModel.provider,
             }
+        } else {
+            // Removed or renamed on the server after the page loaded. Going
+            // on would take the provider from the header, which for a model
+            // of the admin panel is its name's slug ("Invalid provider: ...").
+            return Response.json(
+                {
+                    error: "This model is no longer available on this server.",
+                    code: "server_model_gone",
+                },
+                { status: 400 },
+            )
         }
     }
 

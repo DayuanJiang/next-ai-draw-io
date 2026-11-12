@@ -148,6 +148,8 @@
         "andMore": "...還有 {count} 個",
         "invalidAccessCode": "無效或缺少存取碼。請在設定中配置。",
         "networkError": "網路錯誤。請檢查您的連線。",
+        "connectionLost": "連線在回答完成之前中斷了，請重試。",
+        "serverUnavailable": "伺服器沒能回答，請稍後再試。",
         "retryLimit": "已達自動重試限制（{max}）。請手動重試。",
         "continuationRetryLimit": "已達繼續重試限制（{max}）。圖表可能過於複雜。",
         "sessionCorrupted": "工作階段資料已損壞。重新開始。",
@@ -161,8 +163,10 @@
         "fileTooLong": "{name}：內容超過了 {limit}k 字元的上限（{size}k 字元）",
         "fileReadFailed": "無法讀取檔案：{name}",
         "answerEndedEarly": "回答在圖畫完之前就結束了。",
+        "emptyAnswer": "模型傳回了空的回答。請重試，或換一個模型。",
         "sendInProgress": "上一則訊息還在傳送，請稍後再試。",
         "cannotResend": "這則訊息無法重新傳送：傳送時的畫布沒有儲存下來。",
+        "serverModelGone": "這個模型已經不在伺服器上了。現在選取的是預設模型，請重新傳送。",
         "llm": {
             "invalid_api_key": "服務商拒絕了這個 API Key，請在模型設定中檢查。",
             "forbidden": "服務商拒絕了這次請求。這個 Key 可能沒有使用該模型或該地區的權限。",
@@ -177,6 +181,7 @@
             "provider_unavailable": "服務商發生問題，請稍後再試。",
             "cannot_connect": "無法連線到服務商，請檢查 Base URL 和網路。",
             "timeout": "服務商沒有及時回應。",
+            "bad_response": "服務商的回覆讀不出來：它的格式和模型介面的不一樣。請檢查 Base URL，或重試。",
             "openModelSettings": "開啟模型設定"
         }
     },

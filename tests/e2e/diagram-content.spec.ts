@@ -723,7 +723,8 @@ test("the request after a failed screenshot check keeps the model and diagram", 
     page: p,
 }) => {
     // After a failed check the SDK sends the next request itself; it must
-    // carry the turn's model headers and diagram
+    // carry the turn's model headers, and the drawing the model goes on
+    // from (in the failed call's result: the user message stays as sent)
     await p.addInitScript(() => {
         localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
     })
@@ -758,13 +759,57 @@ test("the request after a failed screenshot check keeps the model and diagram", 
     await expect.poll(() => requests.length, { timeout: 20000 }).toBe(2)
     const [first, retry] = requests
     expect(retry.body.sessionId).toBe(first.body.sessionId)
-    expect(first.body.xml).not.toContain('value="Alpha"')
-    expect(retry.body.xml).toContain('value="Alpha"')
+    expect(retry.body.messages[0]).toEqual(first.body.messages[0])
+    const failed = retry.body.messages
+        .at(-1)
+        .parts.find((part: any) => part.type === "tool-display_diagram")
+    expect(failed.errorText).toMatch(/Current diagram XML:[\s\S]*value="Alpha"/)
     for (const name of Object.keys(first.headers)) {
         if (name.startsWith("x-")) {
             expect(retry.headers[name], name).toBe(first.headers[name])
         }
     }
+})
+
+test("a screenshot check the server could not run does not show as valid", async ({
+    page: p,
+}) => {
+    await p.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
+    })
+    let requests = 0
+    await p.route("**/api/chat", async (route) => {
+        requests++
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: drawReply("d1", cell("a", "Alpha", 40)),
+        })
+    })
+    // What the server answers without a model for the check
+    await p.route("**/api/validate-diagram", (route) =>
+        route.fulfill({
+            status: 503,
+            json: { error: "This server has no model for screenshot checks." },
+        }),
+    )
+    await openApp(p)
+    await sendMessage(p, "Draw a box")
+    await expect(p.frameLocator("iframe").getByText("Alpha")).toBeVisible({
+        timeout: 15000,
+    })
+    const card = p
+        .locator("div.rounded-xl", { hasText: "Validate Diagram" })
+        .last()
+    await expect(card.getByText("Error", { exact: true })).toBeVisible()
+    await expect(card.getByText("Valid", { exact: true })).toHaveCount(0)
+    // Its reason shows when the card is opened
+    await card.getByRole("button").click()
+    await expect(
+        card.getByText("This server has no model for screenshot checks."),
+    ).toBeVisible()
+    // The drawing stands: the model is not asked again
+    expect(requests).toBe(1)
 })
 
 // A display_diagram cut off by the output limit: its last cell is half
@@ -993,11 +1038,13 @@ test("the request after opening a compressed file has the cells", async ({
     ).toBeVisible()
     await sendMessage(p, "What is this?")
     await expect(p.getByText("Looks fine.")).toBeVisible()
-    // Regenerate sends the snapshot taken before the message
+    // Regenerate sends the diagram again
     await p.getByText("Looks fine.").hover()
     await p.getByRole("button", { name: "Regenerate response" }).click()
     await expect.poll(() => requests.length).toBe(2)
-    expect(requests[1].xml).toContain('value="Packed"')
+    expect(requests[1].messages.at(-1).metadata.diagram.xml).toContain(
+        'value="Packed"',
+    )
 })
 
 test("a rejected drawing stops saying it tries again once retries end", async ({
