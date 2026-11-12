@@ -88,6 +88,8 @@ export function useDiagramStreaming({
     const previousXML = useRef<string>("")
     // Last processed XML per toolCallId, to skip redundant work while streaming
     const lastProcessedXmlRef = useRef<Map<string, string>>(new Map())
+    // When the last display_diagram preview ended and how long it took
+    const lastPreviewRef = useRef({ endedAt: 0, took: 0 })
 
     // Reset when messages become empty (new chat or session switch), so
     // cached examples work again after starting a new session
@@ -104,6 +106,15 @@ export function useDiagramStreaming({
     // so far. The tool handler validates and loads the final diagram.
     const handleDisplayChart = useCallback(
         (xml: string) => {
+            // A preview redraws the whole page, so it takes longer the more
+            // cells there are, and the page (draw.io too) does nothing else
+            // meanwhile. Leave this one out until four times the last one's
+            // duration has passed: previews then take a fifth of the time
+            // at most. The next one draws these cells as well, and the tool
+            // handler draws the finished diagram.
+            const startedAt = performance.now()
+            const last = lastPreviewRef.current
+            if (startedAt - last.endedAt < last.took * 4) return
             // Named styles come before the cells, so the ones written so
             // far are known by the time their cells stream in
             const { classes, xml: cellsXml } = readStyleClasses(xml)
@@ -139,6 +150,8 @@ export function useDiagramStreaming({
                 )
                 previousXML.current = model
                 loadDiagram(replacedXML, true, "preview")
+                const endedAt = performance.now()
+                lastPreviewRef.current = { endedAt, took: endedAt - startedAt }
             } catch (error) {
                 console.error("Error processing XML:", error)
             }

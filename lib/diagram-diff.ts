@@ -61,6 +61,7 @@ const DEFAULT_VALUES: Record<string, Record<string, string>> = {
     },
     mxGeometry: { x: "0", y: "0", width: "0", height: "0", relative: "0" },
     mxPoint: { x: "0", y: "0" },
+    mxRectangle: { x: "0", y: "0", width: "0", height: "0" },
 }
 // Numbers draw.io writes back in their shortest form ("40.0" is "40"), on
 // the elements that hold a position or size (a wrapper's "x" is the
@@ -103,12 +104,13 @@ function signatureOf(node: Element): string {
             return [[a.name, value]]
         })
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    const children = Array.from(node.children).map(signatureOf)
+    // draw.io saves a geometry's parts (offset, points, end points) sorted
+    // by name, the model writes them in any order; the points of a line
+    // are inside their Array and keep their order
+    if (node.tagName === "mxGeometry") children.sort()
     // As JSON: a value can hold any text, also "name=value" pairs
-    return JSON.stringify([
-        node.tagName,
-        attrs,
-        Array.from(node.children).map(signatureOf),
-    ])
+    return JSON.stringify([node.tagName, attrs, children])
 }
 
 /** The cells of a page, layers included, with the element that holds each */
@@ -268,14 +270,13 @@ const PAGE_NUMBERS = new Set([
     "pageHeight",
 ])
 
-function samePageSettings(a: Element, b: Element): boolean {
-    const names = new Set(
-        [...Array.from(a.attributes), ...Array.from(b.attributes)].map(
-            (attr) => attr.name,
-        ),
-    )
-    const read = (page: Element, name: string) => {
-        const value = page.getAttribute(name)
+/** A page's settings: the attributes of its mxGraphModel, by name */
+type PageSettings = Map<string, string>
+
+function samePageSettings(a: PageSettings, b: PageSettings): boolean {
+    const names = new Set([...a.keys(), ...b.keys()])
+    const read = (page: PageSettings, name: string) => {
+        const value = page.get(name) ?? null
         if (value === null || !PAGE_NUMBERS.has(name) || !value.trim()) {
             return value
         }
@@ -306,14 +307,16 @@ function contentOf(model: Element | null) {
     for (const { id, cell, node } of cellsIn(model)) {
         cells.set(id, signatureOf(node))
         const parent = cell.getAttribute("parent") ?? ""
-        children.set(parent, [...(children.get(parent) ?? []), id])
+        const siblings = children.get(parent)
+        if (siblings) siblings.push(id)
+        else children.set(parent, [id])
     }
     return { cells, children }
 }
 
-function sameContent(a: Element | null, b: Element | null): boolean {
-    const ca = contentOf(a)
-    const cb = contentOf(b)
+type PageContent = ReturnType<typeof contentOf>
+
+function sameContent(ca: PageContent, cb: PageContent): boolean {
     if (ca.cells.size !== cb.cells.size) return false
     for (const [id, signature] of ca.cells) {
         if (cb.cells.get(id) !== signature) return false
@@ -357,31 +360,65 @@ export function sameFileVars(a: string | null, b: string | null): boolean {
  * subset of the other.
  */
 export function isSameDocument(a: string, b: string): boolean {
-    const pagesOf = (doc: Document) => {
-        const diagrams = Array.from(doc.getElementsByTagName("diagram"))
-        if (diagrams.length === 0) {
-            return [{ name: null, model: doc.querySelector("mxGraphModel") }]
-        }
-        return diagrams.map((d) => ({
-            name: d.getAttribute("name"),
-            model: modelOfPage(d),
-        }))
-    }
-    const docA = parseXml(a)
-    const docB = parseXml(b)
+    const docA = readDocument(a)
+    const docB = readDocument(b)
     if (!docA || !docB) return a === b
-    if (!sameFileVars(fileVars(docA), fileVars(docB))) return false
-    const pagesA = pagesOf(docA)
-    const pagesB = pagesOf(docB)
-    if (pagesA.length !== pagesB.length) return false
-    return pagesA.every((pageA, i) => {
-        const pageB = pagesB[i]
+    if (!sameFileVars(docA.vars, docB.vars)) return false
+    if (docA.pages.length !== docB.pages.length) return false
+    return docA.pages.every((pageA, i) => {
+        const pageB = docB.pages[i]
         if (pageA.name !== null && pageB.name !== null) {
             if (pageA.name !== pageB.name) return false
         }
-        if (pageA.model && pageB.model) {
-            if (!samePageSettings(pageA.model, pageB.model)) return false
+        if (pageA.settings && pageB.settings) {
+            if (!samePageSettings(pageA.settings, pageB.settings)) return false
         }
-        return sameContent(pageA.model, pageB.model)
+        return sameContent(pageA.content, pageB.content)
     })
+}
+
+/** What isSameDocument compares of a document; null when it does not parse */
+function parseDocument(xml: string) {
+    const doc = parseXml(xml)
+    if (!doc) return null
+    const diagrams = Array.from(doc.getElementsByTagName("diagram"))
+    const pages =
+        diagrams.length === 0
+            ? [{ name: null, model: doc.querySelector("mxGraphModel") }]
+            : diagrams.map((d) => ({
+                  name: d.getAttribute("name"),
+                  model: modelOfPage(d),
+              }))
+    return {
+        vars: fileVars(doc),
+        pages: pages.map(({ name, model }) => ({
+            name,
+            settings:
+                model &&
+                (new Map(
+                    Array.from(model.attributes, (a) => [a.name, a.value]),
+                ) as PageSettings),
+            content: contentOf(model),
+        })),
+    }
+}
+
+// Each document is parsed once: after every change to the canvas a chat
+// compares it with each of its versions (up to 20), whose XML stays the
+// same. The documents compared least recently are dropped first.
+const READ_DOCUMENTS_MAX = 50
+const readDocuments = new Map<string, ReturnType<typeof parseDocument>>()
+
+function readDocument(xml: string) {
+    let read = readDocuments.get(xml)
+    if (read === undefined) {
+        read = parseDocument(xml)
+        if (readDocuments.size >= READ_DOCUMENTS_MAX) {
+            readDocuments.delete(readDocuments.keys().next().value as string)
+        }
+    } else {
+        readDocuments.delete(xml)
+    }
+    readDocuments.set(xml, read)
+    return read
 }

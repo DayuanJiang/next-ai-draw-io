@@ -7,18 +7,21 @@ import { DiagramProvider, useDiagram } from "@/contexts/diagram-context"
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }))
 
-// The provider with a stand-in draw.io that records each export request
-function setup() {
+// The provider with a stand-in draw.io that records each export request;
+// started: draw.io has reported its first load
+function setup({ started = true } = {}) {
     const { result } = renderHook(() => useDiagram(), {
         wrapper: ({ children }: { children: React.ReactNode }) => (
             <DiagramProvider>{children}</DiagramProvider>
         ),
     })
     const requests: { format: string; message: string }[] = []
+    const load = vi.fn()
     result.current.drawioRef.current = {
         exportDiagram: (r: any) => requests.push(r),
-        load: vi.fn(),
+        load,
     } as any
+    if (started) act(() => result.current.onDrawioLoad())
     // draw.io's reply to a request: it echoes the request in `message`.
     // Async, so what the caller does with the result runs before it returns
     const reply = (request: { message: string }, data: string, xml = "") =>
@@ -31,8 +34,11 @@ function setup() {
                 message: request,
             } as any)
         })
-    return { result, requests, reply }
+    return { result, requests, reply, load }
 }
+
+const oneBox =
+    '<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Held" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>'
 
 // An editable SVG as draw.io exports it: the diagram, compressed, in its
 // content attribute
@@ -112,6 +118,68 @@ describe("exports in flight at the same time", () => {
         expect(text).toContain('name="A"')
         expect(text).toContain('name="B"')
         vi.unstubAllGlobals()
+    })
+})
+
+describe("the app's own exports", () => {
+    it("read the page's XML without waiting for the diagram's pictures", async () => {
+        const { result, requests, reply } = setup()
+        const xml = result.current.fetchDiagramXml()
+        expect(requests[0]).toMatchObject({
+            format: "xmlsvg",
+            embedImages: false,
+        })
+        await reply(requests[0], svgOf("x"))
+        expect(await xml).toContain('value="x"')
+    })
+
+    it("take a version's picture in the format that leaves the canvas usable", async () => {
+        const { result, requests, reply } = setup()
+        const svg = result.current.getVersionSvg()
+        // A plain "svg" export locks the canvas while pictures download
+        expect(requests[0]).toMatchObject({ format: "xmlsvg", theme: "auto" })
+        await reply(requests[0], svgOf("x"))
+        expect(await svg).toBe(svgOf("x"))
+    })
+
+    it("take the screenshot check's picture of the page on screen", async () => {
+        const { result, requests, reply } = setup()
+        act(() => {
+            result.current.loadDiagram(oneBox, true)
+        })
+        const png = result.current.captureValidationPng()
+        expect(requests[0]).toMatchObject({ format: "png", currentPage: true })
+        await reply(requests[0], "data:image/png;base64,iVBORw0KGgo=")
+        expect(await png).toMatch(/^data:image\/png/)
+    })
+})
+
+describe("before draw.io has started", () => {
+    it("the chat gets the page of the document held, with no export", async () => {
+        const { result, requests, load } = setup({ started: false })
+        act(() => {
+            result.current.loadDiagram(oneBox, true)
+        })
+        load.mockClear()
+        // An export sent now would be lost, and the send would fail
+        expect(await result.current.fetchDiagramXml()).toContain('value="Held"')
+        expect(requests).toEqual([])
+
+        // draw.io's first load puts the document on the canvas; from then
+        // on the canvas is asked
+        act(() => result.current.onDrawioLoad())
+        expect(load).toHaveBeenCalledTimes(1)
+        expect(load.mock.calls[0][0].xml).toContain('value="Held"')
+        result.current.fetchDiagramXml()
+        expect(requests).toHaveLength(1)
+    })
+
+    it("an empty canvas is the blank page", async () => {
+        const { result, requests } = setup({ started: false })
+        const xml = await result.current.fetchDiagramXml()
+        expect(xml).toContain("<mxGraphModel")
+        expect(xml).not.toContain("vertex")
+        expect(requests).toEqual([])
     })
 })
 

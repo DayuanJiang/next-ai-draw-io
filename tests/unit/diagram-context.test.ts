@@ -108,6 +108,46 @@ describe("diagramFingerprint", () => {
         )
     })
 
+    it("ignores the order a geometry's parts are written in", () => {
+        const edge = (geometry: string) =>
+            page(
+                `${box("2")}<mxCell id="5" edge="1" parent="1" source="2" target="2"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell>`,
+            )
+        const points = (...xs: number[]) =>
+            `<Array as="points">${xs.map((x) => `<mxPoint x="${x}" y="70"/>`).join("")}</Array>`
+        // As a model writes them, and sorted by name as draw.io saves them
+        expect(
+            diagramFingerprint(
+                edge(points(250) + '<mxPoint x="0" y="-10" as="offset"/>'),
+            ),
+        ).toBe(
+            diagramFingerprint(
+                edge('<mxPoint y="-10" as="offset"/>' + points(250)),
+            ),
+        )
+        // The points of a line are in the order the line passes them
+        expect(diagramFingerprint(edge(points(250, 300)))).not.toBe(
+            diagramFingerprint(edge(points(300, 250))),
+        )
+        const container = (bounds: string) =>
+            page(
+                `<mxCell id="2" vertex="1" parent="1"><mxGeometry x="40" y="40" width="200" height="120" as="geometry">${bounds}</mxGeometry></mxCell>`,
+            )
+        expect(
+            diagramFingerprint(
+                container(
+                    '<mxRectangle x="0" y="0" width="200" height="30" as="alternateBounds"/>',
+                ),
+            ),
+        ).toBe(
+            diagramFingerprint(
+                container(
+                    '<mxRectangle width="200" height="30" as="alternateBounds"/>',
+                ),
+            ),
+        )
+    })
+
     it("is null for XML without a model", () => {
         expect(diagramFingerprint("")).toBeNull()
         expect(diagramFingerprint("<mxGraphModel><root>")).toBeNull()

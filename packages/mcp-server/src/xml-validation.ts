@@ -738,19 +738,43 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push(`Removed ${orphanPoints.length} orphan <mxPoint>(s)`)
     }
 
-    // 17. Fix unclosed tags
+    // 17. Fix unclosed tags. What a cell left open (its <mxGeometry>) is
+    // closed right before the cell's </mxCell>: closed at the end of the
+    // document, as the other open tags are below, that one cell would fail
+    // the whole drawing. (A cell without its own </mxCell> is left to the
+    // end of the document and steps 20 and 21.)
     const tagStack: string[] = []
     const parsedTags = parseXmlTags(fixed)
+    const closedInCell: { at: number; names: string[] }[] = []
 
-    for (const { tagName, isClosing, isSelfClosing } of parsedTags) {
+    for (const {
+        tagName,
+        isClosing,
+        isSelfClosing,
+        startIndex,
+    } of parsedTags) {
         if (isClosing) {
             const lastIdx = tagStack.lastIndexOf(tagName)
-            if (lastIdx !== -1) {
+            if (lastIdx === -1) continue
+            if (tagName === "mxCell" && lastIdx < tagStack.length - 1) {
+                const stillOpen = tagStack.splice(lastIdx).slice(1).reverse()
+                closedInCell.push({ at: startIndex, names: stillOpen })
+            } else {
                 tagStack.splice(lastIdx, 1)
             }
         } else if (!isSelfClosing) {
             tagStack.push(tagName)
         }
+    }
+    // From the end, so earlier positions stay valid
+    for (const { at, names } of closedInCell.reverse()) {
+        const closingTags = names.map((name) => `</${name}>`).join("")
+        fixed = fixed.slice(0, at) + closingTags + fixed.slice(at)
+    }
+    if (closedInCell.length > 0) {
+        fixes.push(
+            `Closed unclosed tag(s) inside their cell: ${closedInCell.flatMap(({ names }) => names).join(", ")}`,
+        )
     }
 
     if (tagStack.length > 0) {

@@ -55,17 +55,18 @@ const GEOMETRY_DEFAULTS: Record<string, string> = {
     height: "0",
 }
 
+// The elements that hold a position or size
+const GEOMETRY_TAGS = new Set(["mxGeometry", "mxPoint", "mxRectangle"])
+
 function canonical(el: Element): string {
     const attrs = new Map<string, string>()
     for (const a of Array.from(el.attributes)) attrs.set(a.name, a.value)
-    if (el.tagName === "mxGeometry" || el.tagName === "mxPoint") {
+    if (GEOMETRY_TAGS.has(el.tagName)) {
         for (const [k, v] of Object.entries(GEOMETRY_DEFAULTS)) {
             if (el.tagName === "mxPoint" && (k === "width" || k === "height"))
                 continue
             if (!attrs.has(k)) attrs.set(k, v)
         }
-    }
-    if (el.tagName === "mxGeometry" || el.tagName === "mxPoint") {
         for (const k of ["x", "y", "width", "height"]) {
             const v = attrs.get(k)
             if (v !== undefined && v.trim() !== "" && !Number.isNaN(Number(v)))
@@ -82,8 +83,11 @@ function canonical(el: Element): string {
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
         .join(" ")
-    const children = Array.from(el.children).map(canonical).join("")
-    return `<${el.tagName} ${text}>${children}</${el.tagName}>`
+    const children = Array.from(el.children).map(canonical)
+    // draw.io saves a geometry's parts (offset, points, end points) sorted
+    // by name, the model writes them in any order
+    if (el.tagName === "mxGeometry") children.sort()
+    return `<${el.tagName} ${text}>${children.join("")}</${el.tagName}>`
 }
 
 // A root child's parent: on the cell, or on the cell an <object> wraps (the
@@ -104,7 +108,9 @@ function treeOrder(cells: Element[]): Element[] {
     for (const cell of cells) {
         const parent = parentOf(cell)
         const key = parent !== null && ids.has(parent) ? parent : null
-        children.set(key, [...(children.get(key) ?? []), cell])
+        const siblings = children.get(key)
+        if (siblings) siblings.push(cell)
+        else children.set(key, [cell])
     }
     const out: Element[] = []
     const seen = new Set<Element>()

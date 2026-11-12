@@ -476,12 +476,21 @@ export function canReplaceDiagram(xml: string): boolean {
     )
 }
 
+// The preview streams onto a page that was empty: the growing drawing is
+// kept in view, until the user moves the view themselves
+let followPreview = false
+
 /** Show a streaming preview without touching the undo history */
 export function previewDiagram(xml: string) {
-    if (previewBase === null) previewBase = currentFileXml() ?? ""
+    if (previewBase === null) {
+        previewBase = currentFileXml() ?? ""
+        followPreview = isEmptyModel()
+    }
     const wasEmpty = isEmptyModel()
     withoutUndo(() => replace(xml))
-    if (wasEmpty) fitDiagram()
+    // The first shapes on an empty page come to the middle; the drawing is
+    // fitted again each time it grows past the edge of the window
+    if (wasEmpty || (followPreview && !shapesInView())) fitDiagram()
 }
 
 /**
@@ -568,6 +577,12 @@ export function commitDiagram(xml: string) {
 export function revertPreview(targetXml: string) {
     previewBase = null
     withoutUndo(() => replace(targetXml))
+    // An empty page again (the drawing was stopped or failed): back to
+    // 100% in the middle, where the preview's fits took the view from
+    if (isEmptyModel()) {
+        graph()?.zoomTo(1)
+        centerEmptyPage()
+    }
 }
 
 /** Forget the preview base (new user turn) without changing the canvas */
@@ -599,6 +614,7 @@ function zoomChanged() {
     if (fitting) return
     lastAutoFitAt = 0
     lastOpenedAt = 0
+    followPreview = false
 }
 
 /** Fit again if the last automatic fit just happened (layout still moving) */
@@ -641,16 +657,22 @@ function placeOpenedDiagram() {
     } finally {
         fitting = false
     }
+    if (!shapesInView()) fitDiagram()
+}
+
+/** Every shape is inside the visible part of the canvas */
+function shapesInView(): boolean {
+    const g = graph()
     const b = g.getGraphBounds()
     const c = g.container
     const left = b.x - c.scrollLeft
     const top = b.y - c.scrollTop
-    const inView =
+    return (
         left >= 0 &&
         top >= 0 &&
         left + b.width <= c.clientWidth &&
         top + b.height <= c.clientHeight
-    if (!inView) fitDiagram()
+    )
 }
 
 /** Fit the shapes (not the whole page) into the canvas, at most at 100% */
@@ -991,11 +1013,24 @@ function syncSelectionRect() {
 function syncAll() {
     if (!ui) return
     const g = graph()
+    // Every change to the diagram comes here (each frame of a streaming
+    // preview too), mostly with the selection as it was: the store keeps
+    // its array then, so the chat does not render again for it
+    const before = useCanvasStore.getState().selection
+    const now = readSelection()
+    const same =
+        now.length === before.length &&
+        now.every(
+            (cell, i) =>
+                cell.id === before[i].id &&
+                cell.label === before[i].label &&
+                cell.isEdge === before[i].isEdge,
+        )
     useCanvasStore.getState().set({
         currentPageId: ui.currentPage?.getId
             ? String(ui.currentPage.getId())
             : null,
-        selection: readSelection(),
+        selection: same ? before : now,
         selectionRect: readSelectionRect(),
         isFreehand: !!g?.freehand?.isDrawing?.(),
         isFormatOpen: isFormatPanelOpen(),
@@ -1108,9 +1143,21 @@ function installListeners(): () => void {
     const container = g.container as HTMLElement | undefined
     container?.addEventListener("scroll", syncSelectionRect, { passive: true })
     container?.addEventListener("pointerdown", clearHighlights, true)
+    // A press or the wheel on the canvas: the user looks around, so a
+    // streaming preview stops moving the view
+    const stopFollowing = () => {
+        followPreview = false
+    }
+    container?.addEventListener("pointerdown", stopFollowing, true)
+    container?.addEventListener("wheel", stopFollowing, {
+        capture: true,
+        passive: true,
+    })
     cleanups.push(() => {
         container?.removeEventListener("scroll", syncSelectionRect)
         container?.removeEventListener("pointerdown", clearHighlights, true)
+        container?.removeEventListener("pointerdown", stopFollowing, true)
+        container?.removeEventListener("wheel", stopFollowing, true)
     })
 
     return () => {

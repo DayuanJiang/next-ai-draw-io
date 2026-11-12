@@ -152,6 +152,7 @@ export function useVersions({
         const before = chartXMLRef.current
         const wasOnCanvas = store.onCanvasVersionId
         const wasUndone = store.undoneVersionId
+        const wasEdited = store.editedSinceId
         const generation = getChatGeneration()
         apply(store.versions[index].xml)
         store.setOnCanvas(versionId)
@@ -174,6 +175,13 @@ export function useVersions({
                         const now = useVersionsStore.getState()
                         if (wasUndone) now.setUndone(wasUndone, wasOnCanvas)
                         else if (wasOnCanvas) now.setOnCanvas(wasOnCanvas)
+                        else if (wasEdited) {
+                            // The hand edits made since that version are
+                            // back: its card says so again (else the
+                            // version just restored would get the note)
+                            now.setOnCanvas(wasEdited)
+                            now.clearCanvasFlags()
+                        }
                     },
                 },
             },

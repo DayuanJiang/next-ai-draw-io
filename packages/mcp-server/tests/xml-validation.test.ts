@@ -272,6 +272,56 @@ describe("validateAndFixXml strict checks", () => {
     })
 })
 
+describe("a closing tag left out inside one cell", () => {
+    const box = (id: string) =>
+        `<mxCell id="${id}" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`
+    const points = `<Array as="points"><mxPoint x="690" y="264"/><mxPoint x="690" y="360"/></Array>`
+    const edge = (id: string, geometry: string) =>
+        `<mxCell id="${id}" edge="1" parent="1" source="a" target="b">${geometry}</mxCell>`
+
+    it("is added in that cell: the drawing keeps its routing points", () => {
+        // As a model wrote it: </mxGeometry> missing in the second connector
+        const r = validateAndFixXml(
+            model(
+                box("a") +
+                    box("b") +
+                    edge(
+                        "e1",
+                        `<mxGeometry relative="1" as="geometry">${points}</mxGeometry>`,
+                    ) +
+                    edge(
+                        "e2",
+                        `<mxGeometry relative="1" as="geometry">${points}`,
+                    ) +
+                    box("c"),
+            ),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain(
+            edge(
+                "e2",
+                `<mxGeometry relative="1" as="geometry">${points}</mxGeometry>`,
+            ),
+        )
+        // The cells around it are as written
+        expect(r.fixed).toContain(box("c"))
+        expect(r.fixed?.match(/<Array as="points">/g)).toHaveLength(2)
+    })
+
+    it("closes a shape's geometry written without its slash", () => {
+        const open = `<mxGeometry x="40" y="40" width="80" height="40" as="geometry">`
+        const r = validateAndFixXml(
+            model(
+                box("a") +
+                    `<mxCell id="b" vertex="1" parent="1">${open}</mxCell>` +
+                    box("c"),
+            ),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toContain(`${open}</mxGeometry></mxCell>${box("c")}`)
+    })
+})
+
 describe("text between tags", () => {
     // draw.io reads any text inside a page as compressed data, so the whole
     // page fails to open with an atob error

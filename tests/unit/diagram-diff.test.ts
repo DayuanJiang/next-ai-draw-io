@@ -1,5 +1,5 @@
 import pako from "pako"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
     cellLabels,
     diffDiagrams,
@@ -372,6 +372,79 @@ describe("isSameDocument", () => {
         expect(isSameDocument(wrapped("1", "40.0"), wrapped("1", "40"))).toBe(
             true,
         )
+    })
+
+    it("ignores the order a geometry's parts are written in", () => {
+        const line = (geometry: string) =>
+            file(
+                pageOf(
+                    "One",
+                    `<mxCell id="e" value="Yes" edge="1" parent="1"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell>`,
+                ),
+            )
+        const points = (...xs: number[]) =>
+            `<Array as="points">${xs.map((x) => `<mxPoint x="${x}" y="70"/>`).join("")}</Array>`
+        const offset = '<mxPoint x="0" y="-10" as="offset"/>'
+        const source = '<mxPoint x="40" y="40" as="sourcePoint"/>'
+        const target = '<mxPoint x="400" y="40" as="targetPoint"/>'
+        // As a model writes them, and sorted by name as draw.io saves them
+        expect(
+            isSameDocument(
+                line(points(250) + offset),
+                line('<mxPoint y="-10" as="offset"/>' + points(250)),
+            ),
+        ).toBe(true)
+        expect(
+            isSameDocument(
+                line(source + target + points(250)),
+                line(points(250) + source + target),
+            ),
+        ).toBe(true)
+        expect(
+            isSameDocument(line(target + source), line(source + target)),
+        ).toBe(true)
+        // The points of a line are in the order the line passes them
+        expect(
+            isSameDocument(line(points(250, 300)), line(points(300, 250))),
+        ).toBe(false)
+    })
+
+    it("takes a collapsed size's left-out position as 0, as draw.io writes it", () => {
+        const container = (bounds: string) =>
+            file(
+                pageOf(
+                    "One",
+                    `<mxCell id="c" vertex="1" parent="1"><mxGeometry x="40" y="40" width="200" height="120" as="geometry">${bounds}</mxGeometry></mxCell>`,
+                ),
+            )
+        expect(
+            isSameDocument(
+                container(
+                    '<mxRectangle x="0" y="0" width="200" height="30" as="alternateBounds"/>',
+                ),
+                container(
+                    '<mxRectangle width="200" height="30" as="alternateBounds"/>',
+                ),
+            ),
+        ).toBe(true)
+    })
+
+    it("parses each document once, however often it is compared", () => {
+        // A chat's versions, compared with the canvas after each hand edit
+        const versions = Array.from({ length: 20 }, (_, i) =>
+            file(pageOf("One", box("a", `version ${i}`))),
+        )
+        const parse = vi.spyOn(DOMParser.prototype, "parseFromString")
+        const compare = (canvas: string) =>
+            versions.map((version) => isSameDocument(version, canvas))
+        const first = compare(file(pageOf("One", box("a", "edit 1"))))
+        expect(parse).toHaveBeenCalledTimes(21)
+        // The next edit: only the canvas is new
+        compare(file(pageOf("One", box("a", "edit 2"))))
+        expect(parse).toHaveBeenCalledTimes(22)
+        expect(compare(file(pageOf("One", box("a", "edit 1"))))).toEqual(first)
+        expect(compare(versions[3])[3]).toBe(true)
+        parse.mockRestore()
     })
 
     it("reads numeric page settings as numbers", () => {

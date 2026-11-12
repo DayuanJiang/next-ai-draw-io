@@ -1,10 +1,14 @@
-import { cleanup, renderHook } from "@testing-library/react"
+import { act, cleanup, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { EMPTY_SUMMARY } from "@/lib/diagram-diff"
 import en from "@/lib/i18n/dictionaries/en.json"
 import { useVersionsStore } from "@/stores/versions-store"
 
-const mocks = vi.hoisted(() => ({ chartXML: "" }))
+const mocks = vi.hoisted(() => ({
+    chartXML: "",
+    // The button of the latest toast
+    toastAction: () => {},
+}))
 
 vi.mock("@/contexts/diagram-context", () => ({
     useDiagram: () => ({
@@ -16,6 +20,17 @@ vi.mock("@/contexts/diagram-context", () => ({
     }),
 }))
 vi.mock("@/hooks/use-dictionary", () => ({ useDictionary: () => en }))
+vi.mock("sonner", () => ({
+    toast: {
+        success: (
+            _text: string,
+            options: { action: { onClick: () => void } },
+        ) => {
+            mocks.toastAction = options.action.onClick
+        },
+        dismiss: () => {},
+    },
+}))
 vi.mock("@/lib/drawio/editor-bridge", () => ({
     clearHighlights: vi.fn(),
     highlightChangedCells: vi.fn(),
@@ -66,5 +81,42 @@ describe("the version on the canvas", () => {
         mocks.chartXML = A
         rerender()
         expect(useVersionsStore.getState().onCanvasVersionId).toBe(first)
+    })
+
+    it("keeps the hand-edit note on its version when a restore is undone", () => {
+        const store = useVersionsStore.getState()
+        const add = (xml: string, beforeXml: string, turnIndex: number) =>
+            store.addVersion({
+                xml,
+                beforeXml,
+                turnIndex,
+                summary: { ...EMPTY_SUMMARY },
+            })
+        const first = add(A, "", 0)
+        const second = add(AB, A, 1)
+        // The second version, with a shape moved by hand
+        const edited = doc(cell("a") + cell("b", 300))
+        mocks.chartXML = edited
+        const { result, rerender } = renderHook(() =>
+            useVersions({
+                currentTurnRef: { current: 1 },
+                isBusy: false,
+                isTurnActive: () => false,
+                getChatGeneration: () => 0,
+            }),
+        )
+        expect(useVersionsStore.getState().editedSinceId).toBe(second)
+
+        act(() => result.current.restoreVersion(first))
+        mocks.chartXML = A
+        rerender()
+        expect(useVersionsStore.getState().onCanvasVersionId).toBe(first)
+
+        // Undo in the toast: the hand-edited canvas is back
+        act(() => mocks.toastAction())
+        mocks.chartXML = edited
+        rerender()
+        expect(useVersionsStore.getState().onCanvasVersionId).toBeNull()
+        expect(useVersionsStore.getState().editedSinceId).toBe(second)
     })
 })
