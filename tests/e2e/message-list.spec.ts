@@ -30,12 +30,12 @@ const scrollArea = (page: Page) =>
         }
     })
 
-test("the chat stays where the user scrolled it while an answer streams", async ({
-    page,
-}) => {
-    // A first answer longer than the panel, then one that grows by a few
-    // lines with every update on screen (each 150 ms), so the list is
-    // always on its way to the new end
+/**
+ * A first answer longer than the panel, then one that grows by a few lines
+ * with every update on screen (each 150 ms), so the list is always on its
+ * way to the new end. Returns once the second answer streams.
+ */
+async function streamSecondAnswer(page: Page) {
     const first = sse([
         { type: "start" },
         { type: "text-start", id: "t1" },
@@ -67,6 +67,13 @@ test("the chat stays where the user scrolled it while an answer streams", async 
 
     await sendMessage(page, "Write some more")
     await expect(page.getByText("Sentence 10 of")).toBeAttached()
+    return regenerate
+}
+
+test("the chat stays where the user scrolled it while an answer streams", async ({
+    page,
+}) => {
+    const regenerate = await streamSecondAnswer(page)
     // Up, to read the first answer again; in two steps, as a wheel turns
     const { x, y } = await scrollArea(page)
     await page.mouse.move(x, y)
@@ -84,6 +91,19 @@ test("the chat stays where the user scrolled it while an answer streams", async 
     await expect
         .poll(async () => (await scrollArea(page)).fromBottom)
         .toBeLessThan(60)
+})
+
+test("the chat stays where Page Up scrolled it while an answer streams", async ({
+    page,
+}) => {
+    await streamSecondAnswer(page)
+    // A click on the answer's text: the keys then scroll the chat
+    await page.getByText("Sentence 1 of").click()
+    await page.keyboard.press("PageUp")
+    await page.waitForTimeout(300)
+    await page.keyboard.press("PageUp")
+    await expect(page.getByText("Sentence 60 of")).toBeAttached()
+    expect((await scrollArea(page)).fromBottom).toBeGreaterThan(300)
 })
 
 test("a message typed on several lines keeps them; a table shows as one", async ({

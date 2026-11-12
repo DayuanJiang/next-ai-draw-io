@@ -48,6 +48,7 @@ import {
     ATTACHMENT_ACCEPT,
     isDiagramFile,
     isOversizedImage,
+    pickedFile,
     readImageTypes,
     shrinkImage,
     validateFiles,
@@ -205,8 +206,13 @@ export function Composer({
     // Allow a retry when the last request failed, even mid-stream. While
     // the chat is being left, what is typed could not be sent.
     const isDisabled = (isBusy && !error) || engine.isLeaving
+    // Sets of added files still being read (addFiles)
+    const [filesBeingAdded, setFilesBeingAdded] = useState(0)
     const canSend =
-        !isDisabled && !engine.isExtractingAttachments && !!input.trim()
+        !isDisabled &&
+        !engine.isExtractingAttachments &&
+        filesBeingAdded === 0 &&
+        !!input.trim()
 
     const adjustHeight = useCallback(() => {
         const textarea = textareaRef.current
@@ -231,7 +237,10 @@ export function Composer({
     // the input the user types in: the browser takes the focus from the
     // input it disables, after this runs. It gets the focus back once
     // enabled, so the next message can be typed at once, unless something
-    // else took the focus meanwhile.
+    // else took the focus meanwhile. A press on Stop leaves the focus on
+    // that button, which is the disabled Send button by now and loses it
+    // to the page a moment later. Text selected in the chat meanwhile (to
+    // copy it) stays selected: a focused box would take the selection.
     const refocusRef = useRef(false)
     useLayoutEffect(() => {
         if (isDisabled) {
@@ -242,7 +251,11 @@ export function Composer({
         }
         if (!refocusRef.current) return
         refocusRef.current = false
-        if (document.activeElement === document.body) {
+        const active = document.activeElement
+        if (
+            (active === document.body || formRef.current?.contains(active)) &&
+            !window.getSelection()?.toString()
+        ) {
             textareaRef.current?.focus()
         }
     }, [isDisabled])
@@ -262,6 +275,10 @@ export function Composer({
 
     const send = () => {
         if (!canSend) return
+        // A click on Send takes the focus from the box. Put back here, the
+        // box gets it again when the answer ends (above). The start
+        // screen's box hands over to the panel's instead.
+        if (!isHero) textareaRef.current?.focus()
         engine.submit()
         // The answer shows in the chat panel, whose box takes the focus
         // over for the next message. Not on phones, where a focused box
@@ -278,23 +295,33 @@ export function Composer({
         const newFiles = added.filter(
             (file) =>
                 !isDiagramFile(file) &&
-                !files.some(
-                    (f) =>
-                        f.name === file.name &&
-                        f.size === file.size &&
-                        f.lastModified === file.lastModified,
-                ),
+                !files
+                    .map(pickedFile)
+                    .some(
+                        (f) =>
+                            f.name === file.name &&
+                            f.size === file.size &&
+                            f.lastModified === file.lastModified,
+                    ),
         )
         if (newFiles.length === 0) return
         // A picture over the size limit (a phone photo, a large screenshot)
         // is scaled down to fit. The attachments can change meanwhile, so
-        // from here on they are read from the ref.
-        const sized = await Promise.all(
-            newFiles.map((file) =>
-                isOversizedImage(file) ? shrinkImage(file) : file,
-            ),
+        // from here on they are read from the ref. Until the files are
+        // attached the message cannot be sent: it would go without them.
+        setFilesBeingAdded((n) => n + 1)
+        const read = async () => {
+            const sized = await Promise.all(
+                newFiles.map((file) =>
+                    isOversizedImage(file) ? shrinkImage(file) : file,
+                ),
+            )
+            return { sized, imageTypes: await readImageTypes(sized) }
+        }
+        // (Also when a file cannot be read: it went away meanwhile)
+        const { sized, imageTypes } = await read().finally(() =>
+            setFilesBeingAdded((n) => n - 1),
         )
-        const imageTypes = await readImageTypes(sized)
         const attached = filesRef.current
         const { validFiles, errors } = validateFiles(
             sized,

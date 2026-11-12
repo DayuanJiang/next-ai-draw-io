@@ -508,8 +508,15 @@ export function useSessionManager(
                     // was cleared, or another tab deleted it): it is
                     // written again as this page saved it last, under its
                     // new title, and the list is read again. What changed
-                    // since goes in with the next save.
-                    if (renamed && (await saveSession(renamed))) {
+                    // since goes in with the next save. Not after a write
+                    // that failed (storage full): the chat is still in
+                    // storage, where another tab may have saved a newer
+                    // copy than this page's.
+                    if (
+                        updated === null &&
+                        renamed &&
+                        (await saveSession(renamed))
+                    ) {
                         await refreshSessions()
                     } else {
                         notifySaveFailed(dict)

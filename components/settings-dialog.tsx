@@ -219,10 +219,9 @@ function GeneralTab({ open }: { open: boolean }) {
             const params = new URLSearchParams(search.toString())
             if (sessionId) params.set("session", sessionId)
             const query = params.toString() ? `?${params.toString()}` : ""
-            // In place of this page in the browser history. As a step of
-            // its own, Back would lead to the old language's address, which
-            // the saved language turns into the new one, and seem to do
-            // nothing
+            // In place of this page in the browser history: the old
+            // language's address redirects to the saved language, so a
+            // step back to it would come straight back here
             router.replace((parts.join("/") || "/") + query)
         })
 

@@ -250,14 +250,16 @@ export async function enforceSessionLimit(
     return deleted
 }
 
+// Resolves to the renamed chat, to null when storage holds no chat of this
+// id, and to false when the renamed chat could not be written
 export async function renameSession(
     id: string,
     title: string,
-): Promise<ChatSession | null> {
+): Promise<ChatSession | null | false> {
     const session = await getSession(id)
     if (!session) return null
     const updated = { ...session, title, updatedAt: Date.now() }
-    return (await saveSession(updated)) ? updated : null
+    return (await saveSession(updated)) && updated
 }
 
 // Helper: Create a new empty session

@@ -522,4 +522,16 @@ describe("diagramContextText", () => {
             }),
         ).toContain('background="#000000"')
     })
+
+    it("says that a shape missing from the canvas was removed by the user", () => {
+        // After a hand deletion the connectors of the shape stay, open at
+        // one end: without this sentence the models draw the shape again
+        const note = diagramContextText({
+            xml: '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Kept" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>',
+            pageId: null,
+        })
+        expect(note.split("\n")[0]).toMatch(
+            /missing from it was removed by the user: do not add it back unless the user asks\.\]$/,
+        )
+    })
 })

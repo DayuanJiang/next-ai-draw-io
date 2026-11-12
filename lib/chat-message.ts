@@ -86,6 +86,8 @@ export interface ChatNotice {
     accessCode?: boolean
     /** The user's last actions when it happened, for its report */
     actions?: string[]
+    /** The user stopped the answer: a plain line with Retry, no error card */
+    stopped?: boolean
 }
 
 export type ChatToolName = keyof InferUITools<typeof chatTools>

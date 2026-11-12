@@ -247,9 +247,9 @@ class FileReadError extends Error {}
 /**
  * Puts the chat's session id into the address (null: the plain page),
  * through the browser's history, which Next follows on its own. Its router
- * asks the server for the page on every change of the address, and loads
- * the address anew when the server does not answer: a server restart
- * during a chat's first answer took the editor off screen.
+ * would ask the server for the page on every change of the address, and
+ * load the address anew when the server does not answer (a restart during
+ * a chat's first answer).
  */
 function setUrlSession(id: string | null) {
     window.history.replaceState(
@@ -345,8 +345,10 @@ export function ChatEngineProvider({
         latestSvgRef,
         clearDiagram,
         getThumbnailSvg,
+        getVersionSvg,
         captureValidationPng,
         startTurn,
+        isDrawioReady,
     } = useDiagram()
 
     const dict = useDictionary()
@@ -599,6 +601,31 @@ export function ChatEngineProvider({
             }
             // A failure was noted by onError, which comes first
             if (isAbort) noteAction("answer stopped")
+            // Stop before the answer showed anything, or while it thought or
+            // wrote: the chat says that it was stopped, with Retry (a call
+            // that was stopped says so in its own row). The line is kept
+            // with the chat: opened again, a chat that ends with the
+            // question or half an answer reads as cut off.
+            if (
+                isAbort &&
+                stoppedRef.current &&
+                getChatGeneration() === turnChatRef.current
+            ) {
+                setMessages((current) => {
+                    const last = current.at(-1)
+                    const lastPart =
+                        last?.role === "assistant" ? last.parts.at(-1) : null
+                    return lastPart && isToolUIPart(lastPart)
+                        ? current
+                        : [
+                              ...current,
+                              noticeMessage({
+                                  text: dict.versions.stopped,
+                                  stopped: true,
+                              }),
+                          ]
+                })
+            }
             if (isAbort || isError) return
             noteAction(
                 finishReason === "length"
@@ -1039,6 +1066,9 @@ export function ChatEngineProvider({
     // The messages shown when another chat was put on screen: useChat can
     // show that chat's own up to 150 ms later than the rest of its state
     const messagesBeforeShownRef = useRef<ChatUIMessage[] | null>(null)
+    // The version on the canvas of the chat just shown, when it was saved
+    // before its picture was taken
+    const unpicturedVersionRef = useRef<string | null>(null)
 
     const syncUIWithSession = useCallback(
         (data: SessionData | null) => {
@@ -1115,12 +1145,17 @@ export function ChatEngineProvider({
                 else clearDiagram()
                 if (!isRealDiagram(data.diagramXml)) latestSvgRef.current = ""
                 useVersionsStore.getState().setVersions(data.versions ?? [])
+                unpicturedVersionRef.current =
+                    data.versions?.find(
+                        (v) => v.onCanvas && v.svg === undefined,
+                    )?.id ?? null
             } else {
                 loadedMessageIdsRef.current = new Set()
                 setMessages([])
                 xmlSnapshotsRef.current.clear()
                 clearDiagram()
                 useVersionsStore.getState().clear()
+                unpicturedVersionRef.current = null
             }
         },
         [
@@ -1131,6 +1166,23 @@ export function ChatEngineProvider({
             dict.errors.answerEndedEarly,
         ],
     )
+
+    // A version's picture is taken a moment after its drawing, and a chat
+    // left in that moment (the answer is saved when it ends) is saved
+    // without it. The canvas of that chat shows the version when the chat
+    // is opened again: its picture is taken then, after the load that
+    // draw.io was sent before.
+    useEffect(() => {
+        const id = unpicturedVersionRef.current
+        if (!id || !isDrawioReady) return
+        unpicturedVersionRef.current = null
+        void getVersionSvg().then((svg) => {
+            const store = useVersionsStore.getState()
+            if (svg && store.onCanvasVersionId === id) {
+                store.updateVersion(id, { svg })
+            }
+        })
+    }, [isDrawioReady, shownChats])
 
     const buildSessionData = useCallback(
         async (
@@ -1276,6 +1328,8 @@ export function ChatEngineProvider({
     const versions = useVersionsStore((s) => s.versions)
     // An answer was coming in when the auto-save effect ran last
     const answeringRef = useRef(false)
+    // The user message on screen when a sent message was saved last
+    const savedSentRef = useRef<ChatUIMessage | undefined>(undefined)
 
     // Auto-save: at once when a message is sent and when its answer ends,
     // and a second after each change while no answer comes in
@@ -1287,14 +1341,18 @@ export function ChatEngineProvider({
             changesRef.current++
             answeringRef.current = true
             // The message is saved the moment it is sent: its answer can
-            // take a minute, and a reload or a closed tab during it lost
-            // the message, and a new chat as a whole. (Once a chat just
-            // loaded shows its own messages.)
+            // take a minute, and the page can be reloaded or closed
+            // meanwhile. A message sent again (edited, regenerated) shows
+            // in the messages up to 150 ms later (useChat's throttle), when
+            // the answer may already stream: it is saved once it shows.
+            // (Once a chat just loaded shows its own messages.)
+            const sent = messages.findLast((m) => m.role === "user")
             if (
-                status === "submitted" &&
+                (status === "submitted" || sent !== savedSentRef.current) &&
                 !justLoadedSessionRef.current &&
                 hasUnsavedChanges()
             ) {
+                savedSentRef.current = sent
                 void saveNow()
             }
             return
@@ -1790,10 +1848,23 @@ export function ChatEngineProvider({
         // that the canvas gained since is the user's own work: it is in no
         // version, and loading the snapshot would take it away for good (a
         // load resets undo). The canvas then stays, as on Retry, and is the
-        // diagram the message is sent with from now on.
-        const drawnSince = useVersionsStore
-            .getState()
-            .versions.some((v) => v.turnIndex >= index)
+        // diagram the message is sent with from now on. Each drawing has a
+        // version; a chat saved before versions were kept has none, and
+        // there the finished drawing calls of the answers tell.
+        const drawnSince =
+            useVersionsStore
+                .getState()
+                .versions.some((v) => v.turnIndex >= index) ||
+            messages
+                .slice(index + 1)
+                .some((m) =>
+                    m.parts.some(
+                        (p) =>
+                            isToolUIPart(p) &&
+                            p.state === "output-available" &&
+                            getToolName(p) !== "get_shape_library",
+                    ),
+                )
         const xml = drawnSince ? savedXml : chartXMLRef.current || savedXml
         if (drawnSince) {
             onDisplayChart(savedXml, true)

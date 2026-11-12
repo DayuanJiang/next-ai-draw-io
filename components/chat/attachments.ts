@@ -42,6 +42,15 @@ export function isOversizedImage(file: File): boolean {
     )
 }
 
+// The file each scaled down picture was made from
+const pickedFiles = new WeakMap<File, File>()
+
+/**
+ * The file as the user picked it: a scaled down picture has another name,
+ * size and date, by which a file picked twice could not be known
+ */
+export const pickedFile = (file: File) => pickedFiles.get(file) ?? file
+
 /**
  * The picture as a JPEG of at most 2000 pixels a side: a phone photo or a
  * large screenshot is over the size limit as it is. A file the browser
@@ -69,9 +78,13 @@ export async function shrinkImage(file: File): Promise<File> {
             canvas.toBlob(resolve, "image/jpeg", 0.85),
         )
         if (!blob) return file
-        return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, {
-            type: "image/jpeg",
-        })
+        const shrunk = new File(
+            [blob],
+            `${file.name.replace(/\.[^.]+$/, "")}.jpg`,
+            { type: "image/jpeg" },
+        )
+        pickedFiles.set(shrunk, file)
+        return shrunk
     } catch {
         return file
     }

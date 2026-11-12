@@ -10,6 +10,8 @@ let readGate: Promise<void> = Promise.resolve()
 let deletedByLimit: string[] = []
 // What storage rejected the latest save with
 const storageError = new Error("The quota has been exceeded.")
+// A rename finds the chat, and storage refuses the renamed copy
+let renameWriteFails = false
 
 vi.mock("@/hooks/use-dictionary", () => ({
     useDictionary: () => ({
@@ -52,6 +54,7 @@ vi.mock("@/lib/session-storage", async (importActual) => {
         renameSession: async (id: string, title: string) => {
             const session = stored.get(id)
             if (!session) return null
+            if (renameWriteFails) return false
             const updated = { ...session, title, updatedAt: Date.now() }
             stored.set(id, updated)
             return updated
@@ -421,5 +424,42 @@ describe("renaming the chat on screen", () => {
             "New name",
         ])
         expect(toastUnexpectedError).not.toHaveBeenCalled()
+    })
+
+    it("leaves the stored copy alone when the rename could not be written", async () => {
+        const chat = {
+            id: "X",
+            title: "Old name",
+            createdAt: 1000,
+            updatedAt: 1000,
+            messages: data.messages,
+            xmlSnapshots: [],
+            diagramXml: "",
+        }
+        stored.set("X", chat)
+        const { result } = renderHook(() =>
+            useSessionManager({ initialSessionId: "X" }),
+        )
+        await waitFor(() => expect(result.current.currentSessionId).toBe("X"))
+        // Another tab saves two more messages; storage is full
+        const newer = {
+            ...chat,
+            updatedAt: 2000,
+            messages: [...data.messages, ...data.messages, ...data.messages],
+        }
+        stored.set("X", newer)
+        renameWriteFails = true
+        vi.mocked(saveSession).mockClear()
+        let rename!: Promise<void>
+        act(() => {
+            rename = result.current.renameSession("X", "New name")
+        })
+        await finishWrites()
+        await rename
+        renameWriteFails = false
+        // This page's smaller copy was not written over the newer one
+        expect(saveSession).not.toHaveBeenCalled()
+        expect(stored.get("X")).toBe(newer)
+        expect(toastUnexpectedError).toHaveBeenCalledTimes(1)
     })
 })

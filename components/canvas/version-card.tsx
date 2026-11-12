@@ -73,9 +73,8 @@ export function SummaryLink({
 }) {
     // A text link, so the card's only button is the action (undo or
     // restore); it wraps as one unit with its separator. The space before
-    // the unit is outside it, so a line can end there: with the space
-    // inside, a narrow panel had to break in the summary's last word
-    // (Japanese 追加 became 追 and 加)
+    // the unit is outside it, so a line can end there and a narrow panel
+    // does not break inside the summary's last word (Japanese 追加)
     return (
         <>
             {" "}

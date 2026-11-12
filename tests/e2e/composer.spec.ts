@@ -61,6 +61,68 @@ test.describe("Message box", () => {
         await expect(input).not.toBeFocused()
     })
 
+    test("the box has the focus again after a click on Send, and after Stop", async ({
+        page,
+    }) => {
+        let count = 0
+        await page.route("**/api/chat", async (route) => {
+            count++
+            // The third answer never comes: it is stopped
+            if (count === 3) return
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse(`Answer ${count}`),
+            })
+        })
+        await openApp(page)
+        const input = getChatInput(page)
+        await sendMessage(page, "First")
+        await expect(page.getByText("Answer 1")).toBeVisible()
+
+        // Sent with the mouse, which takes the focus to the Send button
+        await input.fill("Second")
+        await getSendButton(page).click()
+        await expect(page.getByText("Answer 2")).toBeVisible()
+        await expect(input).toBeFocused()
+
+        // Stop leaves the focus on its button, which is Send again
+        await page.keyboard.type("Third")
+        await page.keyboard.press("ControlOrMeta+Enter")
+        await page.getByRole("button", { name: "Stop generation" }).click()
+        await expect(input).toBeEnabled()
+        await expect(input).toBeFocused()
+    })
+
+    test("text selected in the chat during an answer stays selected when it ends", async ({
+        page,
+    }) => {
+        let count = 0
+        await page.route("**/api/chat", async (route) => {
+            // The second answer leaves time to select text
+            if (++count === 2) await sleep(1500)
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse(`Answer ${count}`),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "First")
+        await expect(page.getByText("Answer 1")).toBeVisible()
+        await page.keyboard.type("Second")
+        await page.keyboard.press("ControlOrMeta+Enter")
+        // A double click selects a word of the first answer, to copy it (a
+        // whole paragraph's selection would grow with the chat below it)
+        await page.getByText("Answer 1").dblclick({ position: { x: 5, y: 5 } })
+        const selected = () =>
+            page.evaluate(() => window.getSelection()?.toString().trim())
+        expect(await selected()).toBe("Answer")
+        await expect(page.getByText("Answer 2")).toBeVisible()
+        await expect(getChatInput(page)).toBeEnabled()
+        expect(await selected()).toBe("Answer")
+    })
+
     test("the panel's box has the focus after an example's saved answer", async ({
         page,
     }) => {
@@ -209,6 +271,14 @@ test.describe("Message box", () => {
     test("a picture over the size limit is scaled down and attached", async ({
         page,
     }) => {
+        // Scaling takes a second here, as on a slow computer
+        await page.addInitScript(() => {
+            const real = window.createImageBitmap
+            window.createImageBitmap = (async (image: ImageBitmapSource) => {
+                await new Promise((resolve) => setTimeout(resolve, 1000))
+                return real(image)
+            }) as typeof real
+        })
         await openApp(page)
         // A 2400 x 1200 PNG of a gradient with noise, which PNG stores in
         // several megabytes, like a large screenshot
@@ -237,16 +307,27 @@ test.describe("Message box", () => {
         const size = await dataTransfer.evaluate((dt) => dt.files[0].size)
         expect(size).toBeGreaterThan(2 * 1024 * 1024)
 
+        await getChatInput(page).fill("Redraw this whiteboard")
+        await expect(getSendButton(page)).toBeEnabled()
         await page.locator("body").dispatchEvent("drop", { dataTransfer })
-        // Attached as a JPEG whose longest side is 2000 pixels
+        // While it is scaled the message cannot go: it would go without it
         const tile = page.getByAltText("whiteboard.jpg")
+        await expect(getSendButton(page)).toBeDisabled()
+        await expect(tile).toHaveCount(0)
+        // Attached as a JPEG whose longest side is 2000 pixels
         await expect(tile).toBeVisible()
+        await expect(getSendButton(page)).toBeEnabled()
         await expect
             .poll(() =>
                 tile.evaluate((img: HTMLImageElement) => img.naturalWidth),
             )
             .toBe(2000)
         await expect(page.getByText("exceeds 2MB")).toHaveCount(0)
+
+        // The same file again is known by the file it was scaled from
+        await page.locator("body").dispatchEvent("drop", { dataTransfer })
+        await page.waitForTimeout(2500)
+        await expect(tile).toHaveCount(1)
     })
 })
 
@@ -276,6 +357,31 @@ test.describe("Start screen examples", () => {
         // Picked alone, the example gets its picture
         await page.getByTestId("example-aws").click()
         await expect(page.getByAltText("architecture.png")).toBeVisible()
+    })
+
+    test("a file that loads after the start screen was left is not attached on the next one", async ({
+        page,
+    }) => {
+        let release!: () => void
+        const held = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        await page.route("**/architecture.png", async (route) => {
+            await held
+            await route.continue()
+        })
+        await openApp(page)
+        await page.getByTestId("example-aws").click()
+        // To the canvas and back: a new start screen
+        await page.getByTestId("draw-yourself").click()
+        await page.getByTestId("new-chat-button").click()
+        await page.getByTestId("example-cat").click()
+        await expect(getChatInput(page)).toHaveValue("Draw a cat for me")
+        const arrived = page.waitForResponse("**/architecture.png")
+        release()
+        await arrived
+        await page.waitForTimeout(1000)
+        await expect(page.getByAltText("architecture.png")).toHaveCount(0)
     })
 
     test("an example replaces typed text only on confirm", async ({ page }) => {

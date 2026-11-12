@@ -1,6 +1,6 @@
 import { FileUp, History, Pencil } from "lucide-react"
 import type React from "react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -147,8 +147,16 @@ export function LobbyHero({
     ]
 
     // Counts the picks: a file that arrives after another example was
-    // picked belongs to the earlier prompt and is not attached
+    // picked belongs to the earlier prompt and is not attached. Nor one
+    // that arrives once this start screen is gone: the next start screen
+    // counts its own picks from zero, and the attachments are shared.
     const pickCount = useRef(0)
+    useEffect(
+        () => () => {
+            pickCount.current++
+        },
+        [],
+    )
     const applyExample = async (example: Example) => {
         const pick = ++pickCount.current
         engine.setInput(example.prompt)

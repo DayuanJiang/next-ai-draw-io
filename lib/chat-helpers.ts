@@ -309,7 +309,12 @@ export function diagramContextText(diagram: MessageDiagram): string {
     }
     const shown = foldCells(diagram.xml)
     const imageNote = imageRefNote(shown)
-    return `[Canvas when this message was sent, in the compact notation you write (shapes with x, y, w, h; edges with source and target). It is the source of truth from this point on and shows any change the user made by hand.]
+    // The last sentence keeps a shape the user deleted by hand deleted.
+    // Without it the models read its absence, and the connectors it left
+    // open, as damage and draw it again: in replays of the request after
+    // a deletion, Claude Haiku 5.5 did in 10 of 10 and GPT-6 Luna in 5 of
+    // 10, and with the sentence neither did in 10.
+    return `[Canvas when this message was sent, in the compact notation you write (shapes with x, y, w, h; edges with source and target). It is the source of truth from this point on and shows any change the user made by hand. A shape or connector of yours that is missing from it was removed by the user: do not add it back unless the user asks.]
 """xml
 ${shown}
 """${imageNote ? `\n${imageNote}` : ""}`

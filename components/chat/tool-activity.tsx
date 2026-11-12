@@ -127,8 +127,7 @@ function VersionCard({
             }
         >
             {showCode && (
-                // pr-11: room for the copy button, which lay over the ends
-                // of the first lines
+                // pr-11: room for the copy button beside the first lines
                 <div
                     ref={panelRef}
                     className="relative border-t border-border bg-surface-1 px-3 py-2.5 pr-11"

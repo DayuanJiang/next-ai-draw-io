@@ -470,6 +470,11 @@ ${finalXml}
                     ? outcome.errors[0]
                     : `No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}`
                 restoreOriginal()
+                // An edit of a cell the user deleted by hand ends here
+                // ("Cell not found"). The sentence on such cells keeps
+                // the retry from drawing the cell again: GPT-6 Luna did
+                // in 10 replays of 10, and with this sentence and the
+                // one in the canvas note (lib/chat-helpers.ts) in 3 of 30.
                 addToolOutput({
                     tool: "edit_diagram",
                     toolCallId: toolCall.toolCallId,
@@ -481,7 +486,7 @@ Current diagram XML:
 ${shownToModel(currentXml)}
 \`\`\`
 
-Please check the cell IDs and retry.`,
+A cell of an earlier canvas that is missing from it was removed by the user: do not add it back unless the user asks. Please check the cell IDs and retry.`,
                 })
                 return
             }

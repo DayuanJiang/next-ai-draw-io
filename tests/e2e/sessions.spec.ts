@@ -1,6 +1,7 @@
 import type { Page, Route } from "@playwright/test"
 import { FLOWCHART_XML } from "./fixtures/diagrams"
 import {
+    chunkedReplies,
     expect,
     getIframeContent,
     getSendButton,
@@ -10,7 +11,12 @@ import {
     test,
     waitForComplete,
 } from "./lib/fixtures"
-import { createMockSSEResponse, sse, toolCallEvents } from "./lib/helpers"
+import {
+    createMockSSEResponse,
+    createTextOnlyResponse,
+    sse,
+    toolCallEvents,
+} from "./lib/helpers"
 
 /** Every chat request is answered with the flowchart */
 const drawFlowchart = (route: Route) =>
@@ -411,5 +417,159 @@ test.describe("A chat left during an answer", () => {
         await waitForComplete(page)
         await expect(page.getByText("Here is the flowchart.")).toBeVisible()
         await expect(page.getByText(UNFINISHED)).toHaveCount(0)
+    })
+
+    test("an edited message is saved with its new text when its answer starts at once", async ({
+        page,
+    }) => {
+        // The second answer starts with the request and never ends
+        await chunkedReplies(
+            page,
+            [
+                [createTextOnlyResponse("First answer.")],
+                [
+                    sse(
+                        [
+                            { type: "start" },
+                            { type: "text-start", id: "t" },
+                            { type: "text-delta", id: "t", delta: "Second" },
+                        ],
+                        false,
+                    ),
+                ],
+            ],
+            { holdLast: true },
+        )
+        await openApp(page)
+        await sendMessage(page, "Original question")
+        await expect(page.getByText("First answer.")).toBeVisible()
+        await page.getByTitle("Click to edit").click()
+        await page
+            .locator('[data-testid="chat-panel"] textarea')
+            .first()
+            .fill("Edited question")
+        await page.getByRole("button", { name: "Save & submit" }).click()
+        await expect(page.getByText("Second")).toBeVisible()
+        await expect
+            .poll(async () =>
+                Object.values(await storedChats(page)).map((chat) =>
+                    chat.messages
+                        .filter((m: { role: string }) => m.role === "user")
+                        .map((m: any) => m.parts[0].text),
+                ),
+            )
+            .toEqual([["Edited question"]])
+    })
+
+    test("an answer stopped before it showed anything says Stopped, with Retry, also after a reload", async ({
+        page,
+    }) => {
+        let requests = 0
+        await page.route("**/api/chat", async (route) => {
+            // The first answer never comes: it is stopped
+            if (++requests > 1) await drawFlowchart(route)
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await page.getByRole("button", { name: "Stop generation" }).click()
+        const stopped = page.getByTestId("stopped-notice")
+        await expect(stopped).toHaveText("StoppedRetry")
+        await expect
+            .poll(async () =>
+                Object.values(await storedChats(page)).map(
+                    (chat) => chat.messages.length,
+                ),
+            )
+            .toEqual([2])
+
+        // The same after a reload: no card that says the answer was cut off
+        await page.reload({ waitUntil: "networkidle" })
+        await expect(stopped).toHaveText("StoppedRetry", { timeout: 30000 })
+        await expect(page.getByText(UNFINISHED)).toHaveCount(0)
+        await stopped.getByTestId("retry-button").click()
+        await waitForComplete(page)
+        await expect(page.getByText("Here is the flowchart.")).toBeVisible()
+        await expect(stopped).toHaveCount(0)
+    })
+
+    test("regenerate in a chat saved before versions were kept starts from the diagram before the answer", async ({
+        page,
+    }) => {
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return drawFlowchart(route)
+        })
+        await openApp(page)
+        // No versions; the answer's drawing call tells that it drew Alpha
+        const { versions: _none, ...old } = savedChat("old", 1000, ["Alpha"])
+        await storeChat(page, {
+            ...old,
+            xmlSnapshots: [[0, doc("")]],
+            messages: [
+                asked("old-u0", "Draw Alpha"),
+                {
+                    id: "old-a0",
+                    role: "assistant",
+                    parts: [
+                        {
+                            type: "tool-display_diagram",
+                            toolCallId: "old-call",
+                            state: "output-available",
+                            input: { xml: box("c0", "Alpha", 40) },
+                            output: "Successfully displayed the diagram.",
+                        },
+                    ],
+                },
+            ],
+        })
+        await openChat(page, "old", "Alpha")
+        await page.getByRole("button", { name: "Regenerate response" }).click()
+        await waitForComplete(page)
+        // The model drew on the blank canvas the message was sent with,
+        // which stays the diagram the message is sent with
+        expect(bodies[0].messages.at(-1).metadata.diagram.xml).not.toContain(
+            "Alpha",
+        )
+        await expect
+            .poll(async () => (await storedChats(page)).old.messages.length)
+            .toBe(2)
+        expect((await storedChats(page)).old.xmlSnapshots[0][1]).not.toContain(
+            "Alpha",
+        )
+    })
+
+    test("a version saved before its picture was taken gets it when the chat is opened", async ({
+        page,
+    }) => {
+        await openApp(page)
+        // As saved the moment the answer ended: the version has no picture
+        await storeChat(page, {
+            ...savedChat("fast", 1000, ["Alpha"]),
+            versions: [
+                {
+                    id: "v1",
+                    number: 1,
+                    xml: doc(box("c0", "Alpha", 40)),
+                    turnIndex: 0,
+                    summary: {
+                        shapesAdded: 1,
+                        shapesRemoved: 0,
+                        shapesChanged: 0,
+                        edgesAdded: 0,
+                        edgesRemoved: 0,
+                        edgesChanged: 0,
+                    },
+                    fromScratch: true,
+                    onCanvas: true,
+                },
+            ],
+        })
+        await openChat(page, "fast", "Alpha")
+        await expect
+            .poll(async () => (await storedChats(page)).fast.versions[0].svg, {
+                timeout: 15000,
+            })
+            .toMatch(/^data:image\/svg/)
     })
 })

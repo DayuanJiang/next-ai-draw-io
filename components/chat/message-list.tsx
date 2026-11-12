@@ -562,8 +562,7 @@ function AssistantMessage({
                             // The first thing of the answer: the model
                             // has been thinking since the request went
                             // out. Claude on Bedrock sends its thinking
-                            // only when it is over, minutes later, and
-                            // counted from there it was "1 second".
+                            // only when it is over, minutes later.
                             startedAt={
                                 blockIndex === 0 ? answerStartedAt : undefined
                             }
@@ -875,6 +874,33 @@ function ErrorNotice({
     )
 }
 
+/**
+ * The user stopped the answer: said in the page's language, in the muted
+ * text of a stopped call, with Retry
+ */
+function StoppedNotice({ onRetry }: { onRetry?: () => void }) {
+    const dict = useDictionary()
+    return (
+        <div
+            className="flex items-center gap-2.5 px-1 text-[13px] text-muted-foreground"
+            data-testid="stopped-notice"
+        >
+            {dict.versions.stopped}
+            {onRetry && (
+                <button
+                    type="button"
+                    onClick={onRetry}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+                    data-testid="retry-button"
+                >
+                    <RotateCcw className="size-3.5" />
+                    {dict.chat.retry}
+                </button>
+            )}
+        </div>
+    )
+}
+
 // Nothing new on screen for this long while answering: say it is still at
 // work. Short, because GPT-6 Luna and DeepSeek on Bedrock go quiet after
 // their plan sentence in every answer (the drawing comes in one piece 5 to
@@ -949,11 +975,26 @@ export function MessageList() {
             }
             followRef.current = false
         }
+        // Page Up, the up arrow and Home scroll the list too, once it was
+        // clicked. The key is pressed on the page and does not say what
+        // it scrolls: the user takes the list when it moves up right
+        // after one.
+        let upKeyAt = Number.NEGATIVE_INFINITY
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (!["PageUp", "ArrowUp", "Home"].includes(event.key)) return
+            upKeyAt = event.timeStamp
+            // (As above: ends a smooth scroll to the end on its way)
+            if (followRef.current) {
+                scroller.scrollTo({ top: scroller.scrollTop })
+            }
+        }
         // Scrolled back down to the end: follow again
         let lastTop = scroller.scrollTop
-        const onScroll = () => {
+        const onScroll = (event: Event) => {
             const { scrollTop, scrollHeight, clientHeight } = scroller
-            if (
+            if (scrollTop < lastTop && event.timeStamp - upKeyAt < 500) {
+                followRef.current = false
+            } else if (
                 scrollTop > lastTop &&
                 scrollHeight - scrollTop - clientHeight < 80
             ) {
@@ -966,9 +1007,11 @@ export function MessageList() {
             scroller.addEventListener(name, take, { passive: true })
         }
         scroller.addEventListener("scroll", onScroll, { passive: true })
+        document.addEventListener("keydown", onKeyDown)
         return () => {
             for (const name of takes) scroller.removeEventListener(name, take)
             scroller.removeEventListener("scroll", onScroll)
+            document.removeEventListener("keydown", onKeyDown)
         }
     }, [])
 
@@ -1068,6 +1111,13 @@ export function MessageList() {
                     message.id,
                 )
                 const notice = noticeOf(message)
+                // On the newest notice: it sends the last question again
+                const onRetry =
+                    index === messages.length - 1 &&
+                    !engine.isBusy &&
+                    lastUserIndex >= 0
+                        ? engine.retryLastMessage
+                        : undefined
                 return (
                     <div
                         key={message.id}
@@ -1079,6 +1129,8 @@ export function MessageList() {
                                 index={index}
                                 isLast={index === lastUserIndex}
                             />
+                        ) : notice?.stopped ? (
+                            <StoppedNotice onRetry={onRetry} />
                         ) : notice ? (
                             <ErrorNotice
                                 text={notice.text}
@@ -1091,13 +1143,7 @@ export function MessageList() {
                                             : "list",
                                     )
                                 }
-                                onRetry={
-                                    index === messages.length - 1 &&
-                                    !engine.isBusy &&
-                                    lastUserIndex >= 0
-                                        ? engine.retryLastMessage
-                                        : undefined
-                                }
+                                onRetry={onRetry}
                                 onReport={
                                     notice.openModelConfig || notice.accessCode
                                         ? undefined

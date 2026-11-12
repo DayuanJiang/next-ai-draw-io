@@ -396,6 +396,26 @@ describe("the model's page", () => {
         expect(output?.errorText).not.toContain('id="A"')
     })
 
+    it("tells the model not to draw a cell again that the user removed", async () => {
+        // The model edits a cell by the id it had before the user deleted
+        // it by hand
+        const { addToolOutput, call } = setupOn("b")
+        await call("edit_diagram", {
+            operations: [
+                {
+                    operation: "update",
+                    cell_id: "deleted",
+                    new_xml: box("deleted"),
+                },
+            ],
+        })
+        const { errorText } = addToolOutput.mock.lastCall?.[0] ?? {}
+        expect(errorText).toContain('Cell with id="deleted" not found')
+        expect(errorText).toContain(
+            "was removed by the user: do not add it back unless the user asks",
+        )
+    })
+
     it("draws on the first page when the page is not known", async () => {
         const { onDisplayChart, call } = setupOn(null)
         await call("display_diagram", { xml: box("N") })
