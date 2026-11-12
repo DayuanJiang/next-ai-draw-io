@@ -520,6 +520,111 @@ test("a hand edit whose save failed is sent again once the server answers", asyn
     await expect(page.getByText(/only in this tab/)).toHaveCount(0)
 })
 
+test("a hand edit whose save fails twice is kept as a version when the AI wrote in between", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Left alone", 40)}\n${box("3", "For the AI", 240)}`,
+    })
+    await expect(frame.getByText("For the AI")).toBeVisible({ timeout: 10_000 })
+    // The edit's POST fails twice, as on a connection that comes and goes.
+    // The polls wait until the AI has written, so the poll that sends the
+    // edit again also brings the AI's write
+    let dropped = 0
+    let release = () => {}
+    const aiWrote = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    await page.route("**/api/state**", async (route) => {
+        const request = route.request()
+        if (
+            request.method() === "POST" &&
+            dropped < 2 &&
+            (request.postData() ?? "").includes("Lost twice")
+        ) {
+            dropped++
+            await route.abort("connectionfailed")
+            return
+        }
+        if (request.method() === "GET") await aiWrote
+        await route.continue()
+    })
+    await addByHand(frame, "twice-1", "Lost twice")
+    await expect.poll(() => dropped).toBe(1)
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "update",
+                cell_id: "3",
+                new_xml: box("3", "AI was here", 240),
+            },
+        ],
+    })
+    release()
+    await expect(frame.getByText("AI was here")).toBeVisible({
+        timeout: 10_000,
+    })
+    await expect.poll(() => dropped, { timeout: 10_000 }).toBe(2)
+    // The AI's write replaced the edit on the canvas. Sent a third time,
+    // it reaches the server, which keeps it as a version; the page says so
+    await expect(frame.getByText("Lost twice")).toHaveCount(0)
+    await expect(
+        page.getByText(/Your last change was saved in the Versions panel/),
+    ).toBeVisible({ timeout: 10_000 })
+    const kept = await page.evaluate(async () => {
+        const config = (window as any).__MCP_CONFIG__
+        const r = await fetch(`/api/history?sessionId=${config.sessionId}`, {
+            headers: { "X-Drawio-Token": config.token },
+        })
+        const entries: { xml: string }[] = (await r.json()).entries
+        return entries.some((e) => e.xml.includes("Lost twice"))
+    })
+    expect(kept).toBe(true)
+})
+
+test("the notice stays while the polls get through and the edit's saves keep failing", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Polls only", 40) })
+    await expect(frame.getByText("Polls only")).toBeVisible({ timeout: 10_000 })
+    // A proxy in front of a remote preview that lets GET through and
+    // fails POST: every poll is answered, no save arrives
+    let failing = true
+    let dropped = 0
+    await page.route("**/api/state", async (route) => {
+        const request = route.request()
+        if (
+            failing &&
+            request.method() === "POST" &&
+            (request.postData() ?? "").includes('"source":"edit"')
+        ) {
+            dropped++
+            await route.abort("connectionfailed")
+            return
+        }
+        await route.continue()
+    })
+    await addByHand(frame, "polls-1", "Saved later")
+    const notice = page.getByText(/only in this tab/)
+    const status = page.getByTestId("shell-status")
+    await expect(notice).toBeVisible()
+    // Three polls later the edit was sent again three times, in vain
+    await expect.poll(() => dropped, { timeout: 15_000 }).toBeGreaterThan(3)
+    await expect(notice).toBeVisible()
+    await expect(status).toHaveAttribute("data-status", "offline")
+    // The saves arrive again: the edit is saved and the notice goes
+    failing = false
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="polls-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await expect(status).toHaveAttribute("data-status", "connected")
+    await expect(notice).toHaveCount(0)
+})
+
 test("the notice stays and the browser asks before the page is left while an edit is not saved", async ({
     page,
 }) => {
@@ -557,6 +662,82 @@ test("the notice stays and the browser asks before the page is left while an edi
         })
         .toBe(true)
     await expect(notice).toHaveCount(0)
+})
+
+test("the browser asks before the page is left while the diagram is too large to save", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Small so far", 40) })
+    await expect(frame.getByText("Small so far")).toBeVisible({
+        timeout: 10_000,
+    })
+    // Chrome asks only on a page the user has clicked on
+    await page.getByText("Next AI Draw.io").click()
+    // The user pastes a picture of 11 MB: over the server's 10 MiB
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => {
+            const graph = ui.editor.graph
+            graph.getModel().beginUpdate()
+            try {
+                graph.insertVertex(
+                    graph.getDefaultParent(),
+                    "big-1",
+                    "Big picture",
+                    40,
+                    200,
+                    120,
+                    120,
+                    `shape=image;image=data:image/png,${"A".repeat(11 * 1024 * 1024)}`,
+                )
+            } finally {
+                graph.getModel().endUpdate()
+            }
+        })
+    })
+    await expect(page.getByText(/too large to save/)).toBeVisible({
+        timeout: 20_000,
+    })
+    const asked = page.waitForEvent("dialog", { timeout: 5000 })
+    await page.evaluate(() => {
+        setTimeout(() => location.reload(), 0)
+    })
+    expect((await asked).type()).toBe("beforeunload")
+    await (await asked).dismiss()
+    // The user stayed: the picture is still on the canvas
+    await expect(frame.getByText("Big picture")).toBeVisible()
+})
+
+test("a picture from a host that does not answer leaves the canvas usable after a write and after a hand edit", async ({
+    page,
+}) => {
+    // Never answered and never failed: a slow or filtered host. draw.io
+    // downloads pictures from this host itself when it exports
+    await page.route("https://raw.githubusercontent.com/**", () => {})
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Beside the logo", 40)}\n<mxCell id="3" value="Logo" style="shape=image;image=https://raw.githubusercontent.com/acme/icons/main/logo.png;" x="240" y="40" w="80" h="80"/>`,
+    })
+    const shape = frame.getByText("Beside the logo")
+    await expect(shape).toBeVisible({ timeout: 10_000 })
+    // The picture for the write's version card is being made (asked for
+    // 500 ms after the load): the canvas takes a click
+    await page.waitForTimeout(1500)
+    await shape.click()
+    expect(await toolText("get_selection")).toContain(
+        'id="2" shape "Beside the logo"',
+    )
+    // A hand edit is saved with its picture, or without one after 2 s:
+    // the canvas takes a click then too
+    await addByHand(frame, "by-hand-1", "Added by hand")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="by-hand-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await frame.getByText("Added by hand").click()
+    expect(await toolText("get_selection")).toContain('id="by-hand-1"')
 })
 
 test("the cells the user selected stay selected when the AI changes the page", async ({

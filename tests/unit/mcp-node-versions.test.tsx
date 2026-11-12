@@ -742,6 +742,31 @@ describe("useNodeVersions", () => {
         expect(result.current.canRedo).toBe(true)
     })
 
+    it("calls a hand edit undone when Ctrl+Z in the editor took back its restore", async () => {
+        // The user edited AB by hand, went back to AB with its card and
+        // brought the edit back with its own: History has a copy of each
+        const manual = doc(cell("a", "A") + cell("b", "B") + cell("m", "M"))
+        const entries = [
+            entry(0, AB),
+            entry(1, manual, { source: "user" }),
+            entry(2, AB, { firstId: 0, source: "restore" }),
+            entry(3, manual, { firstId: 1, source: "restore" }),
+        ]
+        const server = fakeSync(list(entries, 3))
+        const { result } = renderHook(() => useNodeVersions(server.sync), {
+            wrapper,
+        })
+        await flush()
+        expect(result.current.onCanvasId).toBe("1")
+        expect(result.current.canUndo).toBe(true)
+        // Ctrl+Z in the editor: the tab pushes AB, which adds no entry, so
+        // the canvas shows the copy of AB from before the edit's own copy
+        await act(async () => server.serve(list(entries, 2)))
+        expect(result.current.onCanvasId).toBe("0")
+        expect(result.current.undoneId).toBe("1")
+        expect(result.current.canRedo).toBe(true)
+    })
+
     it("names the version a hand edit was made on: the one on the canvas last", async () => {
         const server = fakeSync(list([entry(0, A), entry(1, AB)], 0))
         const { result } = renderHook(() => useNodeVersions(server.sync), {

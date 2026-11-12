@@ -319,11 +319,12 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
     // A hand edit that lost to a server write (the AI wrote while the user
     // was editing, or the session came back from its file) is kept as the
     // newest entry, after that write, though it never replaced it: nothing
-    // was undone. After an undo of a hand edit the canvas shows a newer
-    // entry, the restore's copy
+    // was undone. After an undo of a hand edit the canvas shows an entry
+    // newer than the edit's first copy: a restore's copy, from the card's
+    // undo or, once the edit was restored, from Ctrl+Z in the editor
     const lostToWrite =
         (latest?.source === "user" || latest?.source === "recover") &&
-        (list?.currentId ?? 0) < latest.entryId
+        (list?.currentId ?? 0) < Number(latest.id)
     // The newest change is undone when the canvas is at the version before
     const undoneId =
         latest && previous && onCanvasId === previous.id && !lostToWrite

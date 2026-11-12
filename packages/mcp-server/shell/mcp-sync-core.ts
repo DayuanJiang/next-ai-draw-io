@@ -194,8 +194,8 @@ export interface McpSync {
         /** The diagram changed since that file was read or written */
         fileChanged: boolean
         /** A hand edit the server does not have yet: its picture or its
-         * push is on the way, or the push failed (leaving the page now
-         * would lose it) */
+         * push is on the way, the push failed, or the server refused it
+         * for its size (leaving the page now would lose it) */
         unsavedEdit: boolean
     }
 }
@@ -206,12 +206,22 @@ export const POLL_INTERVAL_MS = 2000
 const EDITING_MS = 10_000
 
 // How long a write waits for the user to finish typing a label or dragging.
-// The server gives a screenshot of the write 10 s, and the wait ends at a
-// poll: up to 2 s before it starts and 2 s after this time
-const HOLD_MS = 4000
+// The wait is checked at each poll, so it ends at the second poll after the
+// one that first held the write, 4 s later: the value lies between two
+// polls, where the few milliseconds a poll's answer takes do not decide
+// which poll that is. The server gives a screenshot of the write 10 s: up
+// to 2 s until a poll sees the write, these 4 s, at most 2 s more until a
+// label taken as typed is saved, and 0.6 s after the load
+const HOLD_MS = 1.5 * POLL_INTERVAL_MS
 
 // Width cap of a thumbnail drawn as a PNG (the card shows it at about 300 px)
 const THUMBNAIL_WIDTH = 600
+
+// The picture of the page on screen for a version card. Asked for as xmlsvg:
+// for a plain svg draw.io locks the canvas until the diagram's pictures are
+// downloaded, up to 25 seconds when their host does not answer. theme "auto"
+// is what the plain svg has: the picture follows light and dark mode
+const CARD_PICTURE: ExportRequest = { format: "xmlsvg", theme: "auto" }
 
 /** The API token the server wrote into a shell page (window.__MCP_CONFIG__) */
 export function tokenFromPage(html: string): string | null {
@@ -366,6 +376,14 @@ export function createMcpSync(options: SyncOptions): McpSync {
         baseVersion: number
         sid: string | null
     } | null = null
+    // The version of the server write the canvas loaded last (0 while it
+    // holds none of this state). A hand edit based on an older version was
+    // made on the canvas that write replaced: no later edit carries it, and
+    // sent as it was made, the server keeps it in History
+    let loadedVersion = 0
+    // The hand edit the server refused for its size, also without its
+    // picture: only in this tab for as long as the canvas shows it
+    let tooLargeXml: string | null = null
     // After a recovery replaced the canvas, until draw.io reports the load:
     // an autosave still on its way belongs to the canvas being replaced
     let awaitingLoad = false
@@ -426,6 +444,13 @@ export function createMcpSync(options: SyncOptions): McpSync {
         status = next
         onStatus?.(next)
     }
+
+    // A hand edit is on its way to the server: it waits to be sent again,
+    // for its picture, or for the answer to its push
+    const editOnItsWay = () =>
+        unsentEdit !== null ||
+        pendingSvgExport !== null ||
+        pushesInFlight.length > 0
 
     // Listeners of onServerChange, told once per History key seen (the
     // server sends it with every state and push answer; a write, a restore
@@ -494,6 +519,8 @@ export function createMcpSync(options: SyncOptions): McpSync {
     const loadFromServer = (xml: string, how: "decide" | "full") => {
         lastXml = xml
         latestXml = xml
+        // currentVersion is the write's version
+        loadedVersion = currentVersion
         const before = canvas.currentXml()
         const changedPage = changedPageId(before, xml)
         let decision: LoadDecision =
@@ -517,7 +544,6 @@ export function createMcpSync(options: SyncOptions): McpSync {
         // autosave is the user's
         awaitingCommitCopy =
             decision.mode === "commit" && !sameDiagram(before, xml)
-        // currentVersion is the write's version
         thumbExport = {
             stateId,
             version: currentVersion,
@@ -539,7 +565,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
         const request: ExportRequest =
             t.pageId && t.pageId !== canvas.currentPageId()
                 ? { format: "png", pageId: t.pageId, width: THUMBNAIL_WIDTH }
-                : { format: "svg" }
+                : CARD_PICTURE
         canvas.export(request, 5000).then((result) => {
             if (!result?.data || thumbExport !== t) return
             if (!sameDiagram(latestXml, t.xml)) {
@@ -609,6 +635,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 throw new Error(`HTTP ${r.status}`)
             }
             pushFailing = false
+            setStatus("connected")
             if (r.ok) {
                 const d = await r.json()
                 // An answer about a state this tab has left since, or one
@@ -634,7 +661,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 // Over the server's size limit: the image is most of it, so
                 // try once without it
                 if (svg) pushState(xml, "", baseVersion, source, sid)
-                else onNotice("tooLarge")
+                else {
+                    tooLargeXml = xml
+                    onNotice("tooLarge")
+                }
             } else if (r.status === 409) {
                 // The AI wrote a newer version, or the server lost the state
                 // this push was based on; the next poll sorts it out
@@ -655,9 +685,13 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 pushFailing = true
                 onNotice("unreachable")
             }
-            // Kept for the next poll that gets through, unless the canvas
-            // has moved on since (that edit is pushed on its own)
-            if (source === "edit" && xml === latestXml) {
+            // Kept for the next poll that gets through, unless the user has
+            // changed the canvas since (that edit is pushed on its own). A
+            // server write that replaced the canvas since has none of it
+            if (
+                source === "edit" &&
+                (xml === latestXml || baseVersion < loadedVersion)
+            ) {
                 unsentEdit = { xml, svg, baseVersion, sid }
             }
         } finally {
@@ -678,6 +712,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
         pendingSyncExport = false
         const mine = latestXml
         currentVersion = s.version
+        loadedVersion = 0
         if (s.blank || s.xml === lastXml) {
             // The server knows nothing, or exactly what this tab last saved:
             // the canvas can only be newer, so it wins (edits made while the
@@ -828,7 +863,14 @@ export function createMcpSync(options: SyncOptions): McpSync {
             // name a state that is gone
             if (seq < lastHandledPoll) return
             lastHandledPoll = seq
-            setStatus("connected")
+            // With an edit on its way, the answer to its push says whether
+            // the server takes edits again: until then the edit is only in
+            // this tab, and the notice that says so stays (the page takes
+            // it away at "connected", and a later failure gives it again)
+            if (!editOnItsWay()) {
+                setStatus("connected")
+                pushFailing = false
+            }
             if (stateId === null) stateId = s.stateId
             else if (s.stateId && s.stateId !== stateId) recoverState(s)
             // The server answers again: the edit it never got goes now, as
@@ -1035,7 +1077,11 @@ export function createMcpSync(options: SyncOptions): McpSync {
             // is the same document to isSameDocument when the server's copy
             // names none
             latestXml = xml
-            unsentEdit = null
+            // This document has an unsent edit of the same canvas in it;
+            // one of a canvas a server write replaced still has to go
+            if (unsentEdit && unsentEdit.baseVersion >= loadedVersion) {
+                unsentEdit = null
+            }
             const commitCopy = awaitingCommitCopy
             awaitingCommitCopy = false
             // The canvas is back at a write whose picture was not taken (an
@@ -1058,7 +1104,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
             pendingSvgExport = xml
             const base = currentVersion
             const sid = stateId
-            canvas.export({ format: "svg" }, 2000).then((result) => {
+            canvas.export(CARD_PICTURE, 2000).then((result) => {
                 // A later edit took over the slot, or this one was sent
                 if (pendingSvgExport !== xml) return
                 pendingSvgExport = null
@@ -1142,9 +1188,8 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 file,
                 fileChanged,
                 unsavedEdit:
-                    unsentEdit !== null ||
-                    pendingSvgExport !== null ||
-                    pushesInFlight.length > 0,
+                    editOnItsWay() ||
+                    (tooLargeXml !== null && tooLargeXml === latestXml),
             }
         },
     }

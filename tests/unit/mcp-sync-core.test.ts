@@ -494,6 +494,30 @@ describe("MCP sync with an edit made while a write loads", () => {
             baseVersion: 3,
         })
     })
+
+    it("sends that edit again when its push did not reach the server", async () => {
+        const t = await inStep()
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        t.canvas.loadPending = true
+        t.sync.onAutoSave("<mxfile>A edited</mxfile>")
+        await t.settle()
+        t.next("POST", "/api/state").fail()
+        await t.settle()
+        // The write is on the canvas now, and the edit only in this tab
+        t.canvas.loadPending = false
+        t.sync.onDrawioLoad()
+        expect(t.sync.read().unsavedEdit).toBe(true)
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        expect(t.next("POST", "/api/state").body).toMatchObject({
+            xml: "<mxfile>A edited</mxfile>",
+            baseVersion: 2,
+            source: "edit",
+        })
+    })
 })
 
 describe("MCP sync with a write that arrives while the user types or drags", () => {
@@ -532,24 +556,30 @@ describe("MCP sync with a write that arrives while the user types or drags", () 
         expect(t.loads.at(-1)?.xml).toBe("<mxfile>X</mxfile>")
         expect(t.sync.read().currentVersion).toBe(3)
         await vi.advanceTimersByTimeAsync(600)
-        expect(t.exports.map((e) => e.request.format)).toEqual(["svg", "png"])
+        expect(t.exports.map((e) => e.request.format)).toEqual([
+            "xmlsvg",
+            "png",
+        ])
     })
 
-    it("takes the label as typed so far after 4 s, and loads the write at the next poll", async () => {
+    it("takes the label as typed so far two polls after the write came, and loads the write at the next poll", async () => {
         const t = await inStep()
         t.canvas.typing = true
         let poll = t.sync.poll()
         t.next("GET").answer(write())
         await poll
-        await vi.advanceTimersByTimeAsync(3900)
+        // The polls come every 2 s, give or take the few milliseconds
+        // their answers take. One poll later the write still waits
+        await vi.advanceTimersByTimeAsync(2005)
         poll = t.sync.poll()
         t.next("GET").answer(write())
         await poll
         expect(t.canvas.typing).toBe(true)
         expect(t.loads).toHaveLength(1)
-        // Time is up: the label is taken as it is, and its autosave comes
-        // before the write loads
-        await vi.advanceTimersByTimeAsync(100)
+        // Two polls later (this answer came sooner than the first one
+        // did) time is up: the label is taken as it is, and its autosave
+        // comes before the write loads
+        await vi.advanceTimersByTimeAsync(1990)
         poll = t.sync.poll()
         t.next("GET").answer(write())
         await poll
@@ -566,14 +596,19 @@ describe("MCP sync with a write that arrives while the user types or drags", () 
         expect(t.loads.at(-1)?.xml).toBe("<mxfile>X</mxfile>")
     })
 
-    it("loads the write over a drag that goes on past 4 s", async () => {
+    it("loads the write over a drag that still goes on two polls after the write came", async () => {
         const t = await inStep()
         t.canvas.dragging = true
         let poll = t.sync.poll()
         t.next("GET").answer(write())
         await poll
         expect(t.loads).toHaveLength(1)
-        await vi.advanceTimersByTimeAsync(4000)
+        await vi.advanceTimersByTimeAsync(2000)
+        poll = t.sync.poll()
+        t.next("GET").answer(write())
+        await poll
+        expect(t.loads).toHaveLength(1)
+        await vi.advanceTimersByTimeAsync(1995)
         poll = t.sync.poll()
         t.next("GET").answer(write())
         await poll
@@ -602,7 +637,8 @@ describe("MCP sync with an edit the server never got", () => {
         let poll = t.sync.poll()
         t.next("GET").answer(sameState())
         await poll
-        expect(t.sync.read().status).toBe("connected")
+        // Not said yet: the edit is still only in this tab
+        expect(t.sync.read().status).toBe("offline")
         const again = t.next("POST", "/api/state")
         // As it was made: its picture, the version and state it was based on
         expect(again.body).toEqual(lost.body)
@@ -615,6 +651,7 @@ describe("MCP sync with an edit the server never got", () => {
         again.answer({ status: 200, body: { success: true, version: 3 } })
         await t.settle()
         expect(t.sync.read()).toMatchObject({
+            status: "connected",
             currentVersion: 3,
             lastXml: "<mxfile>B</mxfile>",
             unsavedEdit: false,
@@ -644,6 +681,69 @@ describe("MCP sync with an edit the server never got", () => {
         t.next("GET").answer(sameState())
         await poll
         expect(t.next("POST", "/api/state").body.xml).toBe("<mxfile>B</mxfile>")
+    })
+
+    // A proxy that lets GET through and fails POST, or a connection that
+    // comes and goes: the page takes the notice away at "connected"
+    it("stays offline while the polls get through and the edit's pushes fail", async () => {
+        const t = await inStep()
+        await edit(t, "<mxfile>B</mxfile>")
+        t.next("POST").fail()
+        await t.settle()
+        for (let i = 0; i < 3; i++) {
+            const poll = t.sync.poll()
+            t.next("GET").answer(sameState())
+            await poll
+            t.next("POST", "/api/state").fail()
+            await t.settle()
+        }
+        // The user goes on editing: the poll that comes while the newer
+        // edit waits for its picture does not say "connected" either
+        t.sync.onAutoSave("<mxfile>C</mxfile>")
+        let poll = t.sync.poll()
+        t.next("GET").answer(sameState())
+        await poll
+        t.nextExport().answer({ data: "<svg/>" })
+        await t.settle()
+        t.next("POST", "/api/state").fail()
+        await t.settle()
+        expect(t.statuses).toEqual(["connected", "offline"])
+        expect(t.notices).toEqual(["unreachable"])
+        // The server takes the edit: connected again
+        poll = t.sync.poll()
+        t.next("GET").answer(sameState())
+        await poll
+        const saved = t.next("POST", "/api/state")
+        expect(saved.body.xml).toBe("<mxfile>C</mxfile>")
+        saved.answer({ status: 200, body: { success: true, version: 3 } })
+        await t.settle()
+        expect(t.statuses).toEqual(["connected", "offline", "connected"])
+    })
+
+    it("tells the user again when a push fails after the server was reached again", async () => {
+        const t = await inStep()
+        // A sync reply (get_diagram) does not reach the server; no edit of
+        // the user's is waiting, so the next poll says "connected"
+        let poll = t.sync.poll()
+        t.next("GET").answer(
+            state("S1", 2, "<mxfile>A</mxfile>", { syncRequested: true }),
+        )
+        await poll
+        t.nextExport().answer({ xml: '<mxfile host="drawio">A</mxfile>' })
+        await t.settle()
+        t.next("POST").fail()
+        await t.settle()
+        expect(t.notices).toEqual(["unreachable"])
+        poll = t.sync.poll()
+        t.next("GET").answer(sameState())
+        await poll
+        expect(t.statuses).toEqual(["connected", "offline", "connected"])
+        // The notice is gone from the page by now: a push that fails
+        // later gives it again
+        await edit(t, "<mxfile>B</mxfile>")
+        t.next("POST").fail()
+        await t.settle()
+        expect(t.notices).toEqual(["unreachable", "unreachable"])
     })
 
     it("takes a proxy's error answer for a failed push", async () => {
@@ -694,6 +794,87 @@ describe("MCP sync with an edit the server never got", () => {
         await t.settle()
         expect(t.posts()).toHaveLength(0)
         expect(t.sync.read().lastXml).toBe("<mxfile>X</mxfile>")
+    })
+
+    it("keeps the edit when sending it again fails too, after the AI's write replaced it on the canvas", async () => {
+        const t = await inStep()
+        await edit(t, "<mxfile>B</mxfile>")
+        t.next("POST").fail()
+        await t.settle()
+        // The poll that gets through brings the AI's version 3: the edit
+        // goes again and the write loads
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        expect(t.loads.at(-1)?.xml).toBe("<mxfile>X</mxfile>")
+        // draw.io autosaves its copy of the write, then the connection
+        // drops again
+        t.sync.onAutoSave("<mxfile>X</mxfile>")
+        t.next("POST", "/api/state").fail()
+        await t.settle()
+        // The edit is on no canvas and in no version: it still has to go
+        expect(t.sync.read().unsavedEdit).toBe(true)
+        // The user changes the AI's version: saved on its own, and the
+        // edit from before the write is not in it
+        await edit(t, "<mxfile>X2</mxfile>")
+        const newer = t.next("POST", "/api/state")
+        expect(newer.body).toMatchObject({
+            xml: "<mxfile>X2</mxfile>",
+            baseVersion: 3,
+        })
+        newer.answer({ status: 200, body: { success: true, version: 4 } })
+        await t.settle()
+        expect(t.sync.read().unsavedEdit).toBe(true)
+        // The next poll sends it as it was made: the server refuses it
+        // and keeps it in History
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 4, "<mxfile>X2</mxfile>"))
+        await poll
+        const again = t.next("POST", "/api/state")
+        expect(again.body).toMatchObject({
+            xml: "<mxfile>B</mxfile>",
+            baseVersion: 2,
+            source: "edit",
+        })
+        again.answer({
+            status: 409,
+            body: { error: "changed", savedToHistory: true },
+        })
+        await t.settle()
+        expect(t.notices).toEqual(["unreachable", "aiChanged"])
+        // The 409 handler polls: nothing is left to send
+        t.next("GET").answer(state("S1", 4, "<mxfile>X2</mxfile>"))
+        await t.settle()
+        await t.settle()
+        expect(t.posts()).toHaveLength(0)
+        expect(t.sync.read()).toMatchObject({
+            lastXml: "<mxfile>X2</mxfile>",
+            unsavedEdit: false,
+        })
+    })
+
+    it("keeps the edit when its push fails after the AI's write loaded meanwhile", async () => {
+        const t = await inStep()
+        await edit(t, "<mxfile>B</mxfile>")
+        const push = t.next("POST")
+        // The AI's version 3 loads while the push is on its way
+        let poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        expect(t.loads.at(-1)?.xml).toBe("<mxfile>X</mxfile>")
+        push.fail()
+        await t.settle()
+        expect(t.sync.read().unsavedEdit).toBe(true)
+        // draw.io's autosave of the write it loaded is no newer edit
+        t.sync.onAutoSave("<mxfile>X</mxfile>")
+        poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        expect(t.next("POST", "/api/state").body).toMatchObject({
+            xml: "<mxfile>B</mxfile>",
+            baseVersion: 2,
+            source: "edit",
+        })
     })
 
     it("sends only the newer edit when the user went on editing", async () => {
@@ -787,7 +968,9 @@ describe("MCP sync thumbnails", () => {
         await poll
         await vi.advanceTimersByTimeAsync(500)
         const request = t.nextExport()
-        expect(request.request).toEqual({ format: "svg" })
+        // The format for which draw.io leaves the canvas usable while it
+        // downloads the diagram's pictures
+        expect(request.request).toEqual({ format: "xmlsvg", theme: "auto" })
         return { t, request }
     }
     const thumbnailPosts = (t: ReturnType<typeof open>) =>
@@ -891,9 +1074,52 @@ describe("MCP sync with a diagram over the size limit", () => {
         expect(t.notices).toEqual(["tooLarge"])
     })
 
+    it("counts the refused edit as not saved for as long as the canvas shows it", async () => {
+        const refuse = async (t: Awaited<ReturnType<typeof inStep>>) => {
+            for (let i = 0; i < 2; i++) {
+                t.next("POST").answer({
+                    status: 413,
+                    body: { error: "Payload too large" },
+                })
+                await t.settle()
+            }
+        }
+        const t = await inStep()
+        await edit(t, "<mxfile>huge</mxfile>")
+        await refuse(t)
+        // Only in this tab: the browser asks before the page is left
+        expect(t.sync.read().unsavedEdit).toBe(true)
+        // The user takes the large picture out again: that edit is saved
+        await edit(t, "<mxfile>smaller</mxfile>")
+        t.next("POST").answer({
+            status: 200,
+            body: { success: true, version: 3 },
+        })
+        await t.settle()
+        expect(t.sync.read().unsavedEdit).toBe(false)
+        // Refused once more, then undone back to what the server has
+        await edit(t, "<mxfile>huge</mxfile>")
+        await refuse(t)
+        expect(t.sync.read().unsavedEdit).toBe(true)
+        t.sync.onAutoSave("<mxfile>smaller</mxfile>")
+        expect(t.sync.read().unsavedEdit).toBe(false)
+        // And replaced by a write of the AI's
+        await edit(t, "<mxfile>huge</mxfile>")
+        await refuse(t)
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 4, "<mxfile>X</mxfile>"))
+        await poll
+        expect(t.sync.read().unsavedEdit).toBe(false)
+    })
+
     it("pushes an edit without its image when draw.io does not export in time", async () => {
         const t = await inStep()
         t.sync.onAutoSave("<mxfile>B</mxfile>")
+        // The host of a picture in the diagram does not answer: draw.io
+        // leaves the canvas usable while an export in this format waits
+        expect(t.exports.map((e) => e.request)).toEqual([
+            { format: "xmlsvg", theme: "auto" },
+        ])
         await vi.advanceTimersByTimeAsync(2000)
         expect(t.next("POST").body).toMatchObject({
             xml: "<mxfile>B</mxfile>",
@@ -1282,9 +1508,12 @@ describe("MCP sync export requests", () => {
         expect(t.exports).toHaveLength(0)
         // The write's thumbnail comes first (500 ms), the screenshot at 600
         await vi.advanceTimersByTimeAsync(599)
-        expect(t.exports.map((e) => e.request.format)).toEqual(["svg"])
+        expect(t.exports.map((e) => e.request.format)).toEqual(["xmlsvg"])
         await vi.advanceTimersByTimeAsync(1)
-        expect(t.exports.map((e) => e.request.format)).toEqual(["svg", "png"])
+        expect(t.exports.map((e) => e.request.format)).toEqual([
+            "xmlsvg",
+            "png",
+        ])
     })
 })
 
@@ -2106,7 +2335,7 @@ describe("MCP sync with server writes taken in place", () => {
         // The user picks A4: the same document to isSameDocument, an edit
         // to the user
         t.sync.onAutoSave(sized(827, 1169))
-        expect(t.exports.map((e) => e.request.format)).toEqual(["svg"])
+        expect(t.exports.map((e) => e.request.format)).toEqual(["xmlsvg"])
         t.nextExport().answer({ data: "<svg/>" })
         await t.settle()
         expect(t.next("POST").body).toMatchObject({
@@ -2146,7 +2375,7 @@ describe("MCP sync with server writes taken in place", () => {
             ) + drawioPage("p2", "Two", cell("b", "B")),
         )
         t.sync.onAutoSave(a4)
-        expect(t.exports.map((e) => e.request.format)).toEqual(["svg"])
+        expect(t.exports.map((e) => e.request.format)).toEqual(["xmlsvg"])
         t.nextExport().answer({ data: "<svg/>" })
         await t.settle()
         expect(t.next("POST").body).toMatchObject({

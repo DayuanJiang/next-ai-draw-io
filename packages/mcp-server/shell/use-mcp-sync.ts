@@ -160,7 +160,8 @@ export function useMcpSync(config: ShellConfig): {
         }
         window.addEventListener("message", onMessage)
         // A reload or a closed tab would lose an edit the server does not
-        // have (it cannot be reached): the browser asks first
+        // have (it cannot be reached, or the diagram is over its size
+        // limit): the browser asks first
         const onBeforeUnload = (event: BeforeUnloadEvent) => {
             if (!sync.read().unsavedEdit) return
             event.preventDefault()
