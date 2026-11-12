@@ -41,6 +41,7 @@ import {
     shellConfig,
     shutdown,
     startHttpServer,
+    takeLostEdits,
     waitForSelection,
     waitForSync,
 } from "../src/http-server.ts"
@@ -305,6 +306,74 @@ describe("POST /api/state", () => {
         const history = getHistory(id)
         expect(history).toHaveLength(before + 1)
         expect(history.at(-1)?.xml).toBe("<mxfile>lost user edit</mxfile>")
+    })
+
+    // One cell per label: "a" is the user's, "b" the AI's
+    const twoCells = (a: string, b: string) =>
+        `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="${a}" vertex="1" parent="1"/><mxCell id="b" value="${b}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+    // A write as the tools make it: the state, then its History entry
+    const write = (id: string, xml: string) => {
+        const version = setState(id, xml)
+        addHistory(id, xml, "", undefined, { version })
+        return version
+    }
+
+    it("keeps a lost user edit with the entry it was made on, and tells the model once what it changed", async () => {
+        const id = "mcp-conflict-base"
+        write(id, twoCells("A", "B"))
+        const drawn = getHistory(id).at(-1)
+        write(id, twoCells("A", "B by AI"))
+        const aiVersion = write(id, twoCells("A", "B by AI, twice"))
+        // Made on the first drawing, before both AI writes
+        const stale = await postJson("/api/state", {
+            sessionId: id,
+            xml: twoCells("A by hand", "B"),
+            baseVersion: aiVersion - 2,
+        })
+        expect(stale.status).toBe(409)
+        expect(getHistory(id).at(-1)).toMatchObject({
+            source: "user",
+            basedOn: drawn?.id,
+        })
+        // The version cards count the edit from that entry
+        const list = JSON.parse(
+            (await request(`/api/history?sessionId=${id}`)).body,
+        )
+        expect(list.entries.at(-1).basedOn).toBe(drawn?.id)
+        // Only the user's own change, not the AI's writes undone
+        expect(takeLostEdits(id)).toEqual([
+            'While you were writing, the user changed the diagram by hand: modified a ("A by hand").',
+        ])
+        expect(takeLostEdits(id)).toEqual([])
+    })
+
+    it("has nothing to tell the model once the user edited again or restored a version", async () => {
+        const id = "mcp-conflict-moved-on"
+        const lose = async () => {
+            write(id, twoCells("A", "B"))
+            const aiVersion = write(id, twoCells("A", "B by AI"))
+            await postJson("/api/state", {
+                sessionId: id,
+                xml: twoCells("A by hand", "B"),
+                baseVersion: aiVersion - 1,
+            })
+            return aiVersion
+        }
+        // The user makes the change again, on the AI's diagram
+        const aiVersion = await lose()
+        const again = await postJson("/api/state", {
+            sessionId: id,
+            xml: twoCells("A by hand", "B by AI"),
+            baseVersion: aiVersion,
+        })
+        expect(again.status).toBe(200)
+        expect(takeLostEdits(id)).toEqual([])
+        // The user restores the version with their edit
+        await lose()
+        const kept = getHistory(id).at(-1)
+        expect(kept?.source).toBe("user")
+        restoreHistoryEntry(id, kept?.id ?? -1)
+        expect(takeLostEdits(id)).toEqual([])
     })
 
     it("asks for a save when a lost user edit is kept in history", async () => {

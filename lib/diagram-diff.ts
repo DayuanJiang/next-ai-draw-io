@@ -133,16 +133,21 @@ function cellsIn(model: Element | null) {
     })
 }
 
-/** Shapes and connectors of one page (not the root and its layers) */
+/**
+ * Shapes and connectors of one page. The root and its layers are neither,
+ * whatever their ids are (a file made in draw.io can name its root other
+ * than "0"); the MCP server counts the same way (countChanges)
+ */
 function collectCells(
     xml: string,
     pageId?: string | null,
 ): Map<string, CellInfo> {
     const cells = new Map<string, CellInfo>()
     for (const { id, cell, node } of cellsIn(pageModel(xml, pageId))) {
-        if (id === "0" || cell.getAttribute("parent") === "0") continue
+        const isEdge = cell.getAttribute("edge") === "1"
+        if (!isEdge && cell.getAttribute("vertex") !== "1") continue
         cells.set(id, {
-            isEdge: cell.getAttribute("edge") === "1",
+            isEdge,
             signature: signatureOf(node),
         })
     }

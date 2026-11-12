@@ -10,7 +10,11 @@ import { pageNameOf } from "@/lib/diagram-pages"
 import { highlightChangedCells } from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
 import { cn } from "@/lib/utils"
-import { describeChangeSummary, describeTotals } from "@/lib/version-text"
+import {
+    describeChangeSummary,
+    describePagesChange,
+    describeTotals,
+} from "@/lib/version-text"
 import { useUiStore } from "@/stores/ui-store"
 
 /** Picture of a version (SVG data URL), or what stands in for it */
@@ -59,6 +63,8 @@ interface VersionCardProps extends React.ComponentProps<"div"> {
     afterSummary?: React.ReactNode
     /** The canvas was changed by hand since this version: the card says so */
     editedSince?: boolean
+    /** Pages the change added (negative: removed), told with what changed */
+    pagesAdded?: number
     /** Panel below the card (the chat shows the AI's XML there) */
     children?: React.ReactNode
 }
@@ -103,6 +109,7 @@ export function VersionCard({
     label,
     afterSummary,
     editedSince,
+    pagesAdded = 0,
     children,
     className,
     ...rest
@@ -117,6 +124,11 @@ export function VersionCard({
     const summary = version.fromScratch
         ? describeTotals(version.summary, t)
         : describeChangeSummary(version.summary, t)
+    // Pages added or removed come first, and alone when no shape changed
+    // (a new blank page is a visible change). A page drawn from scratch
+    // is told by its totals
+    const pages = version.fromScratch ? "" : describePagesChange(pagesAdded, t)
+    const cellsChanged = Object.values(version.summary).some((n) => n > 0)
     // In a document with several pages, the page the change was made on
     const pageName = useMemo(
         () => pageNameOf(version.xml, version.pageId),
@@ -154,12 +166,18 @@ export function VersionCard({
     )
     const summaryLine = (
         <div className="text-xs text-muted-foreground">
-            {pageName && (
-                <span className="font-medium text-foreground/80">
-                    {pageName}:{" "}
-                </span>
+            {pages}
+            {pages && cellsChanged && t.listSeparator}
+            {(!pages || cellsChanged) && (
+                <>
+                    {pageName && (
+                        <span className="font-medium text-foreground/80">
+                            {pageName}:{" "}
+                        </span>
+                    )}
+                    {summary}
+                </>
             )}
-            {summary}
             {canShowChanges && (
                 <SummaryLink
                     onClick={() =>

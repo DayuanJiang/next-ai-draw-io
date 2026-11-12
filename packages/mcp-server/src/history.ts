@@ -30,6 +30,12 @@ export interface HistoryEntry {
     xml: string
     svg: string
     source?: HistorySource
+    // The state version that a server write (the AI's, a restore) made
+    // with this entry: what a hand edit based on an older version lost to
+    version?: number
+    // The entry a hand edit was made on, when a server write came in
+    // between: the edit lost to that write and is kept after it
+    basedOn?: number
 }
 
 let nextEntryId = 0
@@ -40,6 +46,7 @@ export function addHistory(
     xml: string,
     svg = "",
     source?: HistorySource,
+    more: Pick<HistoryEntry, "version" | "basedOn"> = {},
 ): number {
     let history = historyStore.get(sessionId)
     if (!history) {
@@ -61,6 +68,7 @@ export function addHistory(
         xml,
         svg,
         ...(source && { source }),
+        ...more,
     })
 
     // Circular buffer

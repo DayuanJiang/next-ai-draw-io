@@ -365,13 +365,36 @@ export function countChanges(beforeXml: string, afterXml: string): string {
 }
 
 /**
+ * ` [lost its source mobile: that end is loose]` for an edge whose end the
+ * change left unconnected. Delete in draw.io removes a shape and keeps its
+ * edges, each with a loose end where the shape was. "modified" alone reads
+ * as a move or a new label; this tells the model that the edge needs
+ * another shape at that end, or to be deleted.
+ */
+function looseEnds(old: Element, cell: Element): string {
+    const lost = ["source", "target"].flatMap((end) => {
+        const was = cellFlag(old, end)
+        return was && !cellFlag(cell, end) ? [`${end} ${was}`] : []
+    })
+    return lost.length > 0
+        ? ` [lost its ${lost.join(" and its ")}: that end is loose]`
+        : ""
+}
+
+/**
  * One paragraph naming what the user changed between the XML the model last
  * saw and the live store, for stale rejections and get_diagram. Pages are
  * paired by id, or by index when the two sides share no id (draw.io
  * regenerated the diagram ids), and cells by id. Returns "" when there is
- * nothing to compare or the two sides have the same content.
+ * nothing to compare or the two sides have the same content. `intro` opens
+ * the paragraph: another one for a hand edit that lost to a write of the
+ * model's, told against the diagram it was made on (http-server.ts).
  */
-export function describeChanges(lastSeenXml: string, liveXml: string): string {
+export function describeChanges(
+    lastSeenXml: string,
+    liveXml: string,
+    intro = "Since you last saw it, the user changed the diagram",
+): string {
     if (!lastSeenXml || lastSeenXml === liveXml) return ""
     const parse = (xml: string) => {
         const normalized = normalizeToMxfile(xml)
@@ -418,7 +441,7 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
             const old = cellsBefore.get(id)
             if (!old) added.push(describeCell(id, cell))
             else if (canonicalizeElement(old) !== canonicalizeElement(cell))
-                modified.push(describeCell(id, cell))
+                modified.push(describeCell(id, cell) + looseEnds(old, cell))
         }
         for (const [id, cell] of cellsBefore) {
             if (!cellsLive.has(id)) removed.push(describeCell(id, cell))
@@ -456,7 +479,6 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
     // <root> that is not a cell
     if (!clauses.length && !renames.length)
         clauses.push("the order of the cells changed")
-    const intro = "Since you last saw it, the user changed the diagram"
     const body = clauses.length
         ? `${intro}: ${clauses.join("; ")}.`
         : `${intro}.`

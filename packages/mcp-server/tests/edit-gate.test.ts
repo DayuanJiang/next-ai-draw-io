@@ -489,6 +489,32 @@ describe("describeChanges", () => {
             "Since you last saw it, the user changed the diagram: the order of the cells changed.",
         )
     })
+
+    it("says which end an edge lost when the user deleted the shape there", () => {
+        // Delete in draw.io removes the shape and keeps its edge, with a
+        // point where the shape was
+        const edge = (ends: string, point = "") =>
+            `<mxCell id="e1" value="requests" edge="1" parent="1" ${ends}><mxGeometry relative="1" as="geometry">${point}</mxGeometry></mxCell>`
+        const seen = XML_A_PLUS_BOX2.replace(
+            "</root>",
+            `${edge('source="box2" target="box1"')}</root>`,
+        )
+        const deleted = XML_A.replace(
+            "</root>",
+            `${edge('target="box1"', '<mxPoint x="460" y="230" as="sourcePoint"/>')}</root>`,
+        )
+        expect(describeChanges(seen, deleted)).toBe(
+            'Since you last saw it, the user changed the diagram: modified e1 ("requests") [lost its source box2: that end is loose]; removed box2 ("World").',
+        )
+        // An end moved to another shape is an ordinary change
+        const turned = seen.replace(
+            'source="box2" target="box1"',
+            'source="box1" target="box2"',
+        )
+        expect(describeChanges(seen, turned)).toBe(
+            'Since you last saw it, the user changed the diagram: modified e1 ("requests").',
+        )
+    })
 })
 
 describe("countChanges", () => {

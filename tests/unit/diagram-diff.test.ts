@@ -132,6 +132,34 @@ describe("diffDiagrams", () => {
         })
     })
 
+    it("does not count the root and the layers of a file whose root is not called 0", () => {
+        // A file made in draw.io from a template: the root cells carry the
+        // file's own ids
+        const own = (cells: string) =>
+            `<mxfile><diagram name="Page-1" id="p1"><mxGraphModel><root><mxCell id="W-0"/><mxCell id="W-1" parent="W-0"/>${cells}</root></mxGraphModel></diagram></mxfile>`
+        const shape = (id: string, layer: string) =>
+            `<mxCell id="${id}" value="${id}" vertex="1" parent="${layer}"><mxGeometry width="80" height="40" as="geometry"/></mxCell>`
+        const drafts = (style: string) =>
+            `<mxCell id="L2" value="Drafts" style="${style}" parent="W-0"/>`
+        const opened = own(drafts("locked=1;") + shape("a", "W-1"))
+        expect(diffDiagrams("", opened).summary).toEqual({
+            ...EMPTY_SUMMARY,
+            shapesAdded: 1,
+        })
+        // A new layer with one shape on it
+        const withLayer = own(
+            `${drafts("locked=1;")}${shape("a", "W-1")}<mxCell id="L3" value="Costs" parent="W-0"/>${shape("b", "L3")}`,
+        )
+        expect(diffDiagrams(opened, withLayer)).toEqual({
+            summary: { ...EMPTY_SUMMARY, shapesAdded: 1 },
+            touchedIds: ["b"],
+            fromScratch: false,
+        })
+        // A layer unlocked: no shape changed
+        const unlocked = own(drafts("") + shape("a", "W-1"))
+        expect(diffDiagrams(opened, unlocked).summary).toEqual(EMPTY_SUMMARY)
+    })
+
     it("ignores empty style entries, as draw.io does", () => {
         const styled = (style: string) =>
             doc(

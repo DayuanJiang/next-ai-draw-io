@@ -188,6 +188,90 @@ test("a change made in the editor is pushed, and get_diagram returns it", async 
         .toBe(true)
 })
 
+test("a page tool on top of a hand edit leaves that edit to be told with the next edit", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    const onePage = (id: string, name: string, cells: string) =>
+        `<diagram id="${id}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+    await toolText("create_new_diagram", {
+        xml: `<mxfile>${onePage("pg1", "Flow", box("2", "Drawn by AI", 40))}${onePage("pg2", "Data", box("2", "Table", 40))}</mxfile>`,
+    })
+    await expect(frame.getByText("Drawn by AI")).toBeVisible({
+        timeout: 10_000,
+    })
+    await addByHand(frame, "hand-1", "Added by hand")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="hand-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    // The model has not seen the shape when it renames the other page
+    expect(
+        await toolText("rename_page", { page_index: 1, new_name: "Entities" }),
+    ).toContain('renamed to "Entities"')
+    const edit = {
+        page_index: 0,
+        operations: [
+            { operation: "add", cell_id: "9", new_xml: box("9", "Next", 240) },
+        ],
+    }
+    // Refused once, with the user's change and the page as it is now
+    const refused = await toolText("edit_diagram", edit)
+    expect(refused).toContain(
+        'Since you last saw it, the user changed the diagram: page index=0 added hand-1 ("Added by hand").',
+    )
+    expect(refused).toContain("Build your operations on this XML and retry.")
+    expect(await toolText("edit_diagram", edit)).toContain(
+        "Applied 1 operation(s)",
+    )
+    // A page added on top of the next hand edit: get_diagram tells it
+    await expect(frame.getByText("Next")).toBeVisible({ timeout: 10_000 })
+    await addByHand(frame, "hand-2", "Second by hand")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="hand-2"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await toolText("add_page", { name: "Notes" })
+    expect(await toolText("get_diagram")).toContain(
+        'Note: Since you last saw it, the user changed the diagram: page index=0 added hand-2 ("Second by hand").',
+    )
+    // Hand edits on two pages: the refused edit of one of them shows the
+    // whole document, so that the retry is not refused for the other page
+    const tabs = frame.locator(".geTabContainer")
+    for (const [tab, id] of [
+        ["Flow", "hand-3"],
+        ["Entities", "hand-4"],
+    ]) {
+        await tabs.getByText(tab, { exact: true }).click()
+        await expect(tabs.locator(".geActivePage")).toHaveText(tab)
+        await addByHand(frame, id, `${id} label`)
+        await expect
+            .poll(async () => (await serverXml(page)).includes(`id="${id}"`), {
+                timeout: 10_000,
+            })
+            .toBe(true)
+    }
+    const twoPages = {
+        page_index: 0,
+        operations: [
+            {
+                operation: "add",
+                cell_id: "10",
+                new_xml: box("10", "Last", 440),
+            },
+        ],
+    }
+    const both = await toolText("edit_diagram", twoPages)
+    expect(both).toContain("Current XML of the whole document")
+    expect(both).toContain('page index=1 added hand-4 ("hand-4 label")')
+    expect(both).toContain('name="Entities"')
+    expect(await toolText("edit_diagram", twoPages)).toContain(
+        "Applied 1 operation(s)",
+    )
+})
+
 test("exporting another page shows it for a moment, then the user's page comes back", async ({
     page,
 }) => {
@@ -249,6 +333,40 @@ test("a .drawio.svg path with format svg still gets a file load_diagram can open
     )
 })
 
+test("an exported SVG keeps its light colors and gets a white background, the page's own color, or none", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    const exportSvg = async (name: string, args = {}) => {
+        const file = join(dataDir, name)
+        const text = await toolText("export_diagram", { path: file, ...args })
+        expect(text).toContain("exported successfully")
+        // The <svg> element's own style
+        return readFileSync(file, "utf8").match(/<svg\b[^>]*>/)?.[0] ?? ""
+    }
+    await toolText("create_new_diagram", { xml: box("2", "On white", 40) })
+    await expect(frame.getByText("On white")).toBeVisible({ timeout: 10_000 })
+    // draw.io's default follows the viewer's dark mode ("color-scheme:
+    // light dark", no background): dark shapes on a white web page
+    for (const name of ["plain.svg", "plain.drawio.svg"]) {
+        const svg = await exportSvg(name)
+        expect(svg).toContain("background: #ffffff;")
+        expect(svg).toContain("color-scheme: light;")
+    }
+    const clear = await exportSvg("clear.svg", { transparent: true })
+    expect(clear).toContain("background: transparent;")
+    expect(clear).toContain("color-scheme: light;")
+    // A page with a background color of its own keeps it
+    await toolText("create_new_diagram", {
+        xml: `<mxGraphModel background="#1f2a44"><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="On navy" style="fontColor=#ffffff;fillColor=none;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>`,
+    })
+    await expect(frame.getByText("On navy")).toBeVisible({ timeout: 10_000 })
+    expect(await exportSvg("navy.svg")).toContain("background: #1f2a44;")
+    expect(
+        await exportSvg("navy-clear.drawio.svg", { transparent: true }),
+    ).toContain("background: transparent;")
+})
+
 test("a screenshot of another page leaves the page on screen alone", async ({
     page,
 }) => {
@@ -304,6 +422,11 @@ test("a screenshot of another page leaves the page on screen alone", async ({
         'Screenshot of page name="Backside". If no image came with this result,',
     )
     expect(text).toContain("do not take more screenshots")
+    // And when the next one is worth its time: a model that got a picture
+    // asks for one with every small edit otherwise
+    expect(text).toContain(
+        "From now on pass screenshot: true only with a change that adds or moves several shapes",
+    )
 })
 
 test("get_selection reports the cells selected in the editor", async ({
@@ -445,6 +568,52 @@ test("the download waits for a page export's projection, and saves every page", 
     expect(await exported).toContain("exported successfully")
 })
 
+test("a box the AI adds around shapes goes behind them: a click still selects the shape", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Framed one", 100)}\n${box("3", "Framed two", 300)}`,
+    })
+    await expect(frame.getByText("Framed one")).toBeVisible({ timeout: 10_000 })
+    const added = await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "grp",
+                new_xml:
+                    '<mxCell id="grp" value="Around both" style="fillColor=none;dashed=1;verticalAlign=top;" x="60" y="0" w="420" h="140"/>',
+            },
+        ],
+    })
+    expect(added).toContain(
+        "grp is drawn behind the shapes it covers (2, 3), so they stay visible and can be selected.",
+    )
+    await expect(frame.getByText("Around both")).toBeVisible({
+        timeout: 10_000,
+    })
+    const selected = () =>
+        frame.locator("body").evaluate(
+            (body) =>
+                new Promise<string[]>((resolve) => {
+                    const w = body.ownerDocument.defaultView as any
+                    w.Draw.loadPlugin((ui: any) =>
+                        resolve(
+                            ui.editor.graph
+                                .getSelectionCells()
+                                .map((cell: any) => cell.id),
+                        ),
+                    )
+                }),
+        )
+    // A box in front of them takes the click: draw.io selects the topmost
+    // cell, and the inside of a box is clickable also without a fill
+    await frame.getByText("Framed one").click()
+    expect(await selected()).toEqual(["2"])
+    await frame.getByText("Around both").click()
+    expect(await selected()).toEqual(["grp"])
+})
+
 /** A shape added in the editor, as the user would draw one */
 const addByHand = (frame: FrameLocator, id: string, label: string) =>
     frame.locator("body").evaluate(
@@ -583,6 +752,17 @@ test("a hand edit whose save fails twice is kept as a version when the AI wrote 
         return entries.some((e) => e.xml.includes("Lost twice"))
     })
     expect(kept).toBe(true)
+    // Its card counts from the diagram the edit was made on: counted from
+    // the AI's write, that write's change would show too, as undone
+    const card = page.getByTestId("version-card").last()
+    await expect(card).toContainText("Changed by hand")
+    await expect(card).toContainText("Added 1 shape")
+    await expect(card).not.toContainText("changed 1 shape")
+    // The model is told with its next tool result, whichever tool, once
+    expect(await toolText("list_pages")).toContain(
+        'Note: While you were writing, the user changed the diagram by hand: added twice-1 ("Lost twice"). That edit is not in the diagram',
+    )
+    expect(await toolText("list_pages")).not.toContain("While you were writing")
 })
 
 test("the notice stays while the polls get through and the edit's saves keep failing", async ({

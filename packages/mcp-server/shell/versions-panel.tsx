@@ -54,6 +54,7 @@ export function VersionsPanel({ versions }: { versions: NodeVersion[] }) {
                         isLatest={i === versions.length - 1}
                         label={versionLabel(version, dict)}
                         editedSince={version.id === editedSinceId}
+                        pagesAdded={version.pagesAdded}
                     />
                 ))}
             </div>

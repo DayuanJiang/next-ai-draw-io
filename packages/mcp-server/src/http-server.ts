@@ -55,7 +55,7 @@ function readBody(
 }
 
 import { isDrawioTheme, toDrawioLang } from "./drawio-themes.ts"
-import { contentFingerprint } from "./edit-gate.ts"
+import { contentFingerprint, describeChanges } from "./edit-gate.ts"
 import {
     addHistory,
     clearHistory,
@@ -302,6 +302,11 @@ interface SessionState {
     // The browser saved a change of the user's since that write (a sync
     // reply is no change)
     userEdited?: boolean
+    // Hand edits that lost to a write of the model's and are in History
+    // only, each as a sentence for the model's next tool result
+    // (takeLostEdits). Dropped when the user changes the canvas again or
+    // restores a version: they have then seen it without that edit
+    lostEdits?: string[]
     lastUpdated: Date
     lastPolled?: number // Last browser poll; an open tab keeps the session alive
     svg?: string // Cached SVG from last browser save
@@ -322,7 +327,9 @@ export type ExportFormat = "png" | "svg" | "xmlsvg"
  * draw.io's export takes these directly: width caps the image size (never
  * upscales), pageId renders a page other than the one on screen (both PNG
  * only), border is the margin, background the color behind a page that has
- * none, transparent leaves a PNG without any.
+ * none, transparent leaves the image without any, theme "light" keeps an
+ * SVG from following the viewer's dark mode. (For an SVG draw.io reads the
+ * background its own way: the shell translates, mcp-sync-core.ts.)
  */
 export interface ExportOptions {
     width?: number
@@ -330,6 +337,7 @@ export interface ExportOptions {
     border?: number
     background?: string
     transparent?: boolean
+    theme?: "light"
 }
 
 const stateStore = new Map<string, SessionState>()
@@ -408,6 +416,7 @@ export function setState(
         serverVersion: fromBrowser ? existing?.serverVersion : newVersion,
         serverXml: fromBrowser ? existing?.serverXml : xml,
         userEdited: fromBrowser ? existing?.userEdited : false,
+        lostEdits: existing?.lostEdits,
         lastUpdated: new Date(),
         lastPolled: existing?.lastPolled,
         // The image of this XML, never an older one's: a write without an
@@ -1030,9 +1039,39 @@ function handleStateApi(
                         if (current) current.syncRequested = undefined
                     } else if (typeof data.xml === "string" && data.xml) {
                         // A user edit lost the race with an AI write. Keep
-                        // it in history so the user can restore it.
-                        addHistory(sessionId, data.xml, data.svg || "", "user")
+                        // it in history so the user can restore it, with
+                        // the entry it was made on: the one before the
+                        // first write that came after its version
+                        const history = getHistory(sessionId)
+                        const at = history.findIndex(
+                            (e) => (e.version ?? 0) > data.baseVersion,
+                        )
+                        const lostTo = history[at]
+                        const base = at > 0 ? history[at - 1] : undefined
+                        addHistory(
+                            sessionId,
+                            data.xml,
+                            data.svg || "",
+                            "user",
+                            { basedOn: base?.id },
+                        )
                         savedToHistory = true
+                        // A write of the model's replaced it (a restore is
+                        // the user's own choice): the model is told
+                        const lost =
+                            base && lostTo.source !== "restore"
+                                ? describeChanges(
+                                      base.xml,
+                                      data.xml,
+                                      "While you were writing, the user changed the diagram by hand",
+                                  )
+                                : ""
+                        if (current && lost) {
+                            current.lostEdits = [
+                                ...(current.lostEdits ?? []),
+                                lost,
+                            ]
+                        }
                         if (current) stateListener?.(sessionId, current.xml)
                     }
                     res.writeHead(409, { "Content-Type": "application/json" })
@@ -1054,6 +1093,7 @@ function handleStateApi(
                 const saved = stateStore.get(sessionId)
                 if (saved && data.source !== "sync") {
                     saved.userEdited = true
+                    saved.lostEdits = undefined
                     markFileChanged(sessionId)
                 }
                 res.writeHead(200, { "Content-Type": "application/json" })
@@ -1109,6 +1149,7 @@ function handleHistoryApi(
                 xml: entry.xml,
                 source: entry.source ?? null,
                 firstId: firstIds.get(entry.id),
+                basedOn: entry.basedOn,
             })),
             count: history.length,
             stateId: state?.stateId ?? null,
@@ -1141,10 +1182,25 @@ export function restoreHistoryEntry(
         keepInHistory(sessionId, current.xml, current.svg)
     }
     const newVersion = setState(sessionId, entry.xml)
-    addHistory(sessionId, entry.xml, entry.svg, "restore")
+    addHistory(sessionId, entry.xml, entry.svg, "restore", {
+        version: newVersion,
+    })
+    const restored = stateStore.get(sessionId)
+    if (restored) restored.lostEdits = undefined
 
     log.info(`Restored session ${sessionId} to history entry ${entryId}`)
     return newVersion
+}
+
+/**
+ * The hand edits that lost to a write of the model's since the last call
+ * (see SessionState.lostEdits), each told once
+ */
+export function takeLostEdits(sessionId: string): string[] {
+    const state = stateStore.get(sessionId)
+    const lost = state?.lostEdits ?? []
+    if (state) state.lostEdits = undefined
+    return lost
 }
 
 function handleRestoreApi(

@@ -222,3 +222,55 @@ describe("cut-off new_xml", () => {
         expect(result).not.toContain('id="n"')
     })
 })
+
+describe("a box added around shapes that are already there", () => {
+    const shape = (id: string, x: number, y: number, parent = "1") =>
+        `<mxCell id="${id}" value="${id}" vertex="1" parent="${parent}"><mxGeometry x="${x}" y="${y}" width="120" height="60" as="geometry"/></mxCell>`
+    const EDGE = `<mxCell id="e1" edge="1" parent="1" source="in1" target="in2"><mxGeometry relative="1" as="geometry"/></mxCell>`
+    const PAGE = `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${shape("out", 600, 100)}${EDGE}${shape("in1", 100, 100)}${shape("in2", 300, 100)}</root></mxGraphModel></diagram></mxfile>`
+    const frame = (parent: string) =>
+        `<mxCell id="frame" value="Group" style="fillColor=none;dashed=1;" vertex="1" parent="${parent}"><mxGeometry x="60" y="60" width="420" height="160" as="geometry"/></mxCell>`
+    const order = (xml: string) =>
+        Array.from(xml.matchAll(/<mxCell id="([^"]+)"/g), (m) => m[1])
+
+    it("goes behind the shapes it covers and their edges, so a click still reaches them", () => {
+        const { result, errors, notes } = applyDiagramOperations(PAGE, [
+            { operation: "add", cell_id: "frame", new_xml: frame("1") },
+        ])
+        expect(errors).toEqual([])
+        // draw.io draws in this order, the last cell on top: the frame
+        // comes before the edge between the two shapes inside it
+        expect(order(result)).toEqual([
+            "0",
+            "1",
+            "out",
+            "frame",
+            "e1",
+            "in1",
+            "in2",
+        ])
+        expect(notes).toEqual([
+            "frame is drawn behind the shapes it covers (in1, in2), so they stay visible and can be selected.",
+        ])
+    })
+
+    it("stays in front, at the end, when it covers no shape", () => {
+        const { result, notes } = applyDiagramOperations(PAGE, [
+            // Overlaps in1 without covering it
+            { operation: "add", cell_id: "n", new_xml: shape("n", 150, 120) },
+            // As large as in2, at its place
+            { operation: "add", cell_id: "m", new_xml: shape("m", 300, 100) },
+        ])
+        expect(order(result).slice(-2)).toEqual(["n", "m"])
+        expect(notes).toEqual([])
+    })
+
+    it("only looks at the shapes of its own parent", () => {
+        // A child's position counts from its container's corner
+        const { result, notes } = applyDiagramOperations(PAGE, [
+            { operation: "add", cell_id: "frame", new_xml: frame("out") },
+        ])
+        expect(order(result).at(-1)).toBe("frame")
+        expect(notes).toEqual([])
+    })
+})

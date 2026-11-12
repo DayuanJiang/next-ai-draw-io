@@ -30,6 +30,8 @@ export interface NodeVersion extends VersionItem {
     /** Who made it: "user", "recover", "restore", "load" (a file opened),
      * "add_page", "rename_page"; null for the AI */
     source: string | null
+    /** Pages it added to the document before it (negative: removed) */
+    pagesAdded: number
 }
 
 // The blank page a tab shows before any drawing: the server keeps it in
@@ -81,6 +83,8 @@ interface Change {
     summary: ChangeSummary
     fromScratch: boolean
     touchedIds: string[]
+    /** Pages added (negative: removed) */
+    pages: number
 }
 
 /**
@@ -172,21 +176,53 @@ export function buildVersions(
             number = cache.next++
             cache.numbers.set(contentKey, number)
         }
+        // The entry the change was made on: the one before it, or the one
+        // the server names for a hand edit that lost to a write and is kept
+        // after it (counted from that write, the edit would also show the
+        // write's changes, undone)
+        const madeOn =
+            (first.basedOn !== undefined &&
+                list.entries.find((e) => e.id === first.basedOn)) ||
+            previous
         let change = cache.changes.get(contentKey)
         if (!change) {
-            const beforeXml = previous?.xml ?? ""
+            const beforeXml = madeOn?.xml ?? ""
             const pageId = changedPage(beforeXml, first.xml)
             const { summary, fromScratch, touchedIds } = diffDiagrams(
                 beforeXml,
                 first.xml,
                 pageId,
             )
-            change = { beforeXml, pageId, summary, fromScratch, touchedIds }
+            const pages = beforeXml
+                ? pageIds(first.xml).length - pageIds(beforeXml).length
+                : 0
+            change = {
+                beforeXml,
+                pageId,
+                summary,
+                fromScratch,
+                touchedIds,
+                pages,
+            }
             cache.changes.set(contentKey, change)
         }
-        const svg = [...copies]
+        const ownSvg = [...copies]
             .reverse()
             .find((c) => c.svg && isSameDocument(c.xml, newest.xml))?.svg
+        // A version that changed no shape (a page renamed) looks like the
+        // one it was made on. The tab takes a version's picture when it
+        // shows it, so one that the next write replaced within the same
+        // poll has none: it shows that version's picture
+        const looksAsBefore =
+            !change.fromScratch &&
+            change.pages === 0 &&
+            Object.values(change.summary).every((n) => n === 0)
+        const svg =
+            ownSvg ||
+            (looksAsBefore && madeOn
+                ? versions.find((v) => v.id === String(keys.get(madeOn.id)))
+                      ?.svg
+                : "")
         const beforeKey = previous ? keys.get(previous.id) : undefined
         versions.push({
             id: String(key),
@@ -204,6 +240,7 @@ export function buildVersions(
             touchedIds: change.touchedIds,
             svg: svg || "",
             source: first.source,
+            pagesAdded: change.pages,
         })
     }
     // The newest version on the canvas waits for its picture

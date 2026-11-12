@@ -14,6 +14,7 @@
  * it) and screenshots and file exports for an image, both through the poll.
  */
 import { isSameDocument, sameFileVars } from "@/lib/diagram-diff"
+import { pageModelXml } from "@/lib/diagram-pages"
 import { hasLoadOnlySettings } from "@/lib/drawio/editor-bridge"
 import { contentFingerprint } from "@/packages/mcp-server/src/edit-gate.ts"
 import {
@@ -42,6 +43,7 @@ export interface ServerState {
         border?: number
         background?: string
         transparent?: boolean
+        theme?: string
     } | null
     exportId: string | null
     /** A get_selection request waiting for this tab's answer */
@@ -66,6 +68,9 @@ export interface HistoryEntryInfo {
     source: string | null
     /** The oldest entry with the same content (itself when it is the first) */
     firstId: number
+    /** The entry a hand edit was made on, when a server write came in
+     * between: the edit lost to that write and is kept after it */
+    basedOn?: number
 }
 
 /** GET /api/history as the server answers it, for the state the list is of */
@@ -246,6 +251,30 @@ function sameDiagram(a: string | null, b: string | null): boolean {
     if (a === null || b === null) return false
     const hasModel = (xml: string) => /<(mxGraphModel|diagram)[\s>]/.test(xml)
     return hasModel(a) && hasModel(b) && isSameDocument(a, b)
+}
+
+/**
+ * The background of an SVG export in draw.io's terms, for the page that is
+ * exported (its mxGraphModel). draw.io reads `background` alone there, and
+ * it replaces the page's own color: that color is sent when the page has
+ * one, else the color the server asks for. Transparent is "none", except
+ * in an editable SVG of a page with its own color, which gets that color
+ * back unless a transparent one is sent. The web app's export has the same
+ * rule (contexts/diagram-context.tsx).
+ */
+export function svgBackground(
+    format: ExportFormat,
+    pageModel: string | null,
+    options: { background?: string; transparent?: boolean },
+): string | undefined {
+    const own = pageModel?.match(
+        /<mxGraphModel\b[^>]*\sbackground="([^"]+)"/,
+    )?.[1]
+    const pageColor = own === "none" ? undefined : own
+    if (options.transparent) {
+        return format === "xmlsvg" && pageColor ? "transparent" : "none"
+    }
+    return pageColor ?? options.background
 }
 
 /** SVG as a data URL, as the server stores thumbnails */
@@ -782,8 +811,8 @@ export function createMcpSync(options: SyncOptions): McpSync {
         mcpExportId = s.exportId
         const extra = s.exportOptions ?? {}
         const fire = () => {
-            // The server's options (margin, background, PNG page and size)
-            // go to draw.io as they are
+            // The server's options (margin, theme, background, PNG page and
+            // size) go to draw.io as they are, but an SVG's background
             const request: ExportRequest =
                 format === "png"
                     ? {
@@ -792,7 +821,20 @@ export function createMcpSync(options: SyncOptions): McpSync {
                           currentPage: !extra.pageId,
                           ...extra,
                       }
-                    : { format, ...extra }
+                    : {
+                          format,
+                          ...extra,
+                          background: svgBackground(
+                              format,
+                              s.exportXml
+                                  ? pageModelXml(s.exportXml, null)
+                                  : pageModelXml(
+                                        canvas.currentXml(),
+                                        canvas.currentPageId(),
+                                    ),
+                              extra,
+                          ),
+                      }
             canvas.export(request, 10000).then((result) => {
                 // A later export is running by now, or this one ended
                 if (seq !== mcpExportSeq || pendingMcpExport === null) return

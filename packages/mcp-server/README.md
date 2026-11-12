@@ -88,7 +88,7 @@ Restart the client, then ask, for example, "Read this repo and draw its architec
 - **Real icons**: the web app's drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes, Cisco and more), so the AI uses real icon names.
 - **Self-check**: the AI can look at a screenshot of the rendered diagram and fix overlaps (`screenshot: true`, or `screenshot_diagram`).
 - **Versions**: the last 20 versions as cards next to the canvas; restore or compare one, or ask the AI to undo (`restore_version`).
-- **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin, and PNGs a white background (`transparent: true` for none).
+- **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin and a white background (`transparent: true` for none); an SVG keeps its light colors in a viewer's dark mode.
 - **Offline**: the draw.io editor ships inside the package.
 
 ## Choosing a draw.io MCP server

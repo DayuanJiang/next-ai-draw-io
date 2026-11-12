@@ -455,6 +455,86 @@ describe("buildVersions", () => {
         )
         expect(versions[1].touchedIds).toEqual(["b", "c"])
     })
+
+    it("counts a hand edit that lost to a write from the entry it was made on", () => {
+        // The user renamed A while the AI added B: the server keeps the
+        // edit after the AI's write, and names the entry it was made on
+        const byHand = doc(cell("a", "A by hand"))
+        const { versions } = buildVersions(
+            list(
+                [
+                    entry(0, A),
+                    entry(1, AB),
+                    entry(2, byHand, { source: "user", basedOn: 0 }),
+                ],
+                1,
+            ),
+            cache(),
+        )
+        // From the AI's write it would be two changes: A renamed, B removed
+        expect(versions[2].summary).toMatchObject({
+            shapesChanged: 1,
+            shapesRemoved: 0,
+        })
+        expect(versions[2].beforeXml).toBe(A)
+        // Undo of the edit, once restored, still goes to the canvas it
+        // replaced: the AI's write
+        expect(versions[2].beforeId).toBe("1")
+    })
+
+    it("counts the pages a version added or removed", () => {
+        const pages = (...names: string[]) =>
+            `<mxfile>${names.map((name) => `<diagram id="${name}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cell("a", "A")}</root></mxGraphModel></diagram>`).join("")}</mxfile>`
+        const { versions } = buildVersions(
+            list(
+                [
+                    entry(0, pages("One")),
+                    entry(1, pages("One", "Two", "Three"), { source: "user" }),
+                    entry(2, pages("One", "Three")),
+                ],
+                2,
+            ),
+            cache(),
+        )
+        expect(versions.map((v) => v.pagesAdded)).toEqual([0, 2, -1])
+    })
+
+    it("pictures a version that changed no shape as the one it was made on, until it has a picture of its own", () => {
+        // A page renamed, and replaced by the next write before the tab
+        // showed it: the tab took no picture of it
+        const renamed = A.replace('name="Page-1"', 'name="Overview"')
+        const entries = [
+            entry(0, A, { svg: "data:A" }),
+            entry(1, renamed, { source: "rename_page" }),
+            entry(
+                2,
+                doc(cell("a", "A") + cell("b", "B")).replace(
+                    'name="Page-1"',
+                    'name="Overview"',
+                ),
+            ),
+        ]
+        const { versions } = buildVersions(list(entries, 2), cache())
+        expect(versions[1].svg).toBe("data:A")
+        // A version whose shapes changed has no such stand-in
+        expect(
+            buildVersions(
+                list(
+                    [
+                        entry(0, A, { svg: "data:A" }),
+                        entry(1, AB),
+                        entry(2, ABC),
+                    ],
+                    2,
+                ),
+                cache(),
+            ).versions[1].svg,
+        ).toBe("")
+        entries[1] = { ...entries[1], svg: "data:renamed" }
+        expect(buildVersions(list(entries, 2), cache()).versions[1].svg).toBe(
+            "data:renamed",
+        )
+    })
 })
 
 /** A stand-in for the sync: History as the server would answer, restores

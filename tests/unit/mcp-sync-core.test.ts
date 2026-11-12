@@ -1270,6 +1270,63 @@ describe("MCP sync export requests", () => {
         })
     })
 
+    it("gives an SVG the page's own background in place of the white one, and none when transparent", async () => {
+        const page = (id: string, background: string) =>
+            `<diagram id="${id}" name="${id}"><mxGraphModel${background}><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>`
+        const t = await inStep({ currentPageId: "p2" })
+        // draw.io reads only `background` for an SVG, and it replaces the
+        // page's color: what goes there is decided here, for the page on
+        // screen or the projection
+        const request = async (extra: Record<string, unknown>) => {
+            const poll = t.sync.poll()
+            t.next("GET").answer(exportState(extra))
+            await poll
+            await vi.advanceTimersByTimeAsync(600)
+            const pending = t.nextExport()
+            pending.answer(null)
+            await t.settle()
+            return pending.request
+        }
+        const white = { border: 20, theme: "light", background: "#ffffff" }
+        t.canvas.xml = `<mxfile>${page("p1", ' background="#102030"')}${page("p2", "")}</mxfile>`
+        expect(
+            await request({ exportFormat: "svg", exportOptions: white }),
+        ).toEqual({ format: "svg", ...white })
+        t.canvas.xml = `<mxfile>${page("p1", "")}${page("p2", ' background="#102030"')}</mxfile>`
+        expect(
+            await request({
+                exportFormat: "svg",
+                exportOptions: white,
+                exportId: "e2",
+            }),
+        ).toEqual({ format: "svg", ...white, background: "#102030" })
+        const clear = { border: 20, theme: "light", transparent: true }
+        expect(
+            await request({
+                exportFormat: "svg",
+                exportOptions: clear,
+                exportId: "e3",
+            }),
+        ).toEqual({ format: "svg", ...clear, background: "none" })
+        // An editable SVG gets the page's color back for "none"
+        expect(
+            await request({
+                exportFormat: "xmlsvg",
+                exportOptions: clear,
+                exportId: "e4",
+            }),
+        ).toEqual({ format: "xmlsvg", ...clear, background: "transparent" })
+        // The page of a projection, not the one on screen
+        expect(
+            await request({
+                exportFormat: "svg",
+                exportXml: `<mxfile>${page("p1", "")}</mxfile>`,
+                exportOptions: white,
+                exportId: "e5",
+            }),
+        ).toEqual({ format: "svg", ...white })
+    })
+
     it("renders a page by its id without touching the canvas", async () => {
         const t = await inStep()
         const poll = t.sync.poll()

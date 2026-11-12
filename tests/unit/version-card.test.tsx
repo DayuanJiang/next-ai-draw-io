@@ -171,6 +171,39 @@ describe("VersionCard", () => {
         expect(container.textContent).toContain("Checkout: Added 2 shapes")
     })
 
+    it("says how many pages the change added or removed", () => {
+        const twoPages = {
+            ...version("v2", 2),
+            xml: '<mxfile><diagram id="p1" name="Overview"/><diagram id="p2" name="Checkout"/></mxfile>',
+            pageId: "p2",
+        }
+        const card = (item: VersionItem, pagesAdded: number) =>
+            mount(
+                <VersionCard
+                    version={item}
+                    isLatest={false}
+                    label="Changed by hand"
+                    pagesAdded={pagesAdded}
+                />,
+                source(),
+            ).container.textContent
+        // Before what changed on a page
+        expect(card(twoPages, -1)).toContain(
+            "Removed 1 page, Checkout: Added 2 shapes",
+        )
+        // A blank page added, no shape changed: that is the change
+        const noShapes = { ...twoPages, summary: EMPTY_SUMMARY }
+        const added = card(noShapes, 2)
+        expect(added).toContain("Added 2 pages")
+        expect(added).not.toContain("No visible changes")
+        expect(added).not.toContain("Checkout:")
+        expect(card(noShapes, 0)).toContain("Checkout: No visible changes")
+        // A page drawn from scratch is told by what it holds
+        expect(card({ ...twoPages, fromScratch: true }, 1)).toContain(
+            "Checkout: 2 shapes, 0 connectors",
+        )
+    })
+
     it("says when the canvas was changed by hand since the version", () => {
         const value = source({ onCanvasId: null })
         const { queryByTestId, rerender } = mount(

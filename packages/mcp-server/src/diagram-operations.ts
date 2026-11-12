@@ -152,6 +152,50 @@ function boxOf(cell: Element | undefined) {
     }
 }
 
+/**
+ * The cell a new shape is put in front of in the page's order (draw.io
+ * draws the cells in that order, the last one on top): null, the end, for
+ * most. A box that covers shapes already on the page is a frame or a
+ * background around them, and goes behind the first of them or of their
+ * edges. In front, it would take every click meant for a shape inside it
+ * (draw.io selects the topmost cell, also where its fill is none), and
+ * with a fill it would hide them. Also returns the shapes it covers.
+ */
+function placeBehind(
+    root: Element,
+    cells: Map<string, Element>,
+    newCell: Element,
+): { before: Element | null; covered: string[] } {
+    const frame = boxOf(newCell)
+    const covered: string[] = []
+    if (frame) {
+        const parent = cellAttr(newCell, "parent")
+        for (const [id, cell] of cells) {
+            const box = boxOf(cell)
+            if (
+                box &&
+                cellAttr(cell, "parent") === parent &&
+                box.x >= frame.x &&
+                box.y >= frame.y &&
+                box.x + box.width <= frame.x + frame.width &&
+                box.y + box.height <= frame.y + frame.height &&
+                box.width * box.height < frame.width * frame.height
+            ) {
+                covered.push(id)
+            }
+        }
+    }
+    const inside = (id: string | null) => id !== null && covered.includes(id)
+    const before =
+        Array.from(root.children).find(
+            (cell) =>
+                inside(cell.getAttribute("id")) ||
+                inside(cellAttr(cell, "source")) ||
+                inside(cellAttr(cell, "target")),
+        ) ?? null
+    return { before, covered }
+}
+
 /** Up to ten ids, and how many more there are */
 const listIds = (ids: string[]) =>
     ids.slice(0, 10).join(", ") +
@@ -462,7 +506,13 @@ export function applyDiagramOperations(
                 continue
             }
 
-            root.appendChild(newCell)
+            const { before, covered } = placeBehind(root, cellMap, newCell)
+            root.insertBefore(newCell, before)
+            if (covered.length > 0) {
+                notes.push(
+                    `${op.cell_id} is drawn behind the shapes it covers (${listIds(covered)}), so they stay visible and can be selected.`,
+                )
+            }
             cellMap.set(op.cell_id, newCell)
         } else if (op.operation === "delete") {
             // Protect root cells from deletion
