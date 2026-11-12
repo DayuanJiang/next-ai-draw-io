@@ -1234,11 +1234,11 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
         )
     }
 
-    // Check if client is providing their own provider override
+    // The request brings its own key: the server's env vars are not needed.
+    // It may name a model alone and run on AI_PROVIDER with that key.
     const isClientOverride = !!(
-        overrides?.provider &&
-        (overrides?.apiKey ||
-            (requested?.credential === "vertexKey" && overrides?.vertexApiKey))
+        overrides?.apiKey ||
+        (requested?.credential === "vertexKey" && overrides?.vertexApiKey)
     )
 
     // Use client override if provided, otherwise fall back to env vars.

@@ -328,6 +328,21 @@ describe("server model apiKeyEnv", () => {
         expect(openai).not.toHaveBeenCalled()
         expect(createOpenAI).toHaveBeenCalledWith({ apiKey: "panel-key" })
     })
+
+    it("is not needed by a request with its own key that names a model and no provider", async () => {
+        // A script, on a server whose key is in a model list's custom env
+        // var: OPENAI_API_KEY is not set
+        process.env.AI_PROVIDER = "openai"
+        const { createOpenAI } = await import("@ai-sdk/openai")
+
+        getAIModel({ modelId: "gpt-4o-mini", apiKey: "sk-user-key" })
+
+        // A user's key goes to the provider's own address
+        expect(createOpenAI).toHaveBeenCalledWith({
+            apiKey: "sk-user-key",
+            baseURL: "https://api.openai.com/v1",
+        })
+    })
 })
 
 describe("getValidationModel", () => {
