@@ -13,9 +13,8 @@
 
 Shapes are named like x10010, x10020, etc.
 
-## Shapes (247)
+## Shapes (246)
 
-- `mxgraph.fluid_power`
 - `x10010`
 - `x10020`
 - `x10030`

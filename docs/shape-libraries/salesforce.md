@@ -15,7 +15,7 @@ Replace `analytics` with any shape from the list below.
 
 
 
-## Shapes (97)
+## Shapes (96)
 
 - `analytics`
 - `analytics2`
@@ -75,7 +75,6 @@ Replace `analytics` with any shape from the list below.
 - `marketing2`
 - `media`
 - `media2`
-- `mxgraph.salesforce`
 - `non_profit`
 - `non_profit2`
 - `partners`

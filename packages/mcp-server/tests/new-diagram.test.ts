@@ -187,6 +187,22 @@ describe("truncation check with named styles and compact cells", () => {
         if (out.ok) expect(out.xml).toContain('height="40"')
     })
 
+    it("closes a last compact cell written without its slash", () => {
+        const out = prepareNewDiagram(
+            `${A}<mxCell id="3" value="B" x="120" y="0" w="80" h="40">`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('<mxCell id="3" value="B"')
+        expect(out.xml).toContain('height="40"')
+        // Also when the model wrote the page in full
+        const full = prepareNewDiagram(
+            `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${A}<mxCell id="3" value="B" x="120" y="0" w="80" h="40"></root></mxGraphModel>`,
+        )
+        expect(full.ok).toBe(true)
+        if (full.ok) expect(full.xml).toContain('<mxCell id="3" value="B"')
+    })
+
     it("leaves definitions without any cell to the style check", () => {
         expect(truncatedCellError(BLUE)).toBeNull()
         const out = prepareNewDiagram(BLUE)
@@ -203,5 +219,145 @@ describe("truncation check with named styles and compact cells", () => {
         if (out.ok) return
         expect(out.error).not.toContain("cut off")
         expect(out.error).toContain("not closed")
+    })
+})
+
+describe("what a model puts around complete XML", () => {
+    const CELLS =
+        '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/><mxCell id="3" value="B" x="240" y="40" w="120" h="60"/><mxCell id="4" source="2" target="3"/>'
+
+    it.each([
+        ["a CDATA section", `<![CDATA[${CELLS}]]>`],
+        ["a code fence", `\`\`\`xml\n${CELLS}\n\`\`\``],
+        ["a fence around CDATA", `\`\`\`\n<![CDATA[\n${CELLS}\n]]>\n\`\`\``],
+        ["a sentence after the cells", `${CELLS}\n\nThis shows the flow.`],
+    ])("draws cells wrapped in %s", (_name, xml) => {
+        expect(isMxCellXmlComplete(xml)).toBe(true)
+        const out = prepareNewDiagram(xml)
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml.match(/<mxGeometry/g)).toHaveLength(3)
+        expect(out.xml).not.toMatch(/CDATA|`|This shows/)
+    })
+
+    it("still reports a cut inside a fenced cell", () => {
+        const cut = '```xml\n<mxCell id="2" value="A" x="40" y="4'
+        expect(isMxCellXmlComplete(cut)).toBe(false)
+        const out = prepareNewDiagram(cut)
+        expect(out.ok).toBe(false)
+        if (!out.ok) expect(out.error).toContain("cut off")
+    })
+
+    it("says that empty xml is empty", () => {
+        for (const xml of ["", " \n"]) {
+            const out = prepareNewDiagram(xml)
+            expect(out.ok).toBe(false)
+            if (!out.ok) expect(out.error).toContain("xml is empty")
+        }
+    })
+})
+
+describe("a full page without the root cells", () => {
+    const ROOT_CELLS = '<root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+
+    it("adds them to a bare <mxGraphModel>", () => {
+        const out = prepareNewDiagram(
+            '<mxGraphModel><root><mxCell id="2" value="A" x="40" y="40" w="120" h="60"/></root></mxGraphModel>',
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `${ROOT_CELLS}<mxCell id="2" value="A" vertex="1" parent="1" style="whiteSpace=wrap;html=1;">`,
+        )
+    })
+
+    it("adds them to each page of an <mxfile> that lacks them", () => {
+        const page = (name: string, cells: string) =>
+            `<diagram name="${name}"><mxGraphModel><root>${cells}</root></mxGraphModel></diagram>`
+        const shape = '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>'
+        const out = prepareNewDiagram(
+            `<mxfile>${page("A", shape)}${page("B", `<mxCell id="0"/><mxCell id="1" parent="0"/>${shape}`)}${page("C", `<mxCell id="L" parent="0"/>${shape.replace("x=", 'parent="L" x=')}`)}</mxfile>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        // Pages A and B have both; page C keeps its own layer
+        expect(out.xml.match(/<mxCell id="0"\/>/g)).toHaveLength(3)
+        expect(out.xml.match(/<mxCell id="1" parent="0"\/>/g)).toHaveLength(2)
+        expect(out.xml).toContain(
+            '<root><mxCell id="0"/><mxCell id="L" parent="0"/>',
+        )
+    })
+})
+
+describe("what a drawing tells the model about its cells", () => {
+    const A = '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>'
+    const B = '<mxCell id="3" value="B" x="240" y="40" w="120" h="60"/>'
+
+    it("has no notes for a sound drawing, edges before their ends included", () => {
+        const out = prepareNewDiagram(
+            `<mxCell id="4" source="2" target="3"/>${A}${B}`,
+        )
+        expect(out).toMatchObject({ ok: true, notes: [], fixes: [] })
+    })
+
+    it("draws an edge without the end that names no cell and says so", () => {
+        const out = prepareNewDiagram(
+            `${A}${B}<mxCell id="5" source="2" target="33"/><mxCell id="6" value="C" parent="group9" x="0" y="0" w="80" h="40"/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<mxCell id="5" edge="1" parent="1" source="2" style="html=1;">',
+        )
+        expect(out.xml).toContain(
+            '<mxCell id="6" value="C" vertex="1" parent="1"',
+        )
+        expect(out.notes).toEqual([
+            'Drawn without the end that names no cell on this page: 5 (target "33"). Update these edges once the cells exist.',
+            'Put on the page itself, as the parent is no cell on this page: 6 (parent "group9").',
+        ])
+        expect(out.fixes).toEqual(out.notes)
+    })
+
+    it("names children drawn with page coordinates, at most ten", () => {
+        const kids = Array.from(
+            { length: 12 },
+            (_, i) =>
+                `<mxCell id="k${i}" value="K" parent="box" x="${400 + i * 10}" y="300" w="80" h="40"/>`,
+        ).join("")
+        const out = prepareNewDiagram(
+            `<mxCell id="box" value="VPC" style="swimlane;" x="300" y="200" w="300" h="200"/><mxCell id="ok" value="In" parent="box" x="20" y="40" w="80" h="40"/>${kids}`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.notes).toHaveLength(1)
+        expect(out.notes[0]).toContain(
+            "Outside their container: k0, k1, k2, k3, k4, k5, k6, k7, k8, k9 and 2 more. The x and y of a cell with parent=",
+        )
+    })
+
+    it("writes an embedded picture the way draw.io does, without ;base64", () => {
+        const out = prepareNewDiagram(
+            '<mxCell id="2" style="shape=image;image=data:image/png;base64,iVBORw0KGgo=;" x="0" y="0" w="40" h="40"/>',
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            'style="shape=image;image=data:image/png,iVBORw0KGgo=;html=1;"',
+        )
+    })
+
+    it("says which page of several a note is about", () => {
+        const page = (name: string, cells: string) =>
+            `<diagram name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+        const out = prepareNewDiagram(
+            `<mxfile>${page("One", A)}${page("Two", `${A}<mxCell id="5" source="2" target="9"/>`)}</mxfile>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.notes).toHaveLength(1)
+        expect(out.notes[0]).toMatch(
+            /^Page 2: Drawn without the end that names no cell on this page: 5 \(target "9"\)/,
+        )
     })
 })

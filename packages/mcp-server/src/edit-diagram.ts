@@ -11,11 +11,21 @@ import { defaultLayerOf, expandCompactCells } from "./compact-cells.ts"
 import {
     applyDiagramOperations,
     type DiagramOperation,
+    reviewCells,
 } from "./diagram-operations.ts"
 import { restoreImageData } from "./embedded-images.ts"
-import { type PageSelector, projectPage } from "./pages.ts"
-import { addDefaultStyles, edgeIdsOf } from "./style-classes.ts"
-import { validateAndFixXml, validateMxCellStructure } from "./xml-validation.ts"
+import { findPageElement, type PageSelector, projectPage } from "./pages.ts"
+import {
+    addDefaultStyles,
+    applyStyleClasses,
+    edgeIdsOf,
+    plainLabelsOf,
+} from "./style-classes.ts"
+import {
+    stripWrapping,
+    validateAndFixXml,
+    validateMxCellStructure,
+} from "./xml-validation.ts"
 
 export type EditOutcome =
     | {
@@ -25,6 +35,8 @@ export type EditOutcome =
           fixes: string[]
           /** Ids of updates that sent the cell as it already was */
           unchanged: string[]
+          /** What the model should know about the edit (reviewCells) */
+          notes: string[]
       }
     | { ok: false; errors: string[]; pageError: boolean }
 
@@ -58,17 +70,21 @@ export function editDiagram(
     const fixes: string[] = []
     const prepared: DiagramOperation[] = []
 
-    // Edges already on the page, so a label added to one is not wrapped, and
-    // the layer a compact cell without a parent goes on
+    // Edges already on the page, so a label added to one is not wrapped,
+    // its plain text labels, which an update keeps plain, and the layer a
+    // compact cell without a parent goes on
     const page = targetPageXml(xml, selector)
     const edges = edgeIdsOf(page)
+    const plainLabels = plainLabelsOf(page)
     const layer = defaultLayerOf(page)
     for (const op of operations) {
         if (op.operation === "delete" || !op.new_xml) {
             prepared.push(op)
             continue
         }
-        if (/<mxStyle\b/i.test(op.new_xml)) {
+        // (a code fence or a CDATA section around the cell is taken off)
+        const newXml = stripWrapping(op.new_xml)
+        if (/<mxStyle\b/i.test(newXml)) {
             errors.push(
                 `${op.operation} ${op.cell_id}: named styles (mxStyle) are not available in edit_diagram; write the cell's complete style`,
             )
@@ -76,13 +92,13 @@ export function editDiagram(
         }
         // Checked before validation: several cells fail the strict parser
         // with a misleading "only one root" syntax error.
-        if (countTopLevelElements(op.new_xml) > 1) {
+        if (countTopLevelElements(newXml) > 1) {
             errors.push(
                 `${op.operation} ${op.cell_id}: new_xml must contain exactly one cell; use one add operation per cell`,
             )
             continue
         }
-        const check = validateAndFixXml(op.new_xml)
+        const check = validateAndFixXml(newXml)
         if (!check.valid) {
             errors.push(
                 `${op.operation} ${op.cell_id}: invalid new_xml: ${check.error}`,
@@ -94,25 +110,27 @@ export function editDiagram(
         }
         // The defaults the model is told not to write (style-classes.ts),
         // added after the fixes so a repaired cell gets them too; the
-        // pictures it was shown as references (embedded-images.ts) go back in
+        // pictures it was shown as references (embedded-images.ts) go back
+        // in, and the named styles of the drawings so far are expanded
         prepared.push({
             ...op,
             new_xml: addDefaultStyles(
-                expandCompactCells(
-                    restoreImageData(check.fixed ?? op.new_xml, xml),
-                    layer,
+                applyStyleClasses(
+                    expandCompactCells(
+                        restoreImageData(check.fixed ?? newXml, xml),
+                        layer,
+                    ),
                 ),
                 edges,
+                plainLabels,
             ),
         })
     }
     if (errors.length > 0) return { ok: false, errors, pageError: false }
 
-    const {
-        result,
-        errors: opErrors,
-        unchanged,
-    } = applyDiagramOperations(xml, prepared, selector)
+    const operated = applyDiagramOperations(xml, prepared, selector)
+    const { errors: opErrors, unchanged } = operated
+    let result = operated.result
     // An empty cellId means the page itself could not be edited
     const pageLevel = opErrors.find((e) => e.cellId === "")
     if (pageLevel) {
@@ -124,6 +142,28 @@ export function editDiagram(
             errors: opErrors.map((e) => `${e.type} ${e.cellId}: ${e.message}`),
             pageError: false,
         }
+    }
+
+    // The cells this edit wrote, as they now stand on their page. Done here,
+    // after applyDiagramOperations: the web app's streaming preview applies
+    // half an edit with that function, where an edge still waits for its
+    // target.
+    const doc = new DOMParser().parseFromString(result, "text/xml")
+    const edited =
+        doc.documentElement.tagName === "mxfile"
+            ? findPageElement(doc as unknown as Document, selector)?.element
+            : doc.documentElement
+    const root = edited?.querySelector("root")
+    const review = root
+        ? reviewCells(
+              root,
+              prepared
+                  .filter((op) => op.operation !== "delete")
+                  .map((op) => op.cell_id),
+          )
+        : { repairs: [], notes: [] }
+    if (review.repairs.length > 0) {
+        result = new XMLSerializer().serializeToString(doc)
     }
 
     // Validate only the target page, and reject only errors this edit
@@ -142,7 +182,8 @@ export function editDiagram(
         ok: true,
         xml: result,
         applied: operations.length,
-        fixes,
+        fixes: [...fixes, ...review.repairs],
         unchanged,
+        notes: [...operated.notes, ...review.repairs, ...review.notes],
     }
 }

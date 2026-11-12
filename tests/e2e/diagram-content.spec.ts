@@ -169,7 +169,11 @@ test("edit_diagram applies all operations or none", async ({ page: p }) => {
                     cell_id: "c",
                     new_xml: cell("c", "Broken", 400),
                 },
-                { operation: "delete", cell_id: "missing" },
+                {
+                    operation: "update",
+                    cell_id: "missing",
+                    new_xml: cell("missing", "Nowhere", 580),
+                },
             ],
         }),
     ])

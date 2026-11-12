@@ -149,7 +149,10 @@ describe("compact cells through the pipeline", () => {
         )?.[1]
 
     it("prepareNewDiagram expands them and still adds the defaults", () => {
-        const prepared = prepareNewDiagram(`${shape}\n${edge}`)
+        // (with the edge's target, or the edge would be drawn without it)
+        const prepared = prepareNewDiagram(
+            `${shape}\n${edge}<mxCell id="3" x="0" y="0" w="10" h="10"/>`,
+        )
         expect(prepared.ok).toBe(true)
         if (!prepared.ok) return
         expect(prepared.xml).toContain(

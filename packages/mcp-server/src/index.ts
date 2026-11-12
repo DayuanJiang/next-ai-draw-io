@@ -39,7 +39,7 @@ import {
     customInstructionsPath,
     guideWithCustomInstructions,
 } from "./custom-instructions.ts"
-import type { DiagramOperation } from "./diagram-operations.ts"
+import { type DiagramOperation, notesText } from "./diagram-operations.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
@@ -651,7 +651,7 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                 type: "text",
                 text: cleared
                     ? "Canvas cleared: one blank page. The previous diagram is in History."
-                    : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}\n\n${outlineNote()}`,
+                    : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}${notesText(prepared.notes)}\n\n${outlineNote()}`,
             },
         ]
         // The page on screen: the new document's first page after a full
@@ -934,7 +934,7 @@ registerTool(
         const content: CallToolResult["content"] = [
             {
                 type: "text",
-                text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.${unchangedNote}\n\n${outlineNote()}`,
+                text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.${unchangedNote}${notesText(outcome.notes)}\n\n${outlineNote()}`,
             },
         ]
         // Without a selector the edit went to the first page, while the
@@ -1713,6 +1713,7 @@ registerTool(
         // The starting content is prepared like a new diagram's page, so a
         // half-broken model never gets into the session
         let cleanXml: string | undefined
+        let notes: string[] = []
         if (xml?.trim()) {
             // The pictures get_diagram showed as references go back in
             const prepared = prepareNewModel(
@@ -1725,6 +1726,7 @@ registerTool(
                 )
             }
             cleanXml = prepared.xml
+            notes = prepared.notes
         }
 
         // (throws on a page id in use or a whole <mxfile> as content)
@@ -1741,7 +1743,7 @@ registerTool(
                 ? `\n\nThe first page is still called "${first.name}": give it a name that says what it shows with rename_page.`
                 : ""
         return ok(
-            `Page added.\n\nid=${info.id}\nname=${info.name}\nindex=${info.index}\ncells=${info.cellCount}${renameHint}`,
+            `Page added.\n\nid=${info.id}\nname=${info.name}\nindex=${info.index}\ncells=${info.cellCount}${renameHint}${notesText(notes)}`,
         )
     },
     { write: true },

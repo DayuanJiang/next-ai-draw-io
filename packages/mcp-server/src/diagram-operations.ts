@@ -29,7 +29,15 @@ export interface ApplyOperationsResult {
     errors: OperationError[]
     /** Ids of updates whose new cell was the same as the old one */
     unchanged: string[]
+    /** What the model should know about operations that went through */
+    notes: string[]
 }
+
+/** Notes as the last part of a tool result, or "" without any */
+export const notesText = (notes: string[]) =>
+    notes.length > 0
+        ? `\n\nNotes:\n${notes.map((note) => `- ${note}`).join("\n")}`
+        : ""
 
 // Cells with links, tooltips or custom data are stored as
 // <UserObject id="..."><mxCell .../></UserObject> (or <object>): the id sits
@@ -95,11 +103,151 @@ function cellKey(el: Element): string {
     return `<${el.tagName} ${attrs}>${children}</${el.tagName}>`
 }
 
+/** The mxCell of a cell: itself, or the one inside its wrapper */
+const innerCell = (cell: Element) =>
+    cell.tagName === "mxCell" ? cell : cell.querySelector("mxCell")
+
 /** Read parent/source/target, which a wrapped cell keeps on its inner mxCell. */
 function cellAttr(cell: Element, name: string): string | null {
-    const inner =
-        cell.tagName === "mxCell" ? cell : cell.querySelector("mxCell")
-    return inner?.getAttribute(name) ?? null
+    return innerCell(cell)?.getAttribute(name) ?? null
+}
+
+const isShapeOrEdge = (cell: Element) =>
+    cellAttr(cell, "vertex") === "1" || cellAttr(cell, "edge") === "1"
+
+/** The cells of a page by id */
+function cellsById(root: Element): Map<string, Element> {
+    const cells = new Map<string, Element>()
+    root.querySelectorAll(CELL_SELECTOR).forEach((cell) => {
+        const id = cell.getAttribute("id")
+        // A wrapped mxCell may repeat its wrapper's id; the wrapper is the cell
+        const wrapped =
+            cell.tagName === "mxCell" &&
+            /^(UserObject|object)$/.test(cell.parentElement?.tagName ?? "")
+        if (id && !wrapped) cells.set(id, cell)
+    })
+    return cells
+}
+
+/** Position and size of a shape placed by coordinates, or null */
+function boxOf(cell: Element | undefined) {
+    const inner = cell && innerCell(cell)
+    const geometry = Array.from(inner?.children ?? []).find(
+        (child) => child.tagName === "mxGeometry",
+    )
+    if (
+        inner?.getAttribute("vertex") !== "1" ||
+        !geometry ||
+        geometry.getAttribute("relative") === "1"
+    ) {
+        return null
+    }
+    const number = (name: string) => Number(geometry.getAttribute(name) ?? 0)
+    return {
+        x: number("x"),
+        y: number("y"),
+        width: number("width"),
+        height: number("height"),
+    }
+}
+
+/** Up to ten ids, and how many more there are */
+const listIds = (ids: string[]) =>
+    ids.slice(0, 10).join(", ") +
+    (ids.length > 10 ? ` and ${ids.length - 10} more` : "")
+
+/**
+ * A look at the cells the model just wrote (`ids`; every cell of the page
+ * when left out) for what draw.io accepts without a word but shows
+ * differently from what the model meant.
+ *
+ * repairs: a source or target that names no cell of the page is removed, and
+ * a cell whose parent is missing goes on the page's layer. draw.io does both
+ * when it loads the page; its corrected copy would then come back from the
+ * browser looking like a hand edit by the user. Each repair is also a note.
+ *
+ * notes: shapes that reach outside their container (a child's x and y count
+ * from the container's corner; a model that writes page coordinates there
+ * puts the child outside the box), labels with a literal \n, and
+ * references to pictures the diagram does not have.
+ */
+export function reviewCells(
+    root: Element,
+    ids?: Iterable<string>,
+): { repairs: string[]; notes: string[] } {
+    const cells = cellsById(root)
+    const layers = Array.from(cells)
+        .filter(([, cell]) => cellAttr(cell, "parent") === "0")
+        .map(([id]) => id)
+    const layer = layers.includes("1") ? "1" : (layers[0] ?? "1")
+    const ends: string[] = []
+    const orphans: string[] = []
+    const outside: string[] = []
+    const literal: string[] = []
+    const pictures: string[] = []
+    for (const id of ids ?? cells.keys()) {
+        const cell = cells.get(id)
+        const inner = cell && innerCell(cell)
+        if (!cell || !inner) continue
+        for (const end of ["source", "target"]) {
+            const ref = inner.getAttribute(end)
+            if (ref && !cells.has(ref)) {
+                inner.removeAttribute(end)
+                ends.push(`${id} (${end} "${ref}")`)
+            }
+        }
+        const parentId = inner.getAttribute("parent")
+        if (parentId && !cells.has(parentId)) {
+            inner.setAttribute("parent", layer)
+            orphans.push(`${id} (parent "${parentId}")`)
+        }
+        const box = boxOf(cell)
+        const container = boxOf(cells.get(inner.getAttribute("parent") ?? ""))
+        if (
+            box &&
+            container &&
+            (box.x < -1 ||
+                box.y < -1 ||
+                box.x + box.width > container.width + 1 ||
+                box.y + box.height > container.height + 1)
+        ) {
+            outside.push(id)
+        }
+        const label =
+            cell.getAttribute("value") ?? cell.getAttribute("label") ?? ""
+        if (label.includes("\\n")) literal.push(id)
+        if (inner.getAttribute("style")?.includes("embedded-image-")) {
+            pictures.push(id)
+        }
+    }
+    const repairs: string[] = []
+    if (ends.length > 0) {
+        repairs.push(
+            `Drawn without the end that names no cell on this page: ${ends.join(", ")}. Update these edges once the cells exist.`,
+        )
+    }
+    if (orphans.length > 0) {
+        repairs.push(
+            `Put on the page itself, as the parent is no cell on this page: ${orphans.join(", ")}.`,
+        )
+    }
+    const notes: string[] = []
+    if (outside.length > 0) {
+        notes.push(
+            `Outside their container: ${listIds(outside)}. The x and y of a cell with parent="<container id>" count from the container's top left corner. Move these cells or make the container larger.`,
+        )
+    }
+    if (literal.length > 0) {
+        notes.push(
+            `The label holds a literal \\n, shown as those two characters: ${listIds(literal)}. For a line break write &lt;br&gt;.`,
+        )
+    }
+    if (pictures.length > 0) {
+        notes.push(
+            `No picture for the reference in: ${listIds(pictures)}. A reference (embedded-image-<id>) stands for a picture this diagram holds, as get_diagram shows it; these cells show a broken image.`,
+        )
+    }
+    return { repairs, notes }
 }
 
 /**
@@ -151,6 +299,7 @@ export function applyDiagramOperations(
         return {
             result: xmlContent,
             unchanged: [],
+            notes: [],
             errors: [
                 {
                     type: "update",
@@ -179,6 +328,7 @@ export function applyDiagramOperations(
             return {
                 result: xmlContent,
                 unchanged: [],
+                notes: [],
                 errors: [
                     {
                         type: "update",
@@ -195,6 +345,7 @@ export function applyDiagramOperations(
             return {
                 result: xmlContent,
                 unchanged: [],
+                notes: [],
                 errors: [
                     {
                         type: "update",
@@ -209,6 +360,7 @@ export function applyDiagramOperations(
             return {
                 result: xmlContent,
                 unchanged: [],
+                notes: [],
                 errors: [
                     {
                         type: "update",
@@ -224,6 +376,7 @@ export function applyDiagramOperations(
             return {
                 result: xmlContent,
                 unchanged: [],
+                notes: [],
                 errors: [
                     {
                         type: "update",
@@ -236,18 +389,11 @@ export function applyDiagramOperations(
     }
 
     // Build a map of cell IDs to elements (scoped to the resolved page).
-    const cellMap = new Map<string, Element>()
-    root.querySelectorAll(CELL_SELECTOR).forEach((cell) => {
-        const id = cell.getAttribute("id")
-        // A wrapped mxCell may repeat its wrapper's id; the wrapper is the cell
-        const wrapped =
-            cell.tagName === "mxCell" &&
-            /^(UserObject|object)$/.test(cell.parentElement?.tagName ?? "")
-        if (id && !wrapped) cellMap.set(id, cell)
-    })
+    const cellMap = cellsById(root)
     // Ids deleted so far in this batch; deleting one again is a no-op
     const deletedIds = new Set<string>()
     const unchanged: string[] = []
+    const notes: string[] = []
 
     // Process each operation
     for (const op of operations) {
@@ -268,6 +414,18 @@ export function applyDiagramOperations(
                     type: "update",
                     cellId: op.cell_id,
                     message: newCell,
+                })
+                continue
+            }
+
+            // <mxCell id="3" value="Renamed"/> has no size and no connection:
+            // it is neither a shape nor an edge, and the cell would vanish
+            if (isShapeOrEdge(existingCell) && !isShapeOrEdge(newCell)) {
+                errors.push({
+                    type: "update",
+                    cellId: op.cell_id,
+                    message:
+                        "new_xml has no position or size (x, y, w, h) and no source or target, so the cell would vanish. update replaces the whole cell: send its value, style and position too",
                 })
                 continue
             }
@@ -312,14 +470,15 @@ export function applyDiagramOperations(
 
             const existingCell = cellMap.get(op.cell_id)
             if (!existingCell) {
-                // Skip cells already cascade-deleted by a previous operation
-                // (AI may redundantly list children/edges); warn otherwise
+                // The cell is gone, which is what the model asked for, so
+                // the other operations still apply. Often it went with its
+                // container or its shape in an earlier call. One removed by
+                // this batch (the model lists children and edges too) needs
+                // no word.
                 if (!deletedIds.has(op.cell_id)) {
-                    errors.push({
-                        type: "delete",
-                        cellId: op.cell_id,
-                        message: `Cell with id="${op.cell_id}" not found`,
-                    })
+                    notes.push(
+                        `delete ${op.cell_id}: no cell with this id on the page (already deleted?), skipped.`,
+                    )
                 }
                 continue
             }
@@ -365,10 +524,14 @@ export function applyDiagramOperations(
                 }
             }
 
-            // Log what will be deleted (stderr: stdout carries JSON-RPC)
+            // Log what will be deleted (stderr: stdout carries JSON-RPC),
+            // and tell the model, which would otherwise delete them again
             if (cellsToDelete.size > 1) {
                 log.debug(
                     `Cascade delete "${op.cell_id}" → deleting ${cellsToDelete.size} cells: ${Array.from(cellsToDelete).join(", ")}`,
+                )
+                notes.push(
+                    `delete ${op.cell_id} also removed its children and connected edges: ${Array.from(cellsToDelete).slice(1).join(", ")}.`,
                 )
             }
 
@@ -388,5 +551,5 @@ export function applyDiagramOperations(
     const serializer = new XMLSerializer()
     const result = serializer.serializeToString(doc)
 
-    return { result, errors, unchanged }
+    return { result, errors, unchanged, notes }
 }

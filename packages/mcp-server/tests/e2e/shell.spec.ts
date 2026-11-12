@@ -663,6 +663,62 @@ test("draw.io's order of the cells is not taken for a hand edit, and one undo ta
     await expect(frame.getByText("Order first")).toBeVisible()
 })
 
+test("an edge to a missing cell and a page without root cells are not taken for a hand edit", async ({
+    page,
+}) => {
+    // A session of its own, so History holds only this test's versions
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+
+    // draw.io drops a target that names no cell; the server did so already
+    // and said it, so draw.io's copy is no change
+    const drawn = await toolText("create_new_diagram", {
+        xml: [
+            box("d1", "Dangling A", 40),
+            box("d2", "Dangling B", 240),
+            '<mxCell id="d3" source="d1" target="nowhere"/>',
+        ].join("\n"),
+    })
+    expect(drawn).toContain('d3 (target "nowhere")')
+    await expect(frame.getByText("Dangling B")).toBeVisible({ timeout: 10_000 })
+    // An export sends draw.io's copy of the canvas to the server
+    await toolText("export_diagram", { path: join(dataDir, "dangling.drawio") })
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+    expect(await toolText("get_diagram")).not.toContain("the user changed")
+    expect(
+        await toolText("edit_diagram", {
+            operations: [
+                {
+                    operation: "update",
+                    cell_id: "d2",
+                    new_xml: box("d2", "Dangling B2", 240),
+                },
+            ],
+        }),
+    ).toContain("Diagram edited successfully")
+
+    // A page the model wrote in full without the root cells shows its shape
+    await toolText("create_new_diagram", {
+        xml: `<mxGraphModel><root>${box("r1", "No root cells", 40)}</root></mxGraphModel>`,
+    })
+    await expect(frame.getByText("No root cells")).toBeVisible({
+        timeout: 10_000,
+    })
+    await toolText("export_diagram", { path: join(dataDir, "roots.drawio") })
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+    expect(await toolText("get_diagram")).not.toContain("the user changed")
+})
+
 test("the theme toggle switches the page and draw.io, and is remembered", async ({
     page,
 }) => {

@@ -338,7 +338,13 @@ describe("the model's page", () => {
     it("shows the model only its page when an edit fails", async () => {
         const { addToolOutput, call } = setupOn("b")
         await call("edit_diagram", {
-            operations: [{ operation: "delete", cell_id: "missing" }],
+            operations: [
+                {
+                    operation: "update",
+                    cell_id: "missing",
+                    new_xml: box("missing"),
+                },
+            ],
         })
         const output = addToolOutput.mock.lastCall?.[0]
         expect(output?.state).toBe("output-error")

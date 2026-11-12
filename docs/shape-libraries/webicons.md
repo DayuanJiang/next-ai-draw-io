@@ -13,7 +13,7 @@
 
 
 
-## Shapes (177)
+## Shapes (176)
 
 - `adfty`
 - `adobe_pdf`
@@ -116,7 +116,6 @@
 - `messenger_3`
 - `mind_body_green`
 - `mongodb`
-- `mxgraph.webicons`
 - `myspace`
 - `n4g`
 - `netlog`

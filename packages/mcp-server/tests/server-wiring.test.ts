@@ -321,6 +321,46 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         expect(loaded).toContain(`call export_diagram with path ${path}`)
     })
 
+    it("adds notes to a write it repaired", async () => {
+        const drawn = textOf(
+            await callTool("create_new_diagram", {
+                xml: '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/><mxCell id="5" source="2" target="33"/>',
+            }),
+        )
+        expect(drawn).toContain(
+            'Notes:\n- Drawn without the end that names no cell on this page: 5 (target "33").',
+        )
+        const edited = textOf(
+            await callTool("edit_diagram", {
+                operations: [
+                    { operation: "delete", cell_id: "gone" },
+                    {
+                        operation: "add",
+                        cell_id: "3",
+                        new_xml:
+                            '<mxCell id="3" value="B" parent="nope" x="240" y="40" w="120" h="60"/>',
+                    },
+                ],
+            }),
+        )
+        expect(edited).toContain("Applied 2 operation(s)")
+        expect(edited).toContain(
+            "Notes:\n- delete gone: no cell with this id on the page",
+        )
+        expect(edited).toContain(
+            '- Put on the page itself, as the parent is no cell on this page: 3 (parent "nope").',
+        )
+        const added = textOf(
+            await callTool("add_page", {
+                name: "Two",
+                xml: '<mxCell id="7" source="8" target="9"/><mxCell id="8" value="C" x="40" y="40" w="120" h="60"/>',
+            }),
+        )
+        expect(added).toContain(
+            'Notes:\n- Drawn without the end that names no cell on this page: 7 (target "9").',
+        )
+    })
+
     it("advertises transparent on export_diagram", async () => {
         const props = await properties("export_diagram")
         const transparent = props.transparent as { type?: string } | undefined

@@ -354,6 +354,45 @@ describe("attributes inside quoted values", () => {
         )
     })
 
+    it("are not ids: a label holding id='1' stays as written", () => {
+        // The root cell "1" and the text id='1' are not two cells
+        const sql = `<mxCell id="2" value="SELECT * FROM users WHERE id='1'" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+        expect(validateAndFixXml(model(sql))).toMatchObject({
+            valid: true,
+            fixed: null,
+        })
+        // Nor are two labels with the same text, or an empty one
+        const twice = `<mxCell id="2" value="id='42' or id=''" vertex="1" parent="1"/><mxCell id="3" value="id='42'" vertex="1" parent="1"/>`
+        expect(validateAndFixXml(model(twice)).fixed).toBeNull()
+    })
+
+    it("are not ids: the label text before a real id keeps the cell's edges", () => {
+        const cells = `<mxCell value="id='3'" id="2" vertex="1" parent="1"/><mxCell id="3" vertex="1" parent="1"/><mxCell id="4" edge="1" parent="1" source="2" target="3"/>`
+        expect(validateAndFixXml(model(cells)).fixed).toBeNull()
+    })
+
+    it("data attributes named Id, rack-id or vpc-id are not ids", () => {
+        const data = `<object id="2" label="Alice" Id="3" vpc-id="vpc-123"><mxCell vertex="1" parent="1"/></object><object id="3" label="Bob" Id="4" rack-id="1" vpc-id="vpc-123"><mxCell vertex="1" parent="1"/></object><mxCell id="4" edge="1" parent="1" source="2" target="3"/>`
+        expect(validateAndFixXml(model(data)).fixed).toBeNull()
+        // A real duplicate next to them is still renamed, and only it
+        const r = validateAndFixXml(
+            model(`${data}<mxCell id="4" vertex="1" parent="1"/>`),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixes).toEqual(["Renamed 1 duplicate ID(s)"])
+        expect(r.fixed).toBe(
+            model(`${data}<mxCell id="4_dup1" vertex="1" parent="1"/>`),
+        )
+    })
+
+    it("a cell without an id gets one, the id='' in its label stays", () => {
+        const r = validateAndFixXml(
+            model(`<mxCell id="" value="WHERE id=''" vertex="1" parent="1"/>`),
+        )
+        expect(r.valid).toBe(true)
+        expect(r.fixed).toMatch(/<mxCell id="cell_\d+_1" value="WHERE id=''"/)
+    })
+
     it("leave two cells with an unbalanced quote their ids and parents", () => {
         const broken = `<mxCell id="4" style="rounded=1;fillColor="#dae8fc" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell><mxCell id="5" value="B" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
         const r = validateAndFixXml(model(broken))

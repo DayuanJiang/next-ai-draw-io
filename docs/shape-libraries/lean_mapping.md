@@ -13,7 +13,7 @@
 
 
 
-## Shapes (14)
+## Shapes (13)
 
 - `airplane_7`
 - `electronic_info_flow`
@@ -25,7 +25,6 @@
 - `manual_info_flow`
 - `move_by_forklift`
 - `mrp_erp`
-- `mxgraph.lean_mapping`
 - `operator`
 - `quality_problem`
 - `verbal`

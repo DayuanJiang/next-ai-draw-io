@@ -14,6 +14,10 @@
  * draw.io ignores it, unless its own stylesheet knows the name (text,
  * ellipse, label, blue, green, ...), which then keeps its meaning.
  *
+ * A definition is written for one drawing, but a model goes on using the
+ * name in the calls that follow (an edit_diagram add in the same style), so
+ * the definitions are remembered and later cells are expanded with them.
+ *
  * html=1 and whiteSpace=wrap, which draw.io itself puts on every new shape,
  * are added here too, so the model never has to write them.
  *
@@ -24,6 +28,27 @@
 import { readAttributes } from "./xml-attributes.ts"
 
 export type StyleClasses = Map<string, string>
+
+// The definitions of the drawings so far; a later one replaces an earlier
+// one of the same name
+const remembered: StyleClasses = new Map()
+
+// The names of draw.io's own stylesheet (styles/default.xml). A definition
+// under one of them stays with its drawing: remembered, it would restyle the
+// cells of a file loaded later, which use the name in draw.io's sense.
+const DRAWIO_STYLE_NAME =
+    /^(defaultVertex|defaultEdge|text|edgeLabel|label|icon|swimlane|group|ellipse|rhombus|triangle|line|image|roundImage|rhombusImage|arrow|fancy|(plain-)?(gray|blue|green|turquoise|yellow|orange|red|pink|purple))$/
+
+/**
+ * Keep a drawing's definitions for the cells of later calls. Returns the
+ * definitions for the drawing itself: the remembered ones, then its own.
+ */
+export function rememberStyleClasses(classes: StyleClasses): StyleClasses {
+    for (const [name, value] of classes) {
+        if (!DRAWIO_STYLE_NAME.test(name)) remembered.set(name, value)
+    }
+    return new Map([...remembered, ...classes])
+}
 
 // <mxStyle name="..." value="..."/> with the whitespace after it, also when
 // written as <mxStyle ...> or <mxStyle ...></mxStyle>; quoted values may hold ">"
@@ -171,8 +196,14 @@ function rewriteCellStyles(
     })
 }
 
-/** Expand the names in every cell's style; the overrides after a name still win */
-export function applyStyleClasses(xml: string, classes: StyleClasses): string {
+/**
+ * Expand the names in every cell's style; the overrides after a name still
+ * win. Without `classes`, the names of the drawings so far.
+ */
+export function applyStyleClasses(
+    xml: string,
+    classes: StyleClasses = remembered,
+): string {
     if (classes.size === 0) return xml
     return rewriteCellStyles(xml, (style) =>
         style === undefined ? undefined : applyToStyle(style, classes),
@@ -190,6 +221,29 @@ export function edgeIdsOf(xml: string): Set<string> {
         if (id && attrs.get("edge") === "1") ids.add(id)
     }
     return ids
+}
+
+/**
+ * The labels, by id, of the shapes and edges whose style has no html key.
+ * They come from a file another tool wrote: the label is plain text, where
+ * "<" is a character and a long line is not wrapped.
+ */
+export function plainLabelsOf(xml: string): Map<string, string> {
+    const labels = new Map<string, string>()
+    for (const [, attrText] of xml.matchAll(CELL_TAG)) {
+        const attrs = new Map(
+            readAttributes(attrText).map((a) => [a.name, a.value]),
+        )
+        const id = attrs.get("id")
+        if (
+            id &&
+            (attrs.get("vertex") === "1" || attrs.get("edge") === "1") &&
+            !hasKey(attrs.get("style") ?? "", "html")
+        ) {
+            labels.set(id, attrs.get("value") ?? "")
+        }
+    }
+    return labels
 }
 
 /**
@@ -212,15 +266,20 @@ function hasLabelOutside(style: string): boolean {
  * sits outside (icons, images), to text that sizes itself (autosize=1), to
  * edge labels (their label box has no width of its own) or next to html=0
  * (draw.io renders a wrapping label as HTML). Edges get html=1. Root cells
- * and cells that already set a key are left alone.
+ * and cells that already set a key are left alone. An embedded picture is
+ * written the way draw.io writes it.
  *
  * An edit adds cells to a page the XML does not show, so the caller passes
  * the ids of the edges already on it (edgeIdsOf), or new edge labels would
- * be wrapped like shapes.
+ * be wrapped like shapes. It also passes the page's plain text labels
+ * (plainLabelsOf): an update that keeps such a label gets no defaults, since
+ * html=1 would read the "<" in "List<String>" as a tag and hide the text.
+ * The model cannot ask for that itself: it is told never to write html=1.
  */
 export function addDefaultStyles(
     xml: string,
     knownEdgeIds: Iterable<string> = [],
+    plainLabels: Map<string, string> = new Map(),
 ): string {
     const edges = new Set([...knownEdgeIds, ...edgeIdsOf(xml)])
     return rewriteCellStyles(xml, (style, attrs) => {
@@ -228,7 +287,15 @@ export function addDefaultStyles(
         const isEdge = attrs.get("edge") === "1"
         const isVertex = attrs.get("vertex") === "1" && !isEdge
         if (!isVertex && !isEdge) return undefined
-        const current = style ?? ""
+        const label = attrs.get("value") ?? ""
+        if (plainLabels.get(attrs.get("id") ?? "") === label) return undefined
+        // draw.io writes an embedded picture as image=data:image/png,<data>.
+        // With the usual ";base64" the value would end at that ";", where
+        // a style is split, and the picture would not load.
+        const current = (style ?? "").replace(
+            /(image=data:image\/[\w.+-]+);base64,/,
+            "$1,",
+        )
         const isEdgeLabel =
             hasToken(current, "edgeLabel") ||
             attrs.get("connectable") === "0" ||
@@ -245,7 +312,7 @@ export function addDefaultStyles(
             added.push("whiteSpace=wrap")
         }
         if (!hasKey(current, "html")) added.push("html=1")
-        if (added.length === 0) return undefined
+        if (added.length === 0) return current
         const separator = current === "" || current.endsWith(";") ? "" : ";"
         return `${current}${separator}${added.join(";")};`
     })

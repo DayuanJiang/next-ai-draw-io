@@ -13,7 +13,7 @@
 
 
 
-## Shapes (98)
+## Shapes (97)
 
 - `1u_2u_server`
 - `access_card`
@@ -54,7 +54,6 @@
 - `license_server`
 - `merchandising_server`
 - `middleware`
-- `mxgraph.citrix`
 - `netscaler_gateway`
 - `netscaler_mpx`
 - `netscaler_sdx`

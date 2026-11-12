@@ -13,7 +13,7 @@
 
 
 
-## Shapes (45)
+## Shapes (44)
 
 - `bathtub`
 - `bathtub2`
@@ -33,7 +33,6 @@
 - `flat_tv`
 - `floor_lamp`
 - `laptop`
-- `mxgraph.floorplan`
 - `office_chair`
 - `piano`
 - `plant`

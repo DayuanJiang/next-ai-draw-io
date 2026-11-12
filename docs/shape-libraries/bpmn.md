@@ -16,7 +16,7 @@
 - `outline` - Event type: `start`, `end`, `catching`, `throwing`, `none`
 - `symbol` - Icon inside: `message`, `timer`, `error`, `cancel`, `compensation`, `link`, `terminate`, `general`, `multiple`, `rule`
 
-## Shapes (40)
+## Shapes (39)
 
 - `ad_hoc`
 - `business_rule_task`
@@ -49,7 +49,6 @@
 - `multiple_instances`
 - `multiple_intermediate`
 - `multiple_start`
-- `mxgraph.bpmn`
 - `rule_intermediate`
 - `rule_start`
 - `script_task`

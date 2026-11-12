@@ -33,12 +33,42 @@ describe("wrapped cells", () => {
         expect(result).toContain('id="a"')
     })
 
-    it("warns when deleting a cell that does not exist", () => {
-        const { errors } = applyDiagramOperations(DOC, [
+    it("skips the delete of a cell that is not there, with a note", () => {
+        // A cell that went with its container in an earlier call must not
+        // make the whole batch fail
+        const { result, errors, notes } = applyDiagramOperations(DOC, [
             { operation: "delete", cell_id: "missing" },
+            { operation: "delete", cell_id: "child" },
+        ])
+        expect(errors).toEqual([])
+        expect(notes).toEqual([
+            "delete missing: no cell with this id on the page (already deleted?), skipped.",
+        ])
+        expect(result).not.toContain('id="child"')
+    })
+
+    it("names the cells a delete took along", () => {
+        const { notes } = applyDiagramOperations(DOC, [
+            { operation: "delete", cell_id: "a" },
+            // Listed by the model too: already gone, no second note
+            { operation: "delete", cell_id: "child" },
+        ])
+        expect(notes).toEqual([
+            "delete a also removed its children and connected edges: child, e1.",
+        ])
+    })
+
+    it("refuses an update that would turn a shape into no shape", () => {
+        const { result, errors } = applyDiagramOperations(DOC, [
+            {
+                operation: "update",
+                cell_id: "b",
+                new_xml: '<mxCell id="b" value="Renamed"/>',
+            },
         ])
         expect(errors).toHaveLength(1)
-        expect(errors[0]).toMatchObject({ type: "delete", cellId: "missing" })
+        expect(errors[0].message).toContain("the cell would vanish")
+        expect(result).toContain('<mxCell id="b" value="B" vertex="1"')
     })
 
     it("updates a UserObject cell", () => {
