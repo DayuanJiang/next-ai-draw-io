@@ -1,6 +1,7 @@
 // Shared helper functions for chat route
 // Exported for testing
 
+import type { LanguageModelUsage } from "ai"
 import type { MessageDiagram } from "@/lib/diagram-context"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
 import { imageRefNote } from "@/packages/mcp-server/src/embedded-images.ts"
@@ -9,6 +10,24 @@ import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 // File upload limits (must match client-side)
 export const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 export const MAX_FILES = 5
+
+// How the image formats every provider reads begin, a character for each byte
+const IMAGE_STARTS: Record<string, RegExp> = {
+    "image/png": /^\x89PNG/,
+    "image/jpeg": /^\xff\xd8\xff/,
+    "image/gif": /^GIF8/,
+    "image/webp": /^RIFF[\s\S]{4}WEBP/,
+}
+
+/**
+ * The image format a file's first 12 bytes (a character for each byte)
+ * belong to; undefined when it is none of those the providers read
+ */
+export function imageTypeOf(head: string): string | undefined {
+    return Object.keys(IMAGE_STARTS).find((type) =>
+        IMAGE_STARTS[type].test(head),
+    )
+}
 
 // Helper function to validate file parts in messages
 // Checks every message, since history is sent to the model too
@@ -38,7 +57,7 @@ export function validateFileParts(messages: any[]): {
 
             // Data URLs format: data:image/png;base64,<data>
             // Base64 increases size by ~33%, so we check the decoded size
-            const base64Data = filePart.url.split(",")[1]
+            const [header, base64Data] = filePart.url.split(",")
             if (base64Data) {
                 const sizeInBytes = Math.ceil((base64Data.length * 3) / 4)
                 if (sizeInBytes > MAX_FILE_SIZE) {
@@ -47,11 +66,37 @@ export function validateFileParts(messages: any[]): {
                         error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.`,
                     }
                 }
+                // A picture has to be in the format it is sent as. The
+                // browser sees to that when a file is attached; a request
+                // that skipped it (a HEIC photo or an Office file sent as
+                // JPEG) fails at the provider, whose error does not say
+                // that the picture is the problem.
+                const type = header.slice("data:".length).split(";")[0]
+                if (
+                    Object.hasOwn(IMAGE_STARTS, type) &&
+                    imageTypeOf(atob(base64Data.slice(0, 16))) !== type
+                ) {
+                    return {
+                        valid: false,
+                        error: `An attached image is not in the format it was sent as (${type}). Attach it as a PNG, JPEG, GIF or WebP file.`,
+                    }
+                }
             }
         }
     }
 
     return { valid: true }
+}
+
+/**
+ * A model call's tokens as the quota counts them: input read from the prompt
+ * cache at a tenth, which is its price, and the rest in full. A chat sends
+ * its whole history again with every request, so on the days that reached
+ * the limit three quarters or more of the counted tokens were cache reads.
+ */
+export function quotaTokens(usage: LanguageModelUsage): number {
+    const cacheRead = usage.inputTokenDetails.cacheReadTokens ?? 0
+    return (usage.totalTokens ?? 0) - Math.round(cacheRead * 0.9)
 }
 
 // A tool-call input providers accept: a non-empty JSON object

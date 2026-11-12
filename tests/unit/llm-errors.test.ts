@@ -64,6 +64,20 @@ describe("classifyLLMError", () => {
         ).toBe("images_unsupported")
     })
 
+    it("says the image is the problem when the provider could not read it", () => {
+        // Bedrock, for a HEIC photo sent as JPEG. On the server's keys the
+        // user gets the code only, which the chat turns into its hint.
+        const error = apiError(
+            400,
+            "The model returned the following errors: image processing failed: cannot measure image dimensions: The image format could not be determined",
+        )
+        expect(JSON.parse(streamErrorText(error, true))).toEqual({
+            type: "provider",
+            code: "image_unreadable",
+            message: "The provider returned an error.",
+        })
+    })
+
     it("does not call a 403 an invalid key", () => {
         expect(classifyLLMError(apiError(403, "Forbidden")).code).toBe(
             "forbidden",

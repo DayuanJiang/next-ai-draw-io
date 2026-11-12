@@ -4,6 +4,7 @@ import {
     InvalidToolInputError,
     isTextUIPart,
     pruneMessages,
+    type StreamTextTransform,
     safeValidateUIMessages,
     stepCountIs,
     streamText,
@@ -27,6 +28,7 @@ import {
     fixToolInputJson,
     formatSelectionContext,
     parseStringifiedArrays,
+    quotaTokens,
     validateFileParts,
     withoutOldAttachments,
 } from "@/lib/chat-helpers"
@@ -93,6 +95,34 @@ const describeMessages = (msgs: any[]) =>
                     : ""),
         ),
     }))
+
+// A gateway that speaks Anthropic's format can stream thinking deltas without
+// opening a thinking block first (seen with a GPT model behind one), and the
+// SDK passes them on as they are. Every answer then failed: the SDK's own
+// bookkeeping adds a "reasoning part 0 not found" error to the stream, and
+// the browser's stream reader stops at a reasoning-delta whose part never
+// started. The part is opened here, before either sees the delta, and closed
+// with its step, where both forget the parts that were open.
+const openMissingReasoning: StreamTextTransform<typeof chatTools> = () => {
+    const open = new Set<string>()
+    return new TransformStream({
+        transform(part, controller) {
+            if (part.type === "reasoning-start") open.add(part.id)
+            if (part.type === "reasoning-end") open.delete(part.id)
+            if (part.type === "reasoning-delta" && !open.has(part.id)) {
+                open.add(part.id)
+                controller.enqueue({ type: "reasoning-start", id: part.id })
+            }
+            if (part.type === "finish-step") {
+                for (const id of open) {
+                    controller.enqueue({ type: "reasoning-end", id })
+                }
+                open.clear()
+            }
+            controller.enqueue(part)
+        },
+    })
+}
 
 async function handleChatRequest(req: Request): Promise<Response> {
     const startedAt = Date.now()
@@ -521,6 +551,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         // 4096, enough for a small diagram, so larger ones were cut off mid-attribute.
         maxOutputTokens,
         stopWhen: stepCountIs(5),
+        experimental_transform: openMissingReasoning,
         // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
         experimental_repairToolCall: async ({ toolCall, error }) => {
             // DEBUG: Log what we're trying to repair
@@ -577,7 +608,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
                     ? requestCost + stepCost
                     : undefined
             if (countsQuota) {
-                await recordTokenUsage(userId, usage.totalTokens ?? 0)
+                await recordTokenUsage(userId, quotaTokens(usage))
             }
         },
         onFinish: ({ text }) => {

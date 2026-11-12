@@ -1,11 +1,15 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-// Quota on, and every check answers that the daily limit is used up
+// Quota on, and every check answers that the daily limit is used up, unless
+// a test allows its request
 const quota = vi.hoisted(() => ({
     checks: 0,
     // The limits and the request increment of each check
     calls: [] as Array<{ limits: unknown; increment: unknown }>,
+    allowed: false,
+    // The tokens recorded for each step
+    recorded: [] as number[],
 }))
 vi.mock("@/lib/dynamo-quota-manager", () => ({
     isQuotaEnabled: () => true,
@@ -16,6 +20,7 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
     ) => {
         quota.checks++
         quota.calls.push({ limits, increment })
+        if (quota.allowed) return { allowed: true }
         return {
             allowed: false,
             error: "Daily limit reached",
@@ -24,7 +29,9 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
             limit: 10,
         }
     },
-    recordTokenUsage: async () => {},
+    recordTokenUsage: async (_user: string, tokens: number) => {
+        quota.recorded.push(tokens)
+    },
 }))
 
 // No DNS in tests: only loopback addresses are private
@@ -42,6 +49,8 @@ beforeEach(() => {
     vi.stubEnv("OPENAI_API_KEY", "server-key")
     quota.checks = 0
     quota.calls = []
+    quota.allowed = false
+    quota.recorded = []
     // No request may reach a provider
     vi.stubGlobal(
         "fetch",
@@ -225,6 +234,58 @@ describe("chat quota", () => {
         })
         expect(res.status).not.toBe(429)
         expect(quota.checks).toBe(0)
+    })
+})
+
+describe("the tokens a step counts", () => {
+    it("counts input read from the prompt cache at a tenth", async () => {
+        quota.allowed = true
+        // The second turn of a real chat with GPT-6 Luna: 7,078 input
+        // tokens, 6,094 of them read from the cache, and 212 output
+        const events = [
+            {
+                id: "c1",
+                choices: [
+                    {
+                        index: 0,
+                        delta: { role: "assistant", content: "Done." },
+                        finish_reason: null,
+                    },
+                ],
+            },
+            {
+                id: "c1",
+                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+                usage: {
+                    prompt_tokens: 7078,
+                    completion_tokens: 212,
+                    prompt_tokens_details: { cached_tokens: 6094 },
+                },
+            },
+        ]
+        const body = `${events
+            .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+            .join("")}data: [DONE]\n\n`
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(
+                async () =>
+                    new Response(body, {
+                        headers: { "content-type": "text/event-stream" },
+                    }),
+            ),
+        )
+        // The server's own network: counted
+        const res = await send({
+            "x-ai-provider": "glm",
+            "x-ai-base-url": "http://127.0.0.1:9000/v1",
+            "x-ai-api-key": "dummy",
+            "x-ai-model": "glm-5",
+        })
+        await res.text()
+        // In full it was 7,290. Now 984 uncached input, 212 output and
+        // 609 for the 6,094 cache reads
+        expect(quota.recorded).toEqual([1805])
     })
 })
 

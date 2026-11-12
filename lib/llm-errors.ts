@@ -20,6 +20,8 @@ type LLMErrorCode =
     | "rate_limited"
     | "context_too_long"
     | "images_unsupported"
+    // The model reads images, but not this one
+    | "image_unreadable"
     | "tools_unsupported"
     | "output_truncated"
     | "provider_unavailable"
@@ -44,6 +46,13 @@ const SPECIFIC_TEXTS: Array<[RegExp, LLMErrorCode]> = [
         // Not "too many tokens": that is Bedrock's throttling message
         /context length|context window|maximum context|prompt is too long|input is too long|too many input tokens/i,
         "context_too_long",
+    ],
+    [
+        // Bedrock, for a picture that is damaged or in a format it cannot
+        // read: "image processing failed: cannot measure image dimensions:
+        // The image format could not be determined"
+        /image processing failed|image format could not be determined/i,
+        "image_unreadable",
     ],
     [
         // OpenRouter: "No endpoints found that support image input"

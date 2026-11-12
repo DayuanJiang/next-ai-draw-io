@@ -8,10 +8,55 @@ import {
     dropInvalidToolCalls,
     fixToolInputJson,
     parseStringifiedArrays,
+    quotaTokens,
     validateFileParts,
     withoutOldAttachments,
     withoutOldImagesAndThinking,
 } from "@/lib/chat-helpers"
+
+describe("quotaTokens", () => {
+    // What the SDK reported for the three turns of a real chat with GPT-6
+    // Luna on Bedrock (2026-11-12): from the second turn on, nearly all the
+    // input is read from the prompt cache
+    const usage = (
+        noCache: number,
+        cacheRead: number,
+        cacheWrite: number,
+        output: number,
+    ) => ({
+        inputTokens: noCache + cacheRead + cacheWrite,
+        inputTokenDetails: {
+            noCacheTokens: noCache,
+            cacheReadTokens: cacheRead,
+            cacheWriteTokens: cacheWrite,
+        },
+        outputTokens: output,
+        outputTokenDetails: { textTokens: output, reasoningTokens: undefined },
+        totalTokens: noCache + cacheRead + cacheWrite + output,
+    })
+
+    it("counts input read from the cache at a tenth, the rest in full", () => {
+        // Nothing cached yet: 2 + 6,094 written to the cache + 1,169 output
+        expect(quotaTokens(usage(2, 0, 6094, 1169))).toBe(7265)
+        // 7,290 in all, 6,094 of them cache reads: 1,196 + 609
+        expect(quotaTokens(usage(2, 6094, 982, 212))).toBe(1805)
+        // 7,673 in all, 7,076 of them cache reads: 597 + 708
+        expect(quotaTokens(usage(2, 7076, 266, 329))).toBe(1305)
+    })
+
+    it("counts a provider that reports no cache details in full", () => {
+        expect(
+            quotaTokens({
+                ...usage(1200, 0, 0, 30),
+                inputTokenDetails: {
+                    noCacheTokens: undefined,
+                    cacheReadTokens: undefined,
+                    cacheWriteTokens: undefined,
+                },
+            }),
+        ).toBe(1230)
+    })
+})
 
 describe("validateFileParts", () => {
     it("returns valid for no files", () => {
@@ -21,8 +66,53 @@ describe("validateFileParts", () => {
         expect(validateFileParts(messages)).toEqual({ valid: true })
     })
 
+    // How a file of each kind begins, a character for each byte
+    const PNG = "\x89PNG\r\n\x1a\n"
+    const JPEG = "\xff\xd8\xff\xe0\x00\x10JFIF"
+    const HEIC = "\x00\x00\x00\x18ftypheic"
+    const OFFICE = "\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    const sentAs = (type: string, content: string) => [
+        {
+            role: "user",
+            parts: [
+                {
+                    type: "file",
+                    mediaType: type,
+                    url: `data:${type};base64,${btoa(content + "x".repeat(100))}`,
+                },
+            ],
+        },
+    ]
+
+    it("refuses a picture that is not in the format it was sent as", () => {
+        // What gets here in a request that skipped the browser's check: a
+        // HEIC photo or an Office file named .jpg (Bedrock: "image format
+        // could not be determined"), a PNG named .jpg (Claude refuses it)
+        for (const content of [HEIC, OFFICE, PNG]) {
+            const result = validateFileParts(sentAs("image/jpeg", content))
+            expect(result.valid).toBe(false)
+            expect(result.error).toContain("image/jpeg")
+        }
+    })
+
+    it("accepts the pictures the providers read under their own type", () => {
+        for (const [type, content] of [
+            ["image/png", PNG],
+            ["image/jpeg", JPEG],
+            ["image/gif", "GIF89a"],
+            ["image/webp", "RIFF\x24\x00\x00\x00WEBPVP8 "],
+            // Formats the check does not know are left to the provider
+            ["image/heic", HEIC],
+            ["application/pdf", "%PDF-1.7"],
+        ]) {
+            expect(validateFileParts(sentAs(type, content))).toEqual({
+                valid: true,
+            })
+        }
+    })
+
     it("returns valid for files under limit", () => {
-        const smallBase64 = btoa("x".repeat(100))
+        const smallBase64 = btoa(PNG + "x".repeat(100))
         const messages = [
             {
                 role: "user",

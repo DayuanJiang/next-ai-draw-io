@@ -48,6 +48,7 @@ import {
     ATTACHMENT_ACCEPT,
     isDiagramFile,
     isOversizedImage,
+    readImageTypes,
     shrinkImage,
     validateFiles,
 } from "./attachments"
@@ -285,11 +286,13 @@ export function Composer({
                 isOversizedImage(file) ? shrinkImage(file) : file,
             ),
         )
+        const imageTypes = await readImageTypes(sized)
         const attached = filesRef.current
         const { validFiles, errors } = validateFiles(
             sized,
             attached.length,
             dict,
+            imageTypes,
         )
         showValidationErrors(errors, dict)
         if (validFiles.length > 0) setFiles([...attached, ...validFiles])

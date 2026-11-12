@@ -78,7 +78,10 @@ test.describe("Message box", () => {
         await openApp(page)
         const dataTransfer = await page.evaluateHandle(() => {
             const dt = new DataTransfer()
-            dt.items.add(new File(["x"], "dropped.png", { type: "image/png" }))
+            // Begins as a GIF does: a file that is no picture is turned away
+            dt.items.add(
+                new File(["GIF89a"], "dropped.gif", { type: "image/gif" }),
+            )
             return dt
         })
         // The start screen's heading, above the box
@@ -87,7 +90,7 @@ test.describe("Message box", () => {
         })
         await heading.dispatchEvent("dragover", { dataTransfer })
         await heading.dispatchEvent("drop", { dataTransfer })
-        await expect(page.getByAltText("dropped.png")).toBeVisible()
+        await expect(page.getByAltText("dropped.gif")).toBeVisible()
 
         // The browser would open a file whose drag the page does not take;
         // dragged text is left to the browser
@@ -114,13 +117,16 @@ test.describe("Message box", () => {
         // Pastes one file together with a text, as a file manager's copy
         // (the file's name) or a spreadsheet's copy (the cells) does.
         // Returns whether the text was kept out of the box.
-        const paste = (name: string, type: string, text: string) =>
+        const paste = (
+            name: string,
+            type: string,
+            content: string,
+            text: string,
+        ) =>
             input.evaluate(
-                (el, [name, type, text]) => {
+                (el, [name, type, content, text]) => {
                     const clipboardData = new DataTransfer()
-                    clipboardData.items.add(
-                        new File(["# Notes"], name, { type }),
-                    )
+                    clipboardData.items.add(new File([content], name, { type }))
                     clipboardData.setData("text/plain", text)
                     const event = new ClipboardEvent("paste", {
                         clipboardData,
@@ -130,13 +136,18 @@ test.describe("Message box", () => {
                     el.dispatchEvent(event)
                     return event.defaultPrevented
                 },
-                [name, type, text],
+                [name, type, content, text],
             )
 
-        expect(await paste("notes.md", "text/markdown", "notes.md")).toBe(true)
+        expect(
+            await paste("notes.md", "text/markdown", "# Notes", "notes.md"),
+        ).toBe(true)
         await expect(page.getByText("notes.md")).toBeVisible()
-        // A picture is attached as before, and its text is pasted
-        expect(await paste("image.png", "image/png", "A1\tB1")).toBe(false)
+        // A picture is attached as before, and its text is pasted. It
+        // begins as a GIF does: a file that is no picture is turned away.
+        expect(await paste("image.gif", "image/gif", "GIF89a", "A1\tB1")).toBe(
+            false,
+        )
         await expect(page.getByAltText(/^pasted-image-/)).toBeVisible()
     })
 

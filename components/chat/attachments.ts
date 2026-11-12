@@ -1,4 +1,8 @@
-import { MAX_FILES, MAX_FILE_SIZE as MAX_IMAGE_SIZE } from "@/lib/chat-helpers"
+import {
+    imageTypeOf,
+    MAX_FILES,
+    MAX_FILE_SIZE as MAX_IMAGE_SIZE,
+} from "@/lib/chat-helpers"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 
@@ -73,17 +77,38 @@ export async function shrinkImage(file: File): Promise<File> {
     }
 }
 
+/**
+ * The image format each picture's content is in, read from its first bytes
+ * (undefined: none the models read). The type the browser reports only
+ * repeats the file's name.
+ */
+export async function readImageTypes(
+    files: File[],
+): Promise<Map<File, string | undefined>> {
+    const types = new Map<File, string | undefined>()
+    for (const file of files) {
+        if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) continue
+        const head = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+        types.set(file, imageTypeOf(String.fromCharCode(...head)))
+    }
+    return types
+}
+
 function formatFileSize(bytes: number): string {
     const mb = bytes / 1024 / 1024
     if (mb < 0.01) return `${(bytes / 1024).toFixed(0)}KB`
     return `${mb.toFixed(2)}MB`
 }
 
-/** Keep the files that can be attached; describe the rest as errors */
+/**
+ * Keep the files that can be attached; describe the rest as errors.
+ * imageTypes is what readImageTypes found in the pictures.
+ */
 export function validateFiles(
     newFiles: File[],
     existingCount: number,
     dict: any,
+    imageTypes: Map<File, string | undefined>,
 ): { validFiles: File[]; errors: string[] } {
     const errors: string[] = []
     const validFiles: File[] = []
@@ -122,6 +147,16 @@ export function validateFiles(
             )
             continue
         }
+        // A file named as a picture that is none the models read (a HEIC
+        // photo or an Office file named .jpg) fails the whole request at
+        // the provider, whose error does not say which file is wrong
+        const imageType = imageTypes.get(file)
+        if (imageTypes.has(file) && !imageType) {
+            errors.push(
+                formatMessage(dict.errors.notAnImage, { name: file.name }),
+            )
+            continue
+        }
         // PDFs and text files are extracted in the browser, so only images
         // have a size limit
         const isExtractedFile = isPdfFile(file) || isTextFile(file)
@@ -131,6 +166,17 @@ export function validateFiles(
                     name: file.name,
                     size: formatFileSize(file.size),
                     max: MAX_IMAGE_SIZE / 1024 / 1024,
+                }),
+            )
+        } else if (imageType && imageType !== file.type) {
+            // A picture in another format than its name says (a PNG saved
+            // as .jpg) goes out as what it is: Claude refuses a picture
+            // sent as another format. The date stays, by which a file
+            // picked twice is known.
+            validFiles.push(
+                new File([file], file.name, {
+                    type: imageType,
+                    lastModified: file.lastModified,
                 }),
             )
         } else {
