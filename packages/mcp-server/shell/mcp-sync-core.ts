@@ -259,8 +259,10 @@ function sameDiagram(a: string | null, b: string | null): boolean {
  * it replaces the page's own color: that color is sent when the page has
  * one, else the color the server asks for. Transparent is "none", except
  * in an editable SVG of a page with its own color, which gets that color
- * back unless a transparent one is sent. The web app's export has the same
- * rule (contexts/diagram-context.tsx).
+ * back, and of a page whose colors do not adapt to dark mode
+ * (adaptiveColors="none"), which gets white: there the color sent is a
+ * transparent one. The web app's export has the same rule
+ * (contexts/diagram-context.tsx).
  */
 export function svgBackground(
     format: ExportFormat,
@@ -271,8 +273,13 @@ export function svgBackground(
         /<mxGraphModel\b[^>]*\sbackground="([^"]+)"/,
     )?.[1]
     const pageColor = own === "none" ? undefined : own
+    const fixedColors = /<mxGraphModel\b[^>]*\sadaptiveColors="none"/.test(
+        pageModel ?? "",
+    )
     if (options.transparent) {
-        return format === "xmlsvg" && pageColor ? "transparent" : "none"
+        return format === "xmlsvg" && (pageColor || fixedColors)
+            ? "transparent"
+            : "none"
     }
     return pageColor ?? options.background
 }
@@ -411,6 +418,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
     // made on the canvas that write replaced: no later edit carries it, and
     // sent as it was made, the server keeps it in History
     let loadedVersion = 0
+    // The version the canvas held when the last server write was loaded.
+    // Several writes may lie between the two: the tab polls every two
+    // seconds
+    let versionBeforeLoad = 0
     // The hand edit the server refused for its size, also without its
     // picture: only in this tab for as long as the canvas shows it
     let tooLargeXml: string | null = null
@@ -971,6 +982,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 // document the user had
                 const how = restore ? "full" : "decide"
                 forceReload = false
+                versionBeforeLoad = currentVersion
                 currentVersion = s.version
                 loadFromServer(s.xml, how)
                 // The projection stays on screen until draw.io reports this
@@ -1110,11 +1122,18 @@ export function createMcpSync(options: SyncOptions): McpSync {
             }
             // An edit of the canvas a full load is replacing (the user let
             // go of a shape as a write arrived; draw.io has not reported
-            // the load yet): made on the version before that write, and
-            // pushed as such. The server then keeps it in History, where
-            // pushed on the write's version it would replace the write
+            // the load yet): made on the version the canvas held before
+            // that load, and pushed as such. The server then keeps it in
+            // History, where pushed on the write's version it would replace
+            // the write, and tells what the user changed from that version
+            // on. A reload of the same version (after a projection) is
+            // refused the same way, as one version older
             if (canvas.loadPending()) {
-                pushState(xml, "", currentVersion - 1)
+                pushState(
+                    xml,
+                    "",
+                    Math.min(versionBeforeLoad, currentVersion - 1),
+                )
                 return
             }
             // Also an edit undone back to what the server has, or draw.io's

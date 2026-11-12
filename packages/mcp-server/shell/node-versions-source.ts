@@ -8,6 +8,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import {
     type ChangeSummary,
     diffDiagrams,
+    EMPTY_SUMMARY,
     isSameDocument,
 } from "@/lib/diagram-diff"
 import { formatMessage } from "@/lib/i18n/utils"
@@ -188,14 +189,20 @@ export function buildVersions(
         if (!change) {
             const beforeXml = madeOn?.xml ?? ""
             const pageId = changedPage(beforeXml, first.xml)
-            const { summary, fromScratch, touchedIds } = diffDiagrams(
-                beforeXml,
-                first.xml,
-                pageId,
-            )
             const pages = beforeXml
                 ? pageIds(first.xml).length - pageIds(beforeXml).length
                 : 0
+            // Pages came or went and no page's cells changed (changedPage
+            // looks at every page that has an id): no page is compared.
+            // Without an id diffDiagrams takes each document's first page,
+            // which are two different pages once the first one is deleted
+            const onlyPages =
+                pageId === undefined &&
+                pages !== 0 &&
+                pageIds(first.xml).every(Boolean)
+            const { summary, fromScratch, touchedIds } = onlyPages
+                ? { summary: EMPTY_SUMMARY, fromScratch: false, touchedIds: [] }
+                : diffDiagrams(beforeXml, first.xml, pageId)
             change = {
                 beforeXml,
                 pageId,

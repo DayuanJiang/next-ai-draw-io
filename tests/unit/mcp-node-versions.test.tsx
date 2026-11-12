@@ -499,6 +499,47 @@ describe("buildVersions", () => {
         expect(versions.map((v) => v.pagesAdded)).toEqual([0, 2, -1])
     })
 
+    it("counts no shape as drawn or changed when a page is only added or removed", () => {
+        const page = (name: string, cells: string) =>
+            `<diagram id="${name}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+        const file = (...pages: string[]) =>
+            `<mxfile>${pages.join("")}</mxfile>`
+        const blank = page("Blank", "")
+        const one = page("One", cell("2", "A") + cell("3", "B"))
+        const two = page("Two", cell("2", "A") + cell("4", "C"))
+        // What the card of the last entry tells, after the entry before it
+        const last = (before: string, after: string) => {
+            const { versions } = buildVersions(
+                list([entry(0, A), entry(1, before), entry(2, after)], 2),
+                cache(),
+            )
+            const { summary, fromScratch, touchedIds, pagesAdded } =
+                versions.at(-1) as (typeof versions)[number]
+            return {
+                cells: Object.values(summary).reduce((a, b) => a + b),
+                fromScratch,
+                touchedIds,
+                pagesAdded,
+            }
+        }
+        const removed = {
+            cells: 0,
+            fromScratch: false,
+            touchedIds: [],
+            pagesAdded: -1,
+        }
+        // The first page deleted: the page left is not compared with it,
+        // whether the deleted page was blank or had shapes with the same ids
+        expect(last(file(blank, one), file(one))).toEqual(removed)
+        expect(last(file(one, two), file(two))).toEqual(removed)
+        // A blank first page: the page count is still told
+        expect(last(file(blank, one), file(blank))).toEqual(removed)
+        expect(last(file(blank), file(blank, page("New", "")))).toEqual({
+            ...removed,
+            pagesAdded: 1,
+        })
+    })
+
     it("pictures a version that changed no shape as the one it was made on, until it has a picture of its own", () => {
         // A page renamed, and replaced by the next write before the tab
         // showed it: the tab took no picture of it

@@ -1048,6 +1048,13 @@ function handleStateApi(
                         )
                         const lostTo = history[at]
                         const base = at > 0 ? history[at - 1] : undefined
+                        // No entry has a later version when the write that
+                        // refuses the edit changed nothing (History held its
+                        // document already): the edit was made on that
+                        // document
+                        const baseXml =
+                            base?.xml ??
+                            (at === -1 ? current?.serverXml : undefined)
                         addHistory(
                             sessionId,
                             data.xml,
@@ -1059,9 +1066,9 @@ function handleStateApi(
                         // A write of the model's replaced it (a restore is
                         // the user's own choice): the model is told
                         const lost =
-                            base && lostTo.source !== "restore"
+                            baseXml && lostTo?.source !== "restore"
                                 ? describeChanges(
-                                      base.xml,
+                                      baseXml,
                                       data.xml,
                                       "While you were writing, the user changed the diagram by hand",
                                   )

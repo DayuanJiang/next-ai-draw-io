@@ -254,6 +254,44 @@ describe("a box added around shapes that are already there", () => {
         ])
     })
 
+    it("goes behind a shape that a later operation of the same call moves into it", () => {
+        const { result, errors, notes } = applyDiagramOperations(PAGE, [
+            { operation: "add", cell_id: "frame", new_xml: frame("1") },
+            // The first cell of the page, outside the frame until now
+            {
+                operation: "update",
+                cell_id: "out",
+                new_xml: shape("out", 100, 160),
+            },
+        ])
+        expect(errors).toEqual([])
+        expect(order(result)).toEqual([
+            "0",
+            "1",
+            "frame",
+            "out",
+            "e1",
+            "in1",
+            "in2",
+        ])
+        expect(notes).toEqual([
+            "frame is drawn behind the shapes it covers (out, in1, in2), so they stay visible and can be selected.",
+        ])
+    })
+
+    it("stays where it is, without a note, when the same call adds its shapes after it", () => {
+        const { result, notes } = applyDiagramOperations(PAGE, [
+            {
+                operation: "add",
+                cell_id: "frame",
+                new_xml: frame("1").replace('y="60"', 'y="400"'),
+            },
+            { operation: "add", cell_id: "n", new_xml: shape("n", 100, 440) },
+        ])
+        expect(order(result).slice(-2)).toEqual(["frame", "n"])
+        expect(notes).toEqual([])
+    })
+
     it("stays in front, at the end, when it covers no shape", () => {
         const { result, notes } = applyDiagramOperations(PAGE, [
             // Overlaps in1 without covering it

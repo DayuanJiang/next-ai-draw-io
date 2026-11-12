@@ -153,13 +153,13 @@ function boxOf(cell: Element | undefined) {
 }
 
 /**
- * The cell a new shape is put in front of in the page's order (draw.io
- * draws the cells in that order, the last one on top): null, the end, for
- * most. A box that covers shapes already on the page is a frame or a
- * background around them, and goes behind the first of them or of their
- * edges. In front, it would take every click meant for a shape inside it
- * (draw.io selects the topmost cell, also where its fill is none), and
- * with a fill it would hide them. Also returns the shapes it covers.
+ * The cell a new shape belongs in front of in the page's order (draw.io
+ * draws the cells in that order, the last one on top): null for most. A box
+ * that covers other shapes of the page is a frame or a background around
+ * them, and belongs behind the first of them or of their edges. In front,
+ * it would take every click meant for a shape inside it (draw.io selects
+ * the topmost cell, also where its fill is none), and with a fill it would
+ * hide them. Also returns the shapes it covers.
  */
 function placeBehind(
     root: Element,
@@ -445,6 +445,7 @@ export function applyDiagramOperations(
     const deletedIds = new Set<string>()
     const unchanged: string[] = []
     const notes: string[] = []
+    const addedIds: string[] = []
 
     // Process each operation
     for (const op of operations) {
@@ -506,14 +507,9 @@ export function applyDiagramOperations(
                 continue
             }
 
-            const { before, covered } = placeBehind(root, cellMap, newCell)
-            root.insertBefore(newCell, before)
-            if (covered.length > 0) {
-                notes.push(
-                    `${op.cell_id} is drawn behind the shapes it covers (${listIds(covered)}), so they stay visible and can be selected.`,
-                )
-            }
+            root.appendChild(newCell)
             cellMap.set(op.cell_id, newCell)
+            addedIds.push(op.cell_id)
         } else if (op.operation === "delete") {
             // Protect root cells from deletion
             if (op.cell_id === "0" || op.cell_id === "1") {
@@ -601,6 +597,23 @@ export function applyDiagramOperations(
                 }
                 deletedIds.add(cellId)
             }
+        }
+    }
+
+    // A new box goes behind the shapes it covers. Which ones it covers is
+    // known once every operation is applied: a later update of the batch
+    // can move a shape into a box added before it. A cell the batch deleted
+    // again is no longer in the map.
+    for (const id of addedIds) {
+        const cell = cellMap.get(id)
+        if (!cell) continue
+        const { before, covered } = placeBehind(root, cellMap, cell)
+        const order = Array.from(root.children)
+        if (before && order.indexOf(before) < order.indexOf(cell)) {
+            root.insertBefore(cell, before)
+            notes.push(
+                `${id} is drawn behind the shapes it covers (${listIds(covered)}), so they stay visible and can be selected.`,
+            )
         }
     }
 

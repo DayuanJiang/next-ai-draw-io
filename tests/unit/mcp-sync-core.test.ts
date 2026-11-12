@@ -495,6 +495,24 @@ describe("MCP sync with an edit made while a write loads", () => {
         })
     })
 
+    it("bases that edit on the version the canvas held, also when the poll skipped a write", async () => {
+        const t = await inStep()
+        // Two writes since the last poll (edit_diagram, then add_page):
+        // the tab goes from version 2 to 4 in one load
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 4, "<mxfile>X</mxfile>"))
+        await poll
+        t.canvas.loadPending = true
+        t.sync.onAutoSave("<mxfile>A edited</mxfile>")
+        await t.settle()
+        // On version 3 the server would count the first write's shapes as
+        // removed by the user
+        expect(t.next("POST", "/api/state").body).toMatchObject({
+            xml: "<mxfile>A edited</mxfile>",
+            baseVersion: 2,
+        })
+    })
+
     it("sends that edit again when its push did not reach the server", async () => {
         const t = await inStep()
         let poll = t.sync.poll()
@@ -1316,6 +1334,17 @@ describe("MCP sync export requests", () => {
                 exportId: "e4",
             }),
         ).toEqual({ format: "xmlsvg", ...clear, background: "transparent" })
+        // And white for "none" when the page's colors do not adapt to dark
+        // mode
+        t.canvas.xml = `<mxfile>${page("p1", "")}${page("p2", ' adaptiveColors="none"')}</mxfile>`
+        expect(
+            await request({
+                exportFormat: "xmlsvg",
+                exportOptions: clear,
+                exportId: "e4b",
+            }),
+        ).toEqual({ format: "xmlsvg", ...clear, background: "transparent" })
+        t.canvas.xml = `<mxfile>${page("p1", "")}${page("p2", ' background="#102030"')}</mxfile>`
         // The page of a projection, not the one on screen
         expect(
             await request({

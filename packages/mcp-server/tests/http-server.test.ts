@@ -347,6 +347,25 @@ describe("POST /api/state", () => {
         expect(takeLostEdits(id)).toEqual([])
     })
 
+    it("tells the model of a user edit that lost to a write which changed nothing", async () => {
+        const id = "mcp-conflict-unchanged-write"
+        write(id, twoCells("A", "B"))
+        // The same document again (an update that changed no cell): History
+        // has it already, and no entry carries this version
+        const aiVersion = write(id, twoCells("A", "B"))
+        expect(getHistory(id)).toHaveLength(1)
+        const stale = await postJson("/api/state", {
+            sessionId: id,
+            xml: twoCells("A by hand", "B"),
+            baseVersion: aiVersion - 1,
+        })
+        expect(stale.status).toBe(409)
+        expect(JSON.parse(stale.body).savedToHistory).toBe(true)
+        expect(takeLostEdits(id)).toEqual([
+            'While you were writing, the user changed the diagram by hand: modified a ("A by hand").',
+        ])
+    })
+
     it("has nothing to tell the model once the user edited again or restored a version", async () => {
         const id = "mcp-conflict-moved-on"
         const lose = async () => {
