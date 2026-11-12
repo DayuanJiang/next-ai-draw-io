@@ -549,16 +549,23 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // both. For an SVG `background` replaces the page's color and
         // `transparent` is not read: "none" leaves the background out,
         // except in an editable SVG of a page with its own color, which
-        // gets that color back, so there the color sent is a transparent
-        // one.
-        const pageColor = pageModelXml(
+        // gets that color back, and of a page whose colors do not adapt
+        // to dark mode (adaptiveColors="none"), which gets white, so
+        // there the color sent is a transparent one.
+        const model = pageModelXml(
             chartXMLRef.current,
             useCanvasStore.getState().currentPageId,
-        )?.match(/<mxGraphModel\b[^>]*\sbackground="([^"]+)"/)?.[1]
+        )
+        const pageColor = model?.match(
+            /<mxGraphModel\b[^>]*\sbackground="([^"]+)"/,
+        )?.[1]
         const ownColor = pageColor === "none" ? undefined : pageColor
+        const fixedColors = /<mxGraphModel\b[^>]*\sadaptiveColors="none"/.test(
+            model ?? "",
+        )
         const svgBackground = !transparent
             ? (ownColor ?? "#ffffff")
-            : format === "xmlsvg" && ownColor
+            : format === "xmlsvg" && (ownColor || fixedColors)
               ? "transparent"
               : "none"
         const imageOptions =

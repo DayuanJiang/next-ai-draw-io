@@ -221,3 +221,119 @@ test("a shape an edit adds outside the window comes into view, unless the user l
     ).not.toBeInViewport()
     expect(await service.boundingBox()).toEqual(place)
 })
+
+/** draw.io's zoom: 1 is 100% */
+function zoomOf(page: Page) {
+    return page
+        .frameLocator("iframe")
+        .locator("body")
+        .evaluate((body) => {
+            const w = body.ownerDocument.defaultView as any
+            let scale = 0
+            // draw.io keeps no global editor; in embed mode Draw.loadPlugin
+            // hands it to the callback at once
+            w.Draw.loadPlugin((ui: any) => {
+                scale = ui.editor.graph.view.scale
+            })
+            return scale
+        })
+}
+
+const cell = (id: string, label: string, x: number, y: number) =>
+    `<mxCell id="${id}" value="${label}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="${x}" y="${y}" width="120" height="60" as="geometry"/></mxCell>`
+
+test("a diagram is back at its zoom and place when an edit that zoomed out to show its preview is stopped", async ({
+    page,
+}) => {
+    const call = toolCallEvents("far", "edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "far",
+                new_xml: cell("far", "Far away", 2400, 1500),
+            },
+            {
+                operation: "add",
+                cell_id: "late",
+                new_xml: cell("late", "Late", 100, 300),
+            },
+        ],
+    })
+    // The second operation never completes: the canvas shows a preview
+    await chunkedReplies(
+        page,
+        [
+            [drawing(BOX)],
+            [
+                sseEvents(
+                    [
+                        { type: "start" },
+                        call.start,
+                        ...call.deltas.slice(0, -3),
+                    ],
+                    false,
+                ),
+            ],
+        ],
+        { holdLast: true },
+    )
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    const canvas = page.frameLocator("iframe")
+    const service = canvas.getByText("Service", { exact: true })
+    const far = canvas.getByText("Far away", { exact: true })
+
+    await sendMessage(page, "Draw a service")
+    await waitForCompleteCount(page, 1)
+    // Past the time a resize fits the new diagram again
+    await page.waitForTimeout(4500)
+    expect(await zoomOf(page)).toBe(1)
+    const place = await service.boundingBox()
+
+    await sendMessage(page, "Add a box far away")
+    await expect(far).toBeInViewport({ timeout: 15000 })
+    await expect(service).toBeInViewport()
+    expect(await zoomOf(page)).toBeLessThan(0.5)
+
+    await page.getByRole("button", { name: "Stop generation" }).click()
+    await expect(far).toHaveCount(0, { timeout: 15000 })
+    await expect.poll(() => zoomOf(page)).toBe(1)
+    const back = await service.boundingBox()
+    expect(Math.abs((back?.x ?? 0) - (place?.x ?? 0))).toBeLessThan(2)
+    expect(Math.abs((back?.y ?? 0) - (place?.y ?? 0))).toBeLessThan(2)
+})
+
+test("undoing the first drawing, which empties the canvas, keeps the zoom", async ({
+    page,
+}) => {
+    // Larger than the window, and away from the page's corner
+    await mockChat(page, [
+        drawing(
+            cell("a", "First", 400, 300) +
+                cell("b", "Right", 2400, 300) +
+                cell("c", "Down", 400, 1800),
+        ),
+    ])
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    const first = page
+        .frameLocator("iframe")
+        .getByText("First", { exact: true })
+
+    await sendMessage(page, "Draw something wide")
+    await waitForCompleteCount(page, 1)
+    // Past the time a resize fits the new diagram again
+    await page.waitForTimeout(4500)
+    const fitted = await zoomOf(page)
+    expect(fitted).toBeLessThan(0.5)
+
+    const undo = page.locator('[data-testid="version-undo"]')
+    await undo.click()
+    await expect(first).toHaveCount(0)
+    await page.waitForTimeout(1000)
+    expect(await zoomOf(page)).toBe(fitted)
+    // Redone: fitted as before
+    await undo.click()
+    await expect(first).toBeInViewport()
+    expect(await zoomOf(page)).toBeCloseTo(fitted, 2)
+})

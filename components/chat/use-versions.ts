@@ -80,16 +80,17 @@ export function useVersions({
             if (!fromScratch) {
                 highlightChangedCells(touchedIds, pageId, { navigate: false })
             }
-            // The picture is of the canvas: take it right away, before a
-            // newer version can be on it; once one is, this one gets none
-            // rather than the newer one's
-            const isNewest = () =>
-                useVersionsStore.getState().versions.at(-1)?.id === id
+            // The picture is of the canvas: take it right away, while this
+            // version is on it. Once a newer one is, or its change was
+            // undone (the wait for a draw.io that is still loading is
+            // long), this one gets none rather than a picture of that.
+            const onCanvas = () =>
+                useVersionsStore.getState().onCanvasVersionId === id
             setTimeout(async () => {
-                const svg = isNewest() ? await getVersionSvg() : null
+                const svg = onCanvas() ? await getVersionSvg() : null
                 useVersionsStore
                     .getState()
-                    .updateVersion(id, { svg: svg && isNewest() ? svg : "" })
+                    .updateVersion(id, { svg: svg && onCanvas() ? svg : "" })
             }, 0)
         })
         return () => setCommitHandler(null)

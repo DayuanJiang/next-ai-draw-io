@@ -426,6 +426,14 @@ describe("isSameDocument", () => {
         expect(diffDiagrams(written, saved).summary).toEqual(EMPTY_SUMMARY)
         // The point draw.io keeps counts
         expect(isSameDocument(written, line(waypoint(450)))).toBe(false)
+        // A later point that leaves a coordinate out keeps the earlier
+        // point's: draw.io reads it into that point
+        const end = (attrs: string) => `<mxPoint ${attrs} as="sourcePoint"/>`
+        const partly = line(end('x="100" y="100"') + end('x="200"'))
+        const partlySaved = line(end('x="200" y="100"'))
+        expect(isSameDocument(partly, partlySaved)).toBe(true)
+        expect(diffDiagrams(partly, partlySaved).summary).toEqual(EMPTY_SUMMARY)
+        expect(isSameDocument(partly, line(end('x="200"')))).toBe(false)
     })
 
     it("takes a collapsed size's left-out position as 0, as draw.io writes it", () => {

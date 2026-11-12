@@ -482,17 +482,25 @@ export function canReplaceDiagram(xml: string): boolean {
 // that view.
 let followPreview = false
 
+// The preview fitted the view: the diagram a revert brings back is fitted
+// too (at the preview's zoom and place it would be small, or out of view)
+let previewFitted = false
+
 /** Show a streaming preview without touching the undo history */
 export function previewDiagram(xml: string) {
     if (previewBase === null) {
         previewBase = currentFileXml() ?? ""
         followPreview = isEmptyModel() || shapesInView()
+        previewFitted = false
     }
     const wasEmpty = isEmptyModel()
     withoutUndo(() => replace(xml))
     // The first shapes on an empty page come to the middle; the drawing is
     // fitted again each time it grows past the edge of the window
-    if (wasEmpty || (followPreview && !shapesInView())) fitDiagram()
+    if (wasEmpty || (followPreview && !shapesInView())) {
+        fitDiagram()
+        previewFitted = true
+    }
 }
 
 /**
@@ -590,8 +598,8 @@ export function revertPreview(targetXml: string) {
     if (isEmptyModel()) {
         graph()?.zoomTo(1)
         centerEmptyPage()
-    } else if (followed && !shapesInView()) {
-        // The preview's fits took the view off the diagram that is back
+    } else if (followed && previewFitted) {
+        // The preview's fits zoomed or scrolled the view for its drawing
         fitDiagram()
     }
 }
@@ -673,6 +681,8 @@ function placeOpenedDiagram() {
 
 /** Every shape is inside the visible part of the canvas */
 function shapesInView(): boolean {
+    // (an empty page's bounds are a point at its corner, in view or not)
+    if (isEmptyModel()) return true
     const g = graph()
     const b = g.getGraphBounds()
     const c = g.container

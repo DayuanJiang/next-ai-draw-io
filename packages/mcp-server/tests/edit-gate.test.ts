@@ -267,6 +267,17 @@ describe("contentFingerprint", () => {
             ok: false,
             reason: "stale",
         })
+        // A later point that leaves a coordinate out keeps the earlier
+        // point's: draw.io reads it into that point
+        const end = (attrs: string) => `<mxPoint ${attrs} as="sourcePoint"/>`
+        const partly = edge(end('x="100" y="100"') + end('x="200"'))
+        expect(checkEditGate(partly, edge(end('x="200" y="100"')))).toEqual({
+            ok: true,
+        })
+        expect(checkEditGate(partly, edge(end('x="200"')))).toEqual({
+            ok: false,
+            reason: "stale",
+        })
     })
 
     it("falls back to the raw string for unparseable input", () => {

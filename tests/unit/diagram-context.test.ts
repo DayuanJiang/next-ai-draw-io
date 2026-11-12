@@ -160,6 +160,14 @@ describe("diagramFingerprint", () => {
         expect(written).toBe(diagramFingerprint(edge(waypoint(125))))
         // The point draw.io keeps counts
         expect(written).not.toBe(diagramFingerprint(edge(waypoint(450))))
+        // A later point that leaves a coordinate out keeps the earlier
+        // point's: draw.io reads it into that point
+        const end = (attrs: string) => `<mxPoint ${attrs} as="sourcePoint"/>`
+        const partly = diagramFingerprint(
+            edge(end('x="100" y="100"') + end('x="200"')),
+        )
+        expect(partly).toBe(diagramFingerprint(edge(end('x="200" y="100"'))))
+        expect(partly).not.toBe(diagramFingerprint(edge(end('x="200"'))))
     })
 
     it("is null for XML without a model", () => {

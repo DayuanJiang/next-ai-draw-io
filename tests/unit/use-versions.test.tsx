@@ -8,13 +8,21 @@ const mocks = vi.hoisted(() => ({
     chartXML: "",
     // The button of the latest toast
     toastAction: () => {},
+    // What the hook registered for the AI's committed changes
+    commit: null as
+        | ((commit: { beforeXml: string; afterXml: string }) => void)
+        | null,
+    // draw.io's answer to the export of a version's picture
+    versionSvg: async (): Promise<string | null> => null,
 }))
 
 vi.mock("@/contexts/diagram-context", () => ({
     useDiagram: () => ({
         loadDiagram: vi.fn(),
-        getVersionSvg: vi.fn(),
-        setCommitHandler: vi.fn(),
+        getVersionSvg: () => mocks.versionSvg(),
+        setCommitHandler: (handler: typeof mocks.commit) => {
+            mocks.commit = handler
+        },
         chartXML: mocks.chartXML,
         chartXMLRef: { current: mocks.chartXML },
     }),
@@ -118,5 +126,45 @@ describe("the version on the canvas", () => {
         rerender()
         expect(useVersionsStore.getState().onCanvasVersionId).toBeNull()
         expect(useVersionsStore.getState().editedSinceId).toBe(second)
+    })
+})
+
+describe("a version's picture", () => {
+    beforeEach(() => useVersionsStore.getState().clear())
+
+    it("is kept only while the version is still on the canvas when draw.io answers", async () => {
+        // The answer comes late, as from a draw.io that is still loading
+        let answer = (_svg: string) => {}
+        mocks.versionSvg = () =>
+            new Promise((resolve) => {
+                answer = resolve
+            })
+        const { result } = renderHook(() =>
+            useVersions({
+                currentTurnRef: { current: 0 },
+                isBusy: false,
+                isTurnActive: () => false,
+                getChatGeneration: () => 0,
+            }),
+        )
+        const drawn = async (beforeXml: string, afterXml: string) => {
+            act(() => mocks.commit?.({ beforeXml, afterXml }))
+            // (the picture is asked for in a timeout)
+            await new Promise((resolve) => setTimeout(resolve, 0))
+            return useVersionsStore.getState().versions.at(-1)?.id as string
+        }
+        const svgOf = (id: string) =>
+            useVersionsStore.getState().versions.find((v) => v.id === id)?.svg
+
+        const first = await drawn("", A)
+        await act(async () => answer("data:image/svg+xml,first"))
+        expect(svgOf(first)).toBe("data:image/svg+xml,first")
+
+        // Undone before the answer: the picture shows the canvas without
+        // the second version's change
+        const second = await drawn(A, AB)
+        act(() => result.current.undoVersion(second))
+        await act(async () => answer("data:image/svg+xml,undone"))
+        expect(svgOf(second)).toBe("")
     })
 })

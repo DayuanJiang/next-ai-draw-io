@@ -49,4 +49,10 @@ describe("the buttons next to a selection", () => {
     it("go below a selection near the top of the canvas", () => {
         expect(barFor(300, 60)).toEqual({ left: 534, top: 170 })
     })
+
+    it("go above a selection in the bottom right corner, up to its right edge", () => {
+        // No room past the handle, and below they would be moved up, onto
+        // the shape (y 650 to 750): they end where the shape does, at 960
+        expect(barFor(760, 650)).toEqual({ left: 960 - 68, top: 608 })
+    })
 })

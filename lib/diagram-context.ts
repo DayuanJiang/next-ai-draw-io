@@ -19,6 +19,7 @@
  * are kept as the short references the model sees (embedded-images.ts).
  */
 
+import { geometryParts } from "@/packages/mcp-server/src/edit-gate.ts"
 import { hideImageData } from "@/packages/mcp-server/src/embedded-images.ts"
 
 /** The canvas right after a change of the model was put on it */
@@ -83,14 +84,11 @@ function canonical(el: Element): string {
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
         .join(" ")
-    let parts = Array.from(el.children)
-    // draw.io reads each part of a geometry into the field its "as" names,
-    // also a name it does not know: of two parts with one name it keeps
-    // the last (a model writes several points as="waypoint")
-    if (el.tagName === "mxGeometry") {
-        const lastOfName = new Map(parts.map((p) => [p.getAttribute("as"), p]))
-        parts = [...lastOfName.values()]
-    }
+    // (a geometry's parts as draw.io keeps them: one per name)
+    const parts =
+        el.tagName === "mxGeometry"
+            ? geometryParts(el)
+            : Array.from(el.children)
     const children = parts.map(canonical)
     // draw.io saves a geometry's parts (offset, points, end points) sorted
     // by name, the model writes them in any order

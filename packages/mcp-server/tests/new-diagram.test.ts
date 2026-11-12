@@ -239,6 +239,26 @@ describe("truncation check with named styles and compact cells", () => {
         }
     })
 
+    it("takes a last cell without its slash for complete, as it is drawn", () => {
+        const B = '<mxCell id="3" value="B" x="120" y="0" w="80" h="40"'
+        for (const xml of [
+            `${A}${B}>`,
+            `${A}${B} vertex="1" parent="1">`,
+            `${A}${B}/><mxCell id="5" source="2" target="3">`,
+        ]) {
+            expect(isMxCellXmlComplete(xml)).toBe(true)
+            expect(prepareNewDiagram(xml).ok).toBe(true)
+        }
+        // A cell in the long form that stops after its opening tag is cut
+        for (const xml of [
+            `${A}${B}/><mxCell id="5" edge="1" parent="1" source="2" target="3">`,
+            `${A}<mxCell id="3" value="B" style="rounded=1;" vertex="1" parent="1">`,
+            `${A}<mxCell id="3" value="B" vertex="1" parent="1"><mxGeometry x="120" width="80"`,
+        ]) {
+            expect(isMxCellXmlComplete(xml)).toBe(false)
+        }
+    })
+
     it("leaves definitions without any cell to the style check", () => {
         expect(truncatedCellError(BLUE)).toBeNull()
         const out = prepareNewDiagram(BLUE)

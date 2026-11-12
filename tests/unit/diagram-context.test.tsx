@@ -406,4 +406,19 @@ describe("exported files", () => {
             transparent: true,
         })
     })
+
+    it("ask for a transparent editable SVG of a page whose colors do not adapt to dark mode", async () => {
+        // draw.io gives such a page a white background for "none"
+        const fixed = oneBox.replace(
+            "<mxGraphModel>",
+            '<mxGraphModel adaptiveColors="none">',
+        )
+        localStorage.setItem("next-ai-draw-io-png-transparent", "true")
+        expect(await save("xmlsvg", undefined, fixed)).toMatchObject({
+            background: "transparent",
+        })
+        expect(await save("svg", undefined, fixed)).toMatchObject({
+            background: "none",
+        })
+    })
 })

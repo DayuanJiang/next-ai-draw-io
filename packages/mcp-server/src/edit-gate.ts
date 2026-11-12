@@ -108,6 +108,28 @@ function cellsInDrawioOrder(root: Element): Element[] {
 }
 
 /**
+ * The parts of a geometry (offset, points, end points) as draw.io keeps
+ * them: one per name. It reads each part into the field its "as" names,
+ * also a name it does not know (a model writes several points
+ * as="waypoint"). The later of two parts with one name is read into the
+ * earlier one: it counts, with the attributes (a point's coordinates) only
+ * the earlier one has. Those are copied onto the later element here, so
+ * this is for a document that was parsed to be compared. The web app's two
+ * comparisons use it too (lib/diagram-diff.ts, lib/diagram-context.ts).
+ */
+export function geometryParts(geometry: Element): Element[] {
+    const byName = new Map<string | null, Element>()
+    for (const part of Array.from(geometry.children)) {
+        const name = part.getAttribute("as")
+        for (const a of Array.from(byName.get(name)?.attributes ?? [])) {
+            if (!part.hasAttribute(a.name)) part.setAttribute(a.name, a.value)
+        }
+        byName.set(name, part)
+    }
+    return [...byName.values()]
+}
+
+/**
  * Canonical serialisation of an element subtree: tag + attributes sorted by
  * name + child elements in order (a page's cells in draw.io's order, the
  * parts of a geometry sorted, one per name) + non-whitespace text.
@@ -126,20 +148,12 @@ function canonicalizeElement(el: Element): string {
     const nodes =
         el.tagName === "root"
             ? cellsInDrawioOrder(el)
-            : Array.from(el.childNodes)
-    // draw.io reads each part of a geometry into the field its "as" names,
-    // also a name it does not know: of two parts with one name it keeps
-    // the last (a model writes several points as="waypoint")
-    const lastOfName =
-        el.tagName === "mxGeometry"
-            ? new Map(Array.from(el.children, (p) => [p.getAttribute("as"), p]))
-            : null
+            : el.tagName === "mxGeometry"
+              ? geometryParts(el)
+              : Array.from(el.childNodes)
     for (const child of nodes) {
         if (child.nodeType === 1) {
-            const part = child as Element
-            if (lastOfName && lastOfName.get(part.getAttribute("as")) !== part)
-                continue
-            children.push(canonicalizeElement(part))
+            children.push(canonicalizeElement(child as Element))
         } else if (child.nodeType === 3 || child.nodeType === 4) {
             const text = (child.textContent ?? "").trim()
             if (text) children.push(JSON.stringify(text))

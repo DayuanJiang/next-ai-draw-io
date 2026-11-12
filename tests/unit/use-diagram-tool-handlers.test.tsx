@@ -257,6 +257,20 @@ describe("display_diagram and undo", () => {
         await call("display_diagram", { xml: box("2") })
         expect(onDisplayChart.mock.calls.map((c) => c[2])).toEqual(["commit"])
     })
+
+    it("draws a diagram whose last cell lacks its slash, as the MCP server does", async () => {
+        const { refs, onDisplayChart, addToolOutput, call } = setup("")
+        await call("display_diagram", {
+            xml: '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/><mxCell id="3" value="B" vertex="1" parent="1" x="240" y="40" w="120" h="60">',
+        })
+        // Not taken for output that was cut off
+        expect(refs.partialXmlRef.current).toBe("")
+        expect(onDisplayChart.mock.calls.map((c) => c[2])).toEqual(["commit"])
+        expect(onDisplayChart.mock.calls[0][0]).toContain('value="B"')
+        expect(addToolOutput.mock.lastCall?.[0].output).toMatch(
+            /Successfully displayed/,
+        )
+    })
 })
 
 describe("a cut off drawing", () => {

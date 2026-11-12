@@ -62,14 +62,21 @@ export function SelectionAsk({
     // above end at the middle of its top) and the rotation handle there,
     // kept inside the canvas. Below the selection when the canvas ends
     // before that place: moved left, the buttons would lie on the handle.
+    // A selection in the canvas's bottom right corner has no room below
+    // either: the buttons go above it and end at its right edge, short
+    // of the handle.
     const barWidth = (showAsk && showStyle ? 2 : 1) * BUTTON_WIDTH + 4
     const pastHandle = rect.x + rect.width + HANDLE_SPACE
-    const left = Math.min(Math.max(8, pastHandle), width - barWidth - 8)
+    const inCanvas = Math.min(Math.max(8, pastHandle), width - barWidth - 8)
     const above = rect.y - BUTTON_HEIGHT - GAP
-    const top =
-        above > 64 && left === pastHandle
-            ? above
-            : Math.min(rect.y + rect.height + GAP, height - BUTTON_HEIGHT - 72)
+    const below = rect.y + rect.height + GAP
+    const lowest = height - BUTTON_HEIGHT - 72
+    const goesAbove = above > 64 && (inCanvas === pastHandle || below > lowest)
+    const top = goesAbove ? above : Math.min(below, lowest)
+    const left =
+        goesAbove && inCanvas !== pastHandle
+            ? Math.max(8, Math.min(inCanvas, rect.x + rect.width - barWidth))
+            : inCanvas
 
     return (
         <div

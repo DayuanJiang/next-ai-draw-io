@@ -87,11 +87,12 @@ export function reservedIdError(input: string): string | null {
  */
 export function isMxCellXmlComplete(xml: string): boolean {
     // Named style definitions before the cells are not cells: output cut off
-    // right after them is incomplete. A compact cell whose last quote is
-    // missing is complete; prepareNewDiagram repairs it. A code fence, a
-    // CDATA section or a sentence around complete cells is no cut either.
-    const trimmed = repairNumberQuotes(
-        readStyleClasses(stripWrapping(xml)).xml,
+    // right after them is incomplete. A compact cell whose last quote or
+    // slash is missing is complete; prepareNewDiagram repairs it. A code
+    // fence, a CDATA section or a sentence around complete cells is no cut
+    // either.
+    const trimmed = closeSlashlessCells(
+        repairNumberQuotes(readStyleClasses(stripWrapping(xml)).xml),
     ).trim()
     if (!trimmed) return false
 
@@ -221,8 +222,7 @@ export function prepareNewModel(input: string): NewDiagram {
     // Kept also when the cells are rejected: the retry may come in parts,
     // with the names used in edit_diagram
     const known = rememberStyleClasses(classes)
-    // Before the truncation check, which takes a last cell without its
-    // slash for output that was cut off
+    // First: the checks below and the validator then see these cells closed
     const cells = closeSlashlessCells(defined)
     const closed =
         cells === defined
