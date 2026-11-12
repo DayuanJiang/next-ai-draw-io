@@ -294,6 +294,11 @@ export function parseStringifiedArrays(json: string): string {
 const PAGE_BACKGROUND =
     /<mxGraphModel\b[^>]*\bbackground(?:Image)?="(?!none")[^"]/
 
+// For a canvas with connectors that are attached at one end only, which is
+// what a shape deleted by hand leaves behind (see diagramContextText)
+const FREE_END_NOTE =
+    "Connectors with a free end ({ids}): the user deleted the shape that was there. Do not draw that shape again; leave such a connector as it is or delete it."
+
 /**
  * The note on the canvas that ends a user message (lib/diagram-context.ts).
  * The same message always gets the same text, so the history the model gets
@@ -309,12 +314,32 @@ export function diagramContextText(diagram: MessageDiagram): string {
     }
     const shown = foldCells(diagram.xml)
     const imageNote = imageRefNote(shown)
-    // The last sentence keeps a shape the user deleted by hand deleted.
-    // Without it the models read its absence, and the connectors it left
-    // open, as damage and draw it again: in replays of the request after
-    // a deletion, Claude Haiku 5.5 did in 10 of 10 and GPT-6 Luna in 5 of
-    // 10, and with the sentence neither did in 10.
-    return `[Canvas when this message was sent, in the compact notation you write (shapes with x, y, w, h; edges with source and target). It is the source of truth from this point on and shows any change the user made by hand. A shape or connector of yours that is missing from it was removed by the user: do not add it back unless the user asks.]
+    // The last sentences keep a shape the user deleted by hand deleted.
+    // Without "A shape or connector of yours that is missing..." the
+    // models read its absence, and the connectors it left open, as damage
+    // and draw it again: in replays of the request after a deletion,
+    // Claude Haiku 5.5 did in 10 of 10 and GPT-6 Luna in 5 of 10, and with
+    // the sentence neither did in 10.
+    // In a longer chat that sentence is not enough once the model redraws
+    // the whole diagram: it copies its earlier drawing, and the connector
+    // the shape left behind, open at one end, shows it where the shape
+    // goes. So the note also says what a redraw starts from, and names
+    // the connectors with a free end. Replays of two requests of a real
+    // 13-message chat, 10 each, with Claude Haiku 5.5: the deleted shape
+    // came back in 7 of 10 (a change that the model mostly made with a
+    // redraw) and in 10 of 10 (a redraw the user asked for, after the
+    // model had already drawn the shape again once); with the two
+    // sentences, in 0 and in 5. With either sentence alone: 2 of 10 for
+    // the first request with the one on redrawing, 10 of 10 for the
+    // second with the one on free ends.
+    const freeEnds = [...shown.matchAll(/<mxCell\b[^>]*>/g)]
+        .filter(([tag]) => /\ssource="/.test(tag) !== /\starget="/.test(tag))
+        .map(([tag]) => tag.match(/\sid="([^"]*)"/)?.[1])
+    const freeEndNote =
+        freeEnds.length > 0
+            ? ` ${FREE_END_NOTE.replace("{ids}", freeEnds.join(", "))}`
+            : ""
+    return `[Canvas when this message was sent, in the compact notation you write (shapes with x, y, w, h; edges with source and target). It is the source of truth from this point on and shows any change the user made by hand. A shape or connector of yours that is missing from it was removed by the user: do not add it back unless the user asks. When you redraw the whole diagram with display_diagram, draw it from this canvas, not from your earlier calls.${freeEndNote}]
 """xml
 ${shown}
 """${imageNote ? `\n${imageNote}` : ""}`

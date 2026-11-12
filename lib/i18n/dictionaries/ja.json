@@ -232,6 +232,8 @@
         "enterUrl": "URLを入力してください",
         "invalidFormat": "無効なURL形式です",
         "failed": "このページを読み込めませんでした",
+        "typedLinkHint": "AI はメッセージ内のリンクを開けません。",
+        "readTypedLink": "ページの本文を添付",
         "errors": {
             "private": "プライベートアドレスや内部アドレスへのリンクは読み込めません。",
             "not_found": "このサイトが見つかりません。URLを確認してください。",
@@ -656,6 +658,7 @@
         "edgesTotalOther": "コネクタ {count} 本",
         "restoreVersion": "v{n} に戻す",
         "restoredVersion": "v{n} に戻しました",
+        "keptCanvas": "キャンバスをこのメッセージを送信したときの図に戻しました。直前のキャンバスは v{n} として残しています。",
         "undoRestore": "元に戻す",
         "noPreview": "プレビューなし",
         "compareSince": "バージョン {n} から現在までの変更：",

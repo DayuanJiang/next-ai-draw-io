@@ -530,8 +530,25 @@ describe("diagramContextText", () => {
             xml: '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Kept" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>',
             pageId: null,
         })
+        // The second sentence is for a redraw of the whole diagram, which
+        // the model otherwise copies from its earlier drawing, shape and all
         expect(note.split("\n")[0]).toMatch(
-            /missing from it was removed by the user: do not add it back unless the user asks\.\]$/,
+            /missing from it was removed by the user: do not add it back unless the user asks\. When you redraw the whole diagram with display_diagram, draw it from this canvas, not from your earlier calls\.\]$/,
+        )
+    })
+
+    it("names the connectors a deleted shape left open at one end", () => {
+        // What draw.io leaves of a connector whose target was deleted: the
+        // end is a point. A connector with both ends, and one drawn free
+        // at both, are not named.
+        const edge = (id: string, ends: string) =>
+            `<mxCell id="${id}" edge="1" parent="1" ${ends}><mxGeometry relative="1" as="geometry"><mxPoint x="300" y="70" as="targetPoint"/></mxGeometry></mxCell>`
+        const note = diagramContextText({
+            xml: `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="A" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell><mxCell id="b" value="B" vertex="1" parent="1"><mxGeometry x="40" y="200" width="120" height="60" as="geometry"/></mxCell>${edge("open", 'source="a"')}${edge("whole", 'source="a" target="b"')}${edge("loose", "")}</root></mxGraphModel>`,
+            pageId: null,
+        })
+        expect(note.split("\n")[0]).toMatch(
+            /not from your earlier calls\. Connectors with a free end \(open\): the user deleted the shape that was there\. Do not draw that shape again; leave such a connector as it is or delete it\.\]$/,
         )
     })
 })

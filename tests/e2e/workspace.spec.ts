@@ -1784,6 +1784,117 @@ test.describe("Workspace", () => {
         ).toHaveLength(2)
     })
 
+    test("regenerate after a drawing keeps the hand edits made since as a version", async ({
+        page,
+    }) => {
+        // The answer is drawn again from the snapshot of its message, which
+        // has none of the user's work since
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body:
+                    bodies.length === 1
+                        ? createMockSSEResponse(FLOWCHART_XML, "Flowchart.")
+                        : bodies.length === 2
+                          ? createEditResponse()
+                          : createTextOnlyResponse(`Answer ${bodies.length}.`),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        await sendMessage(page, "Add a review step")
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Review Step")).toBeVisible()
+        // A copy of "Start", made by hand after the answer
+        await canvas.getByText("Start", { exact: true }).click()
+        await page.keyboard.press("ControlOrMeta+d")
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        await page.waitForTimeout(1200)
+
+        await page
+            .getByRole("button", { name: "Regenerate response" })
+            .last()
+            .click()
+        await expect(page.getByText("Answer 3.")).toBeVisible()
+        // The answer started from the diagram of its message
+        await expect(canvas.getByText("Review Step")).toHaveCount(0)
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(1)
+        // The canvas from before is a version, next to the first drawing
+        await expect(
+            page.getByText("What you had is kept as v3."),
+        ).toBeVisible()
+        await expect(page.locator('[data-testid="version-thumb"]')).toHaveCount(
+            2,
+        )
+        // The message's Undo puts it back
+        await page.getByRole("button", { name: "Undo", exact: true }).click()
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        await expect(canvas.getByText("Review Step")).toBeVisible()
+    })
+
+    test("a diagram written as the answer's text goes back to the model as a failed drawing", async ({
+        page,
+    }) => {
+        // The model wrote the XML into its answer and called no tool
+        const written =
+            '<mxCell id="2" value="Typed" style="rounded=1;" x="40" y="40" w="120" h="60"/>'
+        // The answer to the failed call goes on in the same message, as the
+        // server sends it: a start without a message id
+        const drawn = sse([
+            { type: "start" },
+            {
+                type: "tool-input-start",
+                toolCallId: "d1",
+                toolName: "display_diagram",
+            },
+            {
+                type: "tool-input-available",
+                toolCallId: "d1",
+                toolName: "display_diagram",
+                input: { xml: FLOWCHART_XML },
+            },
+            { type: "finish" },
+        ])
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body:
+                    bodies.length === 1
+                        ? createTextOnlyResponse(written)
+                        : drawn,
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await expect(
+            getIframeContent(page).getByText("Start", { exact: true }),
+        ).toBeVisible({ timeout: 15000 })
+        // The second request carries the text as a drawing call that failed
+        const call = bodies[1].messages
+            .at(-1)
+            .parts.find((p: any) => p.type === "tool-display_diagram")
+        expect(call).toMatchObject({
+            state: "output-error",
+            input: { xml: written },
+        })
+        expect(
+            bodies[1].messages.at(-1).parts.some((p: any) => p.type === "text"),
+        ).toBe(false)
+        // The chat shows the failed attempt, folded, and no screen of XML
+        const panel = page.locator('[data-testid="chat-panel"]')
+        await expect(
+            panel.getByText("This attempt failed", { exact: true }),
+        ).toBeVisible()
+        await expect(panel.getByText('value="Typed"')).toHaveCount(0)
+    })
+
     test("page settings draw.io keeps in place follow the AI's diagram", async ({
         page,
     }) => {

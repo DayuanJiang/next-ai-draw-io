@@ -1182,6 +1182,36 @@ export function ModelConfigDialog({
                 : models.length === 1
                   ? formatMessage(t.testOne, { model: models[0].modelId })
                   : formatMessage(t.testAll, { count: models.length })
+        // The chat keeps the model it had: the step from a model that works
+        // to using it. The main button once every model works; beside the
+        // test button when only some do (one failed model, e.g. an
+        // embedding model, must not hide it).
+        const inChatButton = (primary: boolean) =>
+            firstWorking && (
+                <Button
+                    ref={primary ? useButtonRef : undefined}
+                    variant={primary ? "default" : "outline"}
+                    className={cn(
+                        "h-9 max-w-full rounded-lg px-4",
+                        !primary && "bg-background",
+                    )}
+                    disabled={chatLocked}
+                    aria-describedby={resultId}
+                    title={formatMessage(t.useInChat, {
+                        model: firstWorking.modelId,
+                    })}
+                    onClick={() => {
+                        modelConfig.setSelectedModelId(firstWorking.id)
+                        useUiStore.getState().setSettingsOpen(false)
+                    }}
+                >
+                    <span className="truncate">
+                        {formatMessage(t.useInChat, {
+                            model: firstWorking.modelId,
+                        })}
+                    </span>
+                </Button>
+            )
 
         return (
             <div className="flex min-h-0 flex-1 flex-col">
@@ -1511,37 +1541,7 @@ export function ModelConfigDialog({
                                         </span>
                                     </p>
                                     <div className="flex flex-wrap gap-2">
-                                        {firstWorking && (
-                                            <Button
-                                                ref={useButtonRef}
-                                                className="h-9 max-w-full rounded-lg px-4"
-                                                disabled={chatLocked}
-                                                aria-describedby={resultId}
-                                                title={formatMessage(
-                                                    t.useInChat,
-                                                    {
-                                                        model: firstWorking.modelId,
-                                                    },
-                                                )}
-                                                onClick={() => {
-                                                    modelConfig.setSelectedModelId(
-                                                        firstWorking.id,
-                                                    )
-                                                    useUiStore
-                                                        .getState()
-                                                        .setSettingsOpen(false)
-                                                }}
-                                            >
-                                                <span className="truncate">
-                                                    {formatMessage(
-                                                        t.useInChat,
-                                                        {
-                                                            model: firstWorking.modelId,
-                                                        },
-                                                    )}
-                                                </span>
-                                            </Button>
-                                        )}
+                                        {inChatButton(true)}
                                         <Button
                                             ref={backButtonRef}
                                             variant="outline"
@@ -1587,6 +1587,7 @@ export function ModelConfigDialog({
                                                 {validationError}
                                             </p>
                                         )}
+                                        {testFailed && inChatButton(false)}
                                     </div>
                                     {testBlocker && (
                                         <p className="text-xs text-muted-foreground">

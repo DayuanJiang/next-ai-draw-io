@@ -16,6 +16,8 @@ type LLMErrorCode =
     | "invalid_api_key"
     | "forbidden"
     | "model_not_found"
+    // Nothing at the address answers as a model API
+    | "wrong_base_url"
     | "insufficient_quota"
     | "rate_limited"
     | "context_too_long"
@@ -228,10 +230,20 @@ export function classifyLLMError(error: unknown): LLMError {
 
     const find = (rules: Array<[RegExp, LLMErrorCode]>) =>
         rules.find(([pattern]) => pattern.test(text))?.[1]
+    // A 404 that is not in the provider's error format (no data) and names
+    // no model comes from the address, most often a base URL without its
+    // /v1. By the status alone it would be "model not found", which sends
+    // the user to check a model ID that is right.
+    const wrongAddress =
+        APICallError.isInstance(e) &&
+        e.statusCode === 404 &&
+        e.data === undefined &&
+        !/model/i.test(text)
     const code =
         (e instanceof Error && e.name === "TimeoutError" && "timeout") ||
         (LoadAPIKeyError.isInstance(e) && "invalid_api_key") ||
         find(SPECIFIC_TEXTS) ||
+        (wrongAddress && "wrong_base_url") ||
         (status && STATUS_CODES[status]) ||
         (status && status >= 500 && "provider_unavailable") ||
         find(GENERAL_TEXTS) ||

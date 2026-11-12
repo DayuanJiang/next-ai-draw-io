@@ -56,6 +56,7 @@ import {
     diagramFingerprint,
     diagramForMessage,
 } from "@/lib/diagram-context"
+import { diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
 import { pageModelXml, placeOnPage } from "@/lib/diagram-pages"
 import { EMPTY_DRAWIO_DOCUMENT } from "@/lib/drawio/drawio-config"
 import { clearHighlights } from "@/lib/drawio/editor-bridge"
@@ -174,18 +175,25 @@ function withReasoningSeconds(
 
 /**
  * Whether a saved chat ends in the middle of an answer: with the user's
- * message (it is saved when it is sent), or with a part of the answer that
- * was still coming in. The page was reloaded or closed during the answer,
- * or the answer was stopped.
+ * message (it is saved when it is sent), with a part of the answer that
+ * was still coming in, or with a failed call (the app sends it back to the
+ * model, and the chat is saved with that request; a call the user stopped
+ * ends the answer). The page was reloaded or closed during the answer, or
+ * the answer was stopped.
  */
 function endsMidAnswer(messages: StoredMessage[]): boolean {
     const last = messages.at(-1)
     if (!last) return false
     if (last.role === "user") return true
-    return last.parts.some((part) =>
-        ["streaming", "input-streaming", "input-available"].includes(
-            part.state as string,
-        ),
+    const lastPart = last.parts.at(-1)
+    return (
+        (lastPart?.state === TOOL_ERROR_STATE &&
+            lastPart.errorText !== "Stopped by user") ||
+        last.parts.some((part) =>
+            ["streaming", "input-streaming", "input-available"].includes(
+                part.state as string,
+            ),
+        )
     )
 }
 
@@ -648,6 +656,53 @@ export function ChatEngineProvider({
             const step = lastStepParts(message)
             const stepTools = step.filter(isToolUIPart)
             const lastTool = stepTools.at(-1)
+            // The model wrote the diagram into its answer, XML from the
+            // first character, and called no tool (Claude Haiku 5.5 does at
+            // times when a picture comes with a canvas that holds a
+            // diagram): nothing is drawn, and the chat shows a screen of
+            // XML. The text becomes a display_diagram call that failed. The
+            // SDK asks sendAutomaticallyWhen right after this handler, so
+            // the call goes back to the model like any failed call, and the
+            // model draws with the tool.
+            const answer = step
+                .map((p) => (p.type === "text" ? p.text : ""))
+                .join("")
+            if (
+                !lastTool &&
+                finishReason !== "length" &&
+                /^\s*<mx(?:Cell|Style|GraphModel|file)\b/.test(answer) &&
+                getChatGeneration() === turnChatRef.current
+            ) {
+                noteAction("diagram written as text")
+                const toolCallId = `text_${Date.now()}`
+                // The call has no preview to draw
+                processedToolCallsRef.current.add(toolCallId)
+                setMessages((current) =>
+                    current.map((m) => {
+                        if (m.id !== message.id) return m
+                        const start = m.parts.findLastIndex(
+                            (p) => p.type === "step-start",
+                        )
+                        return {
+                            ...m,
+                            parts: [
+                                ...m.parts.filter(
+                                    (p, i) => i <= start || p.type !== "text",
+                                ),
+                                {
+                                    type: "tool-display_diagram",
+                                    toolCallId,
+                                    state: TOOL_ERROR_STATE,
+                                    input: { xml: answer },
+                                    errorText:
+                                        "This XML was written as the text of the answer, so nothing was drawn. Call display_diagram with it as the xml argument.",
+                                },
+                            ],
+                        }
+                    }),
+                )
+                return
+            }
             // The output budget ran out, and no failed call is left that the
             // app sends back to the model: its thinking took the budget and
             // nothing was drawn, or the cut left a call that still ran (the
@@ -776,6 +831,7 @@ export function ChatEngineProvider({
                     "invalid_api_key",
                     "forbidden",
                     "model_not_found",
+                    "wrong_base_url",
                     "server_key_forbidden",
                 ].includes(data.code)
             } else if (data?.code === "server_model_gone") {
@@ -1850,7 +1906,7 @@ export function ChatEngineProvider({
 
     // Send the user message at index again with these parts, from the
     // diagram it was sent with
-    const rerunFrom = (index: number, parts: any[]): boolean => {
+    const rerunFrom = async (index: number, parts: any[]): Promise<boolean> => {
         const savedXml = xmlSnapshotsRef.current.get(index)
         if (!savedXml) {
             console.error("No saved XML snapshot for message index:", index)
@@ -1864,10 +1920,9 @@ export function ChatEngineProvider({
         // diagram the message is sent with from now on. Each drawing has a
         // version; a chat saved before versions were kept has none, and
         // there the finished drawing calls of the answers tell.
+        const store = useVersionsStore.getState()
         const drawnSince =
-            useVersionsStore
-                .getState()
-                .versions.some((v) => v.turnIndex >= index) ||
+            store.versions.some((v) => v.turnIndex >= index) ||
             messages
                 .slice(index + 1)
                 .some((m) =>
@@ -1879,9 +1934,50 @@ export function ChatEngineProvider({
                     ),
                 )
         const xml = drawnSince ? savedXml : chartXMLRef.current || savedXml
+        // The version the canvas is kept as, when it holds hand edits
+        let keptId: string | null = null
         if (drawnSince) {
+            // The answers are drawn again from the snapshot. A canvas that
+            // no version shows holds hand edits made after them, which are
+            // in no snapshot either: it becomes a version of the turn
+            // before, so it stays in the strip and can be restored. (A
+            // chat saved before versions were kept has none to tell by.)
+            const canvas = chartXMLRef.current
+            const latest = store.versions.at(-1)
+            if (
+                canvas &&
+                latest &&
+                store.onCanvasVersionId === null &&
+                store.undoneVersionId === null &&
+                !isSameDocument(canvas, savedXml)
+            ) {
+                // Its picture is of the canvas, so it is taken before the
+                // load. Like submit: nothing else is sent meanwhile
+                const generation = getChatGeneration()
+                preparingSendRef.current = true
+                const svg = await getVersionSvg().finally(() => {
+                    preparingSendRef.current = false
+                })
+                if (getChatGeneration() !== generation || leavingRef.current) {
+                    return false
+                }
+                const pageId = viewedPageId()
+                const { summary, touchedIds } = diffDiagrams(
+                    latest.xml,
+                    canvas,
+                    pageId,
+                )
+                keptId = store.addVersion({
+                    xml: canvas,
+                    ...(pageId && { pageId }),
+                    turnIndex: index - 1,
+                    summary,
+                    touchedIds,
+                    svg: svg ?? "",
+                })
+            }
             onDisplayChart(savedXml, true)
-            useVersionsStore.getState().removeFromTurn(index)
+            store.removeFromTurn(index)
         } else {
             xmlSnapshotsRef.current.set(index, xml)
         }
@@ -1894,6 +1990,41 @@ export function ChatEngineProvider({
             selectionOf(messages[index]),
             messages[index].id,
         )
+
+        // After the send, which takes the toast of a restore away: this one
+        // is about the canvas the answer starts from
+        if (keptId) {
+            const id = keptId
+            const generation = getChatGeneration()
+            const kept = useVersionsStore
+                .getState()
+                .versions.find((v) => v.id === id)
+            toast.success(
+                formatMessage(dict.versions.keptCanvas, {
+                    n: kept?.number ?? 0,
+                }),
+                {
+                    id: "version-restored",
+                    duration: 8000,
+                    action: {
+                        label: dict.versions.undoRestore,
+                        onClick: () => {
+                            if (getChatGeneration() !== generation) return
+                            noteAction("undo canvas reset")
+                            if (busyRef.current) {
+                                // The answer draws on the snapshot: it
+                                // stops first, and the kept canvas comes
+                                // back once it has
+                                restoreAfterStopRef.current = id
+                                handleStopRef.current()
+                            } else {
+                                restoreVersion(id)
+                            }
+                        },
+                    },
+                },
+            )
+        }
 
         return true
     }
@@ -1911,7 +2042,7 @@ export function ChatEngineProvider({
         if (userMessageIndex < 0) return
         const userParts = messages[userMessageIndex].parts
         if (!userParts.some((p: any) => p.type === "text")) return
-        rerunFrom(userMessageIndex, userParts)
+        await rerunFrom(userMessageIndex, userParts)
     }
 
     const editMessage = async (messageIndex: number, newText: string) => {
@@ -2001,6 +2132,20 @@ export function ChatEngineProvider({
         stop()
         abandonContinuation()
     }, [messages, stopToolCall, stop, cancelValidation])
+
+    // The Undo of the toast shown when a message is sent again (rerunFrom)
+    // runs later, during the answer: it stops the answer as Stop does now,
+    // and the version the canvas was kept as is restored once the answer
+    // has ended
+    const handleStopRef = useRef(handleStop)
+    handleStopRef.current = handleStop
+    const restoreAfterStopRef = useRef<string | null>(null)
+    useEffect(() => {
+        const id = restoreAfterStopRef.current
+        if (isBusy || !id) return
+        restoreAfterStopRef.current = null
+        restoreVersion(id)
+    }, [isBusy])
 
     // ---------------------------------------------------------------------
     // Session actions

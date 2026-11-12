@@ -199,6 +199,8 @@ export function Composer({
     const [templatesOpen, setTemplatesOpen] = useState(false)
     const templatePickedRef = useRef(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
+    const urlDialogOpenRef = useRef(showUrlDialog)
+    urlDialogOpenRef.current = showUrlDialog
     const [isExtractingUrl, setIsExtractingUrl] = useState(false)
     const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
 
@@ -448,12 +450,16 @@ export function Composer({
                 next.delete(url)
                 return next
             })
-            toast.error(
-                <span className="text-muted-foreground">
-                    {err instanceof Error ? err.message : dict.url.failed}
-                </span>,
-                { duration: 5000 },
-            )
+            const reason = err instanceof Error ? err.message : dict.url.failed
+            // The dialog shows the reason under the address, where it
+            // stays; a dialog closed meanwhile cannot, so a toast does
+            if (!urlDialogOpenRef.current) {
+                toast.error(
+                    <span className="text-muted-foreground">{reason}</span>,
+                    { duration: 5000 },
+                )
+            }
+            return reason
         } finally {
             setIsExtractingUrl(false)
         }
@@ -474,6 +480,15 @@ export function Composer({
 
     const hasChips =
         chatSelection.length > 0 || files.length > 0 || urlData.size > 0
+
+    // The model cannot open a link that is only typed into the message,
+    // and draws from what it knows of the address. The first link that is
+    // not attached is offered for reading, as "Extract from URL" does
+    // (without the punctuation that ends a sentence).
+    const typedLink = input
+        .match(/https?:\/\/[^\s<>"']+/g)
+        ?.map((link) => link.replace(/[.,;:!?)\]]+$/, ""))
+        .find((link) => !urlData.has(link))
 
     return (
         <form
@@ -531,6 +546,24 @@ export function Composer({
                             />
                         </div>
                     )}
+                </div>
+            )}
+
+            {typedLink && (
+                <div
+                    className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3.5 pt-2.5 text-xs text-muted-foreground"
+                    data-testid="typed-link-hint"
+                >
+                    <Globe className="size-3.5 shrink-0" />
+                    <span>{dict.url.typedLinkHint}</span>
+                    <button
+                        type="button"
+                        disabled={isDisabled || isExtractingUrl}
+                        onClick={() => handleUrlExtract(typedLink)}
+                        className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground disabled:opacity-60"
+                    >
+                        {dict.url.readTypedLink}
+                    </button>
                 </div>
             )}
 

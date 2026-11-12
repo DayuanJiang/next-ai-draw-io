@@ -505,6 +505,48 @@ test.describe("A chat left during an answer", () => {
         await expect(page.getByText(UNFINISHED)).toHaveCount(0)
     })
 
+    test("a chat saved while a failed edit was sent back to the model says so, with Retry", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawFlowchart)
+        await openApp(page)
+        // The page was reloaded during the automatic retry: the chat ends
+        // with the call that failed
+        const failedEdit = (errorText: string) => ({
+            ...savedChat("cut", 1000, ["Alpha"]),
+            messages: [
+                asked("cut-u0", "Add Beta"),
+                {
+                    id: "cut-a0",
+                    role: "assistant",
+                    parts: [
+                        { type: "step-start" },
+                        {
+                            type: "tool-edit_diagram",
+                            toolCallId: "call_failed",
+                            state: "output-error",
+                            input: { operations: [] },
+                            errorText,
+                        },
+                    ],
+                },
+            ],
+        })
+        await storeChat(page, failedEdit("Edit failed: the XML is not valid"))
+        await openChat(page, "cut", "Alpha")
+        await expect(page.getByText(UNFINISHED)).toBeVisible()
+        await expect(page.locator('[data-testid="retry-button"]')).toBeVisible()
+
+        // A call the user stopped says so in its own row
+        await storeChat(page, failedEdit("Stopped by user"))
+        await page.reload({ waitUntil: "networkidle" })
+        await expect(
+            getIframeContent(page).getByText("Alpha", { exact: true }),
+        ).toBeVisible({ timeout: 30000 })
+        await expect(page.getByText("Add Beta").first()).toBeVisible()
+        await expect(page.getByText(UNFINISHED)).toHaveCount(0)
+    })
+
     test("an edited message is saved with its new text when its answer starts at once", async ({
         page,
     }) => {

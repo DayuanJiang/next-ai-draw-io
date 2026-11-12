@@ -17,7 +17,8 @@ import { useDictionary } from "@/hooks/use-dictionary"
 interface UrlInputDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onSubmit: (url: string) => void
+    /** Resolves with the reason when the page could not be read */
+    onSubmit: (url: string) => Promise<string | undefined>
     isExtracting: boolean
 }
 
@@ -39,7 +40,7 @@ export function UrlInputDialog({
         }
     }, [open])
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         setError("")
 
         const typed = url.trim()
@@ -66,7 +67,10 @@ export function UrlInputDialog({
             return
         }
 
-        onSubmit(link)
+        // The reason stays under the address until it is edited: the link
+        // is still there to correct
+        const reason = await onSubmit(link)
+        if (reason) setError(reason)
     }
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

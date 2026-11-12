@@ -544,6 +544,33 @@ test("Use in the chat waits while an answer runs", async ({ page }) => {
     await expect(use).toBeEnabled({ timeout: 15000 })
 })
 
+test("a model that works can be used when another one failed the test", async ({
+    page,
+}) => {
+    // One model of the provider cannot chat (an embedding model)
+    await page.route("**/api/validate-model", (route) =>
+        route.fulfill({
+            json:
+                route.request().postDataJSON().modelId === "gpt-6-astra"
+                    ? { valid: true, responseTime: 900 }
+                    : { valid: false, error: "Not a chat model" },
+        }),
+    )
+    await openApp(page, { config: PROVIDERS })
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await dialog.getByTestId("provider-row-p1").click()
+    await dialog.getByTestId("test-models").click()
+    await expect(dialog.getByTestId("test-result")).toHaveText(
+        "2 models failed the test",
+    )
+    await dialog
+        .getByRole("button", { name: "Use gpt-6-astra in the chat" })
+        .click()
+    await expect(dialog).toHaveCount(0)
+    expect((await savedModelConfigs(page)).selectedModelId).toBe("m1")
+})
+
 test("more options open by themselves only when they matter", async ({
     page,
 }) => {

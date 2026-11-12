@@ -232,6 +232,8 @@
         "enterUrl": "請輸入 URL",
         "invalidFormat": "URL 格式無效",
         "failed": "無法讀取這個網頁",
+        "typedLinkHint": "AI 無法開啟訊息裡的連結。",
+        "readTypedLink": "附上網頁內容",
         "errors": {
             "private": "無法讀取內部網路或本機位址的連結。",
             "not_found": "找不到這個網站，請檢查網址。",
@@ -656,6 +658,7 @@
         "edgesTotalOther": "{count} 條連線",
         "restoreVersion": "還原到 v{n}",
         "restoredVersion": "已還原到 v{n}",
+        "keptCanvas": "畫布已回到傳送這則訊息時的圖。之前的畫布儲存為 v{n}。",
         "undoRestore": "復原",
         "noPreview": "沒有預覽",
         "compareSince": "從第 {n} 版到現在，畫布上：",

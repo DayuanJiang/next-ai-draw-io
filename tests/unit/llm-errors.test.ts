@@ -18,13 +18,20 @@ import {
     streamErrorText,
 } from "@/lib/llm-errors"
 
-const apiError = (statusCode: number, message: string, responseBody = "") =>
+// data: the body as the provider's error format, when it is in that format
+const apiError = (
+    statusCode: number,
+    message: string,
+    responseBody = "",
+    data?: unknown,
+) =>
     new APICallError({
         message,
         url: "https://api.example.com/v1/chat/completions",
         requestBodyValues: {},
         statusCode,
         responseBody,
+        data,
     })
 
 describe("classifyLLMError", () => {
@@ -33,12 +40,30 @@ describe("classifyLLMError", () => {
         expect(
             classifyLLMError(apiError(401, "Authentication Fails")).code,
         ).toBe("invalid_api_key")
-        expect(classifyLLMError(apiError(404, "Unknown")).code).toBe(
-            "model_not_found",
-        )
+        expect(
+            classifyLLMError(
+                apiError(404, "Unknown", "", { error: { message: "Unknown" } }),
+            ).code,
+        ).toBe("model_not_found")
         expect(classifyLLMError(apiError(503, "busy")).code).toBe(
             "provider_unavailable",
         )
+    })
+
+    it("points to the base URL for a 404 that is not the provider's error", () => {
+        // A base URL without its /v1: the web server's own 404, here
+        // FastAPI's
+        const notFound = apiError(404, "Not Found", '{"detail":"Not Found"}')
+        expect(classifyLLMError(notFound)).toEqual({
+            type: "provider",
+            code: "wrong_base_url",
+            message: "Not Found: Not Found",
+        })
+        // A plain 404 that names the model is about the model
+        expect(
+            classifyLLMError(apiError(404, "model 'acme-large' not found"))
+                .code,
+        ).toBe("model_not_found")
     })
 
     it("lets a specific text win over the status code", () => {

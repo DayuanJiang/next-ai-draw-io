@@ -232,6 +232,8 @@
         "enterUrl": "Please enter a URL",
         "invalidFormat": "Invalid URL format",
         "failed": "Couldn't read that page",
+        "typedLinkHint": "The AI cannot open the link in your message.",
+        "readTypedLink": "Attach the page's text",
         "errors": {
             "private": "Links to private or internal addresses can't be read.",
             "not_found": "Couldn't find that website. Check the address.",
@@ -656,6 +658,7 @@
         "edgesTotalOther": "{count} connectors",
         "restoreVersion": "Restore v{n}",
         "restoredVersion": "Restored v{n}",
+        "keptCanvas": "The canvas is back at the diagram this message was sent with. What you had is kept as v{n}.",
         "undoRestore": "Undo",
         "noPreview": "No preview",
         "compareSince": "Since version {n}, the canvas has changed:",

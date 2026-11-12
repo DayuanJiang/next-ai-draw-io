@@ -232,6 +232,8 @@
         "enterUrl": "请输入 URL",
         "invalidFormat": "URL 格式无效",
         "failed": "无法读取这个网页",
+        "typedLinkHint": "AI 打不开消息里的链接。",
+        "readTypedLink": "附上网页内容",
         "errors": {
             "private": "无法读取内网或本机地址的链接。",
             "not_found": "找不到这个网站，请检查网址。",
@@ -656,6 +658,7 @@
         "edgesTotalOther": "{count} 条连线",
         "restoreVersion": "恢复到 v{n}",
         "restoredVersion": "已恢复到 v{n}",
+        "keptCanvas": "画布已回到发送这条消息时的图。之前的画布保存为 v{n}。",
         "undoRestore": "撤销",
         "noPreview": "没有预览",
         "compareSince": "从第 {n} 版到现在，画布上：",
