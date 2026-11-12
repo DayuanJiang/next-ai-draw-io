@@ -140,7 +140,11 @@ export async function loadEnvServerModelsConfig(): Promise<ServerModelsConfig | 
     // Priority 2: ai-models.json file
     const configPath = getConfigPath()
     try {
-        const jsonStr = await fs.readFile(configPath, "utf8")
+        // turbopackIgnore: see getSettingsPath in lib/admin/settings.ts
+        const jsonStr = await fs.readFile(
+            /* turbopackIgnore: true */ configPath,
+            "utf8",
+        )
         const json = JSON.parse(jsonStr)
         return ServerModelsConfigSchema.parse(json)
     } catch (err: any) {

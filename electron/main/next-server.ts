@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
-import { app, type UtilityProcess, utilityProcess } from "electron"
+import { type UtilityProcess, utilityProcess } from "electron"
 import {
     findAvailablePort,
     getAllocatedPort,
@@ -82,10 +82,6 @@ async function startServer(): Promise<string> {
     if (!process.env.NO_PROXY && !process.env.no_proxy) {
         env.NO_PROXY = "localhost,127.0.0.1,[::1]"
     }
-
-    // Set cache directory to a writable location (user's app data folder)
-    // This is necessary because the packaged app might be on a read-only volume
-    env.NEXT_CACHE_DIR = path.join(app.getPath("userData"), "cache")
 
     // Copy existing environment variables
     for (const [key, value] of Object.entries(process.env)) {

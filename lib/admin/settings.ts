@@ -32,6 +32,9 @@ globalState.__adminSettingsState ??= {
 }
 const state = globalState.__adminSettingsState
 
+// The path can come from an environment variable. Reads of it carry
+// turbopackIgnore: without it the build cannot tell which file is read and
+// copies the whole project (sources, tests, public) into .next/standalone.
 function getSettingsPath(): string {
     const custom = process.env.SETTINGS_FILE
     if (custom && custom.trim().length > 0) return custom
@@ -41,7 +44,10 @@ function getSettingsPath(): string {
 export function loadSettings(): Record<string, string> {
     if (state.cachedSettings) return state.cachedSettings
     try {
-        const raw = fs.readFileSync(getSettingsPath(), "utf8")
+        const raw = fs.readFileSync(
+            /* turbopackIgnore: true */ getSettingsPath(),
+            "utf8",
+        )
         const parsed = JSON.parse(raw) as SettingsFile
         // Keep only string values — a hand-edited or corrupted file could
         // hold null/arrays/numbers that would otherwise be overlaid onto
@@ -126,7 +132,10 @@ export function isSettingsWritable(): boolean {
     if (writableCache !== null) return writableCache
     try {
         const filePath = getSettingsPath()
-        if (fs.existsSync(filePath) && !fs.statSync(filePath).isFile()) {
+        if (
+            fs.existsSync(/* turbopackIgnore: true */ filePath) &&
+            !fs.statSync(/* turbopackIgnore: true */ filePath).isFile()
+        ) {
             writableCache = false
             return writableCache
         }

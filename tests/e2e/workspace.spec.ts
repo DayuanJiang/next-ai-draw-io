@@ -188,6 +188,29 @@ test.describe("Workspace", () => {
         await expect(card).toHaveCount(0)
     })
 
+    test("the MCP video starts only once draw.io has loaded", async ({
+        page,
+    }) => {
+        // Hold draw.io back, as a slow connection does: a playing video
+        // downloads its 2 MB ahead of the canvas
+        let release = () => {}
+        const held = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        await page.route("**/drawio/index.html*", async (route) => {
+            await held
+            await route.continue()
+        })
+        await page.goto("/")
+        const video = page.locator('[data-testid="mcp-video"]')
+        await expect(video).toBeVisible()
+        const paused = () => video.evaluate((v: HTMLVideoElement) => v.paused)
+        await page.waitForTimeout(1000)
+        expect(await paused()).toBe(true)
+        release()
+        await expect.poll(paused, { timeout: 30000 }).toBe(false)
+    })
+
     test("the start screen links the docs in a new tab, the editor does not", async ({
         page,
     }) => {

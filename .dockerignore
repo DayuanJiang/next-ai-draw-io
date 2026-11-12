@@ -22,6 +22,9 @@ coverage
 .env.test.local
 .env.production.local
 
+# Admin panel settings (data/settings.json holds the saved API keys)
+data
+
 # Git
 .git
 .gitignore

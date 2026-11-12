@@ -4,11 +4,10 @@ on:
   push:
     tags:
       - "v*"
+  # For a manual run, choose a tag under "Use workflow from": only a run on a
+  # tag publishes. On a branch the Windows job fails at its release step,
+  # after the signing wait.
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version tag (e.g., v0.4.5)"
-        required: false
 
 jobs:
   # Mac and Linux: Build and publish directly (no signing needed)

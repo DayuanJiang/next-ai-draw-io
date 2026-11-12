@@ -8,8 +8,9 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
 }))
 
 import { POST as chat } from "@/app/api/chat/route"
+import { onRequest } from "@/edge-functions/api/edgeai/chat/completions"
 
-const calls: Array<{ url: string; headers: Headers }> = []
+const calls: Array<{ url: string; headers: Headers; body: string }> = []
 
 beforeEach(() => {
     vi.stubEnv("AI_PROVIDER", undefined)
@@ -18,7 +19,11 @@ beforeEach(() => {
     vi.stubGlobal(
         "fetch",
         vi.fn(async (url: string, init: RequestInit) => {
-            calls.push({ url: String(url), headers: new Headers(init.headers) })
+            calls.push({
+                url: String(url),
+                headers: new Headers(init.headers),
+                body: String(init.body),
+            })
             throw new Error("no network in tests")
         }),
     )
@@ -124,6 +129,33 @@ describe("EdgeOne endpoints", () => {
         expect(calls[0]?.url).toBe(
             "http://localhost/api/edgeai/chat/completions",
         )
+    })
+})
+
+describe("the chat's request to the Edge AI function", () => {
+    it("is accepted by the function", async () => {
+        vi.stubEnv("AI_PROVIDER", "edgeone")
+        vi.stubEnv("AI_MODEL", "@tx/deepseek-ai/deepseek-v3-0324")
+        await send({})
+        // The function runs on EdgeOne only: here it gets what the chat sent
+        const chatCompletions = vi.fn(
+            async (_options: any) => new ReadableStream(),
+        )
+        vi.stubGlobal("AI", { chatCompletions })
+        const res = await onRequest({
+            request: new Request(calls[0].url, {
+                method: "POST",
+                headers: calls[0].headers,
+                body: calls[0].body,
+            }),
+            env: {},
+        })
+        expect(res.status).toBe(200)
+        // The user's text and the canvas note reach the model as one string
+        const user = chatCompletions.mock.calls[0][0].messages.findLast(
+            (message: { role: string }) => message.role === "user",
+        )
+        expect(user.content).toMatch(/^Draw two boxes\n\n\[Canvas/)
     })
 })
 
