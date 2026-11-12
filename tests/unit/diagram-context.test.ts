@@ -148,6 +148,20 @@ describe("diagramFingerprint", () => {
         )
     })
 
+    it("keeps the last of a geometry's parts with one name, as draw.io does", () => {
+        const edge = (geometry: string) =>
+            page(
+                `${box("2")}<mxCell id="14" edge="1" parent="1" source="2" target="2"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell>`,
+            )
+        const waypoint = (y: number) =>
+            `<mxPoint x="765" y="${y}" as="waypoint"/>`
+        // A connector as GPT-6 Luna wrote it, and as draw.io saved it
+        const written = diagramFingerprint(edge(waypoint(450) + waypoint(125)))
+        expect(written).toBe(diagramFingerprint(edge(waypoint(125))))
+        // The point draw.io keeps counts
+        expect(written).not.toBe(diagramFingerprint(edge(waypoint(450))))
+    })
+
     it("is null for XML without a model", () => {
         expect(diagramFingerprint("")).toBeNull()
         expect(diagramFingerprint("<mxGraphModel><root>")).toBeNull()

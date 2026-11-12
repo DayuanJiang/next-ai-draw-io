@@ -251,6 +251,24 @@ describe("contentFingerprint", () => {
         )
     })
 
+    it("keeps the last of a geometry's parts with one name, as draw.io does", () => {
+        const edge = (geometry: string) =>
+            `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="14" value="1 : N" edge="1" parent="1"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell></root></mxGraphModel></diagram></mxfile>`
+        const waypoint = (y: number) =>
+            `<mxPoint x="765" y="${y}" as="waypoint"/>`
+        // A connector as GPT-6 Luna wrote it, and as draw.io saved it
+        const written = edge(waypoint(450) + waypoint(125))
+        const saved = edge(waypoint(125))
+        expect(checkEditGate(written, saved)).toEqual({ ok: true })
+        expect(describeChanges(written, saved)).toBe("")
+        expect(countChanges(written, saved)).toBe("")
+        // The point draw.io keeps counts
+        expect(checkEditGate(written, edge(waypoint(450)))).toEqual({
+            ok: false,
+            reason: "stale",
+        })
+    })
+
     it("falls back to the raw string for unparseable input", () => {
         expect(contentFingerprint("not xml at all")).toBe("not xml at all")
     })

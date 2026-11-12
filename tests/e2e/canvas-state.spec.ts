@@ -154,3 +154,70 @@ test("a drawing that streams onto an empty canvas stays in view as it grows", as
         await expect(canvas.getByText(label, { exact: true })).toBeInViewport()
     }
 })
+
+test("a shape an edit adds outside the window comes into view, unless the user looks at a part of the diagram", async ({
+    page,
+}) => {
+    const add = (id: string, label: string, x: number, y: number) =>
+        sse([
+            { type: "start", messageId: `msg_${id}` },
+            {
+                type: "tool-input-start",
+                toolCallId: `call_${id}`,
+                toolName: "edit_diagram",
+            },
+            {
+                type: "tool-input-available",
+                toolCallId: `call_${id}`,
+                toolName: "edit_diagram",
+                input: {
+                    operations: [
+                        {
+                            operation: "add",
+                            cell_id: id,
+                            new_xml: `<mxCell id="${id}" value="${label}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="${x}" y="${y}" width="120" height="60" as="geometry"/></mxCell>`,
+                        },
+                    ],
+                },
+            },
+            { type: "finish" },
+        ])
+    await mockChat(page, [
+        drawing(BOX),
+        add("below", "Far below", 100, 1500),
+        add("right", "Far right", 2400, 100),
+    ])
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    const canvas = page.frameLocator("iframe")
+    const service = canvas.getByText("Service", { exact: true })
+    const below = canvas.getByText("Far below", { exact: true })
+
+    await sendMessage(page, "Draw a service")
+    await waitForCompleteCount(page, 1)
+    // Past the time a resize fits the new diagram again
+    await page.waitForTimeout(4500)
+    // The whole diagram is in view: it stays so when an edit makes it grow
+    await sendMessage(page, "Add a box far below")
+    await waitForCompleteCount(page, 2)
+    await expect(service).toBeInViewport()
+    await expect(below).toBeInViewport()
+
+    // The user zooms in on the middle of the diagram: that view is theirs
+    await canvas
+        .locator(".geDiagramContainer")
+        .click({ position: { x: 20, y: 20 } })
+    for (let i = 0; i < 4; i++) {
+        await page.keyboard.press("ControlOrMeta+Equal")
+    }
+    await expect(below).not.toBeInViewport()
+    // (draw.io applies a zoom key up to 0.6 s later)
+    await page.waitForTimeout(1000)
+    const place = await service.boundingBox()
+    await sendMessage(page, "Add a box far right")
+    await waitForCompleteCount(page, 3)
+    await expect(
+        canvas.getByText("Far right", { exact: true }),
+    ).not.toBeInViewport()
+    expect(await service.boundingBox()).toEqual(place)
+})

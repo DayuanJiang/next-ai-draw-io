@@ -84,7 +84,7 @@ function cellsInDrawioOrder(root: Element): Element[] {
     for (const cell of cells) {
         const parent = parentOf(cell)
         if (parent && parent !== idOf(cell) && ids.has(parent)) {
-            // Appended in place: copying the list for every cell took
+            // Appended in place: copying the list for every cell takes
             // seconds on a layer with tens of thousands of cells
             const siblings = children.get(parent)
             if (siblings) siblings.push(cell)
@@ -110,8 +110,9 @@ function cellsInDrawioOrder(root: Element): Element[] {
 /**
  * Canonical serialisation of an element subtree: tag + attributes sorted by
  * name + child elements in order (a page's cells in draw.io's order, the
- * parts of a geometry sorted) + non-whitespace text. Whitespace-only text
- * nodes (pretty-printing) and the values draw.io leaves out are dropped.
+ * parts of a geometry sorted, one per name) + non-whitespace text.
+ * Whitespace-only text nodes (pretty-printing) and the values draw.io
+ * leaves out are dropped.
  */
 function canonicalizeElement(el: Element): string {
     const attrs = Array.from(el.attributes)
@@ -126,9 +127,19 @@ function canonicalizeElement(el: Element): string {
         el.tagName === "root"
             ? cellsInDrawioOrder(el)
             : Array.from(el.childNodes)
+    // draw.io reads each part of a geometry into the field its "as" names,
+    // also a name it does not know: of two parts with one name it keeps
+    // the last (a model writes several points as="waypoint")
+    const lastOfName =
+        el.tagName === "mxGeometry"
+            ? new Map(Array.from(el.children, (p) => [p.getAttribute("as"), p]))
+            : null
     for (const child of nodes) {
         if (child.nodeType === 1) {
-            children.push(canonicalizeElement(child as Element))
+            const part = child as Element
+            if (lastOfName && lastOfName.get(part.getAttribute("as")) !== part)
+                continue
+            children.push(canonicalizeElement(part))
         } else if (child.nodeType === 3 || child.nodeType === 4) {
             const text = (child.textContent ?? "").trim()
             if (text) children.push(JSON.stringify(text))

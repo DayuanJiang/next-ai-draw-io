@@ -173,6 +173,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const turnBaseRef = useRef<string | null>(null)
     // Full loads sent that draw.io has not reported done yet
     const pendingLoadsRef = useRef(0)
+    // Version pictures waiting for draw.io's first load (getVersionSvg)
+    const firstLoadWaitersRef = useRef<(() => void)[]>([])
     const commitHandlerRef = useRef<((commit: DiagramCommit) => void) | null>(
         null,
     )
@@ -229,6 +231,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // Restore diagram after remount (e.g., theme/UI change), or a file
         // opened while draw.io loaded (its page settings count too)
         if (chartXMLRef.current) fullLoad(chartXMLRef.current, undefined, true)
+        // After that load is sent: draw.io runs its requests in order
+        for (const resume of firstLoadWaitersRef.current.splice(0)) resume()
     }
 
     const resetDrawioReady = () => {
@@ -295,6 +299,14 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // up to 25 seconds when their host does not answer. theme "auto" is
     // what the plain svg has: the picture follows light and dark mode.
     const getVersionSvg = async (): Promise<string | null> => {
+        // draw.io is still starting: it takes no request yet (one sent now
+        // is lost). The picture of a version drawn meanwhile is taken after
+        // draw.io's first load, which puts that drawing on the canvas.
+        if (!hasCalledOnLoadRef.current) {
+            await new Promise<void>((resolve) => {
+                firstLoadWaitersRef.current.push(resolve)
+            })
+        }
         if (!drawioRef.current) return null
         const result = await requestTaggedExport("version", "xmlsvg", 4000, {
             theme: "auto",

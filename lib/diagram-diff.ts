@@ -104,7 +104,15 @@ function signatureOf(node: Element): string {
             return [[a.name, value]]
         })
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    const children = Array.from(node.children).map(signatureOf)
+    let parts = Array.from(node.children)
+    // draw.io reads each part of a geometry into the field its "as" names,
+    // also a name it does not know: of two parts with one name it keeps
+    // the last (a model writes several points as="waypoint")
+    if (node.tagName === "mxGeometry") {
+        const lastOfName = new Map(parts.map((p) => [p.getAttribute("as"), p]))
+        parts = [...lastOfName.values()]
+    }
+    const children = parts.map(signatureOf)
     // draw.io saves a geometry's parts (offset, points, end points) sorted
     // by name, the model writes them in any order; the points of a line
     // are inside their Array and keep their order

@@ -185,6 +185,25 @@ describe("before draw.io has started", () => {
         expect(requests).toHaveLength(1)
     })
 
+    it("a version drawn meanwhile gets its picture after the first load", async () => {
+        const { result, requests, reply, load } = setup({ started: false })
+        act(() => {
+            result.current.loadDiagram(oneBox, true, "commit")
+        })
+        load.mockClear()
+        const svg = result.current.getVersionSvg()
+        await act(async () => {})
+        // An export sent now would be lost: the version would have no picture
+        expect(requests).toEqual([])
+
+        // The picture is asked for after the load of the drawing
+        await act(async () => result.current.onDrawioLoad())
+        expect(load.mock.calls[0][0].xml).toContain('value="Held"')
+        expect(requests[0]).toMatchObject({ format: "xmlsvg", theme: "auto" })
+        await reply(requests[0], svgOf("Held"))
+        expect(await svg).toBe(svgOf("Held"))
+    })
+
     it("an empty canvas is the blank page", async () => {
         const { result, requests } = setup({ started: false })
         const xml = await result.current.fetchDiagramXml()

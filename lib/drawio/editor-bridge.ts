@@ -476,15 +476,17 @@ export function canReplaceDiagram(xml: string): boolean {
     )
 }
 
-// The preview streams onto a page that was empty: the growing drawing is
-// kept in view, until the user moves the view themselves
+// The preview streams onto a page that was empty, or whose whole diagram
+// was in view: the growing drawing is kept in view, until the user moves
+// the view themselves. A user who looks at a part of the diagram keeps
+// that view.
 let followPreview = false
 
 /** Show a streaming preview without touching the undo history */
 export function previewDiagram(xml: string) {
     if (previewBase === null) {
         previewBase = currentFileXml() ?? ""
-        followPreview = isEmptyModel()
+        followPreview = isEmptyModel() || shapesInView()
     }
     const wasEmpty = isEmptyModel()
     withoutUndo(() => replace(xml))
@@ -532,12 +534,17 @@ function changePageId(page: any, id: string) {
 /**
  * Apply the final AI result (or a restored version) as a single undo step,
  * page name and id included: the page gets the document's id, as a full
- * load would give it (links to the page use it). The view is fitted only
- * when the canvas was empty, so a restore keeps the user's zoom.
+ * load would give it (links to the page use it). The view is fitted when
+ * the canvas was empty, and when the whole diagram was in view and the
+ * result reaches out of the window; a user who looks at a part of the
+ * diagram keeps their view and zoom.
  */
 export function commitDiagram(xml: string) {
     const wasEmpty =
         isEmptyModel() || (previewBase !== null && !hasShapes(previewBase))
+    // As the preview before it; a change without one, as a preview would
+    const follow =
+        previewBase !== null ? followPreview : !wasEmpty && shapesInView()
     const base = previewBase ? pageModelOf(previewBase) : null
     previewBase = null
     // Undo goes back to the diagram before streaming started. draw.io's
@@ -570,11 +577,12 @@ export function commitDiagram(xml: string) {
     } finally {
         model?.endUpdate()
     }
-    if (wasEmpty) fitDiagram()
+    if (wasEmpty || (follow && !shapesInView())) fitDiagram()
 }
 
 /** Throw away the preview and go back to the given diagram */
 export function revertPreview(targetXml: string) {
+    const followed = previewBase !== null && followPreview
     previewBase = null
     withoutUndo(() => replace(targetXml))
     // An empty page again (the drawing was stopped or failed): back to
@@ -582,6 +590,9 @@ export function revertPreview(targetXml: string) {
     if (isEmptyModel()) {
         graph()?.zoomTo(1)
         centerEmptyPage()
+    } else if (followed && !shapesInView()) {
+        // The preview's fits took the view off the diagram that is back
+        fitDiagram()
     }
 }
 

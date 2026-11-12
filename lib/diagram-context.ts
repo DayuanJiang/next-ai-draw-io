@@ -83,7 +83,15 @@ function canonical(el: Element): string {
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
         .join(" ")
-    const children = Array.from(el.children).map(canonical)
+    let parts = Array.from(el.children)
+    // draw.io reads each part of a geometry into the field its "as" names,
+    // also a name it does not know: of two parts with one name it keeps
+    // the last (a model writes several points as="waypoint")
+    if (el.tagName === "mxGeometry") {
+        const lastOfName = new Map(parts.map((p) => [p.getAttribute("as"), p]))
+        parts = [...lastOfName.values()]
+    }
+    const children = parts.map(canonical)
     // draw.io saves a geometry's parts (offset, points, end points) sorted
     // by name, the model writes them in any order
     if (el.tagName === "mxGeometry") children.sort()

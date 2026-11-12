@@ -409,6 +409,25 @@ describe("isSameDocument", () => {
         ).toBe(false)
     })
 
+    it("keeps the last of a geometry's parts with one name, as draw.io does", () => {
+        const line = (geometry: string) =>
+            file(
+                pageOf(
+                    "One",
+                    `<mxCell id="14" value="1 : N" edge="1" parent="1"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell>`,
+                ),
+            )
+        const waypoint = (y: number) =>
+            `<mxPoint x="765" y="${y}" as="waypoint"/>`
+        // A connector as GPT-6 Luna wrote it, and as draw.io saved it
+        const written = line(waypoint(450) + waypoint(125))
+        const saved = line(waypoint(125))
+        expect(isSameDocument(written, saved)).toBe(true)
+        expect(diffDiagrams(written, saved).summary).toEqual(EMPTY_SUMMARY)
+        // The point draw.io keeps counts
+        expect(isSameDocument(written, line(waypoint(450)))).toBe(false)
+    })
+
     it("takes a collapsed size's left-out position as 0, as draw.io writes it", () => {
         const container = (bounds: string) =>
             file(
