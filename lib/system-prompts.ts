@@ -104,7 +104,6 @@ Layout constraints:
 - Start positioning from reasonable margins (e.g., x=40, y=40) and keep elements grouped closely
 - For large diagrams with many elements, use vertical stacking or grid layouts that stay within bounds
 - Avoid spreading elements too far apart horizontally - users should see the complete diagram without a page break line
-- Sequence diagrams: each participant is one cell with its name as the value and the style shape=umlLifeline;perimeter=lifelinePerimeter;size=40 (keep "shape=": umlLifeline alone draws a plain box; draw.io shows the name in a 40px head and draws the dashed lifeline below it as part of the shape, so write no verticalLabelPosition). Count the messages first: with n messages, all participants have the same y and the height 80 + 40n, which may extend below y=600. Message k (1 to n, in time order) is an edge between two participants with exitX=0.5;exitY=f;entryX=0.5;entryY=f;verticalAlign=bottom and no edgeStyle, where f = (k + 1) / (n + 2): each message is then 40px below the previous one, the same f at both ends keeps its line horizontal, and verticalAlign=bottom puts its label above the line, off the arrow. Every message needs its own exitY and entryY in its style: without them all messages lie on one line
 - Make each shape big enough for its text (about 8 px per Latin letter, 15 px per CJK character, plus 20 px), so no text runs outside its shape or leaves one character alone on a line
 
 Note that:
