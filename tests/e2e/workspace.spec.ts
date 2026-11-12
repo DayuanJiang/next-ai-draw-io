@@ -282,6 +282,39 @@ test.describe("Workspace", () => {
         )
     })
 
+    test("a title too long for the header leaves the grid icon its size", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(
+            page,
+            "Create a flowchart of the quarterly planning of the platform team",
+        )
+        await waitForComplete(page)
+        const title = page.locator('[data-testid="session-title"]')
+        await expect(title).toContainText("Create a flowchart")
+        const icon = await title.locator("svg").first().boundingBox()
+        expect(icon?.width).toBe(16)
+    })
+
+    test("a click on the canvas closes the diagram list and the add menu", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        const canvas = getIframeContent(page).locator(".geDiagramContainer")
+        const popup = page.locator('[data-slot="popover-content"]')
+        for (const trigger of ["session-title", "composer-add"]) {
+            await page.getByTestId(trigger).click()
+            await expect(popup).toBeVisible()
+            await canvas.click({ position: { x: 10, y: 10 } })
+            await expect(popup).toHaveCount(0)
+        }
+    })
+
     test("opening a .drawio file loads it into a new diagram", async ({
         page,
     }) => {
@@ -2085,6 +2118,10 @@ test.describe("Workspace", () => {
             .getByRole("button", { name: /Create a flowchart/ })
             .getByRole("button", { name: "Delete this diagram?" })
             .click()
+        // The confirmation names the diagram to delete
+        await expect(page.getByRole("alertdialog")).toContainText(
+            "Create a flowchart",
+        )
         await page.getByRole("button", { name: "Delete", exact: true }).click()
         await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
         // The empty chat on screen now has no title of its own; "Foo" was
@@ -5288,6 +5325,12 @@ test.describe("Edge cases", () => {
         ).toBeVisible({ timeout: 15000 })
         // Kept from the start, not saved again after being deleted
         expect((await savedChats(page)).map((c) => c.id)).toContain("oldest")
+        // The next oldest made room: a message names it and the limit
+        await expect(
+            page.getByText(
+                'This browser keeps 50 diagrams. The oldest one, "Chat 1", was deleted to make room.',
+            ),
+        ).toBeVisible()
         await page.waitForTimeout(1500)
         const ids = (await savedChats(page)).map((c) => c.id)
         expect(ids).toContain("oldest")

@@ -1,9 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { toastUnexpectedError } from "@/lib/client-error-report"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
+import { formatMessage } from "@/lib/i18n/utils"
 import {
     type ChatSession,
     createEmptySession,
@@ -13,6 +15,7 @@ import {
     getAllSessionMetadata,
     getSession,
     isIndexedDBAvailable,
+    MAX_SESSIONS,
     readSessionCount,
     renameSession as renameSessionInDB,
     type SessionMetadata,
@@ -378,9 +381,23 @@ export function useSessionManager(
                         return false
                     }
                     savedSeqRef.current = seq
-                    await enforceSessionLimit(
+                    const deleted = await enforceSessionLimit(
                         () => openingSessionRef.current?.id,
                     )
+                    // The oldest diagram made room for this one and is gone
+                    // for good: name it, and the limit behind it
+                    for (const title of deleted) {
+                        toast.info(
+                            formatMessage(dict.sessionHistory.limitDeleted, {
+                                max: MAX_SESSIONS,
+                                title:
+                                    title === "New Chat"
+                                        ? dict.workspace.untitled
+                                        : title,
+                            }),
+                            { duration: 10000 },
+                        )
+                    }
                     if (stillOnScreen()) {
                         currentSessionRef.current = newSession
                         setCurrentSession(newSession)

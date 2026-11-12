@@ -35,6 +35,21 @@ describe("extractTitle", () => {
         )
     })
 
+    it("leaves out the Markdown marks of bold text and headings", () => {
+        expect(
+            extractTitle(
+                userMessage(
+                    "Give me a **animated connector** diagram of transformer's architecture",
+                ),
+            ),
+        ).toBe(
+            "Give me a animated connector diagram of transformer's architecture",
+        )
+        expect(
+            extractTitle(userMessage("# Login flow\n## Steps: 2 ** 3")),
+        ).toBe("Login flow Steps: 2 ** 3")
+    })
+
     it("shortens a long prompt", () => {
         const title = extractTitle(userMessage("a ".repeat(80)))
         expect(title.endsWith("...")).toBe(true)

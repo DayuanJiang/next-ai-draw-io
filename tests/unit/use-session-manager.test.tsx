@@ -6,9 +6,15 @@ const stored = new Map<string, any>()
 let pendingWrites: (() => void)[] = []
 // Reads wait for this
 let readGate: Promise<void> = Promise.resolve()
+// Titles of the chats the limit deletes when a save creates a session
+let deletedByLimit: string[] = []
 
 vi.mock("@/hooks/use-dictionary", () => ({
-    useDictionary: () => ({ errors: { sessionSaveFailed: "Not saved" } }),
+    useDictionary: () => ({
+        errors: { sessionSaveFailed: "Not saved" },
+        sessionHistory: { limitDeleted: "Keeps {max}, deleted {title}" },
+        workspace: { untitled: "Untitled diagram" },
+    }),
 }))
 
 vi.mock("@/lib/client-error-report", () => ({
@@ -22,7 +28,8 @@ vi.mock("@/lib/session-storage", async (importActual) => {
         extractTitle: actual.extractTitle,
         isIndexedDBAvailable: () => true,
         readSessionCount: async () => stored.size,
-        enforceSessionLimit: async () => {},
+        MAX_SESSIONS: actual.MAX_SESSIONS,
+        enforceSessionLimit: async () => deletedByLimit,
         getSession: async (id: string) => {
             await readGate
             return stored.get(id) ?? null
@@ -57,6 +64,7 @@ vi.mock("@/lib/session-storage", async (importActual) => {
     }
 })
 
+import { toast } from "sonner"
 import { useSessionManager } from "@/hooks/use-session-manager"
 import { toastUnexpectedError } from "@/lib/client-error-report"
 
@@ -109,6 +117,23 @@ describe("saving the chat on screen", () => {
         expect(await saves).toEqual([true, true])
         expect(stored.size).toBe(1)
         expect(result.current.currentSessionId).toBe([...stored.keys()][0])
+    })
+
+    it("names the chats the limit deleted to make room for a new one", async () => {
+        deletedByLimit = ["Old flowchart", "New Chat"]
+        const info = vi.spyOn(toast, "info")
+        const { result } = await setup()
+        let save!: Promise<boolean>
+        act(() => {
+            save = result.current.saveCurrentSession(data)
+        })
+        await finishWrites()
+        deletedByLimit = []
+        expect(await save).toBe(true)
+        expect(info.mock.calls.map((call) => call[0])).toEqual([
+            "Keeps 50, deleted Old flowchart",
+            "Keeps 50, deleted Untitled diagram",
+        ])
     })
 
     it("drops a save scheduled before New Chat", async () => {

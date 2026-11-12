@@ -13,8 +13,13 @@ export function formatRelativeTime(
     if (hours < 24) return rtf.format(-hours, "hour")
     const days = Math.floor(hours / 24)
     if (days < 7) return rtf.format(-days, "day")
-    return new Date(timestamp).toLocaleDateString(locale, {
+    const date = new Date(timestamp)
+    return date.toLocaleDateString(locale, {
         month: "short",
         day: "numeric",
+        // A date of another year names its year: "Nov 13, 2025"
+        ...(date.getFullYear() !== new Date().getFullYear() && {
+            year: "numeric",
+        }),
     })
 }

@@ -75,6 +75,8 @@ export function SessionMenu({
         shownTitle(s.title).toLowerCase().includes(query.trim().toLowerCase()),
     )
 
+    const deleteTarget = engine.sessions.find((s) => s.id === toDelete)
+
     const commitRename = async () => {
         const next = draftTitle.trim()
         setRenaming(false)
@@ -274,6 +276,13 @@ export function SessionMenu({
                     <AlertDialogHeader>
                         <AlertDialogTitle>{t.deleteTitle}</AlertDialogTitle>
                         <AlertDialogDescription>
+                            {/* Which one: it can be another diagram than
+                                the one on screen behind the dialog. The
+                                fixed height keeps the dialog's size while
+                                it closes */}
+                            <span className="mb-1 line-clamp-1 h-5 break-all font-medium text-foreground">
+                                {deleteTarget && shownTitle(deleteTarget.title)}
+                            </span>
                             {t.deleteDescription}
                         </AlertDialogDescription>
                     </AlertDialogHeader>

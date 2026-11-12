@@ -39,7 +39,7 @@ Each change the AI makes is outlined for a few seconds, so you can see what it d
 
 ## Your diagrams
 
-Diagrams are saved in this browser as you work. The Diagrams list holds each diagram with its conversation: search, rename or delete them there, and choose New diagram to start another one. A diagram stays in the browser and on the device where you made it, so export it to keep a copy or to move it.
+Diagrams are saved in this browser as you work. The Diagrams list holds each diagram with its conversation: search, rename or delete them there, and choose New diagram to start another one. The list holds up to 50 diagrams: when one more is saved, the one changed longest ago is deleted. A diagram stays in the browser and on the device where you made it, so export it to keep a copy or to move it.
 
 ## Export
 

@@ -6,9 +6,27 @@ import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { cn } from "@/lib/utils"
 
 function Popover({
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
-  return <PopoverPrimitive.Root data-slot="popover" {...props} />
+  // A click on the canvas goes to draw.io's iframe and never reaches this
+  // page, so Radix does not see it as a click outside. The window loses
+  // focus to the iframe then: close the popover on that
+  React.useEffect(() => {
+    if (!open || !onOpenChange) return
+    const close = () => onOpenChange(false)
+    window.addEventListener("blur", close)
+    return () => window.removeEventListener("blur", close)
+  }, [open, onOpenChange])
+  return (
+    <PopoverPrimitive.Root
+      data-slot="popover"
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props}
+    />
+  )
 }
 
 function PopoverTrigger({

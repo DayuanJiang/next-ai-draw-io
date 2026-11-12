@@ -35,8 +35,10 @@ interface TemplateDB extends DBSchema {
     }
 }
 
-// Default title: first 20 chars of trimmed prompt, with ellipsis if truncated
-const DEFAULT_TITLE_MAX_LENGTH = 20
+// Default title: the start of the trimmed prompt, with ellipsis if truncated.
+// Long enough to tell apart prompts that begin alike ("Draw an AWS
+// architecture for..."); the list cuts off what does not fit its row
+const DEFAULT_TITLE_MAX_LENGTH = 60
 
 export function generateDefaultTitle(prompt: string): string {
     const trimmed = prompt.trim()
@@ -47,6 +49,9 @@ export function generateDefaultTitle(prompt: string): string {
 // Database singleton
 let dbPromise: Promise<IDBPDatabase<TemplateDB>> | null = null
 
+// Every failed call below drops the cached connection, so the next call opens
+// a new one: Safari can lose the connection of a page left in the background
+// ("Connection to Indexed Database server lost") and each request then fails
 async function getDB(): Promise<IDBPDatabase<TemplateDB>> {
     if (!dbPromise) {
         dbPromise = openDB<TemplateDB>(DB_NAME, DB_VERSION, {
@@ -70,6 +75,7 @@ export async function getAllTemplates(): Promise<Template[]> {
         return sortTemplates(templates)
     } catch (error) {
         console.error("Failed to get templates:", error)
+        dbPromise = null
         return []
     }
 }
@@ -101,6 +107,7 @@ export async function createTemplate(
         return template
     } catch (error) {
         console.error("Failed to create template:", error)
+        dbPromise = null
         return null
     }
 }
@@ -126,6 +133,7 @@ export async function updateTemplate(
         return updated
     } catch (error) {
         console.error("Failed to update template:", error)
+        dbPromise = null
         return null
     }
 }
@@ -138,6 +146,7 @@ export async function deleteTemplate(id: string): Promise<boolean> {
         return true
     } catch (error) {
         console.error("Failed to delete template:", error)
+        dbPromise = null
         return false
     }
 }
@@ -167,6 +176,7 @@ export async function duplicateTemplate(
         return duplicate
     } catch (error) {
         console.error("Failed to duplicate template:", error)
+        dbPromise = null
         return null
     }
 }
@@ -186,6 +196,7 @@ export async function incrementRunCount(id: string): Promise<void> {
         await db.put(STORE_NAME, template)
     } catch (error) {
         console.error("Failed to increment run count:", error)
+        dbPromise = null
     }
 }
 
@@ -201,7 +212,9 @@ export function searchTemplates(
         const titleMatch = t.title.toLowerCase().includes(lowerQuery)
         const descMatch =
             t.description?.toLowerCase().includes(lowerQuery) ?? false
-        return titleMatch || descMatch
+        // What the user remembers may be a word in the middle of the prompt
+        const promptMatch = t.prompt.toLowerCase().includes(lowerQuery)
+        return titleMatch || descMatch || promptMatch
     })
 }
 
@@ -319,6 +332,7 @@ export async function importTemplates(
             imported++
         } catch (error) {
             console.error("Failed to import template:", error)
+            dbPromise = null
         }
     }
 
