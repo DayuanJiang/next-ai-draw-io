@@ -1,7 +1,7 @@
 "use client"
 
 import { Link, Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -31,22 +31,42 @@ export function UrlInputDialog({
     const [url, setUrl] = useState("")
     const [error, setError] = useState("")
 
+    // Each opening starts empty: the link read last time is in the chat
+    useEffect(() => {
+        if (open) {
+            setUrl("")
+            setError("")
+        }
+    }, [open])
+
     const handleSubmit = () => {
         setError("")
 
-        if (!url.trim()) {
+        const typed = url.trim()
+        if (!typed) {
             setError(dict.url.enterUrl)
             return
         }
+        // A link typed without its scheme ("example.com/article") is an
+        // https one
+        const link = /^[a-z][a-z\d+.-]*:\/\//i.test(typed)
+            ? typed
+            : `https://${typed}`
 
+        // Text with spaces is no address, though Chrome's URL takes it as
+        // a host name
+        let valid = !/\s/.test(link)
         try {
-            new URL(url)
+            new URL(link)
         } catch {
+            valid = false
+        }
+        if (!valid) {
             setError(dict.url.invalidFormat)
             return
         }
 
-        onSubmit(url.trim())
+        onSubmit(link)
     }
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

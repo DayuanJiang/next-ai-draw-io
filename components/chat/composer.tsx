@@ -312,7 +312,7 @@ export function Composer({
                     isExtracting: true,
                 }),
             )
-            const data = await extractUrlContent(url)
+            const data = await extractUrlContent(url, dict)
             setUrlData((prev) =>
                 prev.has(url) ? new Map(prev).set(url, data) : prev,
             )

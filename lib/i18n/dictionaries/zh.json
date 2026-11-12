@@ -212,7 +212,17 @@
         "Cancel": "取消",
         "enterUrl": "请输入 URL",
         "invalidFormat": "URL 格式无效",
-        "failed": "无法读取这个网页"
+        "failed": "无法读取这个网页",
+        "errors": {
+            "private": "无法读取内网或本机地址的链接。",
+            "not_found": "找不到这个网站，请检查网址。",
+            "http_error": "网站返回了错误（{status}）。",
+            "timeout": "网站没有及时响应。",
+            "pdf": "不支持 PDF 链接，请下载 PDF 后上传文件。",
+            "too_large": "页面超过了 {limit} MB 的下载上限。",
+            "too_long": "页面文字超过了 {limit}k 字符的上限（{size}k 字符）。",
+            "no_content": "没有在这个页面上找到可读的正文。"
+        }
     },
     "reasoning": {
         "thinking": "思考中...",

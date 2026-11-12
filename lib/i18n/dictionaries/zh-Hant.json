@@ -212,7 +212,17 @@
         "Cancel": "取消",
         "enterUrl": "請輸入 URL",
         "invalidFormat": "URL 格式無效",
-        "failed": "無法讀取這個網頁"
+        "failed": "無法讀取這個網頁",
+        "errors": {
+            "private": "無法讀取內部網路或本機位址的連結。",
+            "not_found": "找不到這個網站，請檢查網址。",
+            "http_error": "網站回傳了錯誤（{status}）。",
+            "timeout": "網站沒有及時回應。",
+            "pdf": "不支援 PDF 連結，請下載 PDF 後上傳檔案。",
+            "too_large": "頁面超過了 {limit} MB 的下載上限。",
+            "too_long": "頁面文字超過了 {limit}k 字元的上限（{size}k 字元）。",
+            "no_content": "沒有在這個頁面上找到可讀的內文。"
+        }
     },
     "reasoning": {
         "thinking": "思考中...",

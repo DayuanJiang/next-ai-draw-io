@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
+import {
+    blockedUrlReason,
+    isPrivateUrl,
+    publicOnlyDispatcher,
+    publicOnlyLookup,
+    redirectGuardedFetch,
+} from "@/lib/ssrf-protection"
 
 // Mock DNS so tests are deterministic and never hit the network.
 const lookupMock = vi.hoisted(() => vi.fn())
@@ -75,6 +81,82 @@ describe("isPrivateUrl", () => {
         expect(await isPrivateUrl("http://does-not-resolve.example/")).toBe(
             true,
         )
+    })
+
+    it("tells a name without a DNS answer from a private address", async () => {
+        // A mistyped address must not be reported as a private one
+        lookupMock.mockRejectedValue(new Error("ENOTFOUND"))
+        expect(await blockedUrlReason("http://typo.example/")).toBe(
+            "unresolved",
+        )
+        lookupMock.mockResolvedValue([{ address: "10.1.2.3", family: 4 }])
+        expect(await blockedUrlReason("http://intranet.example/")).toBe(
+            "private",
+        )
+        expect(await blockedUrlReason("http://127.0.0.1/")).toBe("private")
+        lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }])
+        expect(await blockedUrlReason("https://example.com/")).toBeNull()
+    })
+})
+
+describe("publicOnlyLookup (the lookup of the connection itself)", () => {
+    // What the socket gets: an error, or the addresses to connect to
+    const connect = (all: boolean) =>
+        new Promise<unknown[]>((resolve) =>
+            publicOnlyLookup("rebind.example", { all }, (...result) =>
+                resolve(result),
+            ),
+        )
+
+    beforeEach(() => {
+        lookupMock.mockReset()
+    })
+
+    it("refuses a name that resolves to a private address when the socket opens (DNS rebinding)", async () => {
+        // isPrivateUrl saw a public address a moment ago
+        lookupMock.mockResolvedValue([{ address: "127.0.0.1", family: 4 }])
+        const [error] = await connect(true)
+        expect(String(error)).toMatch(/private address/)
+    })
+
+    it("refuses when any of the addresses is private", async () => {
+        lookupMock.mockResolvedValue([
+            { address: "93.184.216.34", family: 4 },
+            { address: "fd00::1", family: 6 },
+        ])
+        const [error] = await connect(true)
+        expect(String(error)).toMatch(/private address/)
+    })
+
+    it("hands public addresses to the socket in the form it asked for", async () => {
+        const addresses = [{ address: "93.184.216.34", family: 4 }]
+        lookupMock.mockResolvedValue(addresses)
+        expect(await connect(true)).toEqual([null, addresses])
+        expect(await connect(false)).toEqual([null, "93.184.216.34", 4])
+    })
+
+    it("passes a DNS failure on", async () => {
+        const failure = new Error("ENOTFOUND")
+        lookupMock.mockRejectedValue(failure)
+        expect((await connect(true))[0]).toBe(failure)
+    })
+})
+
+describe("redirectGuardedFetch with private URLs blocked", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals()
+    })
+
+    it("connects through the public-only dispatcher", async () => {
+        vi.stubEnv("ALLOW_PRIVATE_URLS", "false")
+        const fetchMock = vi.fn(async () => new Response("ok"))
+        vi.stubGlobal("fetch", fetchMock)
+        await redirectGuardedFetch()?.("https://proxy.example/v1/chat")
+        expect(fetchMock.mock.calls[0]).toEqual([
+            "https://proxy.example/v1/chat",
+            expect.objectContaining({ dispatcher: publicOnlyDispatcher }),
+        ])
+        expect(publicOnlyDispatcher).toBeDefined()
     })
 })
 

@@ -212,7 +212,17 @@
         "Cancel": "Cancel",
         "enterUrl": "Please enter a URL",
         "invalidFormat": "Invalid URL format",
-        "failed": "Couldn't read that page"
+        "failed": "Couldn't read that page",
+        "errors": {
+            "private": "Links to private or internal addresses can't be read.",
+            "not_found": "Couldn't find that website. Check the address.",
+            "http_error": "The website answered with an error ({status}).",
+            "timeout": "The website took too long to answer.",
+            "pdf": "PDF links aren't supported. Download the PDF and attach the file.",
+            "too_large": "The page is over the {limit} MB download limit.",
+            "too_long": "The page's text is over the {limit}k character limit ({size}k characters).",
+            "no_content": "Couldn't find readable text on that page."
+        }
     },
     "reasoning": {
         "thinking": "Thinking...",
