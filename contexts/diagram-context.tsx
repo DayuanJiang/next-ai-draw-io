@@ -182,6 +182,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // The page to show again once a full load is done: draw.io shows the
     // first page of a loaded document
     const pageAfterLoadRef = useRef<string | null>(null)
+    // The page the user was on when draw.io started again (a language
+    // change): the new editor reports the page of its empty document first
+    const pageBeforeRestartRef = useRef<string | null>(null)
     // The last full load sent opens a diagram (a saved chat, a file): fit
     // it into view once it is done (draw.io keeps the scroll position)
     const fitAfterLoadRef = useRef(false)
@@ -230,12 +233,15 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         pendingLoadsRef.current = 0
         // Restore diagram after remount (e.g., theme/UI change), or a file
         // opened while draw.io loaded (its page settings count too)
-        if (chartXMLRef.current) fullLoad(chartXMLRef.current, undefined, true)
+        if (chartXMLRef.current) {
+            fullLoad(chartXMLRef.current, pageBeforeRestartRef.current, true)
+        }
         // After that load is sent: draw.io runs its requests in order
         for (const resume of firstLoadWaitersRef.current.splice(0)) resume()
     }
 
     const resetDrawioReady = () => {
+        pageBeforeRestartRef.current = useCanvasStore.getState().currentPageId
         hasCalledOnLoadRef.current = false
         pendingLoadsRef.current = 0
         setIsDrawioReady(false)
