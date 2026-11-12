@@ -37,13 +37,19 @@ export function DocsToc({
                 window.innerHeight + window.scrollY >=
                     document.documentElement.scrollHeight - 1
             ) {
-                const jumped = decodeURIComponent(location.hash.slice(1))
-                const top = headings.some((h) => h.id === jumped)
-                    ? topOf(jumped)
-                    : undefined
+                // The address holds the id percent-encoded (a Japanese
+                // heading's). The ids are encoded for the comparison:
+                // decoding the address throws on a mistyped one ("#100%")
+                const jumped = headings.find(
+                    (h) => `#${encodeURIComponent(h.id)}` === location.hash,
+                )
+                const top = jumped && topOf(jumped.id)
                 current =
-                    top !== undefined && top >= 0 && top < window.innerHeight
-                        ? jumped
+                    jumped &&
+                    top !== undefined &&
+                    top >= 0 &&
+                    top < window.innerHeight
+                        ? jumped.id
                         : headings[headings.length - 1]?.id
             }
             setActive(current)

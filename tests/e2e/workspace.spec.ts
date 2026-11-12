@@ -140,12 +140,18 @@ function drawioTabs(page: Page) {
     return getIframeContent(page).locator(".geTabContainer")
 }
 
-/** How wide the paper shows on screen, which changes with the zoom */
+/**
+ * How wide the paper is laid out, which changes with the zoom draw.io has
+ * applied. A zoom key first shows a preview (a CSS transform, which this
+ * width leaves out) and applies the zoom up to 0.6 s later; a redraw in
+ * between takes the preview off the paper, which then shows at its old
+ * width for a moment.
+ */
 function paperWidth(page: Page) {
     return getIframeContent(page)
         .locator(".geBackgroundPage")
         .first()
-        .evaluate((el) => Math.round(el.getBoundingClientRect().width))
+        .evaluate((el) => (el as HTMLElement).offsetWidth)
 }
 
 /** Zooms with draw.io's own shortcut, the focus in an empty canvas corner */

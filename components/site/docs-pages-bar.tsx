@@ -41,6 +41,20 @@ export function DocsPagesBar({ children }: { children: ReactNode }) {
                     event.currentTarget.open = false
                 }
             }}
+            onToggle={(event) => {
+                // The list opens at the page being read, whose sections
+                // follow it: a page far down the list would start out of
+                // view. The line above it (its group's name, or the page
+                // before) stays visible.
+                const bar = event.currentTarget
+                const current = bar.querySelector('a[aria-current="page"]')
+                const list = current?.closest("nav")
+                if (!bar.open || !current || !list) return
+                list.scrollTop +=
+                    current.getBoundingClientRect().top -
+                    list.getBoundingClientRect().top -
+                    40
+            }}
             className="group sticky top-0 z-20 border-b border-border bg-canvas lg:hidden"
         >
             {children}

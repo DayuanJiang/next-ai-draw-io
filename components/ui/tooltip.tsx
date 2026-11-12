@@ -9,7 +9,7 @@ function TooltipProvider({
   delayDuration = 0,
   // Closes when the pointer leaves the button. A tooltip that can be hovered
   // closes on the page's pointer moves, and the page gets none while the
-  // pointer is over the draw.io frame: the tooltip stayed up.
+  // pointer is over the draw.io frame: the tooltip would stay up.
   disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {

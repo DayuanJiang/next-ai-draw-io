@@ -48,9 +48,11 @@ describe("the screenshot check and Stop", () => {
     const draw = async (opts: {
         watchStop: () => () => boolean
         validateDiagram: () => Promise<any>
-        captureValidationPng?: () => Promise<string>
+        captureValidationPng?: (pageId?: string | null) => Promise<string>
         // Checks already made in this user turn
         retryCount?: { current: number }
+        // The page the user was on when the message was sent
+        turnPageId?: string
     }) => {
         const onValidationStateChange = vi.fn()
         const { result } = renderHook(() =>
@@ -61,6 +63,7 @@ describe("the screenshot check and Stop", () => {
                 processedToolCallsRef: { current: new Set() },
                 validationRetryCountRef: opts.retryCount ?? { current: 0 },
                 chartXMLRef: { current: "" },
+                turnPageIdRef: { current: opts.turnPageId ?? null },
                 onDisplayChart: () => null,
                 onFetchChart: async () => "",
                 enableVlmValidation: true,
@@ -135,6 +138,24 @@ describe("the screenshot check and Stop", () => {
         }
         // Passed checks count too
         expect(validateDiagram).toHaveBeenCalledTimes(3)
+    })
+
+    it("takes the screenshot of the page the model drew on", async () => {
+        // The user may look at another page by the time it is taken
+        const captureValidationPng = vi.fn(
+            async () => "data:image/png;base64,AA",
+        )
+        await draw({
+            watchStop: () => () => false,
+            validateDiagram: async () => ({
+                valid: true,
+                issues: [],
+                suggestions: [],
+            }),
+            captureValidationPng,
+            turnPageId: "page-2",
+        })
+        expect(captureValidationPng).toHaveBeenCalledWith("page-2")
     })
 
     it("skips the check when Stop came during the screenshot", async () => {

@@ -65,7 +65,7 @@ interface UseDiagramToolHandlersParams {
         meta?: { toolCallId?: string; pageId?: string | null },
     ) => string | null
     onFetchChart: () => Promise<string>
-    captureValidationPng?: () => Promise<string | null>
+    captureValidationPng?: (pageId?: string | null) => Promise<string | null>
     validateDiagram?: ValidateDiagramFn
     enableVlmValidation?: boolean
     sessionId?: string
@@ -307,7 +307,7 @@ ${finalXml}
                     // This is a best-effort heuristic and may need adjustment for complex diagrams or slower devices.
                     await new Promise((resolve) => setTimeout(resolve, 100))
 
-                    capturedPngData = await captureValidationPng()
+                    capturedPngData = await captureValidationPng(aiPageId())
                     // Stopped while the screenshot was taken: no check. The
                     // chat waits for this handler, so it must end now.
                     if (stopped?.()) {

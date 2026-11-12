@@ -10,7 +10,8 @@
 }
 
 /* A Japanese heading wraps between phrases where the browser can find them
-   (Chrome, Edge); elsewhere it wraps between any two characters, as before */
+   (Chrome, Edge); other browsers ignore this value and wrap between any two
+   characters */
 .site :is(h1, h2, h3):lang(ja) {
     word-break: auto-phrase;
 }

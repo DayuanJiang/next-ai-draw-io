@@ -133,7 +133,9 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
     const t = GALLERY_TEXTS[lang]
     const { copied, copy } = useCopy()
     return (
-        <div className="mt-3 flex items-center gap-2">
+        // Each button keeps its text on one line; in a narrow card the
+        // second one goes below the first
+        <div className="mt-3 flex flex-wrap items-center gap-2">
             {!item.attachment && (
                 <Link
                     href={`/${lang}?prompt=${encodeURIComponent(item.prompt)}`}
@@ -142,7 +144,7 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
                     // The editor takes the prompt out of the address, which
                     // search engines report as a redirect: keep them out
                     rel="nofollow"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[13px] font-medium text-background"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[13px] font-medium whitespace-nowrap text-background"
                 >
                     <SquarePen className="size-3.5" />
                     {t.tryPrompt}
@@ -151,7 +153,7 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
             <button
                 type="button"
                 onClick={() => copy(item.prompt)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[13px] text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[13px] whitespace-nowrap text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
             >
                 {copied ? (
                     <Check className="size-3.5" />
@@ -176,17 +178,23 @@ function Enlarged({
 }) {
     const t = GALLERY_TEXTS[lang]
     const close = useRef<HTMLButtonElement>(null)
+    const scroller = useRef<HTMLDivElement>(null)
     useEffect(() => {
         // Focus moves into the dialog and back to the card when it closes
         const before = document.activeElement as HTMLElement | null
         close.current?.focus()
         const onKey = (event: KeyboardEvent) => {
             if (event.key === "Escape") onClose()
-            // The close button is the dialog's only control: Tab goes to it
-            // and not to the page behind
+            // Tab goes between the dialog's two stops and not to the page
+            // behind: the close button, and the diagram's area, which the
+            // arrow keys scroll while it has the focus
             if (event.key === "Tab") {
                 event.preventDefault()
-                close.current?.focus()
+                const next =
+                    document.activeElement === close.current
+                        ? scroller.current
+                        : close.current
+                next?.focus()
             }
         }
         document.addEventListener("keydown", onKey)
@@ -232,7 +240,11 @@ function Enlarged({
                     diagram keeps its own size, as draw.io shows it at 100%,
                     and is dragged around; the margin centers it without
                     cutting off the part that overflows. */}
-                <div className="lp-grid flex min-h-0 flex-1 overflow-auto p-4 md:p-6">
+                <div
+                    ref={scroller}
+                    tabIndex={0}
+                    className="lp-grid flex min-h-0 flex-1 overflow-auto p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:p-6"
+                >
                     <Image
                         src={item.src}
                         alt={item.title[lang]}

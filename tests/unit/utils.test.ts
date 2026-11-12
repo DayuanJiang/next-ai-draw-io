@@ -78,6 +78,19 @@ describe("formatXML", () => {
             ].join("\n"),
         )
     })
+
+    it("keeps text on the line of its tag, also when the same tag held tags before", () => {
+        expect(formatXML("<root><foo><bar/></foo><foo>text</foo></root>")).toBe(
+            [
+                "<root>",
+                "  <foo>",
+                "    <bar/>",
+                "  </foo>",
+                "  <foo>text</foo>",
+                "</root>",
+            ].join("\n"),
+        )
+    })
 })
 
 const pageBox = (id: string) => `<mxCell id="${id}" vertex="1" parent="1"/>`

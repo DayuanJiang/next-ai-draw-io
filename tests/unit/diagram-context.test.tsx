@@ -152,6 +152,17 @@ describe("the app's own exports", () => {
         await reply(requests[0], "data:image/png;base64,iVBORw0KGgo=")
         expect(await png).toMatch(/^data:image\/png/)
     })
+
+    it("take the screenshot check's picture of the page it is given", async () => {
+        const { result, requests } = setup()
+        act(() => {
+            result.current.loadDiagram(oneBox, true)
+        })
+        // The page the AI drew on, also when another one is on screen
+        result.current.captureValidationPng("p")
+        expect(requests[0]).toMatchObject({ format: "png", pageId: "p" })
+        expect(requests[0]).not.toHaveProperty("currentPage")
+    })
 })
 
 describe("before draw.io has started", () => {

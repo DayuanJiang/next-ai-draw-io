@@ -115,7 +115,8 @@ interface DiagramContextType {
     ) => Promise<void>
     getThumbnailSvg: () => Promise<string | null>
     getVersionSvg: () => Promise<string | null>
-    captureValidationPng: () => Promise<string | null>
+    /** pageId: the page to take the picture of, when it may not be on screen */
+    captureValidationPng: (pageId?: string | null) => Promise<string | null>
     /** One export with its own result; null when draw.io does not answer
      * in time (the MCP shell answers the server's export requests with it) */
     requestExport: (
@@ -302,16 +303,22 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Capture current diagram as PNG for VLM validation
-    const captureValidationPng = async (): Promise<string | null> => {
+    const captureValidationPng = async (
+        pageId?: string | null,
+    ): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
         if (!isRealDiagram(chartXMLRef.current)) return null
 
-        // Of the page on screen, where the AI drew: draw.io renders the
-        // first page otherwise
-        const result = await requestTaggedExport("validation", "png", 5000, {
-            currentPage: true,
-        })
+        // Of the page the AI drew on, which the user may have left since;
+        // without its id, of the page on screen (draw.io renders the first
+        // page otherwise)
+        const result = await requestTaggedExport(
+            "validation",
+            "png",
+            5000,
+            pageId ? { pageId } : { currentPage: true },
+        )
         // PNG data should be a base64 data URL
         return result?.data?.startsWith("data:image/png") ? result.data : null
     }

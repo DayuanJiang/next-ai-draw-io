@@ -31,13 +31,13 @@ function getLocale(request: NextRequest): string {
 }
 
 // The locale that a path's first segment names: the locale itself, in any
-// case (/zh-hant, /EN), or a regional Chinese tag (/zh-TW, /zh-CN)
+// case (/zh-hant, /EN), a regional Chinese tag (/zh-TW, /zh-CN), or a locale
+// with a region's two letters after it (/en-US, /ja-JP)
 function localeOfSegment(segment: string): string | undefined {
     if (TRADITIONAL_CHINESE.test(segment)) return "zh-Hant"
     if (/^zh-(hans|cn|sg)\b/i.test(segment)) return "zh"
-    return i18n.locales.find(
-        (locale) => locale.toLowerCase() === segment.toLowerCase(),
-    )
+    const language = segment.replace(/-[a-z]{2}$/i, "").toLowerCase()
+    return i18n.locales.find((locale) => locale.toLowerCase() === language)
 }
 
 // intl-localematcher throws on a malformed tag, and "*" is not a tag
@@ -79,8 +79,8 @@ export function proxy(request: NextRequest) {
     const pathLocale = localeOfSegment(first)
 
     // A locale written another way goes to the page's own address. Taken
-    // for a page's name it got a locale in front (/zh-Hant/zh-hant/about):
-    // a permanent redirect to a 404.
+    // for a page's name, it would get a locale in front
+    // (/zh-Hant/zh-hant/about): a permanent redirect to a 404.
     if (pathLocale && pathLocale !== first) {
         const url = request.nextUrl.clone()
         url.pathname = `/${pathLocale}${pathname.slice(first.length + 1)}`

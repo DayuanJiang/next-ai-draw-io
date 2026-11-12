@@ -76,6 +76,8 @@ export function NotFoundPage() {
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                     <Link
                         href={`/${lang}`}
+                        // The editor is large: load it only when asked
+                        prefetch={false}
                         className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background"
                     >
                         {t.editor}

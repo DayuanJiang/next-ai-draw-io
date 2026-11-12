@@ -144,6 +144,60 @@ test.describe("Site pages on a phone", () => {
             await page.evaluate(() => getComputedStyle(document.body).overflow),
         ).not.toBe("hidden")
     })
+
+    test("the enlarged gallery diagram scrolls from the keyboard", async ({
+        page,
+    }) => {
+        await page.goto("/en/gallery")
+        await page.getByRole("button", { name: /Customer journey map/ }).click()
+        const dialog = page.getByRole("dialog")
+        const close = dialog.getByRole("button", { name: "Close" })
+        const area = dialog.locator("img").locator("xpath=..")
+        await expect(close).toBeFocused()
+        // Once the picture has loaded, it is wider than its area
+        await expect
+            .poll(() => area.evaluate((el) => el.scrollWidth - el.clientWidth))
+            .toBeGreaterThan(300)
+        // Tab reaches the diagram's area, where the arrow keys scroll
+        await page.keyboard.press("Tab")
+        await expect(area).toBeFocused()
+        await page.keyboard.press("ArrowRight")
+        await expect
+            .poll(() => area.evaluate((el) => el.scrollLeft))
+            .toBeGreaterThan(0)
+        // And back to the close button, never to the page behind
+        await page.keyboard.press("Tab")
+        await expect(close).toBeFocused()
+    })
+
+    test("the gallery's buttons keep their Japanese text on one line", async ({
+        page,
+    }) => {
+        await page.goto("/ja/gallery")
+        for (const text of ["このプロンプトを試す", "プロンプトをコピー"]) {
+            const box = await page
+                .locator("figure a, figure button", { hasText: text })
+                .first()
+                .boundingBox()
+            // One line of text is 20 px high, plus the button's padding
+            expect(box?.height).toBeLessThan(40)
+        }
+    })
+
+    test("the pages list opens at the page being read and its sections", async ({
+        page,
+    }) => {
+        // The last page of the list
+        await page.goto("/en/docs/faq")
+        const bar = page.locator("details")
+        await bar.locator("summary").click()
+        await expect(bar.locator('a[aria-current="page"]')).toBeInViewport({
+            ratio: 1,
+        })
+        await expect(bar.locator('a[href^="#"]').first()).toBeInViewport({
+            ratio: 1,
+        })
+    })
 })
 
 test.describe("Site pages on a desktop", () => {
@@ -169,6 +223,35 @@ test.describe("Site pages on a desktop", () => {
             )
             await expect(marked).toHaveText("Settings")
         })
+    })
+
+    test("the table of contents works with a mistyped # in the address, and in Japanese", async ({
+        page,
+    }) => {
+        const errors: string[] = []
+        page.on("pageerror", (error) => errors.push(error.message))
+        const toc = page.locator("aside")
+        const marked = toc.locator('a[aria-current="location"]')
+        const toEnd = () =>
+            page.evaluate(() =>
+                window.scrollTo(0, document.documentElement.scrollHeight),
+            )
+
+        // "%" alone is no valid encoding
+        await page.goto("/en/docs/claude-code#%")
+        await toEnd()
+        await expect(marked).toHaveText(
+            (await toc.getByRole("link").last().textContent()) ?? "",
+        )
+        expect(errors).toEqual([])
+
+        // The last sections are marked by the id in the address, which
+        // holds a Japanese id encoded
+        await page.goto("/ja/docs/claude-code")
+        for (const link of await toc.getByRole("link").all()) {
+            await link.click()
+            await expect(marked).toHaveText((await link.textContent()) ?? "")
+        }
     })
 
     test("a docs table keeps names and code whole and underlines its links", async ({

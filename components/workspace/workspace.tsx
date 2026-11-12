@@ -277,8 +277,8 @@ function WorkspaceLayout() {
             <div className="absolute inset-0 flex flex-col">
                 <div className="relative min-h-0 flex-1">
                     {/* Under the start screen the canvas takes no focus:
-                        Tab went into the hidden draw.io, and keys typed
-                        there drew shapes */}
+                        Tab would go into the hidden draw.io, and keys typed
+                        there would draw shapes */}
                     <div className="absolute inset-0" inert={heroCoversCanvas}>
                         <CanvasStage
                             className={

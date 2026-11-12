@@ -27,7 +27,7 @@ export function ProviderLogo({
             height={16}
             // Fetched when it comes into view. React preloads an eager
             // image, also for a page that only prefetches /about: every
-            // site page fetched all 19 logos.
+            // site page would fetch all 19 logos.
             loading="lazy"
             src={`https://models.dev/logos/${logo ?? provider}.svg`}
             width={16}

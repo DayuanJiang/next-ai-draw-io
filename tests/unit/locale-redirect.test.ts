@@ -69,6 +69,21 @@ describe("locale redirect", () => {
         )
     })
 
+    it("sends a locale with a region after it to the locale's page", () => {
+        expect(redirectFor("zh-TW", "/en-US/about")).toBe(
+            "http://localhost/en/about",
+        )
+        expect(redirectFor("en-US", "/ja-JP/docs")).toBe(
+            "http://localhost/ja/docs",
+        )
+        expect(redirectFor("ja", "/en-gb")).toBe("http://localhost/en")
+        // Not a locale: a page's name, which gets the browser's locale
+        expect(redirectFor("ja", "/enx/about")).toBe(
+            "http://localhost/ja/enx/about",
+        )
+        expect(redirectFor("ja", "/en-USA")).toBe("http://localhost/ja/en-USA")
+    })
+
     it("leaves a page at its locale alone", () => {
         for (const path of ["/en", "/zh/about", "/ja/docs", "/zh-Hant/mcp"]) {
             expect(redirectFor("zh-TW", path)).toBeUndefined()
