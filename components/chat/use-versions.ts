@@ -81,16 +81,21 @@ export function useVersions({
                 highlightChangedCells(touchedIds, pageId, { navigate: false })
             }
             // The picture is of the canvas: take it right away, while this
-            // version is on it. Once a newer one is, or its change was
-            // undone (the wait for a draw.io that is still loading is
-            // long), this one gets none rather than a picture of that.
-            const onCanvas = () =>
-                useVersionsStore.getState().onCanvasVersionId === id
+            // version is on it. The wait for a draw.io that is still
+            // loading is long: once the canvas has held something else (a
+            // newer version, or this one's change undone, even when it is
+            // redone by the time draw.io answers), this version gets no
+            // picture rather than one of that.
+            let left = false
+            const stopWatching = useVersionsStore.subscribe((state) => {
+                if (state.onCanvasVersionId !== id) left = true
+            })
             setTimeout(async () => {
-                const svg = onCanvas() ? await getVersionSvg() : null
+                const svg = left ? null : await getVersionSvg()
+                stopWatching()
                 useVersionsStore
                     .getState()
-                    .updateVersion(id, { svg: svg && onCanvas() ? svg : "" })
+                    .updateVersion(id, { svg: svg && !left ? svg : "" })
             }, 0)
         })
         return () => setCommitHandler(null)

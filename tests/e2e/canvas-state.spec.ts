@@ -337,3 +337,54 @@ test("undoing the first drawing, which empties the canvas, keeps the zoom", asyn
     await expect(first).toBeInViewport()
     expect(await zoomOf(page)).toBeCloseTo(fitted, 2)
 })
+
+test("an edit that deletes every shape keeps the zoom, also when its preview emptied the canvas first", async ({
+    page,
+}) => {
+    const input = {
+        operations: ["a", "b", "c"].map((cell_id) => ({
+            operation: "delete",
+            cell_id,
+        })),
+    }
+    // Two chunks: the three operations, then the "]}" that ends the JSON.
+    // Between them the canvas shows the preview, without shapes
+    const call = toolCallEvents(
+        "clear",
+        "edit_diagram",
+        input,
+        JSON.stringify(input).length - 2,
+    )
+    await chunkedReplies(page, [
+        [
+            drawing(
+                cell("a", "First", 400, 300) +
+                    cell("b", "Right", 2400, 300) +
+                    cell("c", "Down", 400, 1800),
+            ),
+        ],
+        [
+            sseEvents([{ type: "start" }, call.start, call.deltas[0]], false),
+            1500,
+            sseEvents([call.deltas[1], call.done, { type: "finish" }]),
+        ],
+    ])
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    const first = page
+        .frameLocator("iframe")
+        .getByText("First", { exact: true })
+
+    await sendMessage(page, "Draw something wide")
+    await waitForCompleteCount(page, 1)
+    // Past the time a resize fits the new diagram again
+    await page.waitForTimeout(4500)
+    const fitted = await zoomOf(page)
+    expect(fitted).toBeLessThan(0.5)
+
+    await sendMessage(page, "Delete everything")
+    await expect(first).toHaveCount(0)
+    await waitForCompleteCount(page, 2)
+    await page.waitForTimeout(1000)
+    expect(await zoomOf(page)).toBe(fitted)
+})

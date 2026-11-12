@@ -425,7 +425,9 @@ export function Composer({
         )
     }
 
-    const handleUrlExtract = async (url: string) => {
+    // Called by the URL dialog (fromDialog) and by the link offered above
+    // the box, which can be read while the dialog is open for another link
+    const handleUrlExtract = async (url: string, fromDialog = false) => {
         setIsExtractingUrl(true)
         // Functional updates, so a removal or send made while extracting is
         // not overwritten when the request finishes
@@ -443,7 +445,7 @@ export function Composer({
             setUrlData((prev) =>
                 prev.has(url) ? new Map(prev).set(url, data) : prev,
             )
-            setShowUrlDialog(false)
+            if (fromDialog) setShowUrlDialog(false)
         } catch (err) {
             setUrlData((prev) => {
                 const next = new Map(prev)
@@ -451,9 +453,10 @@ export function Composer({
                 return next
             })
             const reason = err instanceof Error ? err.message : dict.url.failed
-            // The dialog shows the reason under the address, where it
-            // stays; a dialog closed meanwhile cannot, so a toast does
-            if (!urlDialogOpenRef.current) {
+            // The dialog shows the reason under the address it asked for,
+            // where it stays; a dialog closed meanwhile cannot, so a toast
+            // does, as for the link offered above the box
+            if (!(fromDialog && urlDialogOpenRef.current)) {
                 toast.error(
                     <span className="text-muted-foreground">{reason}</span>,
                     { duration: 5000 },
@@ -483,11 +486,23 @@ export function Composer({
 
     // The model cannot open a link that is only typed into the message,
     // and draws from what it knows of the address. The first link that is
-    // not attached is offered for reading, as "Extract from URL" does
-    // (without the punctuation that ends a sentence).
+    // not attached is offered for reading, as "Extract from URL" does.
+    // Chinese and Japanese text and full-width punctuation follow a link
+    // without a space, so the link ends where they begin. The punctuation
+    // that ends a sentence is not part of it; a closing bracket is, when
+    // the link opens it ("/wiki/Raft_(algorithm)").
     const typedLink = input
-        .match(/https?:\/\/[^\s<>"']+/g)
-        ?.map((link) => link.replace(/[.,;:!?)\]]+$/, ""))
+        .match(/https?:\/\/[^\s<>"'\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]+/g)
+        ?.map((link) => {
+            while (
+                /[.,;:!?\]]$/.test(link) ||
+                (link.endsWith(")") &&
+                    link.split(")").length > link.split("(").length)
+            ) {
+                link = link.slice(0, -1)
+            }
+            return link
+        })
         .find((link) => !urlData.has(link))
 
     return (
@@ -722,7 +737,7 @@ export function Composer({
             <UrlInputDialog
                 open={showUrlDialog}
                 onOpenChange={setShowUrlDialog}
-                onSubmit={handleUrlExtract}
+                onSubmit={(url) => handleUrlExtract(url, true)}
                 isExtracting={isExtractingUrl}
             />
             <TemplateFormDialog

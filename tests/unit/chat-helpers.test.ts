@@ -540,15 +540,18 @@ describe("diagramContextText", () => {
     it("names the connectors a deleted shape left open at one end", () => {
         // What draw.io leaves of a connector whose target was deleted: the
         // end is a point. A connector with both ends, and one drawn free
-        // at both, are not named.
+        // at both, are not named. One with a tooltip has its id on the
+        // <object> around it.
         const edge = (id: string, ends: string) =>
             `<mxCell id="${id}" edge="1" parent="1" ${ends}><mxGeometry relative="1" as="geometry"><mxPoint x="300" y="70" as="targetPoint"/></mxGeometry></mxCell>`
+        const withTooltip =
+            '<object label="calls" tooltip="t" id="tip"><mxCell edge="1" parent="1" source="b"><mxGeometry relative="1" as="geometry"/></mxCell></object>'
         const note = diagramContextText({
-            xml: `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="A" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell><mxCell id="b" value="B" vertex="1" parent="1"><mxGeometry x="40" y="200" width="120" height="60" as="geometry"/></mxCell>${edge("open", 'source="a"')}${edge("whole", 'source="a" target="b"')}${edge("loose", "")}</root></mxGraphModel>`,
+            xml: `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="A" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell><mxCell id="b" value="B" vertex="1" parent="1"><mxGeometry x="40" y="200" width="120" height="60" as="geometry"/></mxCell>${edge("open", 'source="a"')}${edge("whole", 'source="a" target="b"')}${edge("loose", "")}${withTooltip}</root></mxGraphModel>`,
             pageId: null,
         })
         expect(note.split("\n")[0]).toMatch(
-            /not from your earlier calls\. Connectors with a free end \(open\): the user deleted the shape that was there\. Do not draw that shape again; leave such a connector as it is or delete it\.\]$/,
+            /not from your earlier calls\. Connectors with a free end \(open, tip\): the user deleted the shape that was there\. Do not draw that shape again; leave such a connector as it is or delete it\.\]$/,
         )
     })
 })

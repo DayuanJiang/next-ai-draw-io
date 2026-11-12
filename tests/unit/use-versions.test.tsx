@@ -166,5 +166,24 @@ describe("a version's picture", () => {
         act(() => result.current.undoVersion(second))
         await act(async () => answer("data:image/svg+xml,undone"))
         expect(svgOf(second)).toBe("")
+
+        // Undone and redone before the answer, which may hold the picture
+        // taken in between
+        const third = await drawn(AB, ABC)
+        act(() => result.current.undoVersion(third))
+        act(() => result.current.undoVersion(third))
+        await act(async () => answer("data:image/svg+xml,without-c"))
+        expect(svgOf(third)).toBe("")
+
+        // Two versions drawn before draw.io answers: the answer for the
+        // first shows the second, also once the second's change is undone
+        // and the first is on the canvas again
+        const fourth = await drawn(ABC, A)
+        const answerFourth = answer
+        const fifth = await drawn(A, AB)
+        act(() => result.current.undoVersion(fifth))
+        expect(useVersionsStore.getState().onCanvasVersionId).toBe(fourth)
+        await act(async () => answerFourth("data:image/svg+xml,fifth"))
+        expect(svgOf(fourth)).toBe("")
     })
 })

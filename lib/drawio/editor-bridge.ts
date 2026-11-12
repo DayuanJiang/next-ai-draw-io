@@ -585,7 +585,11 @@ export function commitDiagram(xml: string) {
     } finally {
         model?.endUpdate()
     }
-    if (wasEmpty || (follow && !shapesInView())) fitDiagram()
+    // A result without shapes has nothing to fit (the preview of a change
+    // that deletes everything empties the canvas before it is applied)
+    if (!isEmptyModel() && (wasEmpty || (follow && !shapesInView()))) {
+        fitDiagram()
+    }
 }
 
 /** Throw away the preview and go back to the given diagram */

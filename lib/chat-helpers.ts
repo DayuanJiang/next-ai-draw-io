@@ -332,8 +332,16 @@ export function diagramContextText(diagram: MessageDiagram): string {
     // sentences, in 0 and in 5. With either sentence alone: 2 of 10 for
     // the first request with the one on redrawing, 10 of 10 for the
     // second with the one on free ends.
-    const freeEnds = [...shown.matchAll(/<mxCell\b[^>]*>/g)]
-        .filter(([tag]) => /\ssource="/.test(tag) !== /\starget="/.test(tag))
+    // A connector with a tooltip, link or data has its id on the <object>
+    // around its mxCell.
+    const freeEnds = [
+        ...shown.matchAll(
+            /(?:<(?:UserObject|object)\b[^>]*>\s*)?(<mxCell\b[^>]*>)/g,
+        ),
+    ]
+        .filter(
+            ([, cell]) => /\ssource="/.test(cell) !== /\starget="/.test(cell),
+        )
         .map(([tag]) => tag.match(/\sid="([^"]*)"/)?.[1])
     const freeEndNote =
         freeEnds.length > 0
