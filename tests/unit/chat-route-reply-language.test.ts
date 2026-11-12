@@ -13,8 +13,10 @@
  * three times as often (217 of 400 replies, 74 of 400 with it).
  *
  * After a user message: a note that names what the user wrote it in, always
- * when that is not Latin script, and for Latin script once the chat has had
- * another one. A chat in Latin script alone gets no such note.
+ * when that is kana, Hangul, Cyrillic or Arabic script, and for Latin script
+ * once the chat has had another one. A chat in Latin script alone gets no
+ * such note, and neither does a message in Han characters alone, which is
+ * Chinese or Japanese written in kanji.
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -149,13 +151,12 @@ it("names it a second time, in the last sentence, for every other model", async 
     }
 })
 
-it("names what a message is written in when that is not Latin script", async () => {
+it("names what a message is written in when that is another script", async () => {
     expect(await userMessages("Check password を赤にして")).toEqual([
         "Check password を赤にして\n\n[The user wrote this message in Japanese.]\n\n[Canvas: empty when this message was sent.]",
     ])
     for (const [text, script] of [
         ["Check password를 빨간색으로 바꿔줘", "Korean"],
-        ["把 Check password 改成红色", "Chinese"],
         ["「Check password」を赤にして", "Japanese"],
         ["Сделай блок Check password красным", "Cyrillic script"],
         ["اجعل مربع Check password أحمر", "Arabic script"],
@@ -176,13 +177,37 @@ it("says nothing about a chat in Latin script", async () => {
     ])
 })
 
+it("says nothing about a message in Han characters alone", async () => {
+    // Chinese, or Japanese written in kanji: the characters do not tell
+    for (const text of [
+        "組織図",
+        "会員登録処理",
+        "把 Check password 改成红色",
+    ]) {
+        expect([text, await writtenIn(text)]).toEqual([text, [undefined]])
+    }
+})
+
 it("goes by the user's own words, not by quoted labels or attached files", async () => {
     expect(
         await writtenIn(
             "Rename the box '登录' to 'Login'",
+            "Rename the box `登录` to `Login`",
             "Draw this file as a flowchart\n\n[File: 流程.txt]\n用户登录，然后进入首页",
         ),
-    ).toEqual([undefined, undefined])
+    ).toEqual([undefined, undefined, undefined])
+    // A quote right after a Chinese character: the Japanese or Korean label
+    // it quotes does not make the message Japanese or Korean
+    for (const text of [
+        "把「ログイン」改成红色",
+        '请把标题"ログイン画面"翻译成中文',
+        "把“로그인”改成红色",
+    ]) {
+        expect([text, await writtenIn(text, "Make the title bold")]).toEqual([
+            text,
+            [undefined, "Latin script, not in Chinese"],
+        ])
+    }
 })
 
 it("names Latin script once the chat has had another script", async () => {
@@ -199,10 +224,30 @@ it("names Latin script once the chat has had another script", async () => {
         ),
     ).toEqual([
         undefined,
-        "Chinese",
+        undefined,
         "Latin script, not in Chinese",
         undefined,
         "Japanese",
         "Latin script, not in Japanese",
     ])
+})
+
+it("keeps a Japanese chat Japanese after a message in kanji alone", async () => {
+    expect(
+        await writtenIn(
+            "ログインの流れをフローチャートにして",
+            "色変更",
+            "Make the title bold",
+        ),
+    ).toEqual(["Japanese", undefined, "Latin script, not in Japanese"])
+})
+
+it("does not take a link or a name with hyphens for three words", async () => {
+    expect(
+        await writtenIn(
+            "画一个登录流程图",
+            "https://github.com/DayuanJiang/next-ai-draw-io/blob/main/README.md",
+            "gpt-4o-mini",
+        ),
+    ).toEqual([undefined, undefined, undefined])
 })

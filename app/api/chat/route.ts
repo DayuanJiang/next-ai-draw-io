@@ -87,16 +87,23 @@ const SCRIPTS: [string, RegExp][] = [
 // The user's own words are the typed text (the first text part) up to the
 // text of attached files ("\n\n[PDF: name]" and the like), without what it
 // quotes: an English request that quotes a Chinese label is in Latin
-// script. No quote starts right after a letter, so the apostrophe of
-// "don't" does not open one. Latin script takes three words: "OK" or a
-// product name in a Chinese chat says nothing about the language.
+// script. No quote starts right after a Latin letter, so the apostrophe of
+// "don't" does not open one; Chinese and Japanese have no spaces, and their
+// quotes follow a character directly. Latin script takes three words
+// between spaces: "OK", a link or a name like gpt-4o-mini in a Chinese chat
+// says nothing about the language. Pasted code of several lines has three
+// words too and counts as Latin script, a known limit.
 function scriptOf(message: ChatUIMessage): string | undefined {
     const words = (message.parts.find(isTextUIPart)?.text ?? "")
         .split(/\n\n\[(?:PDF|File|URL): /)[0]
-        .replace(/(?<!\p{L})["'“”‘’「」『』].*?["'“”‘’「」『』]/gu, "")
+        .replace(
+            /(?<!\p{Script=Latin})["'`“”‘’「」『』].*?["'`“”‘’「」『』]/gu,
+            "",
+        )
     const script = SCRIPTS.find(([, letters]) => letters.test(words))?.[0]
     if (script) return script
-    return (words.match(/\p{Script=Latin}+/gu)?.length ?? 0) >= 3
+    return words.split(/\s+/).filter((word) => /\p{Script=Latin}/u.test(word))
+        .length >= 3
         ? LATIN
         : undefined
 }
@@ -494,18 +501,27 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // some providers join a message's text parts as they are.
     //
     // Before it comes a note that names what the user wrote the message
-    // in: always when that is not Latin script, and for Latin script once
-    // the chat has had another one. The models answer in the language of
-    // what surrounds a message as readily as in its own: the canvas notes
-    // and many labels are English, and a long chat pulls towards the
-    // language of its earlier turns. With the note DeepSeek V3.2 answers
-    // Japanese and Korean requests to edit English labels in the user's
-    // language (24 of 24 replies, 13 of 20 without it), and a request in
-    // another language late in a long chat gets its answer in that
-    // language from GPT-6 Luna (23 of 25, 2 of 10 without) and from
-    // Claude Haiku 5.5 (6 of 6, 4 of 10 without). A chat in Latin script
-    // alone gets no such note. The note depends on the message and on the
-    // user messages before it, so it too is the same in every request.
+    // in: always when that is kana, Hangul, Cyrillic or Arabic script, and
+    // for Latin script once the chat has had another one. The models
+    // answer in the language of what surrounds a message as readily as in
+    // its own: the canvas notes and many labels are English, and a long
+    // chat pulls towards the language of its earlier turns. With the note
+    // DeepSeek V3.2 answers Japanese and Korean requests to edit English
+    // labels in the user's language (24 of 24 replies, 13 of 20 without
+    // it), and a request in another language late in a long chat gets its
+    // answer in that language from GPT-6 Luna (23 of 25, 2 of 10 without)
+    // and from Claude Haiku 5.5 (6 of 6, 4 of 10 without). A chat in Latin
+    // script alone gets no such note. The note depends on the message and
+    // on the user messages before it, so it too is the same in every
+    // request.
+    //
+    // A message whose only other script is Han characters gets no note:
+    // it is Chinese, or Japanese written in kanji alone, and nothing in it
+    // tells which. With a note that said Chinese, Claude Haiku 5.5 and
+    // DeepSeek V3.2 answered "組織図" as a first message in Chinese 5 of 5
+    // times; without a note, in Japanese 5 of 5 times. For a later message
+    // in Latin script it still makes Chinese the chat's other script,
+    // unless that is Japanese: a Japanese chat stays one.
     const newestUser = messages.findLastIndex((m) => m.role === "user")
     // The latest script other than Latin among the user messages so far
     let otherScript: string | undefined
@@ -514,11 +530,20 @@ async function handleChatRequest(req: Request): Promise<Response> {
         const isNewest = i === newestUser
         const diagram = diagramOf(message)
         const script = scriptOf(message)
+        const hanAlone = script === "Chinese"
         const writtenIn =
             script === LATIN
                 ? otherScript && `${LATIN}, not in ${otherScript}`
-                : script
-        if (script && script !== LATIN) otherScript = script
+                : hanAlone
+                  ? undefined
+                  : script
+        if (
+            script &&
+            script !== LATIN &&
+            !(hanAlone && otherScript === "Japanese")
+        ) {
+            otherScript = script
+        }
         const notes = [
             writtenIn ? `[The user wrote this message in ${writtenIn}.]` : "",
             // A message from an older client has no note: the newest one
