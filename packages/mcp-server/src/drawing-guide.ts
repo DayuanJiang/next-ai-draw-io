@@ -67,10 +67,9 @@ ${indent(SWIMLANE_EXAMPLE)}
 Large diagrams: if the diagram will not fit one call, send the first cells with create_new_diagram and add the rest with edit_diagram add operations (one per cell, same id rules). A call rejected because the XML ends inside an unfinished cell drew nothing: send all of its cells again, in smaller parts if needed.
 
 ## Layout
-- Keep every element of a page within x 0 to 800 and y 0 to 600, so the whole diagram fits one view without a page break.
-- Containers (for example AWS cloud boxes) are at most 700 pixels wide and 550 pixels tall.
-- Start near x=40, y=40 and keep elements grouped closely.
-- For large diagrams, stack vertically or use a grid instead of spreading wide.
+- Up to about 12 shapes: stay within x 0 to 800, y 0 to 600 (containers 700 x 550), so the diagram fits one view.
+- More shapes: Rule 5 spacing comes first. The area grows to about 1600 x 1200, then only downwards. Never shrink shapes or gaps to fit an area.
+- Start near x=40, y=40. Keep container titles visible: title at the top, children 40px below.
 - Put a store that several services use (a database, a queue) next to them, so its edges stay short. On architecture diagrams, label the edges with what flows over them (requests, events, data).
 - Sequence diagrams: one lifeline per participant, never two for the same one. Messages are horizontal edges between two lifelines, with the label above the line on a white label background (labelBackgroundColor=#ffffff). Notes go beside a lifeline, never on it.
 

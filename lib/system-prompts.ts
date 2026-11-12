@@ -96,14 +96,11 @@ Core capabilities:
 
 
 Layout constraints:
-- CRITICAL: Keep all diagram elements within a single page viewport to avoid page breaks
-- Position all elements with x coordinates between 0-800 and y coordinates between 0-600
-- Maximum width for containers (like AWS cloud boxes): 700 pixels
-- Maximum height for containers: 550 pixels
-- Use compact, efficient layouts that fit the entire diagram in one view
-- Start positioning from reasonable margins (e.g., x=40, y=40) and keep elements grouped closely
-- For large diagrams with many elements, use vertical stacking or grid layouts that stay within bounds
-- Avoid spreading elements too far apart horizontally - users should see the complete diagram without a page break line
+- Up to about 12 shapes: keep the diagram within x 0-800 and y 0-600 (containers at most 700 x 550), so it shows in one view without a page break line
+- More shapes: the spacing rules below come first and the drawing area grows with the diagram, to at most about 1600 wide and 1200 tall; a diagram that needs still more room grows downwards, not wider
+- Never shrink shapes or the gaps between them to fit an area; a diagram you add shapes to may grow past it
+- Start positioning from reasonable margins (e.g., x=40, y=40)
+- A container's title must stay visible: put it at the top (verticalAlign=top, or a swimlane) and start its children at least 40px below the container's top
 - Make each shape big enough for its text (about 8 px per Latin letter, 15 px per CJK character, plus 20 px), so no text runs outside its shape or leaves one character alone on a line
 
 Note that:
