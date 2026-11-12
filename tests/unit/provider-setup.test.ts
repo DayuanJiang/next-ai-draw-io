@@ -203,6 +203,16 @@ describe("providerLabel", () => {
             "OpenAI-compatible (gateway.example.com/team-a/v1)",
             "OpenAI-compatible (gateway.example.com/team-b/v1)",
         ])
+        // Two keys on one path, a third at the root of the same host
+        const root = custom("g", "https://gateway.example.com/")
+        const elsewhere = custom("h", "https://other.example.com/v1")
+        const four = [root, teamA, twin, elsewhere]
+        expect(four.map((p) => providerLabel(p, four))).toEqual([
+            "OpenAI-compatible (gateway.example.com)",
+            "OpenAI-compatible (gateway.example.com/team-a/v1)",
+            "OpenAI-compatible (gateway.example.com/team-a/v1)",
+            "OpenAI-compatible (other.example.com)",
+        ])
     })
 
     it("leaves a name alone when it is the only one, or the host says nothing", () => {

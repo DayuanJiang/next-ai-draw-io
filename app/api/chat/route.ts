@@ -203,8 +203,14 @@ async function handleChatRequest(req: Request): Promise<Response> {
     let selectedModelId = req.headers.get("x-selected-model-id")
     // A request that names no model runs on AI_MODEL. A server without one
     // runs it on the default of its model list, the model a page selects
-    // once it has the list: a first message can be sent before that.
-    if (!selectedModelId && !provider && !process.env.AI_MODEL) {
+    // once it has the list: a first message can be sent before that. A
+    // request that names its model in x-ai-model alone (a script) keeps it.
+    if (
+        !selectedModelId &&
+        !provider &&
+        !req.headers.get("x-ai-model") &&
+        !process.env.AI_MODEL
+    ) {
         const models = await loadFlattenedServerModels()
         selectedModelId =
             (models.find((m) => m.isDefault) ?? models[0])?.id ?? null
@@ -543,15 +549,24 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // One system message with the instructions, the same in every request
     // of the chat: the diagram goes with the user messages (above). One
     // message also suits the providers that accept only one (MiniMax, chat
-    // templates of open models behind OpenAI-compatible endpoints). The
-    // reply language is named once, in the system prompt: a second sentence
-    // about it at the end of this message makes GPT-6 Luna answer an
-    // English request that quotes its labels in Spanish or Russian (11 of
-    // 68 first replies, none of 42 without it).
+    // templates of open models behind OpenAI-compatible endpoints).
+    //
+    // The system prompt names the reply language, and for every model but
+    // GPT-6 Luna the message ends with a second sentence about it. Each
+    // user message ends with canvas notes in English, and without that
+    // sentence DeepSeek V3.2 answers Japanese and Korean requests to edit
+    // a diagram with English labels in English about three times as often
+    // (217 of 400 replies, 74 of 400 with it). GPT-6 Luna (model ids that
+    // contain gpt-6-luna) gets the system prompt's sentence alone: with
+    // the second one it answers an English request that quotes its labels
+    // in Spanish or Russian about ten times as often (24 of 228 first
+    // replies, 4 of 432 without it).
     const systemMessages = [
         {
             role: "system" as const,
-            content: finalSystemMessage,
+            content: /gpt-6-luna/i.test(modelId)
+                ? finalSystemMessage
+                : `${finalSystemMessage}\n\nWrite your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or the canvas notes in square brackets.`,
             ...(shouldCache && { providerOptions: CACHE_POINT }),
         },
     ]

@@ -282,11 +282,11 @@ describe("a server model that is gone", () => {
 })
 
 /** A first message, from a page that names no model */
-const firstMessage = () =>
+const firstMessage = (headers: Record<string, string> = {}) =>
     chat(
         new Request("http://localhost/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...headers },
             body: JSON.stringify({
                 messages: [
                     {
@@ -336,6 +336,43 @@ describe("a request that names no model", () => {
         await res.text()
         expect(sent).toHaveLength(1)
         expect(JSON.parse(sent[0]).model).toBe("m2")
+    })
+
+    it("keeps the model and key of a request that names its model in x-ai-model alone", async () => {
+        // A script, on a server whose list has another provider's default
+        process.env.AI_PROVIDER = "openai"
+        process.env.OPENAI_API_KEY = "server-key"
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            '{"providers":[{"name":"Claude","provider":"anthropic","models":["claude-default"],"default":true}]}',
+        )
+        const sent: unknown[] = []
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string, init?: RequestInit) => {
+                sent.push([
+                    url,
+                    new Headers(init?.headers).get("authorization"),
+                    JSON.parse(String(init?.body)).model,
+                ])
+                return new Response('{"error":{"message":"x"}}', {
+                    status: 400,
+                    headers: { "Content-Type": "application/json" },
+                })
+            }),
+        )
+        const res = await firstMessage({
+            "x-ai-model": "gpt-4o-mini",
+            "x-ai-api-key": "sk-user-key",
+        })
+        await res.text()
+        expect(sent).toEqual([
+            [
+                "https://api.openai.com/v1/responses",
+                "Bearer sk-user-key",
+                "gpt-4o-mini",
+            ],
+        ])
     })
 
     it("says how to choose Bedrock in the part of the error the chat shows", async () => {
