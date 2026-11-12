@@ -17,6 +17,9 @@
  * A definition is written for one drawing, but a model goes on using the
  * name in the calls that follow (an edit_diagram add in the same style), so
  * the definitions are remembered and later cells are expanded with them.
+ * They belong to the document being drawn: when another one takes its
+ * place (a file, another session or chat, an earlier version), the caller
+ * puts that document's definitions in place, or none (resetStyleClasses).
  *
  * html=1 and whiteSpace=wrap, which draw.io itself puts on every new shape,
  * are added here too, so the model never has to write them.
@@ -48,6 +51,19 @@ export function rememberStyleClasses(classes: StyleClasses): StyleClasses {
         if (!DRAWIO_STYLE_NAME.test(name)) remembered.set(name, value)
     }
     return new Map([...remembered, ...classes])
+}
+
+/** A copy of the remembered definitions, to keep with a version */
+export const rememberedStyleClasses = (): StyleClasses => new Map(remembered)
+
+/**
+ * Replace the remembered definitions: with those kept for the version that
+ * is back on the canvas, or with none for a document they were not written
+ * for. Left in place, a name would expand to another diagram's definition.
+ */
+export function resetStyleClasses(classes: StyleClasses = new Map()) {
+    remembered.clear()
+    for (const [name, value] of classes) remembered.set(name, value)
 }
 
 // <mxStyle name="..." value="..."/> with the whitespace after it, also when
@@ -223,6 +239,37 @@ export function edgeIdsOf(xml: string): Set<string> {
     return ids
 }
 
+// An mxCell opening tag and, for a cell with a link or custom data, the
+// opening tag of the <object> or <UserObject> around it
+const CELL_AND_WRAPPER =
+    /(?:<(?:UserObject|object)\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*>\s*)?<mxCell\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*\/?>/g
+
+/**
+ * The cells in the XML: the id and the label of each, which a wrapper holds
+ * for its cell (the label as "label"), and the attributes of its mxCell
+ */
+function cellsIn(xml: string) {
+    const attrsOf = (text: string) =>
+        new Map(readAttributes(text).map((a) => [a.name, a.value]))
+    return Array.from(
+        xml.matchAll(CELL_AND_WRAPPER),
+        ([, wrapperText, cellText]) => {
+            const cell = attrsOf(cellText)
+            const wrapper =
+                wrapperText === undefined ? undefined : attrsOf(wrapperText)
+            return {
+                id: (wrapper ?? cell).get("id"),
+                label:
+                    (wrapper ? wrapper.get("label") : cell.get("value")) ?? "",
+                cell,
+            }
+        },
+    )
+}
+
+/** The label of the cell an edit operation sends */
+export const labelOf = (cellXml: string) => cellsIn(cellXml)[0]?.label ?? ""
+
 /**
  * The labels, by id, of the shapes and edges whose style has no html key.
  * They come from a file another tool wrote: the label is plain text, where
@@ -230,17 +277,13 @@ export function edgeIdsOf(xml: string): Set<string> {
  */
 export function plainLabelsOf(xml: string): Map<string, string> {
     const labels = new Map<string, string>()
-    for (const [, attrText] of xml.matchAll(CELL_TAG)) {
-        const attrs = new Map(
-            readAttributes(attrText).map((a) => [a.name, a.value]),
-        )
-        const id = attrs.get("id")
+    for (const { id, label, cell } of cellsIn(xml)) {
         if (
             id &&
-            (attrs.get("vertex") === "1" || attrs.get("edge") === "1") &&
-            !hasKey(attrs.get("style") ?? "", "html")
+            (cell.get("vertex") === "1" || cell.get("edge") === "1") &&
+            !hasKey(cell.get("style") ?? "", "html")
         ) {
-            labels.set(id, attrs.get("value") ?? "")
+            labels.set(id, label)
         }
     }
     return labels
@@ -271,15 +314,16 @@ function hasLabelOutside(style: string): boolean {
  *
  * An edit adds cells to a page the XML does not show, so the caller passes
  * the ids of the edges already on it (edgeIdsOf), or new edge labels would
- * be wrapped like shapes. It also passes the page's plain text labels
- * (plainLabelsOf): an update that keeps such a label gets no defaults, since
- * html=1 would read the "<" in "List<String>" as a tag and hide the text.
- * The model cannot ask for that itself: it is told never to write html=1.
+ * be wrapped like shapes. It also says when the XML is a cell of the page
+ * that keeps its plain text label (plainLabelsOf): such an update gets no
+ * defaults, since html=1 would read the "<" in "List<String>" as a tag and
+ * hide the text. The model cannot ask for that itself: it is told never to
+ * write html=1.
  */
 export function addDefaultStyles(
     xml: string,
     knownEdgeIds: Iterable<string> = [],
-    plainLabels: Map<string, string> = new Map(),
+    keepsPlainLabel = false,
 ): string {
     const edges = new Set([...knownEdgeIds, ...edgeIdsOf(xml)])
     return rewriteCellStyles(xml, (style, attrs) => {
@@ -287,8 +331,6 @@ export function addDefaultStyles(
         const isEdge = attrs.get("edge") === "1"
         const isVertex = attrs.get("vertex") === "1" && !isEdge
         if (!isVertex && !isEdge) return undefined
-        const label = attrs.get("value") ?? ""
-        if (plainLabels.get(attrs.get("id") ?? "") === label) return undefined
         // draw.io writes an embedded picture as image=data:image/png,<data>.
         // With the usual ";base64" the value would end at that ";", where
         // a style is split, and the picture would not load.
@@ -296,6 +338,8 @@ export function addDefaultStyles(
             /(image=data:image\/[\w.+-]+);base64,/,
             "$1,",
         )
+        // (a cell without a style attribute stays without one)
+        if (keepsPlainLabel) return style === undefined ? undefined : current
         const isEdgeLabel =
             hasToken(current, "edgeLabel") ||
             attrs.get("connectable") === "0" ||

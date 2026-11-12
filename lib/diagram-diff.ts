@@ -354,10 +354,10 @@ export function sameFileVars(a: string | null, b: string | null): boolean {
  * page settings and file variables. This is the web app's one rule for "is
  * this version on the canvas" (versions, compare, one-step commits). The
  * MCP server's edit gate has its own (contentFingerprint): it compares the
- * cells as written, and leaves page settings and file variables out. The
+ * styles as written, and leaves page settings and file variables out. The
  * two disagree both ways (a background change is a difference only here;
- * a geometry written "40.0" and "40" is one only there), so neither is a
- * subset of the other.
+ * a style written "rounded=1;;" and "rounded=1;" is one only there), so
+ * neither is a subset of the other.
  */
 export function isSameDocument(a: string, b: string): boolean {
     const docA = readDocument(a)

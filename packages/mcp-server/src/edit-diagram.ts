@@ -7,7 +7,11 @@
  * so the model never builds on a half-applied edit.
  */
 
-import { defaultLayerOf, expandCompactCells } from "./compact-cells.ts"
+import {
+    defaultLayerOf,
+    expandCompactCells,
+    hasShapeWithoutPlace,
+} from "./compact-cells.ts"
 import {
     applyDiagramOperations,
     type DiagramOperation,
@@ -19,6 +23,7 @@ import {
     addDefaultStyles,
     applyStyleClasses,
     edgeIdsOf,
+    labelOf,
     plainLabelsOf,
 } from "./style-classes.ts"
 import { readAttributes } from "./xml-attributes.ts"
@@ -130,6 +135,16 @@ export function editDiagram(
         if (check.fixed) {
             fixes.push(`${op.cell_id}: ${check.fixes.join(", ")}`)
         }
+        const cellXml = check.fixed ?? newXml
+        // <mxCell id="3" value="Renamed" vertex="1" parent="1"/> replaces
+        // the cell with one that has no place: expanded below, it would
+        // get the default one and jump to the page's corner
+        if (op.operation === "update" && hasShapeWithoutPlace(cellXml)) {
+            errors.push(
+                `update ${op.cell_id}: new_xml has no position or size (x, y, w, h), so the cell would move to the page's corner. update replaces the whole cell: send its value, style and position too`,
+            )
+            continue
+        }
         // The defaults the model is told not to write (style-classes.ts),
         // added after the fixes so a repaired cell gets them too; the
         // pictures it was shown as references (embedded-images.ts) go back
@@ -138,13 +153,10 @@ export function editDiagram(
             ...op,
             new_xml: addDefaultStyles(
                 applyStyleClasses(
-                    expandCompactCells(
-                        restoreImageData(check.fixed ?? newXml, xml),
-                        layer,
-                    ),
+                    expandCompactCells(restoreImageData(cellXml, xml), layer),
                 ),
                 edges,
-                plainLabels,
+                plainLabels.get(op.cell_id) === labelOf(cellXml),
             ),
         })
     }

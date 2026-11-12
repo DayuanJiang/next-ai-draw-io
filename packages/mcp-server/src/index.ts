@@ -113,6 +113,11 @@ import {
 import { Autosaver, defaultDataDir, expandHome } from "./persistence.ts"
 import { describeSelection } from "./selection.ts"
 import { getShapeLibrary, SHAPE_LIBRARY_LIST } from "./shape-library.ts"
+import {
+    rememberedStyleClasses,
+    resetStyleClasses,
+    type StyleClasses,
+} from "./style-classes.ts"
 import { XML_REFERENCE } from "./xml-reference.ts"
 
 // DOMParser/XMLSerializer globals for the XML helpers (Node has neither)
@@ -184,10 +189,18 @@ type Session = {
     lastSeenXml: string
     // The documents the model wrote itself, newest last, as many as History
     // keeps versions: restore_version back to one of them needs no
-    // get_diagram, the model knows that diagram.
-    written: string[]
+    // get_diagram, the model knows that diagram. Each with the named styles
+    // defined up to it (style-classes.ts), which come back with it.
+    written: Map<string, StyleClasses>
+    // When the server last opened the preview tab (0: it never did)
+    tabOpenedAt: number
 }
 let currentSession: Session | null = null
+
+// A closed preview tab never asks the server again. A hidden one still does,
+// about once a minute (browsers slow the timers of background tabs down),
+// so only a longer silence means that the tab is gone.
+const TAB_CLOSED_MS = 90_000
 
 // After the host restarted the server or resumed a conversation, a model
 // that reads only "call start_session" starts a blank session and redraws
@@ -211,8 +224,7 @@ const fail = (text: string) => ({
 })
 
 // Create MCP server. The version reported in the MCP handshake is read from
-// package.json so it can never drift from the published npm version again
-// (it sat hardcoded at stale values for most of this package's history).
+// package.json, so it is always the version that was published to npm.
 // Both src/ (tsx dev) and dist/ (published build) live one level below the
 // package root, so the relative path works in either runtime.
 const require = createRequire(import.meta.url)
@@ -387,8 +399,9 @@ function commitDocument(
     setState(session.id, xml)
     session.lastSeenXml = seen ? xml : ""
     if (seen) {
-        session.written.push(xml)
-        if (session.written.length > 20) session.written.shift()
+        session.written.set(xml, rememberedStyleClasses())
+        const [oldest] = session.written.keys()
+        if (session.written.size > 20) session.written.delete(oldest)
     }
     addHistory(session.id, xml, "", source)
 }
@@ -396,12 +409,15 @@ function commitDocument(
 /**
  * What the server repaired in the XML of a write, for its result. A repair
  * can change what the model thinks it drew (a duplicate id gets a new one,
- * a stray point is removed), and the log never reaches the model.
+ * a stray point is removed), and the log never reaches the model. A repair
+ * that is also among the write's notes (reviewCells) is told there, once.
  */
-const fixesNote = (fixes: string[]) =>
-    fixes.length > 0
-        ? `\n\nAuto-fixed in your XML: ${fixes.join("; ")}. Call get_diagram if you need the cells as drawn.`
+function fixesNote(fixes: string[], notes: string[]) {
+    const told = fixes.filter((fix) => !notes.includes(fix))
+    return told.length > 0
+        ? `\n\nAuto-fixed in your XML: ${told.join("; ")}. Call get_diagram if you need the cells as drawn.`
         : ""
+}
 
 // The drawing guide plus the user's own rules from instructions.md, read
 // on every call so edits apply without restarting the host
@@ -485,9 +501,9 @@ async function openBrowser(url: string) {
 // can open here. BROWSER=none (the convention of CRA and Vite dev servers)
 // says so: the e2e tests and headless hosts set it. Linux without a display
 // (an SSH session, a container) has none either, and xdg-open reports no
-// failure, so the result used to claim a tab the user never saw. WSL opens
-// the Windows browser, and hosts that forward the browser (VS Code Remote,
-// Codespaces) set BROWSER.
+// failure there, so the environment is checked here: the result must not
+// claim a tab the user never sees. WSL opens the Windows browser, and hosts
+// that forward the browser (VS Code Remote, Codespaces) set BROWSER.
 const NO_BROWSER =
     process.env.BROWSER === "none" ||
     (process.platform === "linux" &&
@@ -528,8 +544,21 @@ registerTool(
         // model has seen, so its next edit would be refused
         if (session_id && session_id === currentSession?.id) {
             const state = sessionState(session_id)
+            const url = previewUrl(port, session_id)
+            // Only its tab is opened again, once the user has closed it:
+            // no word from a tab since it was opened or last asked
+            const quietSince = Math.max(
+                state?.lastPolled ?? 0,
+                currentSession.tabOpenedAt,
+            )
+            const reopen =
+                !NO_BROWSER && Date.now() - quietSince > TAB_CLOSED_MS
+            if (reopen) {
+                await openBrowser(url)
+                currentSession.tabOpenedAt = Date.now()
+            }
             return ok(
-                `Session ${session_id} is already active: keep using it. start_session is needed once per conversation.\n\nBrowser URL: ${previewUrl(port, session_id)} (for the user, if they closed the preview tab)${state ? `\n\n${describePages(state.xml)}` : ""}\n\nThe drawing guide is in the first start_session result; get_drawing_guide returns it again.`,
+                `Session ${session_id} is already active: keep using it. start_session is needed once per conversation.\n\nBrowser URL: ${url} ${reopen ? "(the preview tab was closed, so it was opened again)" : "(for the user, if they closed the preview tab)"}${state ? `\n\n${describePages(state.xml)}` : ""}\n\nThe drawing guide is in the first start_session result; get_drawing_guide returns it again.`,
             )
         }
 
@@ -541,8 +570,11 @@ registerTool(
             id: sessionId,
             xml: "",
             lastSeenXml: "",
-            written: [],
+            written: new Map(),
+            tabOpenedAt: NO_BROWSER ? 0 : Date.now(),
         }
+        // Another document: the named styles of the last one are not its own
+        resetStyleClasses()
 
         const browserUrl = previewUrl(port, sessionId)
         if (!NO_BROWSER) await openBrowser(browserUrl)
@@ -716,7 +748,7 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                 type: "text",
                 text: cleared
                     ? "Canvas cleared: one blank page. The previous diagram is in History."
-                    : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}${fixesNote(prepared.fixes)}${notesText(prepared.notes)}\n\n${outlineNote()}`,
+                    : `Diagram content set successfully!\n\nThe diagram is now visible in your browser.\n\nXML length: ${xml.length} characters\n${pageSummary}${fixesNote(prepared.fixes, prepared.notes)}${notesText(prepared.notes)}\n\n${outlineNote()}`,
             },
         ]
         // The page on screen: the new document's first page after a full
@@ -828,6 +860,8 @@ registerTool(
         //   input — keep the gate.
         const browserState = syncFromBrowser(session)
         const markSeen = inlineXml !== undefined && !loaded.hadCompressedPages
+        // The file's cells use style names in draw.io's sense, or its own
+        resetStyleClasses()
         commitDocument(session, xml, markSeen, browserState?.svg, "load")
         // The preview names the file (inline XML is in none)
         setSessionFile(session.id, path !== undefined ? sourceLabel : null)
@@ -1001,7 +1035,7 @@ registerTool(
         const content: CallToolResult["content"] = [
             {
                 type: "text",
-                text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.${unchangedNote}${fixesNote(outcome.fixes)}${notesText(outcome.notes)}\n\n${outlineNote()}`,
+                text: `Diagram edited successfully!\n\nApplied ${outcome.applied} operation(s) on ${describeSelector(pageSelector)}.${unchangedNote}${fixesNote(outcome.fixes, outcome.notes)}${notesText(outcome.notes)}\n\n${outlineNote()}`,
             },
         ]
         // Without a selector the edit went to the first page, while the
@@ -1295,9 +1329,9 @@ const SCREENSHOT_WIDTHS = [1000, 700]
 const MAX_SCREENSHOT_CHARS = 140_000
 
 // Some hosts and models take only the text of a tool result (Bedrock
-// refuses tool images for several models). The checklist then read as if
-// there were a picture: models answered "the screenshot looks good" and
-// asked for more screenshots they could not see either
+// refuses tool images for several models). The checklist alone reads as if
+// there were a picture, so the text says what to do without one: a model
+// must not report on a screenshot it cannot see, nor ask for more of them
 const NO_IMAGE_NOTE =
     "If no image came with this result, your client does not pass tool images to you: do not say you looked at the diagram and do not take more screenshots. Check positions and sizes in the XML instead, and tell the user the rendering was not checked."
 
@@ -1480,9 +1514,9 @@ registerTool(
 
         // Detect format from extension if not specified
         const lowerPath = path.toLowerCase()
-        // A format this server cannot write: report.pdf used to be saved as
-        // report.pdf.drawio with "exported successfully", and the model
-        // told the user the PDF was there
+        // A format this server cannot write is refused: saved under the
+        // default format (report.pdf.drawio) with "exported successfully",
+        // the model would tell the user the PDF is there
         const foreign = /\.(pdf|jpe?g|gif|webp|bmp|vsdx|html)$/.exec(lowerPath)
         if (foreign && !format) {
             return fail(
@@ -1883,7 +1917,7 @@ registerTool(
                 ? `\n\nThe first page is still called "${first.name}": give it a name that says what it shows with rename_page.`
                 : ""
         return ok(
-            `Page added.\n\nid=${info.id}\nname=${info.name}\nindex=${info.index}\ncells=${info.cellCount}${fixesNote(fixes)}${renameHint}${sameNameNote(loaded.doc, info.name)}${notesText(notes)}`,
+            `Page added.\n\nid=${info.id}\nname=${info.name}\nindex=${info.index}\ncells=${info.cellCount}${fixesNote(fixes, notes)}${renameHint}${sameNameNote(loaded.doc, info.name)}${notesText(notes)}`,
         )
     },
     { write: true },
@@ -1920,8 +1954,8 @@ registerTool(
             return fail(`Page ${describeSelector(pageSelector)} not found.`)
         }
 
-        // Named in History: a rename changes no shape, so its version card
-        // read "Changed the diagram" with "No visible changes"
+        // Named in History: a rename changes no shape, so the entry's source
+        // is all that tells its version card and restore_version what it did
         loaded.writeBack("rename_page")
         log.info(
             `Renamed page ${describeSelector(pageSelector)} → "${new_name}"`,
@@ -2073,13 +2107,17 @@ registerTool(
 
         restoreHistoryEntry(session.id, entry.id)
         session.xml = entry.xml
-        // A version the model wrote is known to it: an undo of its own
-        // change, then an edit, used to be refused until it had read the
-        // whole document back. Any other version (the user's hand edits,
-        // an opened file) it may never have seen: as after load_diagram,
-        // the edit gate asks for one get_diagram first
-        const known = session.written.includes(entry.xml)
+        // A version the model wrote is known to it: after an undo of its
+        // own change an edit can follow without reading the document back.
+        // Any other version (the user's hand edits, an opened file) it may
+        // never have seen: as after load_diagram, the edit gate asks for
+        // one get_diagram first
+        const styles = session.written.get(entry.xml)
+        const known = styles !== undefined
         session.lastSeenXml = known ? entry.xml : ""
+        // Its named styles as they were when the model drew it: a later
+        // drawing may have given a name another definition
+        if (styles) resetStyleClasses(styles)
 
         log.info(
             `Restored the version ${stepsBack} step(s) back (entry ${entry.id})`,

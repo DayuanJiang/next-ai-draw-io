@@ -12,6 +12,7 @@ import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete } from "@/lib/utils"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
+import { notesText } from "@/packages/mcp-server/src/diagram-operations.ts"
 import {
     type EditOperation,
     editDiagram,
@@ -491,10 +492,12 @@ Please check the cell IDs and retry.`,
                 outcome.fixes.length === 0,
                 currentXml,
             )
+            // With what the model should know about them: a delete that
+            // found no such cell and was skipped, cells a delete took along
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
-                output: `Successfully applied ${outcome.applied} operation(s) to the diagram.`,
+                output: `Successfully applied ${outcome.applied} operation(s) to the diagram.${notesText(outcome.notes)}`,
             })
         } catch (error) {
             console.error("[edit_diagram] Failed:", error)

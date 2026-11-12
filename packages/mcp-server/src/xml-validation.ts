@@ -61,6 +61,15 @@ function parseXmlTags(xml: string): ParsedTag[] {
         const tagStart = xml.indexOf("<", i)
         if (tagStart === -1) break
 
+        // A comment is no tag, and an apostrophe in it opens no quoted
+        // value: read as one, it would hide every tag up to the next quote
+        if (xml.startsWith("<!--", tagStart)) {
+            const commentEnd = xml.indexOf("-->", tagStart)
+            if (commentEnd === -1) break
+            i = commentEnd + 3
+            continue
+        }
+
         // Find matching > by tracking quotes
         let tagEnd = tagStart + 1
         let inQuote = false
@@ -497,13 +506,16 @@ export function repairNumberQuotes(xml: string): string {
  * A compact cell written without the slash: <mxCell ... h="60"> followed by
  * the next cell, a definition, the end of the page or the end of the XML.
  * Only cells that carry a size or a connection, so an open container stays
- * open.
+ * open, and not one that says vertex="1" or edge="1": the compact form
+ * writes neither, and a cell in the long form ends its opening tag with ">"
+ * before its mxGeometry, where output that was cut off may stop.
  */
 export function closeSlashlessCells(xml: string): string {
     return xml.replace(
         /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)\s*>(?=\s*(?:<mxCell\b|<mxStyle\b|<\/root>|$))/g,
         (tag, attrText: string) =>
-            /\s(?:x|y|w|h|width|height|source|target)="/.test(attrText)
+            /\s(?:x|y|w|h|width|height|source|target)="/.test(attrText) &&
+            !/\s(?:vertex|edge)="1"/.test(attrText)
                 ? `<mxCell${attrText}/>`
                 : tag,
     )
@@ -525,6 +537,17 @@ export function stripWrapping(xml: string): string {
 export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let fixed = xml
     const fixes: string[] = []
+
+    // Before every other step: the control characters XML 1.0 does not
+    // allow, which are all below the space except tab, line feed and
+    // carriage return. A model now and then ends a style value with one,
+    // and the parser then rejects the cell.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the characters to remove
+    const allowed = fixed.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+    if (allowed !== fixed) {
+        fixed = allowed
+        fixes.push("Removed control characters that XML does not allow")
+    }
 
     // 0. Fix JSON-escaped XML
     if (/=\\"/.test(fixed)) {
@@ -741,21 +764,12 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         )
     }
 
-    // 16b. Remove orphan <mxPoint>s (no "as" attribute, not inside
-    // <Array as="points">), which draw.io refuses to load
-    const orphanPoints = findOrphanMxPoints(fixed)
-    if (orphanPoints.length > 0) {
-        for (const { start, end } of orphanPoints.reverse()) {
-            fixed = fixed.slice(0, start) + fixed.slice(end)
-        }
-        fixes.push(`Removed ${orphanPoints.length} orphan <mxPoint>(s)`)
-    }
-
-    // 17. Fix unclosed tags. What a cell left open (its <mxGeometry>) is
-    // closed right before the cell's </mxCell>: closed at the end of the
-    // document, as the other open tags are below, that one cell would fail
-    // the whole drawing. (A cell without its own </mxCell> is left to the
-    // end of the document and steps 20 and 21.)
+    // 17. Fix unclosed tags. What a cell left open (its <mxGeometry>, the
+    // <Array> of its waypoints) is closed right before the </mxGeometry> or
+    // </mxCell> that follows: closed at the end of the document, as the
+    // other open tags are below, that one cell would fail the whole
+    // drawing. (A cell without its own </mxCell> is left to the end of the
+    // document and steps 20 and 21.)
     const tagStack: string[] = []
     const parsedTags = parseXmlTags(fixed)
     const closedInCell: { at: number; names: string[] }[] = []
@@ -769,7 +783,10 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         if (isClosing) {
             const lastIdx = tagStack.lastIndexOf(tagName)
             if (lastIdx === -1) continue
-            if (tagName === "mxCell" && lastIdx < tagStack.length - 1) {
+            if (
+                (tagName === "mxCell" || tagName === "mxGeometry") &&
+                lastIdx < tagStack.length - 1
+            ) {
                 const stillOpen = tagStack.splice(lastIdx).slice(1).reverse()
                 closedInCell.push({ at: startIndex, names: stillOpen })
             } else {
@@ -788,6 +805,18 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push(
             `Closed unclosed tag(s) inside their cell: ${closedInCell.flatMap(({ names }) => names).join(", ")}`,
         )
+    }
+
+    // 17b. Remove orphan <mxPoint>s (no "as" attribute, not inside
+    // <Array as="points">), which draw.io refuses to load. After the cells'
+    // open tags are closed: the waypoints of an <Array> that lacked its
+    // closing tag are no orphans
+    const orphanPoints = findOrphanMxPoints(fixed)
+    if (orphanPoints.length > 0) {
+        for (const { start, end } of orphanPoints.reverse()) {
+            fixed = fixed.slice(0, start) + fixed.slice(end)
+        }
+        fixes.push(`Removed ${orphanPoints.length} orphan <mxPoint>(s)`)
     }
 
     if (tagStack.length > 0) {

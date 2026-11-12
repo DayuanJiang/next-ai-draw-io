@@ -204,6 +204,15 @@ describe("truncation check with named styles and compact cells", () => {
         if (full.ok) expect(full.xml).toContain('<mxCell id="3" value="B"')
     })
 
+    it("reports output cut right after the opening tag of an edge in the long form", () => {
+        // Its mxGeometry and the cells after it never arrived
+        const out = prepareNewDiagram(
+            `${A}<mxCell id="3" value="B" x="120" y="0" w="80" h="40"/><mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="2" target="3">`,
+        )
+        expect(out.ok).toBe(false)
+        if (!out.ok) expect(out.error).toContain("cut off")
+    })
+
     it("leaves definitions without any cell to the style check", () => {
         expect(truncatedCellError(BLUE)).toBeNull()
         const out = prepareNewDiagram(BLUE)
@@ -287,6 +296,55 @@ describe("a full page without the root cells", () => {
         expect(out.xml).toContain(
             '<root><mxCell id="0"/><mxCell id="L" parent="0"/>',
         )
+    })
+
+    it("adds the layer to a page that has only the root cell", () => {
+        const shape = '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>'
+        for (const root of ["<root>", "<root >"]) {
+            const out = prepareNewDiagram(
+                `<mxGraphModel>${root}<mxCell id="0"/>${shape}</root></mxGraphModel>`,
+            )
+            expect(out).toMatchObject({ ok: true, fixes: [], notes: [] })
+            if (!out.ok) return
+            expect(out.xml).toContain(
+                `${ROOT_CELLS}<mxCell id="2" value="A" vertex="1" parent="1" style="whiteSpace=wrap;html=1;">`,
+            )
+        }
+    })
+})
+
+describe("a full page whose root cells are not called 0 and 1", () => {
+    // draw.io's own templates name them like this (Basic flowchart)
+    const P = "WIyWlLk6GJQsqaUBKTNV"
+    const cells = `<mxCell id="${P}-0"/><mxCell id="${P}-1" parent="${P}-0"/><mxCell id="${P}-3" value="Lamp doesn't work" style="rounded=1;whiteSpace=wrap;html=1;" parent="${P}-1" vertex="1"><mxGeometry x="160" y="80" width="120" height="40" as="geometry"/></mxCell>`
+    const template = (more = "") =>
+        `<mxfile host="app.diagrams.net"><diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1"><mxGraphModel dx="1223" dy="871" grid="1" gridSize="10"><root>${cells}${more}</root></mxGraphModel></diagram></mxfile>`
+
+    it("keeps them, and adds no second pair", () => {
+        const out = prepareNewDiagram(template())
+        expect(out).toMatchObject({ ok: true, fixes: [], notes: [] })
+        if (!out.ok) return
+        expect(out.xml).toBe(template())
+    })
+
+    it("keeps two layers as two layers", () => {
+        const layers = `<mxfile><diagram id="pg1" name="Page-1"><mxGraphModel><root><mxCell id="abc-0"/><mxCell id="abc-1" value="Network" parent="abc-0"/><mxCell id="abc-9" value="Comments" parent="abc-0" visible="0"/><mxCell id="abc-3" value="Router" style="rounded=1;whiteSpace=wrap;html=1;" parent="abc-1" vertex="1"><mxGeometry x="160" y="80" width="120" height="40" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
+        const out = prepareNewDiagram(layers)
+        expect(out).toMatchObject({ ok: true, xml: layers, notes: [] })
+    })
+
+    it("puts a compact cell without a parent on the page's own layer", () => {
+        const out = prepareNewDiagram(
+            template(
+                '<mxCell id="n1" value="New" x="340" y="80" w="120" h="40"/>',
+            ),
+        )
+        expect(out).toMatchObject({ ok: true, fixes: [], notes: [] })
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="n1" value="New" vertex="1" parent="${P}-1"`,
+        )
+        expect(out.xml).not.toContain('parent="1"')
     })
 })
 

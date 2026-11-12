@@ -211,6 +211,17 @@ describe("a compact cell with a slip", () => {
             '<mxGeometry x="535" y="276" width="225" height="112" as="geometry"/>',
         )
     })
+
+    it("drops a semicolon after a number, as draw.io reads the number alone", () => {
+        // From the demo site: h="75;" in an edit_diagram update
+        expect(
+            expandCompactCells(
+                '<mxCell id="22" value="" style="rounded=0;" x="291" y="-18.5;" w="8" h="75;"/>',
+            ),
+        ).toContain(
+            '<mxGeometry x="291" y="-18.5" width="8" height="75" as="geometry"/>',
+        )
+    })
 })
 
 describe("review round: cells the model may write", () => {

@@ -308,6 +308,26 @@ describe("a closing tag left out inside one cell", () => {
         expect(r.fixed?.match(/<Array as="points">/g)).toHaveLength(2)
     })
 
+    it("closes the waypoints' <Array>, with or without </mxGeometry> after it", () => {
+        const open = `<Array as="points"><mxPoint x="690" y="264"/><mxPoint x="690" y="360"/>`
+        const whole = edge(
+            "e1",
+            `<mxGeometry relative="1" as="geometry">${points}</mxGeometry>`,
+        )
+        for (const geometry of [
+            `<mxGeometry relative="1" as="geometry">${open}</mxGeometry>`,
+            `<mxGeometry relative="1" as="geometry">${open}`,
+        ]) {
+            const r = validateAndFixXml(
+                model(box("a") + box("b") + edge("e1", geometry) + box("c")),
+            )
+            expect(r.valid).toBe(true)
+            // Both waypoints are still there
+            expect(r.fixed).toContain(whole + box("c"))
+            expect(r.fixes.join()).not.toContain("orphan")
+        }
+    })
+
     it("closes a shape's geometry written without its slash", () => {
         const open = `<mxGeometry x="40" y="40" width="80" height="40" as="geometry">`
         const r = validateAndFixXml(
@@ -319,6 +339,32 @@ describe("a closing tag left out inside one cell", () => {
         )
         expect(r.valid).toBe(true)
         expect(r.fixed).toContain(`${open}</mxGeometry></mxCell>${box("c")}`)
+    })
+})
+
+describe("a control character in the model's XML", () => {
+    // As on the demo site: a style value that ends with ESC, US, DC2 or STX
+    it.each([27, 31, 18, 2])(
+        "is removed and named among the fixes (character %d)",
+        (code) => {
+            const cell = (end: string) =>
+                `<mxCell id="47" value="push" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;${end}" edge="1" parent="1" source="a" target="b"><mxGeometry relative="1" as="geometry"/></mxCell>`
+            const r = validateAndFixXml(cell(String.fromCharCode(code)))
+            expect(r.valid).toBe(true)
+            expect(r.fixed).toBe(cell(""))
+            expect(r.fixes).toEqual([
+                "Removed control characters that XML does not allow",
+            ])
+        },
+    )
+
+    it("leaves tabs and line breaks where they are", () => {
+        // (the bare & makes the auto-fix run)
+        const cell = (amp: string) =>
+            `\n\t<mxCell id="2" value="R ${amp} D\tb" vertex="1" parent="1"/>\r\n`
+        const r = validateAndFixXml(model(cell("&")))
+        expect(r.fixes).toEqual(["Escaped unescaped & characters"])
+        expect(r.fixed).toBe(model(cell("&amp;")))
     })
 })
 
@@ -443,6 +489,23 @@ describe("attributes inside quoted values", () => {
         )
         expect(r.valid).toBe(true)
         expect(r.fixed).toMatch(/<mxCell id="cell_\d+_1" value="WHERE id=''"/)
+    })
+
+    it("are still read after a comment with an apostrophe", () => {
+        const comment = "<!-- Bob's services -->"
+        const twice = validateAndFixXml(
+            model(
+                `<mxCell id="2" vertex="1" parent="1"/>${comment}<mxCell id="3" vertex="1" parent="1"/><mxCell id="3" vertex="1" parent="1"/>`,
+            ),
+        )
+        expect(twice.fixes).toEqual([
+            "Renamed duplicate ids (the first cell keeps its id; edges still name it): 3 to 3_dup1",
+        ])
+        expect(twice.fixed).toContain(`${comment}<mxCell id="3" vertex`)
+        const empty = validateAndFixXml(
+            model(`${comment}<mxCell id="" vertex="1" parent="1"/>`),
+        )
+        expect(empty.fixes).toEqual(["Generated 1 missing ID(s)"])
     })
 
     it("leave two cells with an unbalanced quote their ids and parents", () => {

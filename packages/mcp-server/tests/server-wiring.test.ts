@@ -343,6 +343,9 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         expect(drawn).toContain(
             'Notes:\n- Drawn without the end that names no cell on this page: 5 (target "33").',
         )
+        // Told once: a repair among the notes is not listed as auto-fixed too
+        expect(drawn.split("Drawn without the end")).toHaveLength(2)
+        expect(drawn).not.toContain("Auto-fixed")
         const edited = textOf(
             await callTool("edit_diagram", {
                 operations: [
@@ -363,6 +366,7 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         expect(edited).toContain(
             '- Put on the page itself, as the parent is no cell on this page: 3 (parent "nope").',
         )
+        expect(edited.split("Put on the page itself")).toHaveLength(2)
         const added = textOf(
             await callTool("add_page", {
                 name: "Two",
@@ -372,6 +376,7 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         expect(added).toContain(
             'Notes:\n- Drawn without the end that names no cell on this page: 7 (target "9").',
         )
+        expect(added.split("Drawn without the end")).toHaveLength(2)
     })
 
     it("get_diagram and a .drawio export do not wait for a tab that never connected", async () => {
@@ -672,6 +677,49 @@ describe("MCP server wiring: restore_version", () => {
         })
         expect(edited.isError).toBe(true)
         expect(textOf(edited)).toContain("You have not seen this diagram yet")
+    })
+})
+
+describe("MCP server wiring: named styles follow the document", () => {
+    const drawWith = (fill: string) =>
+        callTool("create_new_diagram", {
+            xml: `<mxStyle name="svc" value="fillColor=${fill};"/><mxCell id="2" value="A" style="svc;" x="40" y="40" w="120" h="60"/>`,
+        })
+    // The style of a cell added with the name, as get_diagram shows it
+    const addedStyle = async (id: string) => {
+        await callTool("edit_diagram", {
+            operations: [
+                {
+                    operation: "add",
+                    cell_id: id,
+                    new_xml: `<mxCell id="${id}" value="B" style="svc;" x="240" y="40" w="120" h="60"/>`,
+                },
+            ],
+        })
+        const shown = textOf(await callTool("get_diagram", {}))
+        return shown.match(new RegExp(`id="${id}"[^>]* style="([^"]*)"`))?.[1]
+    }
+
+    it("an undo brings back the definitions of the version it restores", async () => {
+        await drawWith("#dae8fc")
+        await drawWith("#f8cecc")
+        expect(await addedStyle("3")).toContain("fillColor=#f8cecc")
+        // Back over the edit and the second drawing, to the first one
+        await callTool("restore_version", { steps_back: 2 })
+        expect(await addedStyle("4")).toContain("fillColor=#dae8fc")
+    })
+
+    it("a file that is opened, and another session, start without them", async () => {
+        await drawWith("#dae8fc")
+        const file = join(dataDir, "styles.drawio")
+        writeFileSync(file, SAVED_DIAGRAM)
+        await callTool("load_diagram", { path: file })
+        await callTool("get_diagram", {})
+        expect(await addedStyle("b")).toBe("svc;whiteSpace=wrap;html=1;")
+        await drawWith("#dae8fc")
+        await callTool("start_session", {})
+        await callTool("create_new_diagram", { xml: box("2", "A") })
+        expect(await addedStyle("3")).toBe("svc;whiteSpace=wrap;html=1;")
     })
 })
 

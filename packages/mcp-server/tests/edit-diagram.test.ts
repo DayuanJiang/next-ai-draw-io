@@ -116,6 +116,52 @@ describe("editDiagram", () => {
         ])
     })
 
+    it("refuses an update of a shape written with vertex but without its place", () => {
+        // Expanded, it would get the default place: x 0, y 0, 120 by 60
+        const renamed =
+            '<mxCell id="a" value="Renamed" style="rounded=1;" vertex="1" parent="1"/>'
+        const out = editDiagram(
+            DOC,
+            [{ operation: "update", cell_id: "a", new_xml: renamed }],
+            {},
+        )
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.errors).toEqual([
+            "update a: new_xml has no position or size (x, y, w, h), so the cell would move to the page's corner. update replaces the whole cell: send its value, style and position too",
+        ])
+        // With its geometry, or in the compact form, it is an update
+        for (const placed of [
+            renamed.replace(
+                "/>",
+                '><mxGeometry x="40" y="40" width="80" height="40" as="geometry"/></mxCell>',
+            ),
+            '<mxCell id="a" value="Renamed" x="40" y="40" w="80" h="40"/>',
+        ]) {
+            expect(
+                editDiagram(
+                    DOC,
+                    [{ operation: "update", cell_id: "a", new_xml: placed }],
+                    {},
+                ),
+            ).toMatchObject({ ok: true })
+        }
+        // A new cell may come without one
+        expect(
+            editDiagram(
+                DOC,
+                [
+                    {
+                        operation: "add",
+                        cell_id: "n",
+                        new_xml: renamed.replace('id="a"', 'id="n"'),
+                    },
+                ],
+                {},
+            ),
+        ).toMatchObject({ ok: true })
+    })
+
     it("reads the id from new_xml when an add or update has no cell_id", () => {
         // As on the demo site: the last add of a long list came without it,
         // and the whole call was rejected
@@ -409,6 +455,10 @@ describe("what an edit tells the model about the cells it wrote", () => {
         if (!out.ok) return
         expect(out.notes).toHaveLength(1)
         expect(out.notes[0]).toMatch(/^Outside their container: far\. /)
+        // An icon set on the container's border is meant to reach outside
+        expect(out.notes[0]).toMatch(
+            /If that is not intended, move these cells or make the container larger\.$/,
+        )
         expect(out.fixes).toEqual([])
     })
 
@@ -423,6 +473,15 @@ describe("what an edit tells the model about the cells it wrote", () => {
                 add(
                     "br",
                     'value="Line one&lt;br&gt;Line two" x="0" y="200" w="120" h="40"',
+                ),
+                // Windows paths hold \n by their nature
+                add(
+                    "drive",
+                    'value="C:\\new_files\\nightly" x="0" y="300" w="120" h="40"',
+                ),
+                add(
+                    "share",
+                    'value="\\\\nas01\\backup" x="0" y="400" w="120" h="40"',
                 ),
             ],
             {},
@@ -449,6 +508,56 @@ describe("what an edit tells the model about the cells it wrote", () => {
         if (!out.ok) return
         expect(out.notes).toHaveLength(1)
         expect(out.notes[0]).toContain("No picture for the reference in: pic.")
+    })
+})
+
+describe("a page whose root cells are not called 0 and 1", () => {
+    // draw.io's own templates name them like this (Basic flowchart)
+    const P = "WIyWlLk6GJQsqaUBKTNV"
+    const file = `<mxfile host="app.diagrams.net"><diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1"><mxGraphModel dx="1223" dy="871" grid="1" gridSize="10"><root><mxCell id="${P}-0"/><mxCell id="${P}-1" parent="${P}-0"/><mxCell id="${P}-3" value="Lamp doesn't work" style="rounded=1;whiteSpace=wrap;html=1;" parent="${P}-1" vertex="1"><mxGeometry x="160" y="80" width="120" height="40" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
+
+    it("puts a compact cell without a parent on the page's layer, with no note", () => {
+        const out = editDiagram(
+            file,
+            [
+                {
+                    operation: "add",
+                    cell_id: "n1",
+                    new_xml:
+                        '<mxCell id="n1" value="Added" x="340" y="80" w="120" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out).toMatchObject({ ok: true, fixes: [], notes: [] })
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="n1" value="Added" vertex="1" parent="${P}-1"`,
+        )
+        // What the edit did not touch is as the file had it, byte for byte
+        expect(out.xml.startsWith(file.slice(0, file.indexOf("</root>")))).toBe(
+            true,
+        )
+    })
+
+    it("puts a cell whose parent is missing on that layer too", () => {
+        const out = editDiagram(
+            file,
+            [
+                {
+                    operation: "add",
+                    cell_id: "n2",
+                    new_xml:
+                        '<mxCell id="n2" value="Lost" parent="group9" x="0" y="0" w="80" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="n2" value="Lost" vertex="1" parent="${P}-1"`,
+        )
     })
 })
 
@@ -583,5 +692,56 @@ describe("a cell without html=1, from a file another tool wrote", () => {
         expect(out.xml).toContain(
             'value="New&lt;br&gt;label" style="rounded=1;whiteSpace=wrap;html=1;"',
         )
+    })
+
+    it("keeps its label plain inside an <object> wrapper too", () => {
+        // A cell with a link: the id and the label are on the wrapper
+        const wrapped = (label: string, x: number) =>
+            `<object id="w" label="${label}" link="https://example.com"><mxCell style="rounded=1;" vertex="1" parent="1"><mxGeometry x="${x}" y="0" width="80" height="40" as="geometry"/></mxCell></object>`
+        const file = `<mxfile>${page("p1", wrapped(LABEL, 0))}</mxfile>`
+        const moved = editDiagram(
+            file,
+            [
+                {
+                    operation: "update",
+                    cell_id: "w",
+                    new_xml: wrapped(LABEL, 100),
+                },
+            ],
+            {},
+        )
+        expect(moved.ok).toBe(true)
+        if (moved.ok) expect(moved.xml).toContain(wrapped(LABEL, 100))
+        const relabelled = editDiagram(
+            file,
+            [{ operation: "update", cell_id: "w", new_xml: wrapped("New", 0) }],
+            {},
+        )
+        expect(relabelled.ok).toBe(true)
+        if (relabelled.ok) {
+            expect(relabelled.xml).toContain(
+                '<mxCell style="rounded=1;whiteSpace=wrap;html=1;" vertex="1"',
+            )
+        }
+    })
+
+    it("still writes an embedded picture the way draw.io does", () => {
+        // A picture without html=1 and with an empty label, which the
+        // model moves with the usual ";base64" in the address
+        const picture = (address: string, x: number) =>
+            `<mxCell id="img" value="" style="shape=image;image=${address}iVBORw0KGgo=;" vertex="1" parent="1"><mxGeometry x="${x}" y="0" width="40" height="40" as="geometry"/></mxCell>`
+        const out = editDiagram(
+            `<mxfile>${page("p1", picture("data:image/png,", 0))}</mxfile>`,
+            [
+                {
+                    operation: "update",
+                    cell_id: "img",
+                    new_xml: picture("data:image/png;base64,", 100),
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (out.ok) expect(out.xml).toContain(picture("data:image/png,", 100))
     })
 })

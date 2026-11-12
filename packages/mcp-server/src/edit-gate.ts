@@ -1,8 +1,8 @@
 /**
  * Workflow gate for edit_diagram.
  *
- * Instead of a wall-clock timeout (the old 30s rule rejected slow-but-correct
- * clients, see #885), we compare content: `lastSeenXml` is the state-store
+ * The gate compares content, not time (a wall-clock limit rejects clients
+ * that are slow but correct, see #885): `lastSeenXml` is the state-store
  * XML the model last saw (get_diagram) or wrote itself (create_new_diagram /
  * edit_diagram / page CRUD). The store only changes on server writes or
  * browser pushes (user autosave, sync exports), so if the live store still
@@ -109,9 +109,9 @@ function cellsInDrawioOrder(root: Element): Element[] {
 
 /**
  * Canonical serialisation of an element subtree: tag + attributes sorted by
- * name + child elements in order (a page's cells in draw.io's order) +
- * non-whitespace text. Whitespace-only text nodes (pretty-printing) and
- * the values draw.io leaves out are dropped.
+ * name + child elements in order (a page's cells in draw.io's order, the
+ * parts of a geometry sorted) + non-whitespace text. Whitespace-only text
+ * nodes (pretty-printing) and the values draw.io leaves out are dropped.
  */
 function canonicalizeElement(el: Element): string {
     const attrs = Array.from(el.attributes)
@@ -121,20 +121,24 @@ function canonicalizeElement(el: Element): string {
         })
         .sort()
         .join(" ")
-    let children = ""
+    const children: string[] = []
     const nodes =
         el.tagName === "root"
             ? cellsInDrawioOrder(el)
             : Array.from(el.childNodes)
     for (const child of nodes) {
         if (child.nodeType === 1) {
-            children += canonicalizeElement(child as Element)
+            children.push(canonicalizeElement(child as Element))
         } else if (child.nodeType === 3 || child.nodeType === 4) {
             const text = (child.textContent ?? "").trim()
-            if (text) children += JSON.stringify(text)
+            if (text) children.push(JSON.stringify(text))
         }
     }
-    return `<${el.tagName} ${attrs}>${children}</${el.tagName}>`
+    // draw.io saves a geometry's parts (offset, points, end points) sorted
+    // by name, a model writes them in any order; the points of a line are
+    // inside their Array and keep their order (as in lib/diagram-diff.ts)
+    if (el.tagName === "mxGeometry") children.sort()
+    return `<${el.tagName} ${attrs}>${children.join("")}</${el.tagName}>`
 }
 
 /**
@@ -276,8 +280,7 @@ function cellFlag(cell: Element, name: string): string | null {
 /**
  * What changed from one version to the next, counted by kind, for
  * restore_version's list: "added 2 shapes, changed 1 connector". Pages are
- * paired by index and cells by id, as in describeChanges. "" when no shape
- * or connector changed.
+ * paired by index and cells by id. "" when no shape or connector changed.
  */
 export function countChanges(beforeXml: string, afterXml: string): string {
     const parse = (xml: string) => {
@@ -339,9 +342,9 @@ export function countChanges(beforeXml: string, afterXml: string): string {
 /**
  * One paragraph naming what the user changed between the XML the model last
  * saw and the live store, for stale rejections and get_diagram. Pages are
- * paired by index (draw.io regenerates diagram ids on re-serialisation), or
- * by id when a page was added or deleted, and cells by id. Returns "" when
- * there is nothing to compare or the two sides have the same content.
+ * paired by id, or by index when the two sides share no id (draw.io
+ * regenerated the diagram ids), and cells by id. Returns "" when there is
+ * nothing to compare or the two sides have the same content.
  */
 export function describeChanges(lastSeenXml: string, liveXml: string): string {
     if (!lastSeenXml || lastSeenXml === liveXml) return ""
@@ -364,20 +367,14 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
     const pagesBefore = Array.from(before.querySelectorAll("diagram"))
     const pagesLive = Array.from(live.querySelectorAll("diagram"))
     const pageCount = Math.max(pagesBefore.length, pagesLive.length)
-    // After the user added or deleted a page, pairing by index sets every
-    // later page against its neighbour and reports all its cells as
-    // replaced. The pages are then paired by id, when each page of the
-    // shorter side has its id on the other (draw.io kept the ids).
+    // After the user added, deleted or moved a page, pairing by index sets
+    // a page against its neighbour and reports all its cells as replaced.
+    // The pages are paired by id when the two sides share one (draw.io
+    // kept the ids), and by index when they share none (it made new ones).
     const idOf = (page: Element) => attr(page, "id")
-    const [fewer, more] =
-        pagesBefore.length < pagesLive.length
-            ? [pagesBefore, pagesLive]
-            : [pagesLive, pagesBefore]
-    const byId =
-        fewer.length < more.length &&
-        fewer.every((p) => idOf(p) && more.some((q) => idOf(q) === idOf(p)))
     const sameId = (pages: Element[], page: Element) =>
         pages.find((p) => idOf(p) === idOf(page))
+    const byId = pagesBefore.some((p) => idOf(p) && sameId(pagesLive, p))
     const clauses: string[] = []
     const renames: string[] = []
     // Pages are named by index=N, counted from 0 as page_index is
@@ -419,6 +416,17 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
         const kept = byId ? sameId(pagesLive, pageBefore) : pagesLive[i]
         if (!kept) clauses.push(`page "${attr(pageBefore, "name")}" removed`)
     }
+    // The pages both sides have, in another order: the user moved a tab
+    const shared = (pages: Element[], others: Element[]) =>
+        pages
+            .filter((p) => sameId(others, p))
+            .map(idOf)
+            .join("\n")
+    if (
+        byId &&
+        shared(pagesBefore, pagesLive) !== shared(pagesLive, pagesBefore)
+    )
+        clauses.push("the order of the pages changed")
     // The fingerprint also covers the cell order (z-order) and anything in
     // <root> that is not a cell
     if (!clauses.length && !renames.length)

@@ -356,6 +356,29 @@ describe("the model's page", () => {
         expect(shapesOn(xml, "b")).toEqual([])
     })
 
+    it("edit_diagram tells the model what happened to a delete of a cell that is not there", async () => {
+        const { onDisplayChart, addToolOutput, call } = setupOn("b")
+        // The model wrote the id wrong: the box stays, and the result says so
+        await call("edit_diagram", {
+            operations: [{ operation: "delete", cell_id: "b" }],
+        })
+        expect(addToolOutput.mock.lastCall?.[0].output).toBe(
+            "Successfully applied 1 operation(s) to the diagram.\n\nNotes:\n- delete b: no cell with this id on the page (already deleted?), skipped.",
+        )
+        const [xml] = onDisplayChart.mock.calls.at(-1) as [string]
+        expect(shapesOn(xml, "b")).toEqual(["B"])
+    })
+
+    it("edit_diagram answers with one sentence when there is nothing to note", async () => {
+        const { addToolOutput, call } = setupOn("b")
+        await call("edit_diagram", {
+            operations: [{ operation: "delete", cell_id: "B" }],
+        })
+        expect(addToolOutput.mock.lastCall?.[0].output).toBe(
+            "Successfully applied 1 operation(s) to the diagram.",
+        )
+    })
+
     it("shows the model only its page when an edit fails", async () => {
         const { addToolOutput, call } = setupOn("b")
         await call("edit_diagram", {

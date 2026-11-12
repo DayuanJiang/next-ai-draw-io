@@ -7,6 +7,7 @@
  * first page is targeted (the "active page by convention" — see pages.ts).
  */
 
+import { defaultLayerOf } from "./compact-cells.ts"
 import { decompressPageContent } from "./load-diagram.ts"
 import { log } from "./logger.ts"
 import { findPageElement, hasPageSelector, type PageSelector } from "./pages.ts"
@@ -168,7 +169,8 @@ const listIds = (ids: string[]) =>
  *
  * notes: shapes that reach outside their container (a child's x and y count
  * from the container's corner; a model that writes page coordinates there
- * puts the child outside the box), labels with a literal \n, and
+ * puts the child outside the box, while an icon set on the border is meant
+ * to be there, so the note leaves that open), labels with a literal \n, and
  * references to pictures the diagram does not have.
  */
 export function reviewCells(
@@ -176,10 +178,9 @@ export function reviewCells(
     ids?: Iterable<string>,
 ): { repairs: string[]; notes: string[] } {
     const cells = cellsById(root)
-    const layers = Array.from(cells)
-        .filter(([, cell]) => cellAttr(cell, "parent") === "0")
-        .map(([id]) => id)
-    const layer = layers.includes("1") ? "1" : (layers[0] ?? "1")
+    // Where a compact cell without a parent goes too; looked up only when
+    // a cell needs it
+    let layer: string | undefined
     const ends: string[] = []
     const orphans: string[] = []
     const outside: string[] = []
@@ -198,6 +199,9 @@ export function reviewCells(
         }
         const parentId = inner.getAttribute("parent")
         if (parentId && !cells.has(parentId)) {
+            layer ??= defaultLayerOf(
+                new XMLSerializer().serializeToString(root),
+            )
             inner.setAttribute("parent", layer)
             orphans.push(`${id} (parent "${parentId}")`)
         }
@@ -215,7 +219,10 @@ export function reviewCells(
         }
         const label =
             cell.getAttribute("value") ?? cell.getAttribute("label") ?? ""
-        if (label.includes("\\n")) literal.push(id)
+        // (a Windows path, C:\new or \\nas01\backup, has one by its nature)
+        if (label.includes("\\n") && !/[A-Za-z]:\\|\\\\/.test(label)) {
+            literal.push(id)
+        }
         if (inner.getAttribute("style")?.includes("embedded-image-")) {
             pictures.push(id)
         }
@@ -234,7 +241,7 @@ export function reviewCells(
     const notes: string[] = []
     if (outside.length > 0) {
         notes.push(
-            `Outside their container: ${listIds(outside)}. The x and y of a cell with parent="<container id>" count from the container's top left corner. Move these cells or make the container larger.`,
+            `Outside their container: ${listIds(outside)}. The x and y of a cell with parent="<container id>" count from the container's top left corner. If that is not intended, move these cells or make the container larger.`,
         )
     }
     if (literal.length > 0) {

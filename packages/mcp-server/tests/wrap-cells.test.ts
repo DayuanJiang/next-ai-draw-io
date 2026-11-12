@@ -174,6 +174,23 @@ describe("prepareNewDiagram", () => {
         expect(out.xml).toContain('name="One"')
     })
 
+    it("names a <diagram> without a name the way draw.io does", () => {
+        // As in draw.io's "Basic flowchart" template; the name draw.io
+        // makes up would come back looking like a rename by the user
+        const page = (attrs: string) =>
+            `<diagram ${attrs}><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram>`
+        const out = prepareNewDiagram(
+            `<mxfile>${page('id="C5RBs43oDa-KdzZeNtuy"')}${page('id="b" name="Details"')}${page('id="c"')}</mxfile>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(
+            [...out.xml.matchAll(/<diagram\b[^>]*\bname="([^"]*)"/g)].map(
+                (m) => m[1],
+            ),
+        ).toEqual(["Page-1", "Details", "Page-3"])
+    })
+
     it("rejects a shape that uses a root cell id", () => {
         // It would clash with the added root cell "1" and be renamed,
         // which breaks the edges that point to it

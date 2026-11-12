@@ -2,7 +2,11 @@
  * A whole new diagram written by the model, for the create_new_diagram tool
  * and the web app's display_diagram tool.
  */
-import { expandCompactCells } from "./compact-cells.ts"
+import {
+    defaultLayerOf,
+    expandCompactCells,
+    rootAndLayersOf,
+} from "./compact-cells.ts"
 import { reviewCells } from "./diagram-operations.ts"
 import {
     generatePageId,
@@ -165,29 +169,28 @@ function takeStyleDefinitions(input: string): {
 }
 
 /**
- * A page written in full (<mxGraphModel> or <mxfile>) without the root cells
- * "0" and "1" gets them here. Bare cells must be sent without them, and a
- * model carries that habit over to a full page; draw.io would take the first
- * shape for the root and show a blank page.
+ * A page written in full (<mxGraphModel> or <mxfile>) without a root cell or
+ * without a layer gets them here. Bare cells must be sent without them, and
+ * a model carries that habit over to a full page; draw.io would take a shape
+ * for the root and show a blank page. A page that has both keeps them as
+ * they are, whatever their ids (rootAndLayersOf).
  */
 function addMissingRootCells(xml: string): string {
-    return xml.replace(/<root>([\s\S]*?)<\/root>/g, (root, cells: string) => {
-        const attrs = Array.from(
-            cells.matchAll(/<mxCell\b((?:[^<>"']|"[^"]*"|'[^']*')*)>/g),
-            ([, attrText]) =>
-                new Map(readAttributes(attrText).map((a) => [a.name, a.value])),
-        )
-        if (attrs.length === 0 || attrs.some((a) => a.get("id") === "0")) {
-            return root
-        }
-        // (a layer the model did write keeps its place)
-        const layer = attrs.some(
-            (a) => a.get("id") === "1" || a.get("parent") === "0",
-        )
-            ? ""
-            : '<mxCell id="1" parent="0"/>'
-        return `<root><mxCell id="0"/>${layer}${cells}</root>`
-    })
+    return xml.replace(
+        /<root\s*>([\s\S]*?)<\/root>/g,
+        (page, cells: string) => {
+            if (!/<mxCell\b/.test(cells)) return page
+            const { root, rootEnd, layers } = rootAndLayersOf(cells)
+            if (rootEnd !== undefined && layers.length > 0) return page
+            const rootCell = rootEnd === undefined ? '<mxCell id="0"/>' : ""
+            // (a layer the model did write keeps its place)
+            const layer =
+                layers.length > 0 ? "" : `<mxCell id="1" parent="${root}"/>`
+            // Right after the root cell, or first on the page
+            const at = rootEnd ?? 0
+            return `<root>${cells.slice(0, at)}${rootCell}${layer}${cells.slice(at)}</root>`
+        },
+    )
 }
 
 /**
@@ -235,7 +238,12 @@ export function prepareNewModel(input: string): NewDiagram {
     if (!valid) {
         return { ok: false, error: `XML validation failed - ${error}` }
     }
-    xml = addDefaultStyles(applyStyleClasses(expandCompactCells(xml), known))
+    // Page by page: a compact cell without a parent goes on the layer of
+    // its own page
+    xml = xml.replace(/<root\s*>[\s\S]*?<\/root>/g, (page) =>
+        expandCompactCells(page, defaultLayerOf(page)),
+    )
+    xml = addDefaultStyles(applyStyleClasses(xml, known))
     // The rewrites copy attribute values as written; a check that they
     // produced well-formed XML, in case one of them ever does not
     const rewriteError = getXmlSyntaxError(xml)
@@ -279,15 +287,21 @@ export function prepareNewDiagram(
             error: "XML must be the mxCell elements of one page, a <mxGraphModel>, or an <mxfile> with one or more <diagram> children.",
         }
     }
-    // A <diagram> the model sent without an id gets one here. draw.io would
-    // otherwise make its own, which the server never sees, and get_selection
-    // would then name a page edit_diagram cannot find
+    // A <diagram> sent without an id or a name gets them here (one of
+    // draw.io's own templates has no name). draw.io would otherwise make its
+    // own, which the server never sees: get_selection would name a page
+    // edit_diagram cannot find, and the name would come back from the
+    // browser looking like a rename by the user
     const doc = parseMxfile(normalized)
     if (doc) {
         let added = false
-        doc.querySelectorAll("diagram").forEach((d) => {
+        doc.querySelectorAll("diagram").forEach((d, index) => {
             if (!d.getAttribute("id")) {
                 d.setAttribute("id", generatePageId())
+                added = true
+            }
+            if (!d.getAttribute("name")) {
+                d.setAttribute("name", `Page-${index + 1}`)
                 added = true
             }
         })

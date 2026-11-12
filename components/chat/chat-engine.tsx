@@ -75,6 +75,7 @@ import { BLANK_MXFILE, hasCells } from "@/packages/mcp-server/src/pages.ts"
 import {
     readStyleClasses,
     rememberStyleClasses,
+    resetStyleClasses,
 } from "@/packages/mcp-server/src/style-classes.ts"
 import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 import { useSettingsStore } from "@/stores/settings-store"
@@ -1075,6 +1076,9 @@ export function ChatEngineProvider({
             editDiagramOriginalXmlRef.current.clear()
             continuationOriginalRef.current = null
             stoppedRef.current = false
+            // Nor are the named styles of the chat left this chat's: a name
+            // would expand to the other diagram's definition
+            resetStyleClasses()
             if (data) {
                 let shown = data.messages as unknown as ChatUIMessage[]
                 // Saved in the middle of an answer: the chat says that the
