@@ -137,6 +137,8 @@ describe("editDiagram", () => {
                 '><mxGeometry x="40" y="40" width="80" height="40" as="geometry"/></mxCell>',
             ),
             '<mxCell id="a" value="Renamed" x="40" y="40" w="80" h="40"/>',
+            // (some models quote XML attributes with single quotes)
+            "<mxCell id='a' value='Renamed' style='rounded=1;' vertex='1' parent='1'><mxGeometry x='40' y='40' width='80' height='40' as='geometry'/></mxCell>",
         ]) {
             expect(
                 editDiagram(
@@ -559,6 +561,36 @@ describe("a page whose root cells are not called 0 and 1", () => {
             `<mxCell id="n2" value="Lost" vertex="1" parent="${P}-1"`,
         )
     })
+
+    it("puts both on a layer with custom data, whose id is on the <object> around it", () => {
+        const layered = `<mxfile><diagram id="p1" name="p1"><mxGraphModel><root><mxCell id="0"/><object id="L" label="Layer" owner="ops"><mxCell parent="0"/></object>${cell("a").replace('parent="1"', 'parent="L"')}</root></mxGraphModel></diagram></mxfile>`
+        const out = editDiagram(
+            layered,
+            [
+                {
+                    operation: "add",
+                    cell_id: "n1",
+                    new_xml:
+                        '<mxCell id="n1" value="Added" x="340" y="80" w="120" h="40"/>',
+                },
+                {
+                    operation: "add",
+                    cell_id: "n2",
+                    new_xml:
+                        '<mxCell id="n2" value="Lost" parent="group9" x="0" y="0" w="80" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<mxCell id="n1" value="Added" vertex="1" parent="L"',
+        )
+        expect(out.xml).toContain(
+            '<mxCell id="n2" value="Lost" vertex="1" parent="L"',
+        )
+    })
 })
 
 describe("named styles in the calls after the drawing", () => {
@@ -682,6 +714,26 @@ describe("a cell without html=1, from a file another tool wrote", () => {
         if (!out.ok) return
         expect(out.xml).toContain(
             `<mxCell id="t" value="${LABEL}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100"`,
+        )
+    })
+
+    it("keeps its label plain when the update writes it in single quotes, a double quote as it is", () => {
+        const stored = "List&lt;String&gt; &quot;name&quot;"
+        const out = editDiagram(
+            doc.replace(LABEL, stored),
+            [
+                {
+                    operation: "update",
+                    cell_id: "t",
+                    new_xml: `<mxCell id='t' value='List&lt;String&gt; "name"' style='rounded=1;' x='100' y='0' w='80' h='40'/>`,
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="t" value="${stored}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100"`,
         )
     })
 

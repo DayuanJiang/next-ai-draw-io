@@ -301,6 +301,17 @@ describe("review round: cells the model may write", () => {
         expect(foldCells(xml)).toBe(xml)
     })
 
+    it("reads a geometry written with single quotes as the cell's own", () => {
+        // Some models quote XML attributes this way inside a JSON string
+        const xml =
+            "<mxCell id='2' value='A' vertex='1' parent='1'><mxGeometry x='1' y='2' width='3' height='4' as='geometry'/></mxCell>"
+        expect(expandCompactCells(xml)).toBe(xml)
+        // Without its parent the cell is rebuilt, around that one geometry
+        expect(expandCompactCells(xml.replace(" parent='1'", ""))).toBe(
+            `<mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x='1' y='2' width='3' height='4' as='geometry'/></mxCell>`,
+        )
+    })
+
     it("ignores prototype names and folds only cells that name their parent", () => {
         expect(expandCompactCells('<mxCell id="2" toString="x"/>')).toBe(
             '<mxCell id="2" toString="x"/>',
@@ -365,6 +376,26 @@ describe("review round: cells the model may write", () => {
         expect(outcome.xml).toContain(
             '<mxCell id="3" value="C" vertex="1" parent="1"',
         )
+    })
+
+    it("counts a layer with custom data, whose id is on the <object> around it", () => {
+        const page = (cells: string) =>
+            `<mxfile><diagram id="p1" name="Page-1"><mxGraphModel><root>${cells}</root></mxGraphModel></diagram></mxfile>`
+        expect(
+            defaultLayerOf(
+                page(
+                    '<mxCell id="0"/><object id="L" label="Layer" owner="ops"><mxCell parent="0"/></object>',
+                ),
+            ),
+        ).toBe("L")
+        // And under a root cell that has custom data itself
+        expect(
+            defaultLayerOf(
+                page(
+                    '<UserObject id="r0" label="" owner="ops"><mxCell/></UserObject><mxCell id="r1" parent="r0"/>',
+                ),
+            ),
+        ).toBe("r1")
     })
 
     it("refuses a compact shape with a root cell id instead of dropping it", () => {

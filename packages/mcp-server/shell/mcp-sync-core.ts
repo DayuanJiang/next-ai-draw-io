@@ -366,16 +366,17 @@ export function createMcpSync(options: SyncOptions): McpSync {
     let stateId: string | null = null
     let pushFailing = false
     const pushesInFlight: string[] = []
-    // A hand edit whose push did not reach the server, with the version and
-    // state it is based on: sent again once a poll gets through (the
+    // Hand edits whose push did not reach the server, each with the version
+    // and state it is based on: sent again once a poll gets through (the
     // connection, a tunnel or a proxy is back). The canvas changing again
-    // ends it: the newer edit carries the whole document
-    let unsentEdit: {
+    // ends one: the newer edit carries the whole document. Two wait when a
+    // server write replaced the canvas between them (loadedVersion)
+    let unsentEdits: {
         xml: string
         svg: string
         baseVersion: number
         sid: string | null
-    } | null = null
+    }[] = []
     // The version of the server write the canvas loaded last (0 while it
     // holds none of this state). A hand edit based on an older version was
     // made on the canvas that write replaced: no later edit carries it, and
@@ -448,7 +449,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
     // A hand edit is on its way to the server: it waits to be sent again,
     // for its picture, or for the answer to its push
     const editOnItsWay = () =>
-        unsentEdit !== null ||
+        unsentEdits.length > 0 ||
         pendingSvgExport !== null ||
         pushesInFlight.length > 0
 
@@ -662,7 +663,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 // try once without it
                 if (svg) pushState(xml, "", baseVersion, source, sid)
                 else {
-                    tooLargeXml = xml
+                    // Marked only while the canvas shows it: the answer about
+                    // an older edit may come after the one about the edit
+                    // on the canvas (a slow upload)
+                    if (xml === latestXml) tooLargeXml = xml
                     onNotice("tooLarge")
                 }
             } else if (r.status === 409) {
@@ -692,7 +696,7 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 source === "edit" &&
                 (xml === latestXml || baseVersion < loadedVersion)
             ) {
-                unsentEdit = { xml, svg, baseVersion, sid }
+                unsentEdits.push({ xml, svg, baseVersion, sid })
             }
         } finally {
             pushesInFlight.splice(pushesInFlight.indexOf(xml), 1)
@@ -873,12 +877,12 @@ export function createMcpSync(options: SyncOptions): McpSync {
             }
             if (stateId === null) stateId = s.stateId
             else if (s.stateId && s.stateId !== stateId) recoverState(s)
-            // The server answers again: the edit it never got goes now, as
+            // The server answers again: an edit it never got goes now, as
             // it was made (a version the AI wrote meanwhile refuses it and
             // keeps it in History). A recreated state got the canvas above
-            if (unsentEdit) {
-                const u = unsentEdit
-                unsentEdit = null
+            const unsent = unsentEdits
+            unsentEdits = []
+            for (const u of unsent) {
                 if (u.sid === stateId) {
                     pushState(u.xml, u.svg, u.baseVersion, "edit", u.sid)
                 }
@@ -1079,9 +1083,9 @@ export function createMcpSync(options: SyncOptions): McpSync {
             latestXml = xml
             // This document has an unsent edit of the same canvas in it;
             // one of a canvas a server write replaced still has to go
-            if (unsentEdit && unsentEdit.baseVersion >= loadedVersion) {
-                unsentEdit = null
-            }
+            unsentEdits = unsentEdits.filter(
+                (u) => u.baseVersion < loadedVersion,
+            )
             const commitCopy = awaitingCommitCopy
             awaitingCommitCopy = false
             // The canvas is back at a write whose picture was not taken (an

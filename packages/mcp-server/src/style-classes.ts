@@ -259,8 +259,11 @@ function cellsIn(xml: string) {
                 wrapperText === undefined ? undefined : attrsOf(wrapperText)
             return {
                 id: (wrapper ?? cell).get("id"),
-                label:
-                    (wrapper ? wrapper.get("label") : cell.get("value")) ?? "",
+                // (a single-quoted value may hold a double quote, which a
+                // saved cell has as &quot;)
+                label: (
+                    (wrapper ? wrapper.get("label") : cell.get("value")) ?? ""
+                ).replace(/"/g, "&quot;"),
                 cell,
             }
         },

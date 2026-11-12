@@ -6,6 +6,7 @@ import {
     getIframeContent,
     getSendButton,
     openApp,
+    openDrawioFile,
     openSettingsTab,
     sendMessage,
     test,
@@ -249,6 +250,63 @@ test.describe("Saved chats", () => {
                     Object.values(await storedChats(page))[0].diagramXml,
             )
             .toMatch(/id="3"[^>]*fillColor=#dae8fc/)
+    })
+
+    test("a file opened after a chat starts without that chat's named styles", async ({
+        page,
+    }) => {
+        // The edit in the file's chat uses a name the chat before defined
+        const calls = [
+            toolCallEvents("d1", "display_diagram", {
+                xml: '<mxStyle name="stepbox" value="rounded=1;fillColor=#dae8fc;"/><mxCell id="2" value="Plan" style="stepbox;" x="40" y="40" w="120" h="60"/>',
+            }),
+            toolCallEvents("e1", "edit_diagram", {
+                operations: [
+                    {
+                        operation: "add",
+                        cell_id: "3",
+                        new_xml:
+                            '<mxCell id="3" value="Build" style="stepbox;" x="240" y="40" w="120" h="60"/>',
+                    },
+                ],
+            }),
+        ]
+        let request = 0
+        await page.route("**/api/chat", (route) => {
+            const call = calls[request++]
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: sse([
+                    { type: "start", messageId: `m${request}` },
+                    call.start,
+                    ...call.deltas,
+                    call.done,
+                    { type: "finish" },
+                ]),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Draw a step")
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Plan", { exact: true })).toBeVisible({
+            timeout: 15000,
+        })
+        await expect
+            .poll(async () => Object.keys(await storedChats(page)))
+            .toHaveLength(1)
+        await openDrawioFile(page, "other.drawio", doc(box("a", "Kept", 40)))
+        await expect(canvas.getByText("Kept", { exact: true })).toBeVisible()
+        await sendMessage(page, "Add a step")
+        await expect(canvas.getByText("Build", { exact: true })).toBeVisible({
+            timeout: 15000,
+        })
+        const fileChat = async () =>
+            Object.values(await storedChats(page)).find(
+                (chat) => chat.title === "other",
+            )?.diagramXml ?? ""
+        await expect.poll(fileChat).toMatch(/id="3"[^>]*style="stepbox;/)
+        expect(await fileChat()).not.toContain("fillColor=#dae8fc")
     })
 
     test("a chat started from a link to a chat this browser does not hold gets its own address", async ({

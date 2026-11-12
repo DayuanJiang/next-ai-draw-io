@@ -2193,6 +2193,9 @@ export function ChatEngineProvider({
         useUiStore.getState().setHeroDismissed(false)
         setMessages([])
         clearDiagram()
+        // The named styles of the chat left are not the new one's (a file
+        // opened into it is not synced as a session, which resets them)
+        resetStyleClasses()
         useVersionsStore.getState().clear()
         setValidationStates({})
         if (!keepComposer) {

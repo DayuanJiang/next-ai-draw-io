@@ -36,8 +36,14 @@ import { readAttributes, type TagAttribute } from "./xml-attributes.ts"
 const CELL_BLOCK =
     /<mxCell\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*(?:\/>|>([\s\S]*?)<\/mxCell>)/g
 
+// CELL_BLOCK after the opening tag of the <object> or <UserObject> around
+// the cell, which holds the id of a cell with a link or custom data
+const WRAPPED_CELL_BLOCK =
+    /(?:<(?:UserObject|object)\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*>\s*)?<mxCell\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*(?:\/>|>([\s\S]*?)<\/mxCell>)/g
+
 // The cell's own geometry, as opposed to one inside its custom data
-const OWN_GEOMETRY = /<mxGeometry\b(?:[^<>"']|"[^"]*"|'[^']*')*?\bas="geometry"/
+const OWN_GEOMETRY =
+    /<mxGeometry\b(?:[^<>"']|"[^"]*"|'[^']*')*?\bas=(?:"geometry"|'geometry')/
 
 // The four compact attributes and the names draw.io uses for them
 const SIZE_ATTRS = new Map([
@@ -88,29 +94,33 @@ function kindOf(
  * calls them "0" and "1"; a file made from one of its templates has longer
  * ids ("WIyWlLk6GJQsqaUBKTNV-0" and "WIyWlLk6GJQsqaUBKTNV-1").
  *
- * root: the root cell's id; "0" when the page has no root cell, or one with
- * custom data, whose id is on the <object> around it. rootEnd: where the
- * root cell ends in the XML, or undefined without one.
+ * root: the root cell's id, "0" when the page has no root cell. rootEnd:
+ * where the root cell ends in the XML, or undefined without one.
  */
 export function rootAndLayersOf(xml: string): {
     root: string
     rootEnd?: number
     layers: string[]
 } {
-    const cells = Array.from(xml.matchAll(CELL_BLOCK), (match) => ({
-        byName: new Map(readAttributes(match[1]).map((a) => [a.name, a.value])),
-        body: match[2] ?? "",
-        end: match.index + match[0].length,
-    }))
+    const attrsOf = (text: string) =>
+        new Map(readAttributes(text).map((a) => [a.name, a.value]))
+    const cells = Array.from(xml.matchAll(WRAPPED_CELL_BLOCK), (match) => {
+        const byName = attrsOf(match[2])
+        return {
+            id: (match[1] === undefined ? byName : attrsOf(match[1])).get("id"),
+            byName,
+            body: match[3] ?? "",
+            end: match.index + match[0].length,
+        }
+    })
     const rootCell = cells.find(
         ({ byName, body }) =>
             !byName.has("parent") && kindOf(byName, body) === null,
     )
-    const root = rootCell?.byName.get("id") ?? "0"
-    const layers = cells.flatMap(({ byName }) => {
-        const id = byName.get("id")
-        return id && byName.get("parent") === root ? [id] : []
-    })
+    const root = rootCell?.id ?? "0"
+    const layers = cells.flatMap(({ id, byName }) =>
+        id && byName.get("parent") === root ? [id] : [],
+    )
     return { root, rootEnd: rootCell?.end, layers }
 }
 

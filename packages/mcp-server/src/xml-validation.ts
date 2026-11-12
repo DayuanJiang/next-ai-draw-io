@@ -506,16 +506,19 @@ export function repairNumberQuotes(xml: string): string {
  * A compact cell written without the slash: <mxCell ... h="60"> followed by
  * the next cell, a definition, the end of the page or the end of the XML.
  * Only cells that carry a size or a connection, so an open container stays
- * open, and not one that says vertex="1" or edge="1": the compact form
- * writes neither, and a cell in the long form ends its opening tag with ">"
- * before its mxGeometry, where output that was cut off may stop.
+ * open, and not an edge="1" cell at the very end of the XML: an edge in the
+ * long form ends its opening tag with ">" before its mxGeometry, where
+ * output that was cut off may stop.
  */
 export function closeSlashlessCells(xml: string): string {
     return xml.replace(
         /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)\s*>(?=\s*(?:<mxCell\b|<mxStyle\b|<\/root>|$))/g,
-        (tag, attrText: string) =>
+        (tag, attrText: string, offset: number) =>
             /\s(?:x|y|w|h|width|height|source|target)="/.test(attrText) &&
-            !/\s(?:vertex|edge)="1"/.test(attrText)
+            !(
+                /\sedge="1"/.test(attrText) &&
+                xml.slice(offset + tag.length).trim() === ""
+            )
                 ? `<mxCell${attrText}/>`
                 : tag,
     )

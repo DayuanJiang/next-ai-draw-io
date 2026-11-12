@@ -220,12 +220,14 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     </button>
                 </header>
                 <div className="flex min-h-0 flex-1">
-                    <div className="relative min-w-0 flex-1">
+                    {/* The page's main landmark, for screen readers; the
+                        versions beside it are an <aside> */}
+                    <main className="relative min-w-0 flex-1">
                         <CanvasStage
                             className="inset-0"
                             drawioSource={drawioSource}
                         />
-                    </div>
+                    </main>
                     {showPanel && (
                         <VersionsPanel versions={versions.versions} />
                     )}

@@ -213,6 +213,32 @@ describe("truncation check with named styles and compact cells", () => {
         if (!out.ok) expect(out.error).toContain("cut off")
     })
 
+    it("closes a compact cell that also says vertex or edge, on one line with the next cell", () => {
+        // A habit from the long form: vertex="1" parent="1" next to x, y,
+        // w and h
+        const shape = prepareNewDiagram(
+            '<mxCell id="2" value="A" vertex="1" parent="1" x="40" y="40" w="120" h="60"><mxCell id="3" value="B" x="240" y="40" w="120" h="60"/>',
+        )
+        expect(shape).toMatchObject({
+            ok: true,
+            fixes: ["Closed compact cells written without the slash"],
+        })
+        if (shape.ok) expect(shape.xml).toContain('value="B"')
+        const edge = prepareNewDiagram(
+            `${A}<mxCell id="3" value="B" x="120" y="0" w="80" h="40"/><mxCell id="5" edge="1" parent="1" source="2" target="3"><mxCell id="6" value="C" x="240" y="0" w="80" h="40"/>`,
+        )
+        expect(edge).toMatchObject({
+            ok: true,
+            fixes: ["Closed compact cells written without the slash"],
+        })
+        if (edge.ok) {
+            expect(edge.xml).toContain(
+                '<mxCell id="5" edge="1" parent="1" source="2" target="3"',
+            )
+            expect(edge.xml).toContain('value="C"')
+        }
+    })
+
     it("leaves definitions without any cell to the style check", () => {
         expect(truncatedCellError(BLUE)).toBeNull()
         const out = prepareNewDiagram(BLUE)
@@ -345,6 +371,27 @@ describe("a full page whose root cells are not called 0 and 1", () => {
             `<mxCell id="n1" value="New" vertex="1" parent="${P}-1"`,
         )
         expect(out.xml).not.toContain('parent="1"')
+    })
+})
+
+describe("a full page whose layer has custom data", () => {
+    // draw.io writes such a layer's id on the <object> around its cell
+    const cells =
+        '<mxCell id="0"/><object id="1" label="Layer" owner="ops"><mxCell parent="0"/></object><mxCell id="2" value="A" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell>'
+
+    it("keeps that layer as the page's layer, in an <mxfile> and in a bare <mxGraphModel>", () => {
+        const file = `<mxfile><diagram id="p" name="P"><mxGraphModel><root>${cells}</root></mxGraphModel></diagram></mxfile>`
+        expect(prepareNewDiagram(file)).toMatchObject({
+            ok: true,
+            xml: file,
+            fixes: [],
+            notes: [],
+        })
+        const bare = prepareNewDiagram(
+            `<mxGraphModel><root>${cells}</root></mxGraphModel>`,
+        )
+        expect(bare).toMatchObject({ ok: true, fixes: [], notes: [] })
+        if (bare.ok) expect(bare.xml).toContain(`<root>${cells}</root>`)
     })
 })
 

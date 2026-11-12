@@ -73,6 +73,8 @@ test("start_session opens the shell, which loads the bundled draw.io", async ({
     })
     const frame = page.frameLocator("iframe[title='draw.io']")
     await expect(frame.locator(".geDiagramContainer")).toBeVisible()
+    // The canvas is the page's main landmark, for screen readers
+    await expect(page.getByRole("main").locator("iframe")).toHaveCount(1)
 
     // The shell's own texts and state: the first poll connects it
     await expect(page.getByTestId("shell-status")).toHaveText(
@@ -975,6 +977,98 @@ test("the version cards follow the server's History; undo, redo and restore go t
     await expect(cards).toHaveCount(5, { timeout: 10_000 })
     await expect(latestCard).toContainText("Renamed a page")
     await expect(latestCard).not.toContainText("Changed the diagram")
+})
+
+/**
+ * What the page translator of Chrome, Edge and Yandex Browser does: every
+ * text node is replaced by <font><font>its translation</font></font>, and so
+ * is text that appears later. React still holds the nodes that were replaced.
+ * (As in the web app's tests/e2e/page-translator.spec.ts.)
+ */
+function startTranslator() {
+    const translate = () => {
+        const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+        )
+        const nodes: Node[] = []
+        while (walker.nextNode()) nodes.push(walker.currentNode)
+        for (const node of nodes) {
+            const parent = node.parentElement
+            if (!node.nodeValue?.trim() || !parent) continue
+            if (parent.closest("font, script, style, textarea, svg")) continue
+            const outer = document.createElement("font")
+            const inner = document.createElement("font")
+            inner.textContent = node.nodeValue
+            outer.appendChild(inner)
+            parent.replaceChild(outer, node)
+        }
+    }
+    translate()
+    let timer: ReturnType<typeof setTimeout>
+    new MutationObserver(() => {
+        clearTimeout(timer)
+        timer = setTimeout(translate, 30)
+    }).observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+    })
+}
+
+test("the preview stays up when the browser translates the page", async ({
+    page,
+}) => {
+    const errors: string[] = []
+    page.on("pageerror", (error) => errors.push(error.message))
+    // A session of its own: the tools write to the one started last
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+    const latestCard = page.getByTestId("version-card").last()
+    await toolText("create_new_diagram", { xml: box("t1", "Lingua A", 40) })
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "t2",
+                new_xml: box("t2", "Lingua B", 240),
+            },
+        ],
+    })
+    await expect(frame.getByText("Lingua B")).toBeVisible({ timeout: 10_000 })
+    await expect(latestCard.getByTestId("version-undo")).toHaveText(
+        /Undo change/,
+    )
+    await page.evaluate(startTranslator)
+    await expect(
+        latestCard.getByTestId("version-undo").locator("font font"),
+    ).toHaveText("Undo change")
+
+    // Undo puts the redo icon before the button's text, which the
+    // translator has replaced: the browser refuses that insertBefore, and
+    // an error in React's update would leave a blank page. The page's
+    // early script (shell/index.html) makes the call do nothing
+    await latestCard.getByTestId("version-undo").click()
+    await expect(frame.getByText("Lingua B")).toHaveCount(0, {
+        timeout: 10_000,
+    })
+    await expect(page.getByTestId("shell-status")).toBeVisible()
+    await expect(page.getByTestId("version-card")).not.toHaveCount(0)
+
+    // And the cards still work: redo brings the shape back
+    await latestCard.getByTestId("version-undo").click()
+    await expect(frame.getByText("Lingua B")).toBeVisible({ timeout: 10_000 })
+    expect(errors).toEqual([])
 })
 
 test("an edit with coordinates of 0 is not taken for a hand edit, and one undo takes it back", async ({

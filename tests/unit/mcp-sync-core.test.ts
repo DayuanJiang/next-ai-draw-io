@@ -877,6 +877,64 @@ describe("MCP sync with an edit the server never got", () => {
         })
     })
 
+    // Two edits wait at once: the one from before the AI's write, which
+    // is on no canvas any more, and the one made on that write
+    const unsentAfterNextPoll = async (
+        t: Awaited<ReturnType<typeof inStep>>,
+    ) => {
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        return t
+            .posts()
+            .map((c) => [c.body.xml, c.body.baseVersion])
+            .sort()
+    }
+
+    it("keeps the edit from before the AI's write when an edit of that write fails too", async () => {
+        const t = await inStep()
+        await edit(t, "<mxfile>B</mxfile>")
+        t.next("POST").fail()
+        await t.settle()
+        // The AI's version 3 loads and the edit goes again, which fails
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        t.sync.onAutoSave("<mxfile>X</mxfile>")
+        t.next("POST", "/api/state").fail()
+        await t.settle()
+        // The user changes the AI's version: that save fails as well
+        await edit(t, "<mxfile>C</mxfile>")
+        t.next("POST", "/api/state").fail()
+        await t.settle()
+        expect(await unsentAfterNextPoll(t)).toEqual([
+            ["<mxfile>B</mxfile>", 2],
+            ["<mxfile>C</mxfile>", 3],
+        ])
+    })
+
+    it("keeps the edit of the AI's write when the older edit's push fails after it", async () => {
+        const t = await inStep()
+        await edit(t, "<mxfile>B</mxfile>")
+        t.next("POST").fail()
+        await t.settle()
+        const poll = t.sync.poll()
+        t.next("GET").answer(state("S1", 3, "<mxfile>X</mxfile>"))
+        await poll
+        // The older edit is on its way again (a proxy answers 502 late)
+        const older = t.next("POST", "/api/state")
+        t.sync.onAutoSave("<mxfile>X</mxfile>")
+        await edit(t, "<mxfile>C</mxfile>")
+        t.next("POST", "/api/state").fail()
+        await t.settle()
+        older.fail()
+        await t.settle()
+        expect(await unsentAfterNextPoll(t)).toEqual([
+            ["<mxfile>B</mxfile>", 2],
+            ["<mxfile>C</mxfile>", 3],
+        ])
+    })
+
     it("sends only the newer edit when the user went on editing", async () => {
         const t = await inStep()
         await edit(t, "<mxfile>B</mxfile>")
@@ -1110,6 +1168,29 @@ describe("MCP sync with a diagram over the size limit", () => {
         t.next("GET").answer(state("S1", 4, "<mxfile>X</mxfile>"))
         await poll
         expect(t.sync.read().unsavedEdit).toBe(false)
+    })
+
+    // A slow upload through a tunnel: the answer about the first picture
+    // comes after the answers about the one that replaced it
+    it("counts the refused edit on the canvas as not saved when an older edit's refusal comes late", async () => {
+        const tooLarge = { status: 413, body: { error: "Payload too large" } }
+        const t = await inStep()
+        await edit(t, "<mxfile>huge</mxfile>")
+        t.next("POST").answer(tooLarge)
+        await t.settle()
+        const older = t.next("POST")
+        expect(older.body).toMatchObject({ xml: "<mxfile>huge</mxfile>" })
+        await edit(t, "<mxfile>large</mxfile>")
+        for (let i = 0; i < 2; i++) {
+            t.next("POST").answer(tooLarge)
+            await t.settle()
+        }
+        older.answer(tooLarge)
+        await t.settle()
+        expect(t.sync.read()).toMatchObject({
+            latestXml: "<mxfile>large</mxfile>",
+            unsavedEdit: true,
+        })
     })
 
     it("pushes an edit without its image when draw.io does not export in time", async () => {
