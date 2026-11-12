@@ -7,5 +7,9 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
     const models = await loadFlattenedServerModels()
-    return NextResponse.json({ models })
+    // Any visitor can read this list: the names of the server's key and
+    // URL variables are for the chat route only
+    return NextResponse.json({
+        models: models.map(({ apiKeyEnv, baseUrlEnv, ...model }) => model),
+    })
 }

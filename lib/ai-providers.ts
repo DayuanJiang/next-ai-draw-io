@@ -96,8 +96,9 @@ export interface ClientOverrides {
     awsSessionToken?: string | null
     // Vertex AI config
     vertexApiKey?: string | null // Express Mode API key
-    // baseUrl is the server's own <P>_BASE_URL (the admin panel's Test),
-    // not one a user chose: no redirect guard
+    // baseUrl is the deployment's own (the admin panel's Test: the server's
+    // <P>_BASE_URL or the entry's URL), not one a user chose: no redirect
+    // guard
     trustedBaseUrl?: boolean
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
@@ -719,7 +720,7 @@ function serverCredentialError(
  * Auto-detect provider based on available API keys
  * Returns the provider if exactly one is configured, otherwise null
  */
-function detectProvider(): ProviderName | null {
+export function detectProvider(): ProviderName | null {
     const configuredProviders = PROVIDER_NAMES.filter(
         (p) =>
             REQUIRED_KEY_VARS[p] !== null && serverCredentialError(p) === null,
@@ -800,8 +801,8 @@ function resolveEndpoint(
     const vars = envVarsOf(provider)
     const clientUrl = overrides?.baseUrl || undefined
     // Requests to a base URL the client chose must not follow redirects. A
-    // trusted URL is the server's own (the admin Test of an entry without
-    // one), not a user's
+    // trusted URL is the deployment's own (the admin panel's Test), not a
+    // user's
     const guarded = !!clientUrl && !overrides?.trustedBaseUrl
 
     switch (def.credential) {
@@ -1155,20 +1156,39 @@ function createModel(
  */
 export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
     // Drop an endpoint path pasted along with the client's base URL
-    const overrides = clientOverrides?.baseUrl
+    let overrides = clientOverrides?.baseUrl
         ? {
               ...clientOverrides,
               baseUrl: normalizeBaseUrl(clientOverrides.baseUrl),
           }
         : clientOverrides
+    // A request that names no provider runs on AI_PROVIDER and AI_MODEL. A
+    // default set in the admin panel becomes these two, but its key lives in
+    // an ADMIN_-prefixed env var. Point at it the way the chat route does for
+    // server models, or the standard env var is required instead (a page
+    // opened before the default was saved still sends no model).
+    if (!overrides?.provider && !overrides?.apiKeyEnv) {
+        const panelDefault = adminProvidersToConfig(
+            loadAdminProviders(),
+        ).providers.find(
+            (p) => p.default && p.provider === process.env.AI_PROVIDER,
+        )
+        if (panelDefault) {
+            overrides = {
+                ...overrides,
+                apiKeyEnv: panelDefault.apiKeyEnv,
+                baseUrlEnv: panelDefault.baseUrlEnv,
+            }
+        }
+    }
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
     // Exceptions, by the provider's credential kind: a provider without keys
     // (EdgeOne); a Vertex key; an optional key (Ollama) only when the server
     // has no key of that provider, otherwise the client must send its own.
-    // A trusted URL is the server's own (the admin Test of an entry without
-    // one), not a user's. An unknown provider name has no kind and is
+    // A trusted URL is the deployment's own (the admin panel's Test), not
+    // a user's. An unknown provider name has no kind and is
     // refused here like any other, and named below.
     const requested = overrides?.provider
         ? providerDef(overrides.provider)
@@ -1472,17 +1492,8 @@ export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
         )
     }
 
-    // A default set in the admin panel becomes AI_PROVIDER/AI_MODEL, but its key
-    // lives in an ADMIN_-prefixed env var. Point at it the way the chat route
-    // does for server models, or the standard env var is required instead.
-    const panelDefault = adminProvidersToConfig(
-        loadAdminProviders(),
-    ).providers.find((p) => p.default && p.provider === process.env.AI_PROVIDER)
-
-    const { model } = getAIModel({
-        modelId,
-        apiKeyEnv: panelDefault?.apiKeyEnv,
-        baseUrlEnv: panelDefault?.baseUrlEnv,
-    })
+    // On AI_PROVIDER, with the key of the admin panel's default when that
+    // is where AI_PROVIDER comes from (see getAIModel)
+    const { model } = getAIModel({ modelId })
     return model
 }

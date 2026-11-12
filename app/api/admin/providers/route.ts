@@ -5,6 +5,7 @@ import {
     loadAdminProviders,
     maskAdminProviders,
     mergeSecrets,
+    movedSecretError,
     validateAdminProviders,
 } from "@/lib/admin/providers"
 import {
@@ -82,6 +83,14 @@ export async function PUT(req: Request) {
     }
 
     const stored = loadAdminProviders()
+    // A stored key is not kept under another base URL (see movedSecretError)
+    for (const p of parsed.data) {
+        const error = movedSecretError(
+            p,
+            stored.find((s) => s.id === p.id),
+        )
+        if (error) return Response.json({ error }, { status: 400 })
+    }
     const merged = mergeSecrets(parsed.data, stored)
 
     const envConfig = await loadEnvServerModelsConfig()

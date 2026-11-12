@@ -188,6 +188,56 @@ describe("POST /api/validate-model", () => {
     })
 })
 
+describe("a Test that gets a 404", () => {
+    const test404 = async (body: string) => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(
+                async () =>
+                    new Response(body, {
+                        status: 404,
+                        statusText: "Not Found",
+                        headers: { "content-type": "application/json" },
+                    }),
+            ),
+        )
+        const res = await validateModel(
+            new Request("http://localhost/api/validate-model", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider: "custom",
+                    apiKey: "key",
+                    baseUrl: "https://llm.example",
+                    modelId: "some-model",
+                }),
+            }),
+        )
+        return res.json()
+    }
+
+    it("points at the base URL when the answer is not the provider's", async () => {
+        // A base URL without its /v1: vLLM and LM Studio answer so
+        const data = await test404('{"detail":"Not Found"}')
+        expect(data.valid).toBe(false)
+        expect(data.error).toMatch(/Check the base URL/)
+        // No code: the "check the model ID" hint would mislead
+        expect(data.code).toBeUndefined()
+    })
+
+    it("still says model not found when the provider says so", async () => {
+        const inFormat = await test404(
+            '{"error":{"message":"The model `some-model` does not exist","type":"invalid_request_error"}}',
+        )
+        expect(inFormat.code).toBe("model_not_found")
+        // Not in the usual format, but it names the model (older vLLM)
+        const other = await test404(
+            '{"object":"error","message":"The model `some-model` does not exist."}',
+        )
+        expect(other.code).toBe("model_not_found")
+    })
+})
+
 describe("chat requests to a client base URL", () => {
     it("refuse redirects when private URLs are blocked", async () => {
         vi.stubEnv("ALLOW_PRIVATE_URLS", "false")
@@ -340,6 +390,62 @@ describe("the admin Test of the server's own base URL", () => {
         // A user typing the same address is still refused
         const other = await userTest()
         expect(other.status).toBe(400)
+    })
+})
+
+describe("the admin Test of an entry on the server's key", () => {
+    const adminTest = (provider: object) =>
+        testModel(
+            new Request("http://localhost/api/admin/test-model", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-admin-password": "admin-pw",
+                },
+                body: JSON.stringify({
+                    provider: { id: "p1", models: ["glm-5"], ...provider },
+                    modelId: "glm-5",
+                }),
+            }),
+        )
+
+    it("passes without a key in the entry, as chat on it does", async () => {
+        vi.stubEnv("ADMIN_PASSWORD", "admin-pw")
+        vi.stubEnv("GLM_API_KEY", "sk-env-key")
+        streamReply({ role: "assistant", content: "OK" })
+        const res = await adminTest({ provider: "glm" })
+        expect((await res.json()).valid).toBe(true)
+        const [, init] = vi.mocked(fetch).mock.calls[0]
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+            "Bearer sk-env-key",
+        )
+    })
+
+    it("still asks for a key at a URL of the entry's own", async () => {
+        vi.stubEnv("ADMIN_PASSWORD", "admin-pw")
+        vi.stubEnv("GLM_API_KEY", "sk-env-key")
+        streamReply({ role: "assistant", content: "OK" })
+        const res = await adminTest({
+            provider: "glm",
+            baseUrl: "https://elsewhere.example/v1",
+        })
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe("API key is required")
+        expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it("allows an internal address typed into the entry", async () => {
+        // Once saved it is the server's own URL, which chat does not check
+        vi.stubEnv("ADMIN_PASSWORD", "admin-pw")
+        vi.stubEnv("ALLOW_PRIVATE_URLS", "false")
+        privateUrls.all = true
+        streamReply({ role: "assistant", content: "OK" })
+        const res = await adminTest({
+            provider: "glm",
+            apiKey: "panel-key",
+            baseUrl: "http://10.0.0.5:4000/v1",
+        })
+        expect((await res.json()).valid).toBe(true)
     })
 })
 

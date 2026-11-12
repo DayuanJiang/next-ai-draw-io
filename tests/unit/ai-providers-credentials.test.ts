@@ -331,7 +331,9 @@ describe("server model apiKeyEnv", () => {
 })
 
 describe("getValidationModel", () => {
-    it("uses the admin panel default's ADMIN_ key", async () => {
+    // A default provider saved in the admin panel, and what deriveEnvUpdates
+    // writes for it
+    const savePanelDefault = () => {
         settings.values = {
             ADMIN_PROVIDERS: JSON.stringify([
                 {
@@ -344,14 +346,31 @@ describe("getValidationModel", () => {
                 },
             ]),
         }
-        // What deriveEnvUpdates writes for that panel config
         process.env.AI_PROVIDER = "openrouter"
         process.env.AI_MODEL = "openai/gpt-4o"
         process.env.ADMIN_OPENROUTER_API_KEY = "panel-key"
+    }
+
+    it("uses the admin panel default's ADMIN_ key", async () => {
+        savePanelDefault()
         const { createOpenRouter } = await import("@openrouter/ai-sdk-provider")
 
         expect(() => getValidationModel()).not.toThrow()
         expect(createOpenRouter).toHaveBeenCalledWith({ apiKey: "panel-key" })
+    })
+
+    it("getAIModel uses it too for a chat request that names no model", async () => {
+        // A page opened before the default was saved selects nothing
+        savePanelDefault()
+        const { createOpenRouter } = await import("@openrouter/ai-sdk-provider")
+
+        expect(getAIModel({ provider: null, modelId: null })).toMatchObject({
+            provider: "openrouter",
+            modelId: "openai/gpt-4o",
+        })
+        expect(createOpenRouter).toHaveBeenLastCalledWith({
+            apiKey: "panel-key",
+        })
     })
 
     it("uses the standard env vars without a panel default", async () => {

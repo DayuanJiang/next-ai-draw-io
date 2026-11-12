@@ -11,6 +11,7 @@ vi.mock("@/lib/ai-providers", async (importOriginal) => ({
     },
 }))
 
+import { POST as testModel } from "@/app/api/admin/test-model/route"
 import { POST as validateModel } from "@/app/api/validate-model/route"
 
 describe("testing Bedrock", () => {
@@ -64,5 +65,36 @@ describe("testing Bedrock", () => {
         )
         expect(response.status).toBe(400)
         expect(factory.overrides).toBeNull()
+    })
+
+    it("runs an admin panel entry without keys, on the server's IAM role", async () => {
+        // Chat on such an entry uses the default AWS credential chain; the
+        // Test used to stop at "AWS credentials are required"
+        factory.overrides = null
+        vi.stubEnv("ADMIN_PASSWORD", "admin-pw")
+        vi.stubEnv("SETTINGS_FILE", "/nonexistent/settings.json")
+        await testModel(
+            new Request("http://localhost/api/admin/test-model", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-admin-password": "admin-pw",
+                },
+                body: JSON.stringify({
+                    provider: {
+                        id: "p1",
+                        provider: "bedrock",
+                        awsRegion: "us-east-2",
+                        models: ["amazon.nova-lite-v1:0"],
+                    },
+                    modelId: "amazon.nova-lite-v1:0",
+                }),
+            }),
+        )
+        expect(factory.overrides).toMatchObject({
+            provider: "bedrock",
+            awsRegion: "us-east-2",
+        })
+        expect(factory.overrides.awsAccessKeyId).toBeUndefined()
     })
 })

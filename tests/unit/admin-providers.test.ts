@@ -15,7 +15,10 @@ import {
 } from "@/lib/admin/providers"
 import { _resetForTests, saveSettings } from "@/lib/admin/settings"
 import { PROVIDER_NAMES } from "@/lib/providers"
-import { loadRawServerModelsConfig } from "@/lib/server-model-config"
+import {
+    loadFlattenedServerModels,
+    loadRawServerModelsConfig,
+} from "@/lib/server-model-config"
 
 let tmpDir: string
 
@@ -292,6 +295,134 @@ describe("loadRawServerModelsConfig merge", () => {
         )
         const merged = await loadRawServerModelsConfig()
         expect(merged?.providers.map((p) => p.name)).toEqual(["Env Only"])
+    })
+
+    it("keeps a comma-separated AI_MODEL's models under a panel default", async () => {
+        vi.stubEnv("AI_MODELS_CONFIG", "")
+        vi.stubEnv("AI_MODELS_CONFIG_PATH", path.join(tmpDir, "none.json"))
+        vi.stubEnv("AI_PROVIDER", "openai")
+        vi.stubEnv("AI_MODEL", "gpt-a,gpt-b")
+        // The save overlays AI_PROVIDER and AI_MODEL with the panel's default
+        saveSettings(
+            deriveEnvUpdates(
+                [
+                    provider({
+                        provider: "anthropic",
+                        models: ["claude-panel"],
+                        isDefault: true,
+                    }),
+                ],
+                [],
+            ),
+        )
+        expect(process.env.AI_MODEL).toBe("claude-panel")
+
+        const models = await loadFlattenedServerModels()
+        expect(models.map((m) => m.id)).toEqual([
+            "server:openai:gpt-a",
+            "server:openai:gpt-b",
+            "server:anthropic:claude-panel",
+        ])
+        expect(models.filter((m) => m.isDefault).map((m) => m.id)).toEqual([
+            "server:anthropic:claude-panel",
+        ])
+    })
+
+    it("marks only the panel default when the environment lists the same model", async () => {
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Environment",
+                        provider: "openai",
+                        models: ["gpt-same"],
+                    },
+                ],
+            }),
+        )
+        // The save writes openai and gpt-same to AI_PROVIDER and AI_MODEL,
+        // which fit the environment's entry too
+        saveSettings(
+            deriveEnvUpdates(
+                [
+                    provider({
+                        name: "Panel",
+                        models: ["gpt-same"],
+                        isDefault: true,
+                    }),
+                ],
+                [],
+            ),
+        )
+
+        const models = await loadFlattenedServerModels()
+        expect(models.map((m) => [m.id, m.isDefault])).toEqual([
+            ["server:environment:gpt-same", false],
+            ["server:panel:gpt-same", true],
+        ])
+    })
+
+    describe("with a lone AI_MODEL in the environment", () => {
+        const flagged = async () =>
+            (await loadFlattenedServerModels()).map(
+                (m) => `${m.id}${m.isDefault ? " (default)" : ""}`,
+            )
+        const panel = (overrides: Partial<StoredAdminProvider>) =>
+            saveSettings(deriveEnvUpdates([provider(overrides)], []))
+
+        beforeEach(() => {
+            vi.stubEnv("AI_MODELS_CONFIG", "")
+            vi.stubEnv("AI_MODELS_CONFIG_PATH", path.join(tmpDir, "none.json"))
+            vi.stubEnv("AI_PROVIDER", "openai")
+            vi.stubEnv("AI_MODEL", "gpt-env")
+        })
+
+        it("lists it as the default next to the panel's providers", async () => {
+            // Clients use it by selecting nothing while the list is empty
+            expect(await flagged()).toEqual([])
+            panel({ provider: "anthropic", models: ["claude-panel"] })
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-env (default)",
+                "server:anthropic:claude-panel",
+            ])
+        })
+
+        it("lists it on the provider that has a key when AI_PROVIDER is not set", async () => {
+            for (const key of Object.keys(process.env)) {
+                if (/_API_KEY$|_AUTH_TOKEN$/.test(key)) {
+                    vi.stubEnv(key, undefined)
+                }
+            }
+            vi.stubEnv("AI_PROVIDER", undefined)
+            vi.stubEnv("OPENAI_API_KEY", "sk-env")
+            // The panel's own key is not one the server detects a provider by
+            panel({ provider: "anthropic", models: ["claude-panel"] })
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-env (default)",
+                "server:anthropic:claude-panel",
+            ])
+        })
+
+        it("keeps it in the list under a panel default", async () => {
+            panel({
+                provider: "anthropic",
+                models: ["claude-panel"],
+                isDefault: true,
+            })
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-env",
+                "server:anthropic:claude-panel (default)",
+            ])
+        })
+
+        it("does not repeat it when a panel provider of that name lists it", async () => {
+            panel({ models: ["gpt-other", "gpt-env"] })
+            expect(await flagged()).toEqual([
+                "server:openai:gpt-other",
+                "server:openai:gpt-env (default)",
+            ])
+        })
     })
 })
 

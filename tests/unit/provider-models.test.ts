@@ -218,6 +218,21 @@ describe("POST /api/provider-models", () => {
         expect(await res.json()).toMatchObject({ code: "invalid_api_key" })
     })
 
+    it("points at the base URL when the address has no model list", async () => {
+        // A base URL without its /v1: vLLM and LM Studio answer so
+        vi.stubGlobal("fetch", answer({ detail: "Not Found" }, 404).fn)
+        const res = await post({
+            provider: "custom",
+            apiKey: "k",
+            baseUrl: "https://llm.example",
+        })
+        const data = await res.json()
+        expect(data.error).toMatch(/^No model list at this address \(404\)/)
+        expect(data.error).toMatch(/Check the base URL/)
+        // No model ID was sent, so not the hint to check one
+        expect(data.code).not.toBe("model_not_found")
+    })
+
     // The base URL is the caller's, and private addresses are allowed by
     // default (local Ollama), so the answer must not reveal what an
     // internal address sent back

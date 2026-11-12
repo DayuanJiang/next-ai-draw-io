@@ -41,6 +41,8 @@ function validateValue(def: SettingDef, value: string): string | null {
         case "number": {
             const num = Number(value)
             if (!Number.isFinite(num)) return "Must be a number"
+            if (def.integer && !Number.isInteger(num))
+                return "Must be a whole number"
             if (def.min !== undefined && num < def.min)
                 return `Must be at least ${def.min}`
             if (def.max !== undefined && num > def.max)

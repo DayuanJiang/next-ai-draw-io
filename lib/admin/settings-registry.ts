@@ -20,6 +20,8 @@ export interface SettingDef {
     description?: string
     min?: number
     max?: number
+    // A number setting whose reader takes whole numbers only
+    integer?: boolean
     placeholder?: string
     // Built-in default applied at runtime when the value is unset, so the UI
     // can reflect actual behavior (e.g. ALLOW_PRIVATE_URLS defaults to "true").
@@ -85,7 +87,11 @@ export const SETTINGS_REGISTRY: SettingDef[] = [
         group: "generation",
         type: "number",
         label: "Max Output Tokens",
+        // What the chat route takes (validBudget in lib/output-token-limit):
+        // any other value is ignored there, for the default of 64000
         min: 1,
+        max: 200000,
+        integer: true,
     },
 
     // ── Access Control ───────────────────────────────────────────────
@@ -107,6 +113,8 @@ export const SETTINGS_REGISTRY: SettingDef[] = [
         label: "VLM Diagram Validation",
         description:
             "Visually validate generated diagrams with a vision model.",
+        // Unset means on at runtime (validate-diagram route: !== "false")
+        default: "true",
     },
     {
         key: "VALIDATION_MODEL",

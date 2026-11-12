@@ -156,8 +156,29 @@ export function mergeSecrets(
     })
 }
 
-function displayName(p: StoredAdminProvider): string {
+function displayName(p: { name?: string; provider: ProviderName }): string {
     return p.name?.trim() || PROVIDERS[p.provider].label
+}
+
+// SECURITY: an {isSet} marker stands for a stored secret only while the
+// entry still sends it to the same place. Under another provider or base
+// URL the stored key would go to a host it was not entered for, so Save and
+// Test refuse with this text and the admin types the key again. `stored` is
+// the saved entry with the id of `incoming`. A Bedrock region may change:
+// it only picks the AWS endpoint that the keys sign a request for.
+export function movedSecretError(
+    incoming: AdminProviderInput,
+    stored: StoredAdminProvider | undefined,
+): string | null {
+    const keepsSecret = SECRET_FIELDS.some(
+        (field) => typeof incoming[field] === "object",
+    )
+    const sameEndpoint =
+        stored?.provider === incoming.provider &&
+        (stored.baseUrl ?? "") === (incoming.baseUrl ?? "")
+    return keepsSecret && !sameEndpoint
+        ? `The base URL of "${displayName(incoming)}" changed. Enter its key again.`
+        : null
 }
 
 export function validateAdminProviders(

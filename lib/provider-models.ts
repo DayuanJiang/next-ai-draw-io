@@ -109,6 +109,14 @@ async function getJson(
         signal: AbortSignal.timeout(15_000),
     })
     if (!response.ok) {
+        // Nothing at this path: the address is wrong, most often a base URL
+        // without its /v1. Without the status, which would bring the hint
+        // to check a model ID, and no model ID was sent
+        if (response.status === 404) {
+            throw new ModelListError(
+                "No model list at this address (404). Check the base URL: OpenAI-compatible servers usually need /v1 at the end.",
+            )
+        }
         // Google answers a wrong key with 400 and the reason in the body.
         // The body stays here; the hint goes by the status.
         const wrongKey = (await response.text()).includes("API_KEY_INVALID")
