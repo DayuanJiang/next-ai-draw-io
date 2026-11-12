@@ -4,8 +4,11 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { diffDiagrams } from "@/lib/diagram-diff"
 import {
+    finishTyping,
     highlightChangedCells,
+    isMidGesture,
     readSelectionDetails,
+    selectCells,
 } from "@/lib/drawio/editor-bridge"
 import { useCanvasStore } from "@/stores/canvas-store"
 import { createMcpSync, type McpSync, type SyncStatus } from "./mcp-sync-core"
@@ -34,6 +37,9 @@ export function useMcpSync(config: ShellConfig): {
     diagramRef.current = diagram
     const dictRef = useRef(dict)
     dictRef.current = dict
+    // The ids of the cells selected when a server write went on the page
+    // in place
+    const selectedRef = useRef<string[]>([])
 
     useEffect(() => {
         if (!config.sessionId) return
@@ -56,6 +62,8 @@ export function useMcpSync(config: ShellConfig): {
                 // A server write that loads in full keeps the user's view
                 load: (xml, decision) => {
                     const before = diagramRef.current.chartXMLRef.current
+                    selectedRef.current =
+                        readSelectionDetails()?.cells.map((c) => c.id) ?? []
                     diagramRef.current.loadDiagram(
                         xml,
                         true,
@@ -91,6 +99,8 @@ export function useMcpSync(config: ShellConfig): {
                 currentXml: () => diagramRef.current.chartXMLRef.current,
                 currentPageId: () => useCanvasStore.getState().currentPageId,
                 loadPending: () => diagramRef.current.hasPendingLoad(),
+                busy: isMidGesture,
+                finishTyping,
                 // The bridge reads the editor directly; without it (an
                 // external draw.io) the selection cannot be read
                 readSelection: () =>
@@ -101,9 +111,19 @@ export function useMcpSync(config: ShellConfig): {
                         unavailable: true,
                     },
             },
+            // "Can't reach the server" stays until it answers again: what
+            // the user changes meanwhile is only in this tab
             onNotice: (notice) =>
-                toast(dictRef.current.shell[notice], { duration: 8000 }),
-            onStatus: setStatus,
+                toast(
+                    dictRef.current.shell[notice],
+                    notice === "unreachable"
+                        ? { id: notice, duration: Number.POSITIVE_INFINITY }
+                        : { duration: 8000 },
+                ),
+            onStatus: (next) => {
+                setStatus(next)
+                if (next === "connected") toast.dismiss("unreachable")
+            },
             isHidden: () => document.visibilityState === "hidden",
         })
         syncRef.current = sync
@@ -139,9 +159,19 @@ export function useMcpSync(config: ShellConfig): {
             }
         }
         window.addEventListener("message", onMessage)
+        // A reload or a closed tab would lose an edit the server does not
+        // have (it cannot be reached): the browser asks first
+        const onBeforeUnload = (event: BeforeUnloadEvent) => {
+            if (!sync.read().unsavedEdit) return
+            event.preventDefault()
+            // Some browsers only show the prompt when returnValue is set
+            event.returnValue = ""
+        }
+        window.addEventListener("beforeunload", onBeforeUnload)
         return () => {
             loadOutline = null
             window.removeEventListener("message", onMessage)
+            window.removeEventListener("beforeunload", onBeforeUnload)
             sync.stop()
             syncRef.current = null
             setSync(null)
@@ -157,6 +187,11 @@ export function useMcpSync(config: ShellConfig): {
     // the canvas clears it
     useEffect(() => {
         diagram.setCommitHandler(({ beforeXml, afterXml, pageId }) => {
+            // The write replaced every cell of the page, which empties the
+            // selection: the cells the user had selected are selected
+            // again, so "these two" are still theirs when the AI reads the
+            // selection next. Before the outline: a selection ends it
+            selectCells(selectedRef.current)
             const { touchedIds, fromScratch } = diffDiagrams(
                 beforeXml,
                 afterXml,

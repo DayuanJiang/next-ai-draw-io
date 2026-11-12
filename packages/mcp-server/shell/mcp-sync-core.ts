@@ -115,6 +115,11 @@ export interface SyncCanvas {
     /** A full load was sent and draw.io has not reported it yet: the
      * editor still shows the previous document */
     loadPending(): boolean
+    /** The user is typing a label or holds the mouse button down on the
+     * canvas (a drag): a load now would end that */
+    busy(): boolean
+    /** Takes the label being typed as it is; false when none is */
+    finishTyping(): boolean
     /** The cells selected in the editor, for get_selection; `unavailable`
      * when the page cannot reach the editor (external draw.io) */
     readSelection(): SelectionAnswer
@@ -188,6 +193,10 @@ export interface McpSync {
         file: string | null
         /** The diagram changed since that file was read or written */
         fileChanged: boolean
+        /** A hand edit the server does not have yet: its picture or its
+         * push is on the way, or the push failed (leaving the page now
+         * would lose it) */
+        unsavedEdit: boolean
     }
 }
 
@@ -195,6 +204,11 @@ export const POLL_INTERVAL_MS = 2000
 
 // A hand edit this recent means the user is working on the page on screen
 const EDITING_MS = 10_000
+
+// How long a write waits for the user to finish typing a label or dragging.
+// The server gives a screenshot of the write 10 s, and the wait ends at a
+// poll: up to 2 s before it starts and 2 s after this time
+const HOLD_MS = 4000
 
 // Width cap of a thumbnail drawn as a PNG (the card shows it at about 300 px)
 const THUMBNAIL_WIDTH = 600
@@ -342,6 +356,16 @@ export function createMcpSync(options: SyncOptions): McpSync {
     let stateId: string | null = null
     let pushFailing = false
     const pushesInFlight: string[] = []
+    // A hand edit whose push did not reach the server, with the version and
+    // state it is based on: sent again once a poll gets through (the
+    // connection, a tunnel or a proxy is back). The canvas changing again
+    // ends it: the newer edit carries the whole document
+    let unsentEdit: {
+        xml: string
+        svg: string
+        baseVersion: number
+        sid: string | null
+    } | null = null
     // After a recovery replaced the canvas, until draw.io reports the load:
     // an autosave still on its way belongs to the canvas being replaced
     let awaitingLoad = false
@@ -386,6 +410,9 @@ export function createMcpSync(options: SyncOptions): McpSync {
     }
     // Load the server state on the next poll even at the same version
     let forceReload = false
+    // When a write was first held back because the user was typing or
+    // dragging; 0 while none is
+    let heldSince = 0
     let pendingSyncExport = false
     let syncExportSeq = 0
     // The selection request answered last: the server shows a request until
@@ -545,10 +572,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
     }
 
     // Restore the user's real document after a page-targeted projection
-    // export by reloading the server state (it also has any autosave that
-    // was still in flight when the projection started). projectionExportActive
-    // stays set until the poll loads the document: an edit on the
-    // projection before that must not be pushed.
+    // export by reloading the server state (the poll waits until it has
+    // an edit that was still on its way when the projection started).
+    // projectionExportActive stays set until the poll loads the document:
+    // an edit on the projection before that must not be pushed.
     const restoreFromProjection = () => {
         if (!projectionExportActive) return
         forceReload = true
@@ -575,6 +602,12 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 source,
                 stateId: sid,
             })
+            // Not the MCP server's answer (the proxy of a remote preview
+            // says 502 when it cannot reach it), or the server failing:
+            // nothing was saved, as when the request itself fails
+            if (!r.ok && r.status !== 409 && r.status !== 413) {
+                throw new Error(`HTTP ${r.status}`)
+            }
             pushFailing = false
             if (r.ok) {
                 const d = await r.json()
@@ -621,6 +654,11 @@ export function createMcpSync(options: SyncOptions): McpSync {
             if (!pushFailing) {
                 pushFailing = true
                 onNotice("unreachable")
+            }
+            // Kept for the next poll that gets through, unless the canvas
+            // has moved on since (that edit is pushed on its own)
+            if (source === "edit" && xml === latestXml) {
+                unsentEdit = { xml, svg, baseVersion, sid }
             }
         } finally {
             pushesInFlight.splice(pushesInFlight.indexOf(xml), 1)
@@ -793,6 +831,16 @@ export function createMcpSync(options: SyncOptions): McpSync {
             setStatus("connected")
             if (stateId === null) stateId = s.stateId
             else if (s.stateId && s.stateId !== stateId) recoverState(s)
+            // The server answers again: the edit it never got goes now, as
+            // it was made (a version the AI wrote meanwhile refuses it and
+            // keeps it in History). A recreated state got the canvas above
+            if (unsentEdit) {
+                const u = unsentEdit
+                unsentEdit = null
+                if (u.sid === stateId) {
+                    pushState(u.xml, u.svg, u.baseVersion, "edit", u.sid)
+                }
+            }
             // Load a new version (before an export, so it pictures the
             // latest). While a projection is on screen, only the restore
             // (forceReload) replaces it, so a new version doesn't fight the
@@ -800,17 +848,40 @@ export function createMcpSync(options: SyncOptions): McpSync {
             // tab's own push still on its way is not loaded back: the canvas
             // may have moved on since (an undo), and its answer follows.
             const ownPush = s.xml !== null && pushesInFlight.includes(s.xml)
+            // The restore after a projection waits for an edit still on its
+            // way to the server (its picture awaited, its push unanswered):
+            // the server's document is the one from before the edit, and
+            // loading it would undo the edit here and, with the push's
+            // answer, on the server. The next poll restores
+            const restore =
+                forceReload &&
+                pendingSvgExport === null &&
+                pushesInFlight.length === 0
+            // The user is typing a label or dragging a shape: loading a
+            // write now would end that without a word (the text is gone,
+            // the shape jumps back). The write waits for them; the edit
+            // they finish then loses against it as any other, and is kept
+            // in History. When the time is up, a label is taken as typed
+            // so far, which saves it the same way before the next poll
+            // loads the write
+            const busy = s.version > currentVersion && canvas.busy()
+            if (!busy) heldSince = 0
+            else if (!heldSince) heldSince = Date.now()
+            const held =
+                busy &&
+                (Date.now() - heldSince < HOLD_MS || canvas.finishTyping())
             let justLoaded = false
             if (
-                (forceReload ||
+                (restore ||
                     (s.version > currentVersion &&
                         !projectionExportActive &&
-                        !ownPush)) &&
+                        !ownPush &&
+                        !held)) &&
                 s.xml
             ) {
                 // The restore after a projection is a full load of the
                 // document the user had
-                const how = forceReload ? "full" : "decide"
+                const how = restore ? "full" : "decide"
                 forceReload = false
                 currentVersion = s.version
                 loadFromServer(s.xml, how)
@@ -842,12 +913,14 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 startSyncExport()
             }
             // Nor an export while the projection is still on screen: it
-            // would picture the projection
+            // would picture the projection; nor while a write is held
+            // back: it would picture the canvas without it
             if (
                 s.exportFormat &&
                 !pendingMcpExport &&
                 isReady &&
-                !projectionExportActive
+                !projectionExportActive &&
+                !held
             ) {
                 startMcpExport(s, justLoaded)
             }
@@ -947,12 +1020,22 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 pushState(xml, "", currentVersion, "recover")
                 return
             }
+            // An edit of the canvas a full load is replacing (the user let
+            // go of a shape as a write arrived; draw.io has not reported
+            // the load yet): made on the version before that write, and
+            // pushed as such. The server then keeps it in History, where
+            // pushed on the write's version it would replace the write
+            if (canvas.loadPending()) {
+                pushState(xml, "", currentVersion - 1)
+                return
+            }
             // Also an edit undone back to what the server has, or draw.io's
             // own copy of a write it took in place (a commit). Compared as
             // documents only for that copy: a change of the paper size alone
             // is the same document to isSameDocument when the server's copy
             // names none
             latestXml = xml
+            unsentEdit = null
             const commitCopy = awaitingCommitCopy
             awaitingCommitCopy = false
             // The canvas is back at a write whose picture was not taken (an
@@ -1058,6 +1141,10 @@ export function createMcpSync(options: SyncOptions): McpSync {
                 status,
                 file,
                 fileChanged,
+                unsavedEdit:
+                    unsentEdit !== null ||
+                    pendingSvgExport !== null ||
+                    pushesInFlight.length > 0,
             }
         },
     }

@@ -932,6 +932,38 @@ export function readSelectionDetails(): SelectionAnswer | null {
     }
 }
 
+/**
+ * Selects the cells with these ids that the page on the canvas has: what
+ * the user had selected before a write replaced the page's cells
+ */
+export function selectCells(ids: string[]) {
+    const g = graph()
+    if (!g) return
+    const cells = ids.map((id) => g.model.getCell(id)).filter(Boolean)
+    if (cells.length > 0) g.setSelectionCells(cells)
+}
+
+/**
+ * The user is in the middle of something a new document would end: typing
+ * a label, or holding the mouse button down on the canvas (a drag, a
+ * rubber band)
+ */
+export function isMidGesture(): boolean {
+    const g = graph()
+    return !!g && (g.isEditing() || !!g.isMouseDown)
+}
+
+/**
+ * Takes the label being typed as it is, as a click beside it does; false
+ * when none is being typed
+ */
+export function finishTyping(): boolean {
+    const g = graph()
+    if (!g?.isEditing()) return false
+    g.stopEditing(false)
+    return true
+}
+
 function readSelectionRect() {
     const g = graph()
     if (!g || g.isSelectionEmpty()) return null

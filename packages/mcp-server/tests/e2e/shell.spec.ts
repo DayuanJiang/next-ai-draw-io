@@ -10,7 +10,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
-import { expect, type Page, test } from "@playwright/test"
+import { expect, type FrameLocator, type Page, test } from "@playwright/test"
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "../..")
 
@@ -439,6 +439,209 @@ test("the download waits for a page export's projection, and saves every page", 
     expect(saved).toContain('name="Page-1"')
     expect(saved).toContain('name="Elsewhere"')
     expect(await exported).toContain("exported successfully")
+})
+
+/** A shape added in the editor, as the user would draw one */
+const addByHand = (frame: FrameLocator, id: string, label: string) =>
+    frame.locator("body").evaluate(
+        (body, cell) => {
+            const w = body.ownerDocument.defaultView as any
+            w.Draw.loadPlugin((ui: any) => {
+                const graph = ui.editor.graph
+                graph.getModel().beginUpdate()
+                try {
+                    graph.insertVertex(
+                        graph.getDefaultParent(),
+                        cell.id,
+                        cell.label,
+                        40,
+                        200,
+                        120,
+                        60,
+                        "rounded=1;",
+                    )
+                } finally {
+                    graph.getModel().endUpdate()
+                }
+            })
+        },
+        { id, label },
+    )
+
+/** The server's document, read as the page polls it: get_diagram would ask
+ * the tab for its canvas first */
+const serverXml = (page: Page) =>
+    page.evaluate(async () => {
+        const config = (window as any).__MCP_CONFIG__
+        const r = await fetch(`/api/state?sessionId=${config.sessionId}`, {
+            headers: { "X-Drawio-Token": config.token },
+        })
+        return String((await r.json()).xml)
+    })
+
+test("a hand edit whose save failed is sent again once the server answers", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Retry me", 40) })
+    await expect(frame.getByText("Retry me")).toBeVisible({ timeout: 10_000 })
+    // The connection drops for the edit's POST only, as a tunnel or a proxy
+    // in front of a remote preview does; the polls get through
+    let dropped = 0
+    await page.route("**/api/state", async (route) => {
+        const request = route.request()
+        if (
+            request.method() === "POST" &&
+            dropped === 0 &&
+            (request.postData() ?? "").includes('"source":"edit"')
+        ) {
+            dropped++
+            await route.abort("connectionfailed")
+            return
+        }
+        await route.continue()
+    })
+    await addByHand(frame, "retry-1", "Sent again")
+    await expect(frame.getByText("Sent again")).toBeVisible()
+    await expect.poll(() => dropped).toBe(1)
+    // The next poll gets through, and the edit follows it
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="retry-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    // The notice about the unreachable server is gone again
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    await expect(page.getByText(/only in this tab/)).toHaveCount(0)
+})
+
+test("the notice stays and the browser asks before the page is left while an edit is not saved", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Stay or go", 40) })
+    await expect(frame.getByText("Stay or go")).toBeVisible({ timeout: 10_000 })
+    // The server cannot be reached any more (the MCP client was closed)
+    await page.route("**/api/**", (route) => route.abort("connectionrefused"))
+    // Chrome asks only on a page the user has clicked on
+    await page.getByText("Next AI Draw.io").click()
+    await addByHand(frame, "unsent-1", "Not saved yet")
+    const notice = page.getByText(/only in this tab/)
+    await expect(notice).toBeVisible()
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "offline",
+    )
+    const asked = page.waitForEvent("dialog")
+    await page.evaluate(() => {
+        setTimeout(() => location.reload(), 0)
+    })
+    const dialog = await asked
+    expect(dialog.type()).toBe("beforeunload")
+    await dialog.dismiss()
+    // The user stayed: the edit is on the canvas, and the notice is still
+    // up after the 8 s other notices get
+    await page.waitForTimeout(8500)
+    await expect(frame.getByText("Not saved yet")).toBeVisible()
+    await expect(notice).toBeVisible()
+    // The server answers again: the edit is saved and the notice goes
+    await page.unroute("**/api/**")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="unsent-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await expect(notice).toHaveCount(0)
+})
+
+test("the cells the user selected stay selected when the AI changes the page", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Mine one", 40)}\n${box("3", "Mine two", 240)}\n${box("4", "Not mine", 440)}`,
+    })
+    await expect(frame.getByText("Mine two")).toBeVisible({ timeout: 10_000 })
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => {
+            const graph = ui.editor.graph
+            graph.setSelectionCells([
+                graph.model.getCell("2"),
+                graph.model.getCell("3"),
+            ])
+        })
+    })
+    expect(await toolText("get_selection")).toContain("2 cells selected")
+    // "Make these green": the write replaces the page's cells in place
+    await toolText("edit_diagram", {
+        operations: ["2", "3"].map((id) => ({
+            operation: "update",
+            cell_id: id,
+            new_xml: `<mxCell id="${id}" value="Green ${id}" style="rounded=1;fillColor=#d5e8d4;" x="${id === "2" ? 40 : 240}" y="40" w="120" h="60"/>`,
+        })),
+    })
+    await expect(frame.getByText("Green 3")).toBeVisible({ timeout: 10_000 })
+    // What the AI changed is still outlined, and the user's selection is
+    // the same two cells: "now make them bigger" finds them
+    await expect(frame.locator('[stroke="#a86b00"]')).toHaveCount(2)
+    const selection = await toolText("get_selection")
+    expect(selection).toContain('2 cells selected on page "Page-1"')
+    expect(selection).toContain('id="2" shape "Green 2"')
+    expect(selection).toContain('id="3" shape "Green 3"')
+})
+
+test("an AI write waits while the user types a label, and the label is kept in History", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Type here", 40)}\n${box("3", "AI target", 240)}`,
+    })
+    await expect(frame.getByText("Type here")).toBeVisible({ timeout: 10_000 })
+    await frame.getByText("Type here", { exact: true }).dblclick()
+    await page.keyboard.press("ControlOrMeta+a")
+    await page.keyboard.type("Half typed")
+    const labelEditor = frame.locator(".mxCellEditor")
+    await expect(labelEditor).toHaveCount(1)
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "update",
+                cell_id: "3",
+                new_xml: box("3", "AI wrote", 240),
+            },
+        ],
+    })
+    // The next poll brings the write: it is not loaded over the label
+    // being typed
+    await page.waitForTimeout(2600)
+    await expect(labelEditor).toHaveCount(1)
+    await expect(frame.getByText("AI wrote")).toHaveCount(0)
+    await page.keyboard.type(" label")
+    await frame
+        .locator(".geDiagramContainer")
+        .click({ position: { x: 400, y: 400 } })
+    // The finished label lost against the write: the page says so, the
+    // write is on the canvas and the label is in History
+    await expect(
+        page.getByText(/Your last change was saved in History/),
+    ).toBeVisible({ timeout: 10_000 })
+    await expect(frame.getByText("AI wrote")).toBeVisible({ timeout: 10_000 })
+    const kept = await page.evaluate(async () => {
+        const config = (window as any).__MCP_CONFIG__
+        const r = await fetch(`/api/history?sessionId=${config.sessionId}`, {
+            headers: { "X-Drawio-Token": config.token },
+        })
+        const entries: { xml: string }[] = (await r.json()).entries
+        return entries.some((e) => e.xml.includes("Half typed label"))
+    })
+    expect(kept).toBe(true)
+    // No key went to the editor as a shortcut: the two layers, two shapes
+    expect((await serverXml(page)).match(/<mxCell /g)).toHaveLength(4)
 })
 
 // --- Version cards from the server's History (shell/node-versions-source.ts) ---
