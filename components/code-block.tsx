@@ -1,6 +1,7 @@
 "use client"
 
 import { Highlight, themes } from "prism-react-renderer"
+import { useSettingsStore } from "@/stores/settings-store"
 
 interface CodeBlockProps {
     code: string
@@ -8,9 +9,16 @@ interface CodeBlockProps {
 }
 
 export function CodeBlock({ code, language = "xml" }: CodeBlockProps) {
+    // The code sits on the panel's own background: the light theme's dark
+    // blue tag names and grey punctuation can't be read on the dark one
+    const isDark = useSettingsStore((s) => s.isDark)
     return (
         <div className="overflow-hidden w-full">
-            <Highlight theme={themes.github} code={code} language={language}>
+            <Highlight
+                theme={isDark ? themes.vsDark : themes.github}
+                code={code}
+                language={language}
+            >
                 {({
                     className: _className,
                     style,

@@ -168,7 +168,9 @@ test("a model drawing silently shows the time so far", async ({ page }) => {
     // Not while something new is still arriving
     const clock = page.getByTestId("silent-work")
     await expect(clock).toBeHidden()
-    await expect(clock).toBeVisible({ timeout: 8000 })
+    // Two to three seconds of nothing new, not five: the panel looked
+    // stopped
+    await expect(clock).toBeVisible({ timeout: 4000 })
     await expect(clock).toHaveText(/^Drawing… \d+ s$/)
     // Gone once the drawing arrives
     await expect(clock).toBeHidden({ timeout: 10000 })

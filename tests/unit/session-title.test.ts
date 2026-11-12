@@ -19,6 +19,16 @@ describe("extractTitle", () => {
         ).toBe("Summarize")
     })
 
+    it('leaves out an attached file whose name has "]" in it', () => {
+        expect(
+            extractTitle(
+                userMessage(
+                    "Summarize this paper\n\n[PDF: [2301.00001] Attention.pdf]\nLONG PDF TEXT",
+                ),
+            ),
+        ).toBe("Summarize this paper")
+    })
+
     it("puts the typed text on one line", () => {
         expect(extractTitle(userMessage("Login flow:\n  email,\n  SMS"))).toBe(
             "Login flow: email, SMS",

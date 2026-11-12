@@ -249,8 +249,8 @@ export function createEmptySession(): ChatSession {
 const MAX_TITLE_LENGTH = 100
 
 // The [PDF: ...], [File: ...] and [URL: ...] sections the chat appends to
-// the typed text
-const APPENDED_SECTIONS = /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
+// the typed text; a name may hold "]"
+const APPENDED_SECTIONS = /\n\n\[(PDF|File|URL):\s*[^\n]*\]\n[\s\S]*$/
 
 export function extractTitle(messages: StoredMessage[]): string {
     const firstUserMessage = messages.find((m) => m.role === "user")
