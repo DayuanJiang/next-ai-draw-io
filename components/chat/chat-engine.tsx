@@ -2152,10 +2152,16 @@ export function ChatEngineProvider({
     const openFile = async (file: File, keepComposer: boolean) => {
         const xml = await readDiagramFile(file).catch(() => null)
         if (!xml) {
+            // An SVG that does not open is a picture without the diagram
+            // inside, like this app's own "SVG image" export: the message
+            // names the two formats that can be opened again
             toast.error(
-                formatMessage(dict.errors.notADiagramFile, {
-                    name: file.name,
-                }),
+                formatMessage(
+                    /\.svg$/i.test(file.name)
+                        ? dict.errors.svgWithoutDiagram
+                        : dict.errors.notADiagramFile,
+                    { name: file.name },
+                ),
             )
             return
         }

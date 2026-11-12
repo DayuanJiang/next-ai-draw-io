@@ -130,6 +130,7 @@
             "xmlsvg": "可編輯的 SVG"
         },
         "savedSuccessfully": "已匯出 {name}",
+        "exportFailed": "匯出圖紙失敗，請重試。",
         "hints": {
             "drawio": "所有內容都能繼續編輯",
             "png": "用於簡報和文件的圖片",
@@ -165,6 +166,7 @@
         "sessionSaveFailedLeave": "無法儲存這個對話，瀏覽器儲存空間可能已滿。可以不儲存它、直接繼續，再在新對話的列表裡刪除舊對話。",
         "continueWithoutSaving": "不儲存，繼續",
         "notADiagramFile": "{name} 不是 draw.io 圖表檔案。",
+        "svgWithoutDiagram": "{name} 是一般的 SVG 圖片，裡面沒有 draw.io 圖表。想以後再開啟，匯出時請選「可編輯的 SVG」或「draw.io 檔案」。",
         "fileTooLong": "{name}：內容超過了 {limit}k 字元的上限（{size}k 字元）",
         "fileReadFailed": "無法讀取檔案：{name}",
         "fileNoText": "{name} 裡沒有可以讀取的文字。如果是掃描檔，請改為上傳頁面截圖。",
@@ -650,7 +652,7 @@
         "noPreview": "沒有預覽",
         "compareSince": "從第 {n} 版到現在，畫布上：",
         "isOnCanvas": "畫布現在顯示的就是這一版。",
-        "differsElsewhere": "第一頁的形狀和連線與第 {n} 版相同，疊放順序、其他頁面或頁面設定有改動。",
+        "differsElsewhere": "這一版所在頁面的形狀和連線與第 {n} 版相同，疊放順序、其他頁面或頁面設定有改動。",
         "showChanges": "顯示改動",
         "outlineFaded": "AI 改動的地方剛才標出了 3 秒。",
         "showAgain": "再看一次",

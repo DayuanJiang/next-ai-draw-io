@@ -834,6 +834,38 @@ test.describe("Workspace", () => {
         await expect(style).toBeVisible()
     })
 
+    test("the buttons next to a selection leave draw.io's rotation handle free", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        const canvas = getIframeContent(page)
+        // With the chat panel hidden the bar has both buttons
+        await page.getByRole("button", { name: "Hide chat panel" }).click()
+        await canvas.getByText("Process", { exact: true }).click()
+        const ask = page.locator('[data-testid="selection-ask"]')
+        await expect(ask).toBeVisible()
+        // draw.io draws the handle outside the shape's top right corner;
+        // it alone has this cursor
+        const handle = await boxOf(
+            canvas.locator('svg g[style*="cursor: crosshair"]'),
+        )
+        for (const button of [
+            ask,
+            page.locator('[data-testid="selection-style"]'),
+        ]) {
+            const box = await boxOf(button)
+            const overlaps =
+                box.x < handle.x + handle.width &&
+                handle.x < box.x + box.width &&
+                box.y < handle.y + handle.height &&
+                handle.y < box.y + box.height
+            expect(overlaps).toBe(false)
+        }
+    })
+
     test("with the chat panel hidden, a selection also offers ask AI, which opens the panel", async ({
         page,
     }) => {
@@ -1254,6 +1286,32 @@ test.describe("Workspace", () => {
         await expect(toast).toHaveCount(0)
     })
 
+    test("a dialog taller than the window stays inside it and scrolls", async ({
+        page,
+    }) => {
+        await page.setViewportSize({ width: 1280, height: 480 })
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await drawAndEdit(page)
+        await page.locator('[data-testid="version-thumb"]').first().click()
+        const dialog = page.getByRole("dialog")
+        await expect(dialog).toContainText("Version 1")
+        // Once it has slid in, the dialog is within the window
+        await expect
+            .poll(async () => (await boxOf(dialog)).y)
+            .toBeGreaterThanOrEqual(0)
+        const box = await boxOf(dialog)
+        expect(box.y + box.height).toBeLessThanOrEqual(480)
+        // Its close button is on screen, and its last button is reached
+        // by scrolling the dialog
+        await expect(
+            dialog.getByRole("button", { name: "Close" }),
+        ).toBeInViewport()
+        const restore = page.locator('[data-testid="compare-restore"]')
+        await restore.scrollIntoViewIfNeeded()
+        await expect(restore).toBeInViewport({ ratio: 1 })
+    })
+
     test("a broken file leaves the chat on screen", async ({ page }) => {
         await page.route("**/api/chat", drawThenEdit())
         await openApp(page)
@@ -1300,6 +1358,19 @@ test.describe("Workspace", () => {
         })
         await expect(
             page.getByText("notes.xml isn't a draw.io diagram."),
+        ).toBeVisible()
+        await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
+        // A picture without the diagram inside, as the "SVG image" export
+        // writes it: the message names the formats that open again
+        await openDrawioFile(
+            page,
+            "picture.svg",
+            '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>',
+        )
+        await expect(
+            page.getByText(
+                "picture.svg is a plain SVG picture with no draw.io diagram inside. To open a diagram again later, export it as Editable SVG or as a draw.io file.",
+            ),
         ).toBeVisible()
         await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
     })
@@ -2254,10 +2325,57 @@ test.describe("Workspace", () => {
             .locator('[data-testid="version-card"]')
             .getByRole("button", { name: "Compare" })
             .click()
-        await expect(page.getByRole("dialog")).toContainText("their order")
+        // The page compared is the version's, which need not be the first
+        await expect(page.getByRole("dialog")).toContainText(
+            "On the page this version was made on, the shapes and connectors are the same as in version 1; their order",
+        )
         await expect(
             page.locator('[data-testid="compare-restore"]'),
         ).toBeEnabled()
+    })
+
+    test("compare shows the canvas's picture of the page the version was made on", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await openDrawioFile(page, "two.drawio", TWO_PAGE_FILE)
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        // The AI draws the flowchart, taller than wide, on the second page
+        await drawioTabs(page).getByText("P1", { exact: true }).click()
+        await expect(canvas.getByText("Old B")).toBeVisible()
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        await page.waitForTimeout(1500)
+        // Back on the first page, which holds one wide box
+        await drawioTabs(page).getByText("P0", { exact: true }).click()
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        await page
+            .locator('[data-testid="version-card"]')
+            .getByRole("button", { name: "Compare" })
+            .click()
+        const dialog = page.getByRole("dialog")
+        await expect(dialog).toContainText(
+            "This version is what the canvas shows now.",
+        )
+        // Both pictures are of the second page: the flowchart's shape, not
+        // the wide box of the page on screen
+        const pictures = dialog.locator("figure img")
+        await expect(pictures).toHaveCount(2)
+        const widthToHeight = await pictures.evaluateAll((images) =>
+            Promise.all(
+                (images as HTMLImageElement[]).map(async (image) => {
+                    await image.decode()
+                    return image.naturalWidth / image.naturalHeight
+                }),
+            ),
+        )
+        expect(widthToHeight[0]).toBeLessThan(1)
+        expect(widthToHeight[1]).toBeLessThan(1)
+        // The canvas stays on the page the user is viewing
+        await page.keyboard.press("Escape")
+        await expect(canvas.getByText("Old A")).toBeVisible()
     })
 
     test("a file name typed in the export dialog stays when the title comes", async ({
@@ -2283,6 +2401,86 @@ test.describe("Workspace", () => {
         await expect(page).toHaveURL(/session=/, { timeout: 10000 })
         await page.waitForTimeout(1000)
         await expect(name).toHaveValue("my-arch")
+    })
+
+    test("the versions strip brings a restored older version into view", async ({
+        page,
+    }) => {
+        const file = (label: string) =>
+            `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("a", label, 40)}</root></mxGraphModel></diagram></mxfile>`
+        await openApp(page)
+        // More versions than the strip is wide
+        await seedSession(page, {
+            id: "strip",
+            title: "Strip",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            messages: [
+                {
+                    id: "u1",
+                    role: "user",
+                    parts: [{ type: "text", text: "Draw boxes" }],
+                },
+            ],
+            xmlSnapshots: [],
+            diagramXml: file("Box 8"),
+            versions: Array.from({ length: 8 }, (_, i) => ({
+                id: `v${i + 1}`,
+                number: i + 1,
+                xml: file(`Box ${i + 1}`),
+                svg: "",
+                turnIndex: 0,
+                summary: {
+                    shapesAdded: 0,
+                    shapesRemoved: 0,
+                    shapesChanged: 1,
+                    edgesAdded: 0,
+                    edgesRemoved: 0,
+                    edgesChanged: 0,
+                },
+            })),
+        })
+        await page.goto("/?session=strip", { waitUntil: "networkidle" })
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Box 8")).toBeVisible({ timeout: 30000 })
+        const thumbs = page.locator('[data-testid="version-thumb"]')
+        await expect(thumbs).toHaveCount(8)
+        // How far a thumbnail's edges are inside the strip's visible part
+        // (negative: cut off). Once the strip is scrolled, its first 40 px
+        // fade out.
+        const insideStrip = (index: number) =>
+            thumbs.nth(index).evaluate((thumb) => {
+                const strip = (
+                    thumb.parentElement as HTMLElement
+                ).getBoundingClientRect()
+                const box = thumb.getBoundingClientRect()
+                return {
+                    left: box.left - strip.left,
+                    right: strip.right - box.right,
+                }
+            })
+        // The newest version is on the canvas, and in view
+        await expect
+            .poll(async () => (await insideStrip(7)).right)
+            .toBeGreaterThanOrEqual(0)
+        expect((await insideStrip(1)).left).toBeLessThan(0)
+        // Restore v2 from the compare dialog of the newest (a click on its
+        // own thumbnail would scroll the strip to it)
+        await thumbs.last().click()
+        const dialog = page.getByRole("dialog")
+        for (let i = 0; i < 6; i++) {
+            await dialog
+                .getByRole("button", { name: "Previous version" })
+                .click()
+        }
+        await expect(dialog).toContainText("Version 2")
+        await page.locator('[data-testid="compare-restore"]').click()
+        await expect(canvas.getByText("Box 2")).toBeVisible()
+        // Its thumbnail is whole, clear of the fade at the left edge
+        await expect
+            .poll(async () => (await insideStrip(1)).left)
+            .toBeGreaterThanOrEqual(40)
+        expect((await insideStrip(1)).right).toBeGreaterThanOrEqual(0)
     })
 })
 

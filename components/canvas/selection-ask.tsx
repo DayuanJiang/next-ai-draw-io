@@ -9,6 +9,9 @@ import { useUiStore } from "@/stores/ui-store"
 const BUTTON_HEIGHT = 32
 const BUTTON_WIDTH = 32
 const GAP = 10
+// draw.io draws a shape's rotation handle outside the selection's top right
+// corner, 13 to 29 px to the right of it: the buttons start past the handle
+const HANDLE_SPACE = 34
 
 const iconButton =
     "flex h-full w-8 items-center justify-center rounded-xl transition-colors hover:bg-interactive-hover"
@@ -56,10 +59,11 @@ export function SelectionAsk({
     }
 
     // Above the selection, starting past its right edge (connectors from
-    // above end at the middle of its top), kept inside the canvas
+    // above end at the middle of its top) and the rotation handle there,
+    // kept inside the canvas
     const barWidth = (showAsk && showStyle ? 2 : 1) * BUTTON_WIDTH + 4
     const left = Math.min(
-        Math.max(8, rect.x + rect.width + GAP),
+        Math.max(8, rect.x + rect.width + HANDLE_SPACE),
         width - barWidth - 8,
     )
     const above = rect.y - BUTTON_HEIGHT - GAP

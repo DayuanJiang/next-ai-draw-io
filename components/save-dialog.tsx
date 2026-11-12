@@ -15,26 +15,27 @@ import { cn } from "@/lib/utils"
 
 export type ExportFormat = "drawio" | "png" | "svg" | "xmlsvg"
 
-// The PNG background choice, kept in this browser for the next exports
-const TRANSPARENT_PNG_KEY = "next-ai-draw-io-png-transparent"
+// The background choice for pictures, kept in this browser for the next
+// exports (the key dates from when only PNG had the choice)
+const TRANSPARENT_KEY = "next-ai-draw-io-png-transparent"
 // The choice made in this page, kept only while storage is full or blocked
 // (otherwise the stored one counts, as another tab may have changed it)
 let transparentChoice: boolean | null = null
 
-/** The user asked for PNG exports without a background (saveDiagramToFile
- * reads this; the dialog sets it before calling onSave) */
-export function prefersTransparentPng(): boolean {
+/** The user asked for pictures (PNG, SVG) without a background
+ * (saveDiagramToFile reads this; the dialog sets it before calling onSave) */
+export function prefersTransparentBackground(): boolean {
     if (transparentChoice !== null) return transparentChoice
     try {
-        return localStorage.getItem(TRANSPARENT_PNG_KEY) === "true"
+        return localStorage.getItem(TRANSPARENT_KEY) === "true"
     } catch {
         return false
     }
 }
 
-function setTransparentPng(transparent: boolean) {
+function setTransparentBackground(transparent: boolean) {
     try {
-        localStorage.setItem(TRANSPARENT_PNG_KEY, String(transparent))
+        localStorage.setItem(TRANSPARENT_KEY, String(transparent))
         transparentChoice = null
     } catch {
         // Kept for this page only
@@ -78,18 +79,26 @@ export function SaveDialog({
                     ? last.name
                     : defaultFilename,
             )
-            setTransparent(prefersTransparentPng())
+            setTransparent(prefersTransparentBackground())
         }
         wasOpenRef.current = open
     }, [open, defaultFilename])
 
     const handleSave = () => {
-        const finalFilename = filename.trim() || defaultFilename
+        // A name typed with the format's extension ("my-diagram.drawio")
+        // gets it once: the field shows the extension after the name
+        const typed = filename.trim()
+        const extension = currentFormat?.extension
+        const name =
+            extension && typed.toLowerCase().endsWith(extension)
+                ? typed.slice(0, -extension.length)
+                : typed
+        const finalFilename = name || defaultFilename
         lastNameRef.current = {
             forDefault: defaultFilename,
             name: finalFilename,
         }
-        if (format === "png") setTransparentPng(transparent)
+        if (format !== "drawio") setTransparentBackground(transparent)
         onSave(finalFilename, format)
         onOpenChange(false)
     }
@@ -184,7 +193,7 @@ export function SaveDialog({
                             </button>
                         ))}
                     </div>
-                    {format === "png" && (
+                    {format !== "drawio" && (
                         <label className="flex w-fit items-center gap-2 text-sm">
                             <input
                                 type="checkbox"

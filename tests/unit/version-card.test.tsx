@@ -15,8 +15,13 @@ import en from "@/lib/i18n/dictionaries/en.json"
 
 afterEach(cleanup)
 
-// jsdom has no scrolling; the strip scrolls to its newest version
+// jsdom has no scrolling; the strip scrolls to its newest version, and to
+// the one on the canvas
 Element.prototype.scrollTo = vi.fn()
+const scrollIntoView = vi.fn(function (this: Element) {
+    return this.getAttribute("title")
+})
+Element.prototype.scrollIntoView = scrollIntoView
 
 const bridge = vi.hoisted(() => ({ highlightChangedCells: vi.fn() }))
 vi.mock("@/lib/drawio/editor-bridge", () => bridge)
@@ -198,6 +203,22 @@ describe("VersionStrip", () => {
         expect(thumbs).toHaveLength(2)
         expect(thumbs[1].title).toContain("Canvas now")
         expect(thumbs[0].title).not.toContain("Canvas now")
+    })
+
+    it("brings the thumbnail of a restored older version into view", () => {
+        const value = source()
+        const { rerender } = mount(<VersionStrip />, value)
+        scrollIntoView.mockClear()
+        // v1 is restored: the strip may be scrolled to the newest, v2
+        rerender(
+            <DictionaryProvider dictionary={en as unknown as Dictionary}>
+                <VersionsProvider value={{ ...value, onCanvasId: "v1" }}>
+                    <VersionStrip />
+                </VersionsProvider>
+            </DictionaryProvider>,
+        )
+        expect(scrollIntoView).toHaveBeenCalledTimes(1)
+        expect(scrollIntoView.mock.results[0].value).toContain("v1")
     })
 
     it("marks the version hand edits were made on, more lightly", () => {

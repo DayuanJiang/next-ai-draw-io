@@ -16,7 +16,7 @@ import type {
 } from "@/components/canvas/drawio-frame"
 import {
     type ExportFormat,
-    prefersTransparentPng,
+    prefersTransparentBackground,
 } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
 import { pageModelXml } from "@/lib/diagram-pages"
@@ -111,6 +111,7 @@ interface DiagramContextType {
         format: ExportFormat,
         sessionId?: string,
         successMessage?: string,
+        failureMessage?: string,
     ) => Promise<void>
     getThumbnailSvg: () => Promise<string | null>
     getVersionSvg: () => Promise<string | null>
@@ -511,26 +512,29 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         format: ExportFormat,
         sessionId?: string,
         successMessage?: string,
+        failureMessage?: string,
     ) => {
-        // Map format to draw.io export format
-        const drawioFormat =
-            format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
-        // Pictures get a margin; a PNG twice the size, of the page on
-        // screen (draw.io renders the first page otherwise), on white
-        // unless the user asked for a transparent background
+        // The draw.io file is asked for as "xml": the document with its
+        // pages as plain XML, which a diff or another tool can read (the
+        // xml of an xmlsvg export has each page compressed)
+        const drawioFormat = format === "drawio" ? "xml" : format
+        // Pictures get a margin, on white unless the user asked for a
+        // transparent background. A PNG is twice the size, of the page on
+        // screen (draw.io renders the first page otherwise). An SVG keeps
+        // its light colors (draw.io's default follows the viewer's dark
+        // mode: dark shapes on a white web page)
         const imageOptions =
             format === "drawio"
                 ? {}
-                : format === "png"
-                  ? {
-                        border: 20,
-                        scale: 2,
-                        currentPage: true,
-                        ...(prefersTransparentPng()
-                            ? { transparent: true }
-                            : { background: "#ffffff" }),
-                    }
-                  : { border: 20 }
+                : {
+                      border: 20,
+                      ...(prefersTransparentBackground()
+                          ? { transparent: true }
+                          : { background: "#ffffff" }),
+                      ...(format === "png"
+                          ? { scale: 2, currentPage: true }
+                          : { theme: "light" }),
+                  }
 
         // Each save has its own request id, so two at once never swap
         // results. A large PNG takes a while to render.
@@ -538,28 +542,28 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             { format: drawioFormat, ...imageOptions },
             30000,
         )
-        if (!result?.data) {
+        // An "xml" export answers with the document in xml, a picture
+        // comes in data
+        const exportData = format === "drawio" ? result?.xml : result?.data
+        if (!exportData) {
             console.warn(
                 "Diagram export for saving failed (editor not ready or timed out)",
             )
+            // The export dialog closed with the click: without a message
+            // the user would go on waiting for the file
+            if (failureMessage) toast.error(failureMessage)
             return
         }
-        const exportData = result.data
-        const fullDiagramXML = result.xml
         let fileContent: string
         let mimeType: string
         let extension: string
 
         if (format === "drawio") {
-            // Prefer the complete document from the export event so all pages are saved.
-            const xml = fullDiagramXML?.trim()
-                ? fullDiagramXML
-                : extractDiagramXML(exportData)
             fileContent =
-                normalizeToMxfile(xml, {
+                normalizeToMxfile(exportData, {
                     pageId: "page-1",
                     pageName: "Page-1",
-                }) ?? xml
+                }) ?? exportData
             mimeType = "application/xml"
             extension = ".drawio"
         } else if (format === "png") {

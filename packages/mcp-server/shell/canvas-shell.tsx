@@ -114,6 +114,7 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
             format,
             undefined,
             dict.save.savedSuccessfully,
+            dict.save.exportFailed,
         )
     }
 

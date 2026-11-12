@@ -130,6 +130,7 @@
             "xmlsvg": "編集できる SVG"
         },
         "savedSuccessfully": "{name} をエクスポートしました",
+        "exportFailed": "図をエクスポートできませんでした。もう一度お試しください。",
         "hints": {
             "drawio": "すべて編集できるまま保存",
             "png": "スライドや文書向けの画像",
@@ -165,6 +166,7 @@
         "sessionSaveFailedLeave": "このチャットを保存できませんでした。ブラウザのストレージがいっぱいの可能性があります。保存せずに続けて、新しいチャットの一覧から古いチャットを削除できます。",
         "continueWithoutSaving": "保存せずに続ける",
         "notADiagramFile": "{name} は draw.io の図ではありません。",
+        "svgWithoutDiagram": "{name} は通常の SVG 画像で、draw.io の図は入っていません。あとで開き直すには、「編集できる SVG」か「draw.io ファイル」でエクスポートしてください。",
         "fileTooLong": "{name}：内容が上限の {limit}k 文字を超えています（{size}k 文字）",
         "fileReadFailed": "ファイルを読み込めませんでした：{name}",
         "fileNoText": "{name} には読み取れる文字がありません。スキャンした書類の場合は、ページのスクリーンショットを添付してください。",
@@ -650,7 +652,7 @@
         "noPreview": "プレビューなし",
         "compareSince": "バージョン {n} から現在までの変更：",
         "isOnCanvas": "現在のキャンバスはこのバージョンと同じです。",
-        "differsElsewhere": "1 ページ目の図形と線はバージョン {n} と同じですが、重なり順、ほかのページ、またはページ設定が変わっています。",
+        "differsElsewhere": "このバージョンを作成したページの図形と線はバージョン {n} と同じですが、重なり順、ほかのページ、またはページ設定が変わっています。",
         "showChanges": "変更箇所を表示",
         "outlineFaded": "AI が変更した箇所を 3 秒間ハイライトしました。",
         "showAgain": "もう一度表示",

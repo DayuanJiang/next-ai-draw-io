@@ -73,6 +73,10 @@ function DialogBox({
         // Base styles
         "fixed top-[50%] left-[50%] z-50 w-full",
         "max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
+        // In a window lower than the dialog its content scrolls: the
+        // title, the close button and the buttons at the bottom would
+        // be cut off above and below the window
+        "max-h-[calc(100dvh-2rem)] overflow-y-auto",
         "grid gap-4 p-6",
         // Refined visual treatment
         "bg-surface-0 rounded-2xl border border-border-subtle shadow-pop",
@@ -96,7 +100,10 @@ function DialogBox({
           opener !== document.body
         ) {
           event.preventDefault()
-          opener.focus()
+          // Without scrolling to it, as Radix focuses a trigger: what the
+          // dialog did may have brought something else into view (the
+          // versions strip shows the version just restored)
+          opener.focus({ preventScroll: true })
         }
       }}
     >

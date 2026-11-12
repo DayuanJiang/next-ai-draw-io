@@ -69,11 +69,19 @@ function useSavedLocale() {
 
 /** The diagram's title as a file name, or diagram-YYYY-MM-DD without one */
 export function exportFilename(title: string | null): string {
-    const name = (title && title !== "New Chat" ? title : "")
+    let name = (title && title !== "New Chat" ? title : "")
         .replace(/[\\/:*?"<>|]+/g, "-")
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 80)
+    // A long title (the first message) is cut at the end of a word, where
+    // it has spaces
+    if (name.length > 80) {
+        const space = name.lastIndexOf(" ", 80)
+        name = name.slice(0, space > 40 ? space : 80)
+    }
+    // No punctuation at the end: a full stop there would stand next to
+    // the extension's ("arrow..drawio")
+    name = name.replace(/[\s.,;。、，…-]+$/, "")
     // Local date (toISOString would give UTC)
     return name || `diagram-${new Date().toLocaleDateString("sv-SE")}`
 }
@@ -431,6 +439,7 @@ function WorkspaceLayout() {
                         format,
                         engine.langfuseSessionId,
                         dict.save.savedSuccessfully,
+                        dict.save.exportFailed,
                     )
                 }}
                 defaultFilename={exportFilename(engine.currentTitle)}

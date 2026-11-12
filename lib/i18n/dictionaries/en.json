@@ -130,6 +130,7 @@
             "xmlsvg": "Editable SVG"
         },
         "savedSuccessfully": "Exported {name}",
+        "exportFailed": "Couldn't export the diagram. Try again.",
         "hints": {
             "drawio": "Keeps everything editable",
             "png": "A picture for slides and documents",
@@ -165,6 +166,7 @@
         "sessionSaveFailedLeave": "Could not save this chat. Browser storage may be full. You can go on without saving it, then delete old chats from the list in the new chat.",
         "continueWithoutSaving": "Continue without saving",
         "notADiagramFile": "{name} isn't a draw.io diagram.",
+        "svgWithoutDiagram": "{name} is a plain SVG picture with no draw.io diagram inside. To open a diagram again later, export it as Editable SVG or as a draw.io file.",
         "fileTooLong": "{name}: Content exceeds {limit}k character limit ({size}k chars)",
         "fileReadFailed": "Failed to read file: {name}",
         "fileNoText": "{name} has no text that can be read. If it is a scan, attach screenshots of its pages instead.",
@@ -650,7 +652,7 @@
         "noPreview": "No preview",
         "compareSince": "Since version {n}, the canvas has changed:",
         "isOnCanvas": "This version is what the canvas shows now.",
-        "differsElsewhere": "The shapes and connectors on the first page are the same as in version {n}; their order, other pages or the page settings differ.",
+        "differsElsewhere": "On the page this version was made on, the shapes and connectors are the same as in version {n}; their order, other pages or the page settings differ.",
         "showChanges": "Show changes",
         "outlineFaded": "AI changes were outlined for 3 seconds.",
         "showAgain": "Show again",

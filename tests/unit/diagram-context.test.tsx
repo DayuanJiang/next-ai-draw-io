@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { DiagramProvider, useDiagram } from "@/contexts/diagram-context"
 
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }))
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 // The provider with a stand-in draw.io that records each export request;
 // started: draw.io has reported its first load
@@ -186,6 +186,8 @@ describe("before draw.io has started", () => {
 describe("exported files", () => {
     // The requests the last save sent to our own server
     let fetched: string[] = []
+    // The file the last save downloaded (a PNG is a data URL, not a file)
+    let savedFile: Blob | undefined
     // Every save asked for, and the toast after a download
     async function save(
         format: "drawio" | "png" | "svg" | "xmlsvg",
@@ -195,7 +197,11 @@ describe("exported files", () => {
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
             () => {},
         )
-        URL.createObjectURL = vi.fn(() => "blob:test")
+        savedFile = undefined
+        URL.createObjectURL = vi.fn((blob: Blob) => {
+            savedFile = blob
+            return "blob:test"
+        })
         URL.revokeObjectURL = vi.fn()
         fetched = []
         vi.stubGlobal(
@@ -214,12 +220,15 @@ describe("exported files", () => {
             )
         })
         const request = requests[0]
-        await reply(
-            request,
-            format === "png"
-                ? "data:image/png;base64,iVBORw0KGgo="
-                : svgOf("x"),
-        )
+        // draw.io answers an "xml" export with the document alone
+        if (format === "drawio") await reply(request, "", oneBox)
+        else
+            await reply(
+                request,
+                format === "png"
+                    ? "data:image/png;base64,iVBORw0KGgo="
+                    : svgOf("x"),
+            )
         vi.unstubAllGlobals()
         return request
     }
@@ -227,6 +236,8 @@ describe("exported files", () => {
     afterEach(() => {
         localStorage.clear()
         vi.mocked(toast.success).mockClear()
+        vi.mocked(toast.error).mockClear()
+        vi.useRealTimers()
     })
 
     it("draw a PNG of the page on screen at twice the size on white, with a margin", async () => {
@@ -275,5 +286,59 @@ describe("exported files", () => {
         expect(await save("svg")).toMatchObject({ format: "svg", border: 20 })
         expect(await save("xmlsvg")).toMatchObject({ border: 20 })
         expect(await save("drawio")).not.toHaveProperty("border")
+    })
+
+    it("say so when draw.io gives no file", async () => {
+        const { result } = setup()
+        const click = vi
+            .spyOn(HTMLAnchorElement.prototype, "click")
+            .mockImplementation(() => {})
+        vi.spyOn(console, "warn").mockImplementation(() => {})
+        vi.useFakeTimers()
+        act(() => {
+            result.current.saveDiagramToFile(
+                "pic",
+                "png",
+                undefined,
+                "Exported {name}",
+                "Export failed",
+            )
+        })
+        // draw.io never answers (it is still loading, or failed to load);
+        // the export dialog closed with the click
+        await act(() => vi.advanceTimersByTimeAsync(30000))
+        expect(toast.error).toHaveBeenCalledWith("Export failed")
+        expect(toast.success).not.toHaveBeenCalled()
+        expect(click).not.toHaveBeenCalled()
+    })
+
+    it("save the draw.io file with its pages as plain XML", async () => {
+        // An xmlsvg export's xml has each page compressed: no diff, and
+        // no other tool, can read it
+        expect(await save("drawio")).toMatchObject({ format: "xml" })
+        expect(toast.success).toHaveBeenCalledWith("Exported pic.drawio", {
+            duration: 4000,
+        })
+        const text = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result))
+            reader.readAsText(savedFile as Blob)
+        })
+        expect(text).toBe(oneBox)
+    })
+
+    it("draw an SVG in light colors on white, whatever the viewer's dark mode", async () => {
+        for (const format of ["svg", "xmlsvg"] as const) {
+            expect(await save(format)).toMatchObject({
+                format,
+                theme: "light",
+                background: "#ffffff",
+            })
+        }
+        // Without a background when the dialog asked for that
+        localStorage.setItem("next-ai-draw-io-png-transparent", "true")
+        const request = await save("svg")
+        expect(request).toMatchObject({ theme: "light" })
+        expect(request).not.toHaveProperty("background")
     })
 })
