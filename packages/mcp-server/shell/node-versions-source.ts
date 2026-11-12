@@ -28,7 +28,7 @@ export interface NodeVersion extends VersionItem {
     /** The version this one replaced, when it has a card (undo goes there) */
     beforeId: string | null
     /** Who made it: "user", "recover", "restore", "load" (a file opened),
-     * "add_page"; null for the AI */
+     * "add_page", "rename_page"; null for the AI */
     source: string | null
 }
 
@@ -49,11 +49,27 @@ function pageIds(xml: string): (string | undefined)[] {
     return ids.length > 0 ? ids : [undefined]
 }
 
-/** The page a change was made on: the first page with a change, else none */
+/** The names of a document's pages by their ids */
+function pageNames(xml: string): Map<string | null, string | null> {
+    const doc = new DOMParser().parseFromString(xml, "text/xml")
+    return new Map(
+        Array.from(doc.querySelectorAll("diagram")).map((page) => [
+            page.getAttribute("id"),
+            page.getAttribute("name"),
+        ]),
+    )
+}
+
+/** The page a change was made on: the first page with a change, else the
+ * page that got another name (a rename changes no cell), else none */
 function changedPage(beforeXml: string, afterXml: string): string | undefined {
     for (const id of pageIds(afterXml)) {
         const { summary } = diffDiagrams(beforeXml, afterXml, id)
         if (Object.values(summary).some((n) => n > 0)) return id
+    }
+    const before = pageNames(beforeXml)
+    for (const [id, name] of pageNames(afterXml)) {
+        if (id && before.has(id) && before.get(id) !== name) return id
     }
     return undefined
 }

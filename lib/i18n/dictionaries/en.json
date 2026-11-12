@@ -653,6 +653,7 @@
         "hideVersions": "Hide the versions",
         "openedFile": "Opened the file",
         "addedPage": "Added a page",
+        "renamedPage": "Renamed a page",
         "fileChanged": "unsaved changes",
         "fileChangedHint": "Changes since this file was opened or saved are not in it yet. Ask the AI to save the diagram to the file.",
         "feedback": "Report a problem on GitHub"

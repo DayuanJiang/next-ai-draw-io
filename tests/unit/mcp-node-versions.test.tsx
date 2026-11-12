@@ -423,6 +423,25 @@ describe("buildVersions", () => {
             "Opened the file",
             "Added a page",
         ])
+        // A rename changes no cell: the card says what it was, and names
+        // the page that was renamed (here the second one)
+        const second = (name: string) =>
+            A.replace(
+                "</mxfile>",
+                `<diagram id="p2" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`,
+            )
+        const renamed = buildVersions(
+            list(
+                [
+                    entry(0, second("Page-2")),
+                    entry(1, second("Schema"), { source: "rename_page" }),
+                ],
+                1,
+            ),
+            cache(),
+        )
+        expect(versionLabel(renamed.versions[1], dict)).toBe("Renamed a page")
+        expect(renamed.versions[1].pageId).toBe("p2")
     })
 
     it("keeps the cells each change touched, to outline them again", () => {

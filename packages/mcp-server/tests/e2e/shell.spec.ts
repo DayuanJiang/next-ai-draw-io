@@ -222,6 +222,29 @@ test("exporting another page shows it for a moment, then the user's page comes b
     const xml = await toolText("get_diagram")
     expect(xml).toContain('value="First page"')
     expect(xml).toContain('name="Second"')
+    // Without a selector the result names the page that was on screen
+    const onScreen = await toolText("export_diagram", {
+        path: join(dataDir, "on-screen.png"),
+    })
+    expect(onScreen).toContain(
+        'showing page "Page-1", the one on screen; the diagram has 2 pages, pass page_index to export another',
+    )
+})
+
+test("a .drawio.svg path with format svg still gets a file load_diagram can open", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Editable", 40) })
+    await expect(frame.getByText("Editable")).toBeVisible({ timeout: 10_000 })
+    const file = join(dataDir, "editable.drawio.svg")
+    const text = await toolText("export_diagram", { path: file, format: "svg" })
+    expect(text).toContain("Format: drawio.svg")
+    expect(text).toContain("Embedded diagram: Pages (1)")
+    // A plain SVG under this name was refused: "no embedded diagram"
+    expect(await toolText("load_diagram", { path: file })).toContain(
+        `Diagram loaded from ${file}`,
+    )
 })
 
 test("a screenshot of another page leaves the page on screen alone", async ({
@@ -272,6 +295,13 @@ test("a screenshot of another page leaves the page on screen alone", async ({
     expect(await toolText("get_selection")).toContain('page "Page-1"')
     // Another picture than the page on screen
     expect(await png({})).not.toBe(back)
+    // The text beside the picture says what to do when the client passes
+    // the model no picture
+    const text = await toolText("screenshot_diagram", { page_name: "Backside" })
+    expect(text).toContain(
+        'Screenshot of page name="Backside". If no image came with this result,',
+    )
+    expect(text).toContain("do not take more screenshots")
 })
 
 test("get_selection reports the cells selected in the editor", async ({
@@ -546,6 +576,12 @@ test("the version cards follow the server's History; undo, redo and restore go t
     )
     await expect(frame.getByText("By hand")).toBeVisible({ timeout: 10_000 })
     await expect(cards).toHaveCount(4)
+
+    // A page rename changes no shape: its card says what it was
+    await toolText("rename_page", { page_index: 0, new_name: "Overview" })
+    await expect(cards).toHaveCount(5, { timeout: 10_000 })
+    await expect(latestCard).toContainText("Renamed a page")
+    await expect(latestCard).not.toContainText("Changed the diagram")
 })
 
 test("an edit with coordinates of 0 is not taken for a hand edit, and one undo takes it back", async ({

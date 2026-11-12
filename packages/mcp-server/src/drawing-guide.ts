@@ -131,5 +131,5 @@ When the user asks for a minimal, plain, black-and-white or unstyled diagram, us
     {"page_name": "CNN", "operations": [{"operation": "add", "cell_id": "conv-1", "new_xml": "<mxCell id=\\"conv-1\\" value=\\"Conv\\" x=\\"40\\" y=\\"40\\" w=\\"120\\" h=\\"60\\"/>"}]}
     {"page_index": 1, "operations": [{"operation": "delete", "cell_id": "5"}]}
 
-Pages: list_pages shows every page's id, name and index. edit_diagram, get_diagram and export_diagram take an optional page_id, page_name or page_index; without one they use the first page. Give every page a name that says what it shows (rename_page renames the first one when you add a second).
+Pages (see list_pages): without page_id, page_name or page_index, edit_diagram edits the first page, get_diagram and .drawio export take all pages, .png or .svg export the page on screen. Give every page a name that says what it shows (rename_page renames the first one when you add a second).
 `

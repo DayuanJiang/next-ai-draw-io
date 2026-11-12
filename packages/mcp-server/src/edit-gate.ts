@@ -18,6 +18,7 @@
  * (tags + sorted attributes + text). Byte equality is kept as a fast path.
  */
 import {
+    attr,
     findPageElement,
     isMxGraphModel,
     normalizeToMxfile,
@@ -311,9 +312,9 @@ export function countChanges(beforeXml: string, afterXml: string): string {
 /**
  * One paragraph naming what the user changed between the XML the model last
  * saw and the live store, for stale rejections and get_diagram. Pages are
- * paired by index (draw.io regenerates diagram ids on re-serialisation) and
- * cells by id. Returns "" when there is nothing to compare or the two sides
- * have the same content.
+ * paired by index (draw.io regenerates diagram ids on re-serialisation), or
+ * by id when a page was added or deleted, and cells by id. Returns "" when
+ * there is nothing to compare or the two sides have the same content.
  */
 export function describeChanges(lastSeenXml: string, liveXml: string): string {
     if (!lastSeenXml || lastSeenXml === liveXml) return ""
@@ -336,13 +337,27 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
     const pagesBefore = Array.from(before.querySelectorAll("diagram"))
     const pagesLive = Array.from(live.querySelectorAll("diagram"))
     const pageCount = Math.max(pagesBefore.length, pagesLive.length)
+    // After the user added or deleted a page, pairing by index sets every
+    // later page against its neighbour and reports all its cells as
+    // replaced. The pages are then paired by id, when each page of the
+    // shorter side has its id on the other (draw.io kept the ids).
+    const idOf = (page: Element) => attr(page, "id")
+    const [fewer, more] =
+        pagesBefore.length < pagesLive.length
+            ? [pagesBefore, pagesLive]
+            : [pagesLive, pagesBefore]
+    const byId =
+        fewer.length < more.length &&
+        fewer.every((p) => idOf(p) && more.some((q) => idOf(q) === idOf(p)))
+    const sameId = (pages: Element[], page: Element) =>
+        pages.find((p) => idOf(p) === idOf(page))
     const clauses: string[] = []
     const renames: string[] = []
-    for (let i = 0; i < pageCount; i++) {
-        const pageBefore = pagesBefore[i]
-        const pageLive = pagesLive[i]
-        if (!pageBefore || !pageLive) {
-            clauses.push(`page ${i + 1} ${pageLive ? "added" : "removed"}`)
+    // Pages are named by index=N, counted from 0 as page_index is
+    for (const [i, pageLive] of pagesLive.entries()) {
+        const pageBefore = byId ? sameId(pagesBefore, pageLive) : pagesBefore[i]
+        if (!pageBefore) {
+            clauses.push(`page index=${i} ("${attr(pageLive, "name")}") added`)
             continue
         }
         const cellsBefore = pageCells(pageBefore)
@@ -360,17 +375,22 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
             if (!cellsLive.has(id)) removed.push(describeCell(id, cell))
         }
         // Name the page only when the document has several
-        const where = pageCount > 1 ? `page ${i + 1} ` : ""
+        const where = pageCount > 1 ? `page index=${i} ` : ""
         if (modified.length)
             clauses.push(`${where}modified ${listCells(modified)}`)
         if (added.length) clauses.push(`${where}added ${listCells(added)}`)
         if (removed.length)
             clauses.push(`${where}removed ${listCells(removed)}`)
         if (includeNames) {
-            const name = pageLive.getAttribute("name") ?? ""
-            if (name !== (pageBefore.getAttribute("name") ?? ""))
-                renames.push(`Page ${i + 1} renamed to "${name}".`)
+            const name = attr(pageLive, "name")
+            if (name !== attr(pageBefore, "name"))
+                renames.push(`Page index=${i} renamed to "${name}".`)
         }
+    }
+    // The pages the document no longer has, by name: their index is gone
+    for (const [i, pageBefore] of pagesBefore.entries()) {
+        const kept = byId ? sameId(pagesLive, pageBefore) : pagesLive[i]
+        if (!kept) clauses.push(`page "${attr(pageBefore, "name")}" removed`)
     }
     // The fingerprint also covers the cell order (z-order) and anything in
     // <root> that is not a cell

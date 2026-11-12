@@ -268,7 +268,7 @@ describe("describeChanges", () => {
     it("reports a renamed page", () => {
         const renamed = XML_A.replace('name="Page-1"', 'name="Renamed"')
         expect(describeChanges(XML_A, renamed)).toBe(
-            'Since you last saw it, the user changed the diagram. Page 1 renamed to "Renamed".',
+            'Since you last saw it, the user changed the diagram. Page index=0 renamed to "Renamed".',
         )
     })
 
@@ -335,10 +335,25 @@ describe("describeChanges", () => {
 
     it("reports added and removed pages", () => {
         expect(describeChanges(XML_A, XML_A_TWO_PAGES)).toBe(
-            "Since you last saw it, the user changed the diagram: page 2 added.",
+            'Since you last saw it, the user changed the diagram: page index=1 ("Page-2") added.',
         )
         expect(describeChanges(XML_A_TWO_PAGES, XML_A)).toBe(
-            "Since you last saw it, the user changed the diagram: page 2 removed.",
+            'Since you last saw it, the user changed the diagram: page "Page-2" removed.',
+        )
+    })
+
+    it("reports a deleted first page as that, with the other pages unchanged", () => {
+        // The pages keep their ids, so they are paired by id; by index
+        // every page read as "cells replaced, renamed"
+        const first = `<diagram id="p0" name="R&amp;D"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="Front" vertex="1" parent="1"/></root></mxGraphModel></diagram>`
+        const three = XML_A_TWO_PAGES.replace("<diagram", `${first}<diagram`)
+        expect(describeChanges(three, XML_A_TWO_PAGES)).toBe(
+            'Since you last saw it, the user changed the diagram: page "R&D" removed.',
+        )
+        // And a page added in front, with a change on a later page
+        const moved = three.replace('x="40" y="40"', 'x="300" y="200"')
+        expect(describeChanges(XML_A_TWO_PAGES, moved)).toBe(
+            'Since you last saw it, the user changed the diagram: page index=0 ("R&D") added; page index=1 modified box1 ("Hello").',
         )
     })
 
@@ -348,7 +363,7 @@ describe("describeChanges", () => {
             'x="300" y="200"',
         )
         expect(describeChanges(XML_A_TWO_PAGES, movedOnPage1)).toContain(
-            'page 1 modified box1 ("Hello")',
+            'page index=0 modified box1 ("Hello")',
         )
     })
 

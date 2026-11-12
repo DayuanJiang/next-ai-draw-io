@@ -653,6 +653,7 @@
         "hideVersions": "隐藏版本",
         "openedFile": "打开了文件",
         "addedPage": "添加了一页",
+        "renamedPage": "重命名了页面",
         "fileChanged": "有未保存的修改",
         "fileChangedHint": "打开或保存这个文件之后的修改还没有写入文件。请让 AI 把图表保存到这个文件。",
         "feedback": "在 GitHub 上反馈问题"

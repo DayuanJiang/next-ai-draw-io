@@ -971,17 +971,21 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     if (!/<mxfile[\s>]/i.test(fixed)) {
         // The first cell keeps the id; each later one gets a suffix
         const seenIds = new Map<string, number>()
-        const duplicateIds = new Set<string>()
+        const renamed: string[] = []
         fixed = rewriteIds(fixed, (_tagName, id) => {
             if (!id) return undefined
             const count = seenIds.get(id) || 0
             seenIds.set(id, count + 1)
             if (count === 0) return undefined
-            duplicateIds.add(id)
+            renamed.push(`${id} to ${id}_dup${count}`)
             return `${id}_dup${count}`
         })
-        if (duplicateIds.size > 0) {
-            fixes.push(`Renamed ${duplicateIds.size} duplicate ID(s)`)
+        if (renamed.length > 0) {
+            // With the new ids: the MCP server tells the model, which would
+            // otherwise edit the first cell when it means the second
+            fixes.push(
+                `Renamed duplicate ids (the first cell keeps its id; edges still name it): ${renamed.join(", ")}`,
+            )
         }
     }
 

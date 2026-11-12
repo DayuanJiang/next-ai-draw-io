@@ -152,6 +152,7 @@ describe("shell language", () => {
                 "historyChanged",
                 "offline",
                 "openedFile",
+                "renamedPage",
                 "restoreFailed",
                 "restoredFromFile",
                 "showVersions",

@@ -134,7 +134,7 @@ describe("pages.ts — addPageToDoc input validation", () => {
         const doc = parseMxfile(TWO_PAGE_MXFILE)!
         const withDecl = `<?xml version="1.0"?>${BARE_MODEL_ONE_CELL}`
         const info = addPageToDoc(doc, { name: "Sequence", xml: withDecl })
-        expect(info.cellCount).toBeGreaterThanOrEqual(3)
+        expect(info.cellCount).toBe(1)
     })
 })
 
@@ -153,9 +153,9 @@ describe("pages.ts — listPagesFromDoc / findPageElement", () => {
             name: "CNN",
             index: 1,
         })
-        // Cell count is per-page (3 cells per page including the two root sentinels).
-        expect(pages[0].cellCount).toBe(3)
-        expect(pages[1].cellCount).toBe(3)
+        // Cells are counted per page, without the two root cells
+        expect(pages[0].cellCount).toBe(1)
+        expect(pages[1].cellCount).toBe(1)
     })
 
     it("findPageElement defaults to the first page when selector is empty", () => {
@@ -202,9 +202,12 @@ describe("pages.ts — addPageToDoc", () => {
         expect(info.name).toBe("Sequence")
         expect(info.index).toBe(2)
         expect(info.id).toMatch(/.+/)
+        // A blank page has no cells: its two root cells do not count
+        expect(info.cellCount).toBe(0)
         const pages = listPagesFromDoc(doc)
         expect(pages).toHaveLength(3)
         expect(pages[2].name).toBe("Sequence")
+        expect(pages[2].cellCount).toBe(0)
     })
 
     it("rejects a duplicate explicit id", () => {
@@ -224,7 +227,7 @@ describe("pages.ts — addPageToDoc", () => {
         const doc = parseMxfile(TWO_PAGE_MXFILE)!
         const inner = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" vertex="1" parent="1" value="A"><mxGeometry x="10" y="10" width="20" height="20" as="geometry"/></mxCell></root></mxGraphModel>`
         const info = addPageToDoc(doc, { name: "Custom", xml: inner })
-        expect(info.cellCount).toBeGreaterThanOrEqual(3)
+        expect(info.cellCount).toBe(1)
     })
 })
 
@@ -235,6 +238,26 @@ describe("pages.ts — renamePageInDoc / deletePageFromDoc", () => {
         expect(ok).toBe(true)
         const pages = listPagesFromDoc(doc)
         expect(pages[1].name).toBe("CNN-v2")
+    })
+
+    it("finds and lists a page by a name with &, < and >", () => {
+        const doc = parseMxfile(TWO_PAGE_MXFILE)!
+        renamePageInDoc(doc, { page_name: "CNN" }, "R&D <v2>")
+        // As the tools do: every call parses the stored XML again
+        const stored = serializeMxfile(doc)
+        expect(stored).toContain('name="R&amp;D &lt;v2&gt;"')
+        const again = parseMxfile(stored)!
+        expect(listPagesFromDoc(again)[1].name).toBe("R&D <v2>")
+        expect(findPageElement(again, { page_name: "R&D <v2>" })?.index).toBe(1)
+        const projection = projectPage(stored, { page_name: "R&D <v2>" })
+        expect(projection.ok && projection.name).toBe("R&D <v2>")
+        // An edit of that page finds it too
+        const edited = applyDiagramOperations(
+            stored,
+            [{ operation: "delete", cell_id: "2" }],
+            { page_name: "R&D <v2>" },
+        )
+        expect(edited.errors).toEqual([])
     })
 
     it("rename returns false when target page is missing", () => {
@@ -339,9 +362,9 @@ describe("diagram-operations.ts — page-targeted edits (AC3)", () => {
         expect(errors).toHaveLength(0)
         const doc = parseMxfile(result)!
         const pages = listPagesFromDoc(doc)
-        // Transformer untouched (still 3 cells), CNN gained one cell.
-        expect(pages[0].cellCount).toBe(3)
-        expect(pages[1].cellCount).toBe(4)
+        // Transformer untouched (still 1 cell), CNN gained one cell.
+        expect(pages[0].cellCount).toBe(1)
+        expect(pages[1].cellCount).toBe(2)
         expect(result).toContain(`id="conv-2"`)
     })
 
@@ -356,8 +379,8 @@ describe("diagram-operations.ts — page-targeted edits (AC3)", () => {
         expect(errors).toHaveLength(0)
         const doc = parseMxfile(result)!
         const pages = listPagesFromDoc(doc)
-        expect(pages[0].cellCount).toBe(4) // Transformer (first page) grew
-        expect(pages[1].cellCount).toBe(3) // CNN untouched
+        expect(pages[0].cellCount).toBe(2) // Transformer (first page) grew
+        expect(pages[1].cellCount).toBe(1) // CNN untouched
     })
 
     it("errors clearly when the page is not found", () => {
@@ -390,9 +413,9 @@ describe("diagram-operations.ts — page-targeted edits (AC3)", () => {
         expect(errors).toHaveLength(0)
         const doc = parseMxfile(result)!
         const pages = listPagesFromDoc(doc)
-        // CNN lost its only non-sentinel cell, Transformer keeps its three.
-        expect(pages[1].cellCount).toBe(2)
-        expect(pages[0].cellCount).toBe(3)
+        // CNN lost its only cell, Transformer keeps its one.
+        expect(pages[1].cellCount).toBe(0)
+        expect(pages[0].cellCount).toBe(1)
     })
 
     it("legacy bare-mxGraphModel input still works when no selector is given", () => {
@@ -458,6 +481,23 @@ describe("export_diagram — single-page projection (regression for selectPage b
         // The projection must NOT contain the Transformer page anywhere.
         expect(projected).not.toContain('id="page-transformer"')
         expect(projected).not.toContain('name="Transformer"')
+    })
+
+    it("keeps the file's variables in the projection", () => {
+        const vars = '{"company":"Acme & Co"}'
+        const withVars = TWO_PAGE_MXFILE.replace(
+            "<mxfile ",
+            `<mxfile vars="${vars.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" `,
+        )
+        const projected = projectSinglePage(withVars, { page_id: "page-cnn" })
+        expect(
+            parseMxfile(projected)!.documentElement.getAttributeNode("vars")
+                ?.value,
+        ).toBe(vars)
+        // A file without variables gets no empty attribute
+        expect(
+            projectSinglePage(TWO_PAGE_MXFILE, { page_id: "page-cnn" }),
+        ).not.toContain("vars=")
     })
 
     it("projects only the requested page when targeted by name", () => {

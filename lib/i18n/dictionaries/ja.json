@@ -653,6 +653,7 @@
         "hideVersions": "バージョンを隠す",
         "openedFile": "ファイルを開きました",
         "addedPage": "ページを追加しました",
+        "renamedPage": "ページ名を変更しました",
         "fileChanged": "未保存の変更あり",
         "fileChangedHint": "このファイルを開いた、または保存した後の変更は、まだファイルに入っていません。図をこのファイルに保存するよう AI に頼んでください。",
         "feedback": "GitHub で問題を報告"

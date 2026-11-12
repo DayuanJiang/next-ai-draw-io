@@ -11,8 +11,9 @@
  *
  * restoreImageData puts the pictures back into the XML the model writes.
  * It knows the pictures of the diagrams passed to rememberImages: the web
- * app passes each diagram it sends to the model, so a reference to a
- * picture the model saw an earlier version of the diagram with still works.
+ * app and the MCP server pass each diagram they show to the model, so a
+ * reference to a picture the model saw an earlier version of the diagram
+ * with still works.
  */
 
 // Shorter data stays as it is: a reference would save little

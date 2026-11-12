@@ -379,7 +379,9 @@ describe("attributes inside quoted values", () => {
             model(`${data}<mxCell id="4" vertex="1" parent="1"/>`),
         )
         expect(r.valid).toBe(true)
-        expect(r.fixes).toEqual(["Renamed 1 duplicate ID(s)"])
+        expect(r.fixes).toEqual([
+            "Renamed duplicate ids (the first cell keeps its id; edges still name it): 4 to 4_dup1",
+        ])
         expect(r.fixed).toBe(
             model(`${data}<mxCell id="4_dup1" vertex="1" parent="1"/>`),
         )

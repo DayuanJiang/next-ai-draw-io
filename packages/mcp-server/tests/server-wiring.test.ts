@@ -84,6 +84,17 @@ const callTool = async (name: string, args: Record<string, unknown>) =>
 const textOf = (result: CallToolResult) =>
     (result.content[0] as { text: string }).text
 
+// A cell and a page as the model writes them
+const box = (id: string, label: string, x = 40) =>
+    `<mxCell id="${id}" value="${label}" x="${x}" y="40" w="120" h="60"/>`
+const page = (id: string, name: string, cells: string) =>
+    `<diagram id="${id}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+const addBox = (id: string, label: string) => ({
+    operation: "add",
+    cell_id: id,
+    new_xml: box(id, label, 240),
+})
+
 beforeAll(async () => {
     writeFileSync(path.join(dataDir, "instructions.md"), CUSTOM_RULE)
     writeFileSync(path.join(dataDir, `${SAVED_ID}.drawio`), SAVED_DIAGRAM)
@@ -133,7 +144,7 @@ describe("MCP server wiring", () => {
         const text = textOf(result)
         const line = text.split("\n").find((l) => l.startsWith(SAVED_ID))
         expect(line, text).toBeTruthy()
-        expect(line).toContain("pages: Flow (3 cells)")
+        expect(line).toContain("pages: Flow (1 cell)")
         expect(line).toContain(path.join(dataDir, `${SAVED_ID}.drawio`))
         expect(line).not.toContain("(current)")
     })
@@ -150,6 +161,9 @@ describe("MCP server wiring", () => {
         const result = await callTool("restore_version", {})
         expect(result.isError).toBe(true)
         expect(textOf(result)).toContain("start_session")
+        // How to get back to the diagram of before a restart
+        expect(textOf(result)).toContain("pass its session_id")
+        expect(textOf(result)).toContain("list_saved_diagrams")
     })
 
     it("refuses get_selection without a session", async () => {
@@ -189,6 +203,8 @@ describe("MCP server wiring", () => {
         expect(text).toContain("Edge routing rules")
         expect(text).toContain("do not describe the diagram")
         expect(text).toContain("clear the canvas")
+        // Only edit_diagram defaults to the first page
+        expect(text).toContain("get_diagram and .drawio export take all pages")
         expect(text.length).toBeLessThanOrEqual(15000)
     })
 
@@ -268,8 +284,6 @@ describe("MCP server wiring with a session, without a preview tab", () => {
     })
 
     it("tells the model what each write did and that the outline is no part of the diagram", async () => {
-        const box = (id: string, label: string, x: number) =>
-            `<mxCell id="${id}" value="${label}" x="${x}" y="40" w="120" h="60"/>`
         const created = textOf(
             await callTool("create_new_diagram", { xml: box("2", "A", 40) }),
         )
@@ -313,8 +327,7 @@ describe("MCP server wiring with a session, without a preview tab", () => {
             "steps_back=1 (the version you just left): added a page;",
         )
         expect(restored).toContain("steps_back=2: AI change, added 1 shape;")
-        // A file opened by path is saved back with export_diagram (which,
-        // like get_diagram, waits for the preview tab this test has not)
+        // A file opened by path is saved back with export_diagram
         const path = join(dataDir, "flow.drawio")
         writeFileSync(path, SAVED_DIAGRAM)
         const loaded = textOf(await callTool("load_diagram", { path }))
@@ -361,6 +374,22 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         )
     })
 
+    it("get_diagram and a .drawio export do not wait for a tab that never connected", async () => {
+        const started = Date.now()
+        const shown = textOf(await callTool("get_diagram", {}))
+        const exported = textOf(
+            await callTool("export_diagram", {
+                path: join(dataDir, "no-wait.drawio"),
+            }),
+        )
+        // Each waited 3 s for the tab's copy of the canvas
+        expect(Date.now() - started).toBeLessThan(2000)
+        expect(shown).toContain("<mxfile")
+        expect(shown).toContain("is the preview tab open?")
+        expect(exported).toContain("Diagram exported successfully!")
+        expect(exported).toContain("is the preview tab open?")
+    })
+
     it("advertises transparent on export_diagram", async () => {
         const props = await properties("export_diagram")
         const transparent = props.transparent as { type?: string } | undefined
@@ -395,6 +424,28 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         expect(readFileSync(pageFile, "utf8")).toContain(data)
     }, 30000)
 
+    it("puts a picture back from its reference after it left the document", async () => {
+        // Another picture than the test above, which the server remembers
+        const data = `iVBORw0KGgo${"Z9".repeat(300)}AAAA==`
+        const doc = `<mxfile>${page("p1", "Page-1", `<mxCell id="img" value="" style="shape=image;image=data:image/png,${data};" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="120" as="geometry"/></mxCell>`)}</mxfile>`
+        await callTool("load_diagram", { xml: doc })
+        const shown = textOf(await callTool("get_diagram", {}))
+        const cell = shown.match(/<mxCell id="img"[^>]*\/>/)?.[0] ?? ""
+        expect(cell).toContain("embedded-image-")
+        // A redraw in parts: the first part has no picture, so the picture
+        // is in no document when its cell comes with the second part
+        await callTool("create_new_diagram", { xml: box("2", "A", 240) })
+        const added = await callTool("edit_diagram", {
+            operations: [{ operation: "add", cell_id: "img", new_xml: cell }],
+        })
+        expect(added.isError).toBeFalsy()
+        const file = join(dataDir, "picture-back.drawio")
+        await callTool("export_diagram", { path: file })
+        const saved = readFileSync(file, "utf8")
+        expect(saved).toContain(data)
+        expect(saved).not.toContain("embedded-image-")
+    })
+
     it("exports into a folder that does not exist yet", async () => {
         const drawn = await callTool("create_new_diagram", {
             xml: '<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>',
@@ -406,3 +457,263 @@ describe("MCP server wiring with a session, without a preview tab", () => {
         expect(readFileSync(file, "utf8")).toContain('value="A"')
     }, 30000)
 })
+
+describe("MCP server wiring: auto-fixed XML", () => {
+    it("tells the model what it repaired in the XML of a write", async () => {
+        // Two cells with id 3: the second gets a new id
+        const drawn = textOf(
+            await callTool("create_new_diagram", {
+                xml: `${box("2", "Web")}${box("3", "API", 240)}${box("3", "Database", 440)}`,
+            }),
+        )
+        expect(drawn).toContain(
+            "Auto-fixed in your XML: Renamed duplicate ids (the first cell keeps its id; edges still name it): 3 to 3_dup1. Call get_diagram",
+        )
+        const edited = textOf(
+            await callTool("edit_diagram", {
+                operations: [
+                    {
+                        operation: "add",
+                        cell_id: "4",
+                        new_xml:
+                            '<mxCell id="4" value="R & D" x="40" y="140" w="120" h="60"/>',
+                    },
+                ],
+            }),
+        )
+        expect(edited).toContain(
+            "Auto-fixed in your XML: 4: Escaped unescaped & characters.",
+        )
+        // Nothing to repair, nothing said
+        const clean = textOf(
+            await callTool("create_new_diagram", { xml: box("2", "Web") }),
+        )
+        expect(clean).not.toContain("Auto-fixed")
+    })
+})
+
+describe("MCP server wiring: pages", () => {
+    it("selects a page by a name with & and lists the pages when none matches", async () => {
+        const drawn = await callTool("create_new_diagram", {
+            xml: `<mxfile>${page("p1", "Overview", box("2", "A"))}${page("p2", "Lab", box("2", "B"))}</mxfile>`,
+        })
+        expect(drawn.isError).toBeFalsy()
+        const renamed = await callTool("rename_page", {
+            page_index: 1,
+            new_name: "R&D",
+        })
+        expect(renamed.isError).toBeFalsy()
+        const edited = await callTool("edit_diagram", {
+            page_name: "R&D",
+            operations: [addBox("3", "C")],
+        })
+        expect(textOf(edited)).toContain("Applied 1 operation(s)")
+        expect(textOf(await callTool("list_pages", {}))).toContain(
+            '[1] id="p2" name="R&D" cells=2',
+        )
+        const missing = await callTool("edit_diagram", {
+            page_name: "Nope",
+            operations: [addBox("4", "D")],
+        })
+        expect(missing.isError).toBe(true)
+        expect(textOf(missing)).toContain(
+            'Pages (2): [0] id=p1 name="Overview" cells=1 | [1] id=p2 name="R&D" cells=2',
+        )
+    })
+
+    it("says when add_page or rename_page leaves two pages with one name", async () => {
+        const first = textOf(await callTool("add_page", { name: "Data" }))
+        expect(first).not.toContain("Note:")
+        const second = textOf(await callTool("add_page", { name: "Data" }))
+        expect(second).toContain(
+            '2 pages are now named "Data", and page_name selects only the first one',
+        )
+        const renamed = textOf(
+            await callTool("rename_page", { page_index: 0, new_name: "Data" }),
+        )
+        expect(renamed).toContain('3 pages are now named "Data"')
+    })
+})
+
+describe("MCP server wiring: export_diagram", () => {
+    it("refuses a format it cannot write, and names the file it wrote", async () => {
+        await callTool("create_new_diagram", { xml: box("2", "A") })
+        const pdf = join(dataDir, "report.pdf")
+        const refused = await callTool("export_diagram", { path: pdf })
+        expect(refused.isError).toBe(true)
+        expect(textOf(refused)).toContain("cannot write .pdf files")
+        expect(textOf(refused)).toContain(".drawio, .png, .svg and .drawio.svg")
+        expect(existsSync(`${pdf}.drawio`)).toBe(false)
+        // An extension made to match the format is named in the result
+        const png = join(dataDir, "b.png")
+        const renamed = textOf(
+            await callTool("export_diagram", { path: png, format: "drawio" }),
+        )
+        expect(renamed).toContain(
+            `File: ${png}.drawio\nNote: saved under this name, not as ${png}`,
+        )
+        const plain = textOf(
+            await callTool("export_diagram", {
+                path: join(dataDir, "c.drawio"),
+            }),
+        )
+        expect(plain).not.toContain("saved under this name")
+        // An empty path wrote a hidden file named ".drawio"
+        const empty = await callTool("export_diagram", { path: "" }).catch(
+            () => ({ isError: true }),
+        )
+        expect(empty.isError).toBe(true)
+    })
+
+    it("says that a .drawio file of one page leaves the other pages out", async () => {
+        await callTool("create_new_diagram", {
+            xml: `<mxfile>${page("p1", "Overview", box("2", "A"))}${page("p2", "Detail", box("2", "B"))}</mxfile>`,
+        })
+        const file = join(dataDir, "detail.drawio")
+        const one = textOf(
+            await callTool("export_diagram", { path: file, page_index: 1 }),
+        )
+        expect(one).toContain(
+            "Note: this file holds only this page; the diagram has 2 pages. Export without a page selector to save all of them.",
+        )
+        expect(readFileSync(file, "utf8")).not.toContain("Overview")
+        const all = textOf(await callTool("export_diagram", { path: file }))
+        expect(all).not.toContain("holds only this page")
+        expect(readFileSync(file, "utf8")).toContain("Overview")
+    })
+})
+
+describe("MCP server wiring: restore_version", () => {
+    it("tells a restored copy by the version it copies", async () => {
+        await callTool("create_new_diagram", { xml: box("2", "A") })
+        await callTool("edit_diagram", { operations: [addBox("3", "B")] })
+        await callTool("edit_diagram", { operations: [addBox("4", "C")] })
+        // Undo, then redo: History now ends with copies of both versions
+        await callTool("restore_version", {})
+        const redone = textOf(await callTool("restore_version", {}))
+        // The version left is a copy of the edit that added B
+        expect(redone).toContain(
+            'steps_back=1 (the version you just left): AI change, added 1 shape; "Page-1" (2 cells)',
+        )
+        expect(redone).not.toContain("restored copy")
+    })
+
+    it("names a page rename in the list of versions", async () => {
+        await callTool("create_new_diagram", { xml: box("2", "A") })
+        await callTool("rename_page", { page_index: 0, new_name: "Overview" })
+        const undone = textOf(await callTool("restore_version", {}))
+        expect(undone).toContain(
+            'steps_back=1 (the version you just left): renamed a page; "Overview" (1 cell)',
+        )
+    })
+
+    it("lets an edit follow an undo back to a version the model drew", async () => {
+        await callTool("create_new_diagram", { xml: box("2", "A") })
+        await callTool("edit_diagram", { operations: [addBox("3", "B")] })
+        const undone = textOf(await callTool("restore_version", {}))
+        expect(undone).toContain("This is a version you drew")
+        expect(undone).not.toContain("Call get_diagram before edit_diagram")
+        // A new page and an edit of it: both were refused until the model
+        // had read the whole document back
+        const added = await callTool("add_page", {
+            name: "Schema",
+            xml: box("t1", "Table"),
+        })
+        expect(added.isError).toBeFalsy()
+        const edited = await callTool("edit_diagram", {
+            page_index: 1,
+            operations: [
+                {
+                    operation: "update",
+                    cell_id: "t1",
+                    new_xml: box("t1", "Orders"),
+                },
+            ],
+        })
+        expect(textOf(edited)).toContain("Applied 1 operation(s)")
+    })
+
+    it("still asks for get_diagram after an undo back to a file the model never read", async () => {
+        const file = join(dataDir, "unread.drawio")
+        writeFileSync(file, SAVED_DIAGRAM)
+        await callTool("load_diagram", { path: file })
+        await callTool("create_new_diagram", { xml: box("2", "A") })
+        const undone = textOf(await callTool("restore_version", {}))
+        expect(undone).toContain("Call get_diagram before edit_diagram")
+        const edited = await callTool("edit_diagram", {
+            operations: [addBox("3", "B")],
+        })
+        expect(edited.isError).toBe(true)
+        expect(textOf(edited)).toContain("You have not seen this diagram yet")
+    })
+})
+
+describe("MCP server wiring: start_session for the session in use", () => {
+    it("keeps the session: no guide again, and the next edit needs no get_diagram", async () => {
+        const started = textOf(await callTool("start_session", {}))
+        const id = started.match(/Session ID: (\S+)/)?.[1]
+        expect(started).toContain("Edge routing rules")
+        await callTool("create_new_diagram", { xml: box("2", "A") })
+        const again = textOf(
+            await callTool("start_session", { session_id: id }),
+        )
+        expect(again).toContain(`Session ${id} is already active`)
+        expect(again).toMatch(
+            /Browser URL: http:\/\/localhost:\d+\S*\?mcp=mcp-/,
+        )
+        expect(again).toContain("Pages (1): [0] id=")
+        expect(again).not.toContain("Edge routing rules")
+        expect(again.length).toBeLessThan(700)
+        // A new session object had forgotten what the model drew: the edit
+        // was refused with "You have not seen this diagram yet"
+        const edited = await callTool("edit_diagram", {
+            operations: [addBox("3", "B")],
+        })
+        expect(textOf(edited)).toContain("Applied 1 operation(s)")
+    })
+})
+
+// A server of its own: the one above runs with BROWSER=none. Linux only,
+// where the display variables decide (macOS and Windows would open a tab)
+describe.skipIf(process.platform !== "linux")(
+    "start_session on Linux without a display",
+    () => {
+        it("gives the model the link instead of saying a tab opened", async () => {
+            const env: Record<string, string> = {
+                ...(process.env as Record<string, string>),
+                DRAWIO_DATA_DIR: dataDir,
+                PORT: String(6900 + Math.floor(Math.random() * 90)),
+            }
+            for (const name of [
+                "BROWSER",
+                "DISPLAY",
+                "WAYLAND_DISPLAY",
+                "WSL_DISTRO_NAME",
+            ]) {
+                delete env[name]
+            }
+            const headless = new Client({ name: "headless", version: "0.0.0" })
+            await headless.connect(
+                new StdioClientTransport({
+                    command: tsxBin,
+                    args: [entry],
+                    env,
+                    stderr: "ignore",
+                }),
+            )
+            try {
+                const text = textOf(
+                    (await headless.callTool({
+                        name: "start_session",
+                        arguments: {},
+                    })) as CallToolResult,
+                )
+                expect(text).toContain("Put this link in your reply")
+                expect(text).toContain("Give the user the Browser URL above")
+                expect(text).not.toContain("just opened")
+            } finally {
+                await headless.close()
+            }
+        }, 30000)
+    },
+)

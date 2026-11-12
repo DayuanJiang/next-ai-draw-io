@@ -13,6 +13,7 @@ export function versionLabel(version: NodeVersion, dict: Dictionary): string {
     }
     if (version.source === "load") return dict.shell.openedFile
     if (version.source === "add_page") return dict.shell.addedPage
+    if (version.source === "rename_page") return dict.shell.renamedPage
     return version.fromScratch ? dict.versions.created : dict.versions.edited
 }
 

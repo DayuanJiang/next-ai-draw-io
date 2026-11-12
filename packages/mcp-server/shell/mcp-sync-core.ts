@@ -61,8 +61,8 @@ export interface HistoryEntryInfo {
     index: number
     svg: string
     xml: string
-    /** Who made it: "user", "recover", "restore", "load", "add_page"; null
-     * for the AI's other writes */
+    /** Who made it: "user", "recover", "restore", "load", "add_page",
+     * "rename_page"; null for the AI's other writes */
     source: string | null
     /** The oldest entry with the same content (itself when it is the first) */
     firstId: number
