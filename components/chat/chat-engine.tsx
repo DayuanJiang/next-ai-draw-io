@@ -102,7 +102,7 @@ const SAVE_DEBOUNCE_MS = 1000
  * the same assistant message, and the SDK starts each step with a
  * step-start part.
  */
-function lastStepParts(message: ChatUIMessage) {
+function lastStepParts<P extends { type: string }>(message: { parts: P[] }) {
     const start = message.parts.findLastIndex((p) => p.type === "step-start")
     return message.parts.slice(start + 1)
 }
@@ -178,17 +178,21 @@ function withReasoningSeconds(
  * message (it is saved when it is sent), with a part of the answer that
  * was still coming in, or with a failed call (the app sends it back to the
  * model, and the chat is saved with that request; a call the user stopped
- * ends the answer). The page was reloaded or closed during the answer, or
- * the answer was stopped.
+ * ends the answer). The failed call is found as hasToolErrors finds the one
+ * to send back: the last call of the latest step, with or without words
+ * after it. The page was reloaded or closed during the answer, or the
+ * answer was stopped.
  */
 function endsMidAnswer(messages: StoredMessage[]): boolean {
     const last = messages.at(-1)
     if (!last) return false
     if (last.role === "user") return true
-    const lastPart = last.parts.at(-1)
+    const lastTool = lastStepParts(last)
+        .filter((part) => part.type.startsWith("tool-"))
+        .at(-1)
     return (
-        (lastPart?.state === TOOL_ERROR_STATE &&
-            lastPart.errorText !== "Stopped by user") ||
+        (lastTool?.state === TOOL_ERROR_STATE &&
+            lastTool.errorText !== "Stopped by user") ||
         last.parts.some((part) =>
             ["streaming", "input-streaming", "input-available"].includes(
                 part.state as string,
@@ -729,11 +733,13 @@ export function ChatEngineProvider({
             }
             // Ended with no error, but short of what the model set out to
             // draw: undo a preview still on the canvas, and say so, as an
-            // error does (with Retry)
+            // error does (with Retry). A cut off drawing goes first, with
+            // the previews on top of it: the canvas then changes once, to
+            // the diagram that stays, and the view is fitted for that one.
+            abandonContinuation()
             const [originalXml] = editDiagramOriginalXmlRef.current.values()
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             editDiagramOriginalXmlRef.current.clear()
-            abandonContinuation()
             // Thinking took most of the turn's output, and the model has a
             // switch for it: a higher output limit, which the other hint
             // advises, would go to more thinking. The card names the switch
@@ -780,11 +786,13 @@ export function ChatEngineProvider({
             // A diagram still streaming when the request failed never
             // reaches the tool handler: undo its preview. Only previews not
             // handled yet are stored, and the first one holds the diagram
-            // before any of them.
+            // before any of them. A cut off drawing goes first, with the
+            // previews on top of it: the canvas then changes once, to the
+            // diagram that stays, and the view is fitted for that one.
+            abandonContinuation()
             const [originalXml] = editDiagramOriginalXmlRef.current.values()
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             editDiagramOriginalXmlRef.current.clear()
-            abandonContinuation()
 
             // Server errors are JSON: a quota limit ({type: request, token or
             // tpm}), a provider error ({type: "provider", code, message}) or
@@ -1952,14 +1960,23 @@ export function ChatEngineProvider({
                 !isSameDocument(canvas, savedXml)
             ) {
                 // Its picture is of the canvas, so it is taken before the
-                // load. Like submit: nothing else is sent meanwhile
-                const generation = getChatGeneration()
-                preparingSendRef.current = true
-                const svg = await getVersionSvg().finally(() => {
-                    preparingSendRef.current = false
-                })
-                if (getChatGeneration() !== generation || leavingRef.current) {
-                    return false
+                // load. Like submit: nothing else is sent meanwhile. While
+                // draw.io is loading it takes no picture, and the request
+                // for one would hold the message until it has loaded: the
+                // version is kept without a picture.
+                let svg: string | null = null
+                if (isDrawioReady) {
+                    const generation = getChatGeneration()
+                    preparingSendRef.current = true
+                    svg = await getVersionSvg().finally(() => {
+                        preparingSendRef.current = false
+                    })
+                    if (
+                        getChatGeneration() !== generation ||
+                        leavingRef.current
+                    ) {
+                        return false
+                    }
                 }
                 const pageId = viewedPageId()
                 const { summary, touchedIds } = diffDiagrams(

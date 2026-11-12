@@ -303,6 +303,69 @@ test("a diagram is back at its zoom and place when an edit that zoomed out to sh
     expect(Math.abs((back?.y ?? 0) - (place?.y ?? 0))).toBeLessThan(2)
 })
 
+test("a diagram is back at its zoom and place when the drawing after a cut off one fails midway", async ({
+    page,
+}) => {
+    // Far larger than the window, and cut off by the output limit: its
+    // last cell is half written, and the drawing stays to be continued
+    const cut = toolCallEvents("cut", "display_diagram", {
+        xml: `${cell("near", "Near", 100, 100)}${cell("far", "Far away", 2400, 1500)}<mxCell id="c" value="Gam`,
+    })
+    // The model draws anew instead of continuing, and the request fails
+    // while that drawing streams
+    const again = toolCallEvents("again", "display_diagram", {
+        xml:
+            cell("near2", "Near again", 100, 100) +
+            cell("far2", "Far again", 2400, 1500) +
+            cell("late", "Late", 100, 300),
+    })
+    await chunkedReplies(page, [
+        [drawing(BOX)],
+        [
+            sseEvents([{ type: "start" }, cut.start, ...cut.deltas], false),
+            1500,
+            sseEvents([cut.done, { type: "finish" }]),
+        ],
+        [
+            sseEvents(
+                [{ type: "start" }, again.start, ...again.deltas.slice(0, -3)],
+                false,
+            ),
+            1500,
+            sseEvents([
+                { type: "error", errorText: "Upstream connection lost" },
+            ]),
+        ],
+    ])
+    await page.goto("/", { waitUntil: "networkidle" })
+    await getIframe(page).waitFor({ state: "visible", timeout: 30000 })
+    const canvas = page.frameLocator("iframe")
+    const service = canvas.getByText("Service", { exact: true })
+
+    await sendMessage(page, "Draw a service")
+    await waitForCompleteCount(page, 1)
+    // Past the time a resize fits the new diagram again
+    await page.waitForTimeout(4500)
+    expect(await zoomOf(page)).toBe(1)
+    const place = await service.boundingBox()
+
+    await sendMessage(page, "Draw a bigger one")
+    await expect(canvas.getByText("Far again", { exact: true })).toBeInViewport(
+        { timeout: 15000 },
+    )
+    expect(await zoomOf(page)).toBeLessThan(0.5)
+
+    await expect(
+        page.getByText("Upstream connection lost").first(),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(service).toBeVisible()
+    await expect(canvas.getByText("Far away", { exact: true })).toHaveCount(0)
+    await expect.poll(() => zoomOf(page)).toBe(1)
+    const back = await service.boundingBox()
+    expect(Math.abs((back?.x ?? 0) - (place?.x ?? 0))).toBeLessThan(2)
+    expect(Math.abs((back?.y ?? 0) - (place?.y ?? 0))).toBeLessThan(2)
+})
+
 test("undoing the first drawing, which empties the canvas, keeps the zoom", async ({
     page,
 }) => {

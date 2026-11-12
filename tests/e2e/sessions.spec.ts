@@ -512,7 +512,7 @@ test.describe("A chat left during an answer", () => {
         await openApp(page)
         // The page was reloaded during the automatic retry: the chat ends
         // with the call that failed
-        const failedEdit = (errorText: string) => ({
+        const failedEdit = (errorText: string, after: object[] = []) => ({
             ...savedChat("cut", 1000, ["Alpha"]),
             messages: [
                 asked("cut-u0", "Add Beta"),
@@ -528,14 +528,39 @@ test.describe("A chat left during an answer", () => {
                             input: { operations: [] },
                             errorText,
                         },
+                        ...after,
                     ],
                 },
             ],
         })
-        await storeChat(page, failedEdit("Edit failed: the XML is not valid"))
+        const failed = "Edit failed: the XML is not valid"
+        const words = { type: "text", text: "Done.", state: "done" }
+        const reopened = async () => {
+            await page.reload({ waitUntil: "networkidle" })
+            await expect(page.getByText("Add Beta").first()).toBeVisible({
+                timeout: 30000,
+            })
+        }
+        await storeChat(page, failedEdit(failed))
         await openChat(page, "cut", "Alpha")
         await expect(page.getByText(UNFINISHED)).toBeVisible()
         await expect(page.locator('[data-testid="retry-button"]')).toBeVisible()
+
+        // Words after the failed call, in the same step: the app sends
+        // that call back to the model as well
+        await storeChat(page, failedEdit(failed, [words]))
+        await reopened()
+        await expect(page.getByText(UNFINISHED)).toBeVisible()
+        await expect(page.locator('[data-testid="retry-button"]')).toBeVisible()
+
+        // Words alone in the step after it: the model ended the turn
+        await storeChat(
+            page,
+            failedEdit(failed, [{ type: "step-start" }, words]),
+        )
+        await reopened()
+        await expect(page.getByText("Done.")).toBeVisible()
+        await expect(page.getByText(UNFINISHED)).toHaveCount(0)
 
         // A call the user stopped says so in its own row
         await storeChat(page, failedEdit("Stopped by user"))
@@ -782,5 +807,78 @@ test.describe("A chat left during an answer", () => {
                 timeout: 15000,
             })
             .toMatch(/^data:image\/svg/)
+    })
+
+    test("regenerate in a chat opened while draw.io is still loading goes out at once", async ({
+        page,
+    }) => {
+        const bodies: unknown[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse("Drawn again."),
+            })
+        })
+        await openApp(page)
+        // The canvas has a box added by hand after the answer's drawing:
+        // Regenerate keeps it as a version, with a picture of the canvas
+        await storeChat(page, {
+            ...savedChat("edited", 1000, ["Alpha"]),
+            xmlSnapshots: [[0, doc("")]],
+            diagramXml: doc(box("c0", "Alpha", 40) + box("mine", "Mine", 240)),
+            versions: [
+                {
+                    id: "v1",
+                    number: 1,
+                    xml: doc(box("c0", "Alpha", 40)),
+                    turnIndex: 0,
+                    summary: {
+                        shapesAdded: 1,
+                        shapesRemoved: 0,
+                        shapesChanged: 0,
+                        edgesAdded: 0,
+                        edgesRemoved: 0,
+                        edgesChanged: 0,
+                    },
+                    fromScratch: true,
+                    editedSince: true,
+                },
+            ],
+        })
+        // draw.io's page is held back, as on a slow connection
+        let release!: () => void
+        const held = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        await page.route("**/drawio/index.html*", async (route) => {
+            await held
+            await route.continue()
+        })
+        await page.goto("/?session=edited", { waitUntil: "domcontentloaded" })
+        await page
+            .getByRole("button", { name: "Regenerate response" })
+            .last()
+            .click()
+        // draw.io can take no picture yet: the request does not wait for it
+        await expect.poll(() => bodies.length, { timeout: 4000 }).toBe(1)
+        await expect(page.getByText("Drawn again.")).toBeVisible()
+        await expect(
+            page.locator('[data-testid="canvas-loading"]'),
+        ).toHaveCount(1)
+        // The canvas with the box is a version all the same
+        await expect(
+            page.getByText("What you had is kept as v2."),
+        ).toBeVisible()
+
+        release()
+        await expect(
+            page.locator('[data-testid="canvas-loading"]'),
+        ).toHaveCount(0, { timeout: 30000 })
+        // and the drawing of the answer that is made again is none
+        await expect(page.locator('[data-testid="version-thumb"]')).toHaveCount(
+            1,
+        )
     })
 })
