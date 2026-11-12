@@ -49,7 +49,9 @@ export function DocMarkdown({
         ({ children }: { children?: ReactNode }) => {
             const id = ids.next(textOf(children))
             return (
-                <Tag id={id} className="group scroll-mt-6">
+                // A jump to a heading stops below the pages bar, which
+                // sticks to the top of the window below 1024 px
+                <Tag id={id} className="group scroll-mt-16 lg:scroll-mt-6">
                     {children}
                     <a
                         href={`#${id}`}
@@ -64,6 +66,7 @@ export function DocMarkdown({
     return (
         <Markdown
             remarkPlugins={[remarkGfm]}
+            rehypePlugins={[cellLabels]}
             components={{
                 h2: heading("h2"),
                 h3: heading("h3"),
@@ -125,6 +128,51 @@ export function DocMarkdown({
             {doc.body.replace(DEMO_LINE, "```demo\n$1\n```")}
         </Markdown>
     )
+}
+
+type HtmlNode = {
+    tagName?: string
+    value?: string
+    properties?: Record<string, unknown>
+    children?: HtmlNode[]
+}
+
+/**
+ * On a phone a table shows its rows as blocks, without the header row
+ * (site.css). In a table of three columns or more, a cell after the first
+ * then says nothing without its column's name: each gets it as data-label,
+ * which the phone shows above the cell.
+ */
+function cellLabels() {
+    const textOfNode = (node: HtmlNode): string =>
+        node.value ?? (node.children ?? []).map(textOfNode).join("")
+    const cellsOf = (row: HtmlNode) =>
+        (row.children ?? []).filter(
+            (cell) => cell.tagName === "th" || cell.tagName === "td",
+        )
+    const label = (node: HtmlNode) => {
+        if (node.tagName === "table") {
+            // The rows of <thead> and <tbody>, the header row first
+            const [head, ...rows] = (node.children ?? []).flatMap((part) =>
+                (part.children ?? []).filter((row) => row.tagName === "tr"),
+            )
+            const names = cellsOf(head).map(textOfNode)
+            if (names.length < 3) return
+            for (const row of rows) {
+                cellsOf(row).forEach((cell, i) => {
+                    if (i > 0) {
+                        cell.properties = {
+                            ...cell.properties,
+                            dataLabel: names[i],
+                        }
+                    }
+                })
+            }
+            return
+        }
+        node.children?.forEach(label)
+    }
+    return label
 }
 
 /** The text inside rendered Markdown, for ids and copy buttons */

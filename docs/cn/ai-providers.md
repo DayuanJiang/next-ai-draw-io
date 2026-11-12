@@ -5,7 +5,7 @@
 ## 快速开始
 
 1. 将 `env.example` 复制为 `.env.local`。
-2. 设置所选服务商的 API Key。
+2. 设置所选服务商的 API Key。模板里有一行 `AI_PROVIDER=bedrock`：使用其他服务商时，把它改成该服务商的名字，或者删掉这一行，让服务端按 Key 自动检测。
 3. 把 `AI_MODEL` 设为您想用的模型。
 4. 运行 `npm run dev`。
 
@@ -297,7 +297,10 @@ AI_MODEL=openai/gpt-4o
 
 ### Amazon Bedrock
 
+Bedrock 用 AWS 凭证登录。因为没有 API Key 可供检测，服务端无法自动选中这家服务商，请设置 `AI_PROVIDER`：
+
 ```bash
+AI_PROVIDER=bedrock
 AWS_REGION=us-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
@@ -347,7 +350,7 @@ AI_MODEL=your-deployment-name
 
 ```bash
 AZURE_REASONING_EFFORT=low      # 可选：low, medium, high
-AZURE_REASONING_SUMMARY=detailed  # 可选：none, brief, detailed
+AZURE_REASONING_SUMMARY=detailed  # 可选：auto, concise, detailed
 ```
 
 ### EdgeOne Pages（腾讯云）

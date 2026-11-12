@@ -2,6 +2,7 @@
 
 import { useLayoutEffect } from "react"
 import { Toaster } from "sonner"
+import { useDictionary } from "@/hooks/use-dictionary"
 import { useSettingsStore } from "@/stores/settings-store"
 
 /** The single toast container, mounted once at the root */
@@ -15,6 +16,7 @@ export function AppToaster() {
     useLayoutEffect(() => {
         useSettingsStore.getState().hydrate()
     }, [])
+    const dict = useDictionary()
     return (
         <Toaster
             position="bottom-center"
@@ -24,6 +26,8 @@ export function AppToaster() {
             theme={isDark ? "dark" : "light"}
             offset={{ bottom: 20 }}
             mobileOffset={{ bottom: 72 }}
+            // What a screen reader calls the region; sonner's own is English
+            containerAriaLabel={dict.common.notifications}
             toastOptions={{
                 duration: 2500,
                 style: { maxWidth: "480px" },

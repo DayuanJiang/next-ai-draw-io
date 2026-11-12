@@ -10,7 +10,14 @@ import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Locale } from "@/lib/i18n/config"
 import { i18n } from "@/lib/i18n/config"
 import { getDictionary, hasLocale } from "@/lib/i18n/dictionaries"
-import { localeAlternates, OG_IMAGE, OG_LOCALE, SITE_URL } from "@/lib/seo"
+import {
+    APP_DESCRIPTION,
+    KEYWORDS,
+    localeAlternates,
+    OG_IMAGE,
+    OG_LOCALE,
+    SITE_URL,
+} from "@/lib/seo"
 import { THEME_INIT_SCRIPT } from "@/stores/settings-store"
 
 import "../globals.css"
@@ -68,17 +75,7 @@ export async function generateMetadata({
     return {
         title: titles[lang],
         description: descriptions[lang],
-        keywords: [
-            "AI diagram generator",
-            "AWS architecture",
-            "flowchart creator",
-            "draw.io",
-            "AI drawing tool",
-            "technical diagrams",
-            "diagram automation",
-            "free diagram generator",
-            "online diagram maker",
-        ],
+        keywords: KEYWORDS[lang],
         authors: [{ name: "Next AI Draw.io" }],
         creator: "Next AI Draw.io",
         publisher: "Next AI Draw.io",
@@ -93,7 +90,7 @@ export async function generateMetadata({
             images: [
                 {
                     ...OG_IMAGE,
-                    alt: "Next AI Draw.io - AI-powered diagram creation tool",
+                    alt: titles[lang],
                 },
             ],
         },
@@ -140,8 +137,7 @@ export default async function RootLayout({
         name: "Next AI Draw.io",
         applicationCategory: "DesignApplication",
         operatingSystem: "Web, Windows, macOS, Linux",
-        description:
-            "Draw and edit draw.io diagrams by chatting with an AI: AWS, Azure and GCP architecture diagrams, flowcharts and other technical diagrams on a real draw.io canvas. Every AI change is a version you can compare or restore, and it works with many AI providers. Also available as a desktop app and an MCP server for AI agents.",
+        description: APP_DESCRIPTION[validLang],
         url: SITE_URL,
         sameAs: [
             "https://github.com/DayuanJiang/next-ai-draw-io",

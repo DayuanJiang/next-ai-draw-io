@@ -67,7 +67,7 @@ dsh plugin --profile web add @next-ai-drawio/dsh
 }
 ```
 
-設定寫在伺服器的 `env` 裡，例如 `"env": { "DRAWIO_LANG": "ja" }`。所有變數列在[在 Claude Code 裡畫 draw.io 圖表](./claude-code.md)頁面中。
+設定寫在伺服器的 `env` 裡，例如 `"env": { "DRAWIO_LANG": "ja" }`。所有變數列在[在 Claude Code 裡畫 draw.io 圖表](./claude-code.md#設定)頁面中。
 
 ## 安裝之後
 

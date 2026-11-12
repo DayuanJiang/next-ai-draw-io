@@ -11,12 +11,20 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { docsDemos } from "@/components/site/demo-texts"
 import { DocMarkdown } from "@/components/site/doc-markdown"
+import { DocsPagesBar } from "@/components/site/docs-pages-bar"
 import { DocsToc } from "@/components/site/docs-toc"
 import { JsonLd } from "@/components/site/json-ld"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import { GITHUB_URL, SITE_TEXTS } from "@/components/site/site-texts"
-import { DOCS_NAV, DOCS_SLUGS, docsPath, fileOfSlug, loadDoc } from "@/lib/docs"
+import {
+    DOCS_NAV,
+    DOCS_SLUGS,
+    type Doc,
+    docsPath,
+    fileOfSlug,
+    loadDoc,
+} from "@/lib/docs"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { hasLocale } from "@/lib/i18n/dictionaries"
 import { OG_IMAGE, OG_LOCALE, SITE_URL } from "@/lib/seo"
@@ -190,10 +198,7 @@ export default async function DocsPage({ params }: Props) {
                 <SiteHeader lang={lang} current="docs" />
             </div>
             {/* Below 1024 px the pages open from a bar under the header */}
-            <details
-                key={file}
-                className="group sticky top-0 z-20 border-b border-border bg-canvas lg:hidden"
-            >
+            <DocsPagesBar key={file}>
                 <summary className="flex cursor-pointer list-none items-center gap-2.5 px-5 py-2.5 text-[14px] md:px-8 [&::-webkit-details-marker]:hidden">
                     <TextAlignStart className="size-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate font-medium">
@@ -204,14 +209,20 @@ export default async function DocsPage({ params }: Props) {
                         <ChevronDown className="size-4 group-open:rotate-180" />
                     </span>
                 </summary>
-                <nav className="max-h-[70svh] overflow-y-auto border-t border-border px-3 pt-4 pb-2 text-[15px] md:px-6">
-                    <PageList lang={lang} file={file} />
+                <nav
+                    aria-label={SITE_TEXTS[lang].nav.pages}
+                    className="max-h-[70svh] overflow-y-auto border-t border-border px-3 pt-4 pb-2 text-[15px] md:px-6"
+                >
+                    <PageList lang={lang} file={file} headings={doc.headings} />
                 </nav>
-            </details>
+            </DocsPagesBar>
             {/* Below 1280 px the page's headings give their room to the text */}
             <div className="mx-auto grid max-w-7xl px-5 md:px-8 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-12 xl:grid-cols-[232px_minmax(0,1fr)_208px]">
                 {/* Pages */}
-                <nav className="sticky top-0 max-h-screen self-start overflow-y-auto py-8 text-[14px] max-lg:hidden">
+                <nav
+                    aria-label={SITE_TEXTS[lang].nav.pages}
+                    className="sticky top-0 max-h-screen self-start overflow-y-auto py-8 text-[14px] max-lg:hidden"
+                >
                     <PageList lang={lang} file={file} />
                 </nav>
 
@@ -284,8 +295,19 @@ export default async function DocsPage({ params }: Props) {
     )
 }
 
-/** The docs' pages, by group */
-function PageList({ lang, file }: { lang: Locale; file: string }) {
+/**
+ * The docs' pages, by group. With `headings`, the sections of the page being
+ * read follow it: the list in the bar is the only one a narrow window has.
+ */
+function PageList({
+    lang,
+    file,
+    headings = [],
+}: {
+    lang: Locale
+    file: string
+    headings?: Doc["headings"]
+}) {
     return DOCS_NAV.map((g) => (
         <div key={g.group.en} className="mb-6">
             <h2 className="mb-1.5 px-2.5 text-[12.5px] font-semibold text-muted-foreground">
@@ -301,6 +323,20 @@ function PageList({ lang, file }: { lang: Locale; file: string }) {
                         >
                             {loadDoc(lang, f).title}
                         </Link>
+                        {f === file && headings.length > 0 && (
+                            <ul className="mt-0.5 mb-2 text-[14px]">
+                                {headings.map((h) => (
+                                    <li key={h.id}>
+                                        <a
+                                            href={`#${h.id}`}
+                                            className={`block rounded-md py-1 pr-2.5 text-muted-foreground hover:text-foreground ${h.depth === 3 ? "pl-9" : "pl-6"}`}
+                                        >
+                                            {h.text}
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </li>
                 ))}
             </ul>

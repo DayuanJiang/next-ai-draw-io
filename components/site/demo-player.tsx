@@ -708,10 +708,10 @@ export function DemoPlayer({
                                     {s.title}
                                 </span>
                             </span>
-                            {/* The docs' column and a phone are too narrow
-                                for the notes */}
+                            {/* The docs' column, a phone and a tablet are
+                                too narrow for the notes */}
                             <span
-                                className={`mt-0.5 hidden truncate pl-[26px] text-[12px] text-muted-foreground ${docs ? "" : "md:block"}`}
+                                className={`mt-0.5 hidden truncate pl-[26px] text-[12px] text-muted-foreground ${docs ? "" : "lg:block"}`}
                             >
                                 {s.text}
                             </span>

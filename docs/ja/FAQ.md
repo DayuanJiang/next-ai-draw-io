@@ -4,9 +4,9 @@
 
 ## PDF をエクスポートしても何も起こらない
 
-アプリの「エクスポート」ダイアログで保存できるのは、draw.io ファイル、PNG 画像、SVG 画像、編集できる SVG です。PDF は draw.io 自身のメニューから作ります。キャンバス左上の ☰ を押し、**形式を指定してエクスポート**、**PDF** の順に選んでください。そのあとの動きは、アプリがどの draw.io を使っているかで変わります。
+アプリの「エクスポート」ダイアログで保存できるのは、draw.io ファイル、PNG 画像、SVG 画像、編集できる SVG です。PDF は draw.io 自身のメニューから作ります。キャンバス右上の 3 点ボタン（⋯）を押し、**形式を指定してエクスポート**、**PDF** の順に選んでください。そのあとの動きは、アプリがどの draw.io を使っているかで変わります。
 
-**アプリに同梱された draw.io**：Web 版、Docker イメージ、デスクトップアプリはこれを使います。ただし、`NEXT_PUBLIC_DRAWIO_BASE_URL` を指定してビルドしたアプリは別です。この draw.io は、印刷を通して PDF を作ります。PDF のダイアログが開くので、そこで **印刷** を押すと、ブラウザやシステムの印刷ダイアログが開きます。そこで、PDF に保存する項目を選んでください。たとえば Chrome なら **PDF に保存**、Windows なら **Microsoft Print to PDF** です。
+**アプリに同梱された draw.io**：Web 版、Docker イメージ、デスクトップアプリはこれを使います。ただし、`NEXT_PUBLIC_DRAWIO_BASE_URL` を指定してビルドしたアプリは別です。PDF のダイアログが開きます。デスクトップアプリでは、そこで **エクスポート** を押すと、保存先を尋ねるダイアログが開き、PDF ファイルが保存されます。Web 版と Docker イメージでは、この draw.io は印刷を通して PDF を作ります。**エクスポート** を押すと、ブラウザの印刷ダイアログが開きます。そこで、PDF に保存する項目を選んでください。たとえば Chrome なら **PDF に保存**、Windows なら **Microsoft Print to PDF** です。
 
 **外部の draw.io**：`NEXT_PUBLIC_DRAWIO_BASE_URL` で指定した draw.io です（たとえば `https://embed.diagrams.net`）。ページが `convert.diagrams.net/node/export` に移動し、そのあと何も起こりません。この draw.io は図を `convert.diagrams.net` の変換サービスに送って PDF を作りますが、アプリの中ではこのダウンロードが失敗します。代わりに draw.io のメニューの **印刷** を選び、印刷ダイアログで PDF として保存してください。`NEXT_PUBLIC_DRAWIO_BASE_URL` を外してアプリを再ビルドし、同梱の draw.io を使う方法もあります。
 

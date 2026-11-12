@@ -5,7 +5,7 @@ When you host Next AI Draw.io yourself, environment variables choose the AI prov
 ## Get started
 
 1. Copy `env.example` to `.env.local`.
-2. Set the API key of the provider you chose.
+2. Set the API key of the provider you chose. The template has the line `AI_PROVIDER=bedrock`: change it to the name of your provider, or delete the line so that the server detects the provider from your key.
 3. Set `AI_MODEL` to the model you want.
 4. Run `npm run dev`.
 
@@ -297,7 +297,10 @@ Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-ga
 
 ### Amazon Bedrock
 
+Bedrock signs in with AWS credentials. With no API key to detect, the server cannot pick this provider by itself, so set `AI_PROVIDER`:
+
 ```bash
+AI_PROVIDER=bedrock
 AWS_REGION=us-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
@@ -347,7 +350,7 @@ Optionally, set the reasoning options:
 
 ```bash
 AZURE_REASONING_EFFORT=low      # Optional: low, medium, high
-AZURE_REASONING_SUMMARY=detailed  # Optional: none, brief, detailed
+AZURE_REASONING_SUMMARY=detailed  # Optional: auto, concise, detailed
 ```
 
 ### EdgeOne Pages (Tencent Cloud)

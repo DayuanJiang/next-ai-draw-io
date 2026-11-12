@@ -54,7 +54,7 @@ export function NotFoundPage() {
     }, [t.title])
     return (
         <div className="site lp-grid flex min-h-screen items-center justify-center bg-canvas px-6 text-foreground md:px-8">
-            <div className="max-w-md text-center">
+            <main className="max-w-md text-center">
                 <Link
                     href={`/${lang}/about`}
                     className="inline-flex items-center gap-2.5"
@@ -93,7 +93,7 @@ export function NotFoundPage() {
                         {t.home}
                     </Link>
                 </div>
-            </div>
+            </main>
         </div>
     )
 }

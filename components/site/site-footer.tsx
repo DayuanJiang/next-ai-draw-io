@@ -104,7 +104,10 @@ export function SiteFooter({ lang, path }: { lang: Locale; path: string }) {
             </div>
             <div className="mx-auto flex max-w-7xl flex-col-reverse items-start justify-between gap-3 border-t border-border px-5 py-5 text-[12.5px] text-muted-foreground md:flex-row md:items-center md:gap-6 md:px-8">
                 <span>{t.license}</span>
-                <nav className="flex flex-wrap gap-x-4 gap-y-2">
+                <nav
+                    aria-label={SITE_TEXTS[lang].nav.language}
+                    className="flex flex-wrap gap-x-4 gap-y-2"
+                >
                     {i18n.locales.map((locale) => (
                         <Link
                             key={locale}

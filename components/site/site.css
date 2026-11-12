@@ -9,6 +9,12 @@
     --lp-line: rgb(255 255 255 / 0.045);
 }
 
+/* A Japanese heading wraps between phrases where the browser can find them
+   (Chrome, Edge); elsewhere it wraps between any two characters, as before */
+.site :is(h1, h2, h3):lang(ja) {
+    word-break: auto-phrase;
+}
+
 /* draw.io's grid behind the hero */
 .lp-grid {
     background-color: var(--lp-paper);
@@ -175,6 +181,59 @@
     padding: 0.05rem 0.3rem;
     font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 0.88em;
+}
+/* A table is outside the prose styles, which underline the text's links */
+.docs-table a {
+    color: var(--foreground);
+    font-weight: 500;
+    text-decoration-line: underline;
+    text-underline-offset: 4px;
+}
+/* From 768 px a table keeps its columns. Its headers, its first column (a
+   name) and code stay on one line: left to wrap, a short Chinese or Japanese
+   name or a long variable gets a column one or two characters wide. */
+@media (min-width: 768px) {
+    .docs-table th,
+    .docs-table td:first-child,
+    .docs-table code {
+        white-space: nowrap;
+    }
+}
+/* On a phone a row is a block, as in the tables of the MCP page: the first
+   cell names the row and the others follow, each under its column's name
+   when DocMarkdown gave it one */
+@media (max-width: 767px) {
+    .docs-table,
+    .docs-table tbody,
+    .docs-table tr,
+    .docs-table td {
+        display: block;
+    }
+    .docs-table thead {
+        display: none;
+    }
+    .docs-table tr {
+        border-bottom: 1px solid var(--border);
+        padding: 0.75rem 1rem;
+    }
+    .docs-table tr:last-child {
+        border-bottom: 0;
+    }
+    .docs-table td {
+        border: 0;
+        padding: 0.25rem 0;
+    }
+    .docs-table td:first-child {
+        color: var(--foreground);
+        font-weight: 500;
+    }
+    .docs-table td[data-label]::before {
+        display: block;
+        color: var(--foreground);
+        font-size: 12.5px;
+        font-weight: 600;
+        content: attr(data-label);
+    }
 }
 
 /* A long command or address in a sentence breaks on a phone */
