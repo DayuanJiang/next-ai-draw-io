@@ -1,6 +1,7 @@
 import { checkAdminAuth } from "@/lib/admin/auth"
 import {
     AdminProvidersSchema,
+    adminProvidersToConfig,
     deriveEnvUpdates,
     loadAdminProviders,
     maskAdminProviders,
@@ -13,31 +14,38 @@ import {
     isSettingsWritable,
     saveSettings,
 } from "@/lib/admin/settings"
-import { loadEnvServerModelsConfig } from "@/lib/server-model-config"
+import {
+    loadEnvServerModelsConfig,
+    loadRawServerModelsConfig,
+} from "@/lib/server-model-config"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 async function payload() {
-    // Env-based providers (AI_MODELS_CONFIG / ai-models.json) are shown
-    // read-only in the panel; their credentials live in the environment
-    const envConfig = await loadEnvServerModelsConfig()
     const adminProviders = loadAdminProviders()
-    // A panel default overrides any env default (matches the merge in
-    // loadRawServerModelsConfig), so env stars must reflect that
-    const adminHasDefault = adminProviders.some(
-        (p) => p.isDefault && p.models.length > 0,
+    // The environment's providers are shown read-only in the panel; their
+    // credentials live in the environment. They are the ones the users'
+    // model list holds before the panel's own: those of AI_MODELS_CONFIG /
+    // ai-models.json, or a lone AI_MODEL that the list keeps next to the
+    // panel's providers. A panel default has taken their default away.
+    const listed = (await loadRawServerModelsConfig())?.providers ?? []
+    const envProviders = listed.slice(
+        0,
+        listed.length - adminProvidersToConfig(adminProviders).providers.length,
     )
+    const loneModel = !(await loadEnvServerModelsConfig())
     return {
         writable: isSettingsWritable(),
         providers: maskAdminProviders(adminProviders),
-        envProviders:
-            envConfig?.providers.map((p) => ({
-                name: p.name,
-                provider: p.provider,
-                models: p.models,
-                isDefault: !!p.default && !adminHasDefault,
-            })) ?? [],
+        envProviders: envProviders.map((p) => ({
+            name: p.name,
+            provider: p.provider,
+            models: p.models,
+            isDefault: !!p.default,
+            // Not a config of its own: the panel may add this provider type
+            loneModel,
+        })),
         // Whether .env sets a default model. getEnvFallback skips the value
         // the panel overlays onto process.env, so a panel default doesn't count.
         envHasDefaultModel: !!getEnvFallback("AI_MODEL"),

@@ -183,6 +183,28 @@ describe("providerLabel", () => {
         expect(new Set(labels).size).toBe(2)
     })
 
+    it("adds the host to two providers on one address when a third is elsewhere", () => {
+        const first = custom("a", "http://127.0.0.1:7711/v1")
+        const second = custom("b", "http://localhost:7711/v1")
+        const third = custom("c", "http://localhost:7711/v1")
+        const all = [first, second, third]
+        expect(all.map((p) => providerLabel(p, all))).toEqual([
+            "OpenAI-compatible (127.0.0.1:7711)",
+            "OpenAI-compatible (localhost:7711)",
+            "OpenAI-compatible (localhost:7711)",
+        ])
+        // Two keys on one path of a gateway, a third on another path
+        const teamA = custom("d", "https://gateway.example.com/team-a/v1")
+        const twin = custom("e", "https://gateway.example.com/team-a/v1")
+        const teamB = custom("f", "https://gateway.example.com/team-b/v1")
+        const gateway = [teamA, twin, teamB]
+        expect(gateway.map((p) => providerLabel(p, gateway))).toEqual([
+            "OpenAI-compatible (gateway.example.com/team-a/v1)",
+            "OpenAI-compatible (gateway.example.com/team-a/v1)",
+            "OpenAI-compatible (gateway.example.com/team-b/v1)",
+        ])
+    })
+
     it("leaves a name alone when it is the only one, or the host says nothing", () => {
         const local = custom("a", "http://127.0.0.1:7140/v1")
         expect(providerLabel(local, [local])).toBe("OpenAI-compatible")

@@ -550,11 +550,16 @@ export function ModelsSection({
                                 (p) => {
                                     // Global-credential providers already in
                                     // the env config can't be added here —
-                                    // panel credentials would override theirs
+                                    // panel credentials would override theirs.
+                                    // The server accepts the provider of a
+                                    // lone AI_MODEL: more of its models are
+                                    // added here.
                                     const envBlocked =
                                         !!PROVIDERS[p].fixedCredentials &&
                                         envProviders.some(
-                                            (e) => e.provider === p,
+                                            (e) =>
+                                                e.provider === p &&
+                                                !e.loneModel,
                                         )
                                     return (
                                         <SelectItem

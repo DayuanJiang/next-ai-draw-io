@@ -103,7 +103,9 @@ export function createModelConfig(modelId: string): ModelConfig {
  * name, else its type's label. Providers that would show the same name
  * (two OpenAI-compatible servers without a display name) get the host of
  * their base URL added, where that tells them apart, else the host with
- * the path (two paths of one gateway).
+ * the path (two paths of one gateway). Providers that share the whole
+ * address (two keys for one server) get it when another of that name is
+ * elsewhere, so none of them stands unmarked beside a marked one.
  */
 export function providerLabel(
     provider: ProviderConfig,
@@ -122,10 +124,14 @@ export function providerLabel(
         (p) => p !== provider && name(p) === name(provider),
     )
     if (sameName.length === 0) return name(provider)
-    for (const withPath of [false, true]) {
-        const own = address(provider, withPath)
-        if (own && sameName.every((p) => address(p, withPath) !== own)) {
-            return `${name(provider)} (${own})`
+    // First an address that differs from all of them, then from some
+    for (const apartFrom of [sameName.length, 1]) {
+        for (const withPath of [false, true]) {
+            const own = address(provider, withPath)
+            const others = sameName.filter((p) => address(p, withPath) !== own)
+            if (own && others.length >= apartFrom) {
+                return `${name(provider)} (${own})`
+            }
         }
     }
     return name(provider)

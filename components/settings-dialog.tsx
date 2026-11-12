@@ -232,7 +232,7 @@ function GeneralTab({ open }: { open: boolean }) {
         // the code) fetch throws before sending, which would read as a
         // network error. Such a code can never reach the server.
         if (/[\u0100-\uffff]/.test(code)) {
-            setAccessError(dict.errors.invalidAccessCode)
+            setAccessError(t.accessCodeWrong)
             return
         }
         setAccessError("")
@@ -247,8 +247,9 @@ function GeneralTab({ open }: { open: boolean }) {
             )
             const data = await response.json()
             if (!data.valid) {
-                // The server's message is English
-                setAccessError(dict.errors.invalidAccessCode)
+                // The server's message is English, and the chat's own text
+                // sends the user to Settings, where they are now
+                setAccessError(t.accessCodeWrong)
                 return
             }
             localStorage.setItem(STORAGE_KEYS.accessCode, code)

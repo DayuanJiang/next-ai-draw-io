@@ -474,7 +474,8 @@ test("an access code error reads in the interface's language", async ({
     const dialog = page.getByRole("dialog")
     await dialog.locator("#access-code").fill("wrong")
     await dialog.locator("#access-code").press("Enter")
-    await expect(dialog.getByText(text)).toBeVisible()
+    // The dialog's own words: the user is in Settings already
+    await expect(dialog.getByText("访问码不正确，请检查后再试。")).toBeVisible()
     await expect(page.getByText("Invalid or missing access code")).toHaveCount(
         0,
     )

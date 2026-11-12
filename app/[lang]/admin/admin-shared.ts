@@ -29,12 +29,16 @@ export function savedTextOf(state: SettingState | undefined): string {
     return state && !isSecretValue(state.value) ? (state.value ?? "") : ""
 }
 
-// Provider defined in AI_MODELS_CONFIG / ai-models.json — shown read-only
+// Provider defined in the environment (AI_MODELS_CONFIG, ai-models.json or
+// AI_MODEL), shown read-only
 export interface EnvProvider {
     name: string
     provider: ProviderName
     models: string[]
     isDefault: boolean
+    // From an AI_MODEL that makes no model list of its own (see
+    // loadRawServerModelsConfig)
+    loneModel: boolean
 }
 
 export async function adminFetch(path: string, pw: string, init?: RequestInit) {

@@ -1277,11 +1277,13 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                 const keys = Object.entries(REQUIRED_KEY_VARS)
                     .filter(([, envVar]) => envVar)
                     .map(([p, envVar]) => `- ${envVar} for ${p}`)
+                // AI_PROVIDER comes first: the chat shows only the start of
+                // a long error, and Bedrock and Ollama have no key variable
+                // that selects them
                 throw new Error(
-                    `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
-                        `${keys.join("\n")}\n` +
-                        `- AWS_ACCESS_KEY_ID for bedrock\n` +
-                        `Or set AI_PROVIDER=ollama for local Ollama.`,
+                    `No AI provider configured. Set AI_PROVIDER (for example AI_PROVIDER=bedrock or AI_PROVIDER=ollama), ` +
+                        `or the API key of one provider, in your .env.local file:\n` +
+                        `${keys.join("\n")}`,
                 )
             }
             throw new Error(

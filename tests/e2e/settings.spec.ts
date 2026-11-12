@@ -58,15 +58,26 @@ test.describe("Settings", () => {
         )
         const sent: string[] = []
         await page.route("**/api/verify-access-code", (route) => {
-            sent.push(route.request().headers()["x-access-code"])
-            return route.fulfill({ json: { valid: true } })
+            const code = route.request().headers()["x-access-code"]
+            sent.push(code)
+            return code === "wrong-code"
+                ? route.fulfill({
+                      status: 401,
+                      json: {
+                          valid: false,
+                          message: "Invalid or missing access code",
+                      },
+                  })
+                : route.fulfill({ json: { valid: true } })
         })
         await openSettingsTab(page, "general")
 
         const dialog = page.locator('[role="dialog"]')
         const field = dialog.locator("#access-code")
+        // Not the chat's text, which sends the user to Settings
         const invalid = dialog.getByText(
-            "Invalid or missing access code. Please configure it in Settings.",
+            "That access code is not valid. Check it and try again.",
+            { exact: true },
         )
         // Pasted along with its label: a request header cannot carry it
         await field.fill("访问码：abc123")
@@ -82,6 +93,13 @@ test.describe("Settings", () => {
         await field.press("Enter")
         await expect(invalid).toBeVisible()
         expect(sent).toEqual(["abc123"])
+        // A code the server refuses gets the same words
+        await field.fill("abc123")
+        await field.press("Enter")
+        await expect(invalid).toHaveCount(0)
+        await field.fill("wrong-code")
+        await field.press("Enter")
+        await expect(invalid).toBeVisible()
     })
 
     test("max output tokens is editable and persists", async ({ page }) => {

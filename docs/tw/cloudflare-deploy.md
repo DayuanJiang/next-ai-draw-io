@@ -4,6 +4,16 @@
 
 Worker 會部署到 Cloudflare 遍布全球的伺服器上，所以延遲極低。託管在 `workers.dev` 網域上是免費的。如果需要，還可以用 Cloudflare 的 R2 儲存服務取得完整的 Next.js ISR 支援。
 
+## 在 Worker 上不能用的功能
+
+首頁和編輯器在 Worker 上可以正常使用。下面三項在 Worker 上會失敗，因為它們在收到請求時要從磁碟讀取 Markdown 檔案，Worker 裡沒有這些檔案：
+
+- `/docs` 下的文件頁面會傳回錯誤。
+- `/sitemap.xml` 會傳回錯誤。
+- 聊天時 AI 查不到 draw.io 的圖形庫，畫 AWS、Azure、GCP、Kubernetes 這類圖時只能猜圖示名稱。
+
+用 [Docker](./docker.md) 部署時，這三項都可以正常使用。
+
 ## 需要準備什麼
 
 - 一個 Cloudflare 帳戶。基本部署用免費版就夠了。

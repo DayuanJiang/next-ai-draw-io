@@ -60,6 +60,7 @@ import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     type FlattenedServerModel,
     findServerModelById,
+    loadFlattenedServerModels,
 } from "@/lib/server-model-config"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { withHeartbeat } from "@/lib/stream-heartbeat"
@@ -199,7 +200,15 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Read client AI provider overrides from headers
     const provider = req.headers.get("x-ai-provider")
     let baseUrl = req.headers.get("x-ai-base-url")
-    const selectedModelId = req.headers.get("x-selected-model-id")
+    let selectedModelId = req.headers.get("x-selected-model-id")
+    // A request that names no model runs on AI_MODEL. A server without one
+    // runs it on the default of its model list, the model a page selects
+    // once it has the list: a first message can be sent before that.
+    if (!selectedModelId && !provider && !process.env.AI_MODEL) {
+        const models = await loadFlattenedServerModels()
+        selectedModelId =
+            (models.find((m) => m.isDefault) ?? models[0])?.id ?? null
+    }
 
     // Check if this is a server model with custom env var names
     let serverModelConfig: {

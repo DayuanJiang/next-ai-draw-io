@@ -187,3 +187,74 @@ describe("envHasDefaultModel", () => {
         expect(await envHasDefaultModel()).toBe(false)
     })
 })
+
+describe("envProviders", () => {
+    const savePanelProvider = async (isDefault: boolean) => {
+        const res = await PUT(
+            new Request("http://localhost/api/admin/providers", {
+                method: "PUT",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    providers: [
+                        {
+                            id: "p1",
+                            provider: "anthropic",
+                            apiKey: "sk-test",
+                            models: ["claude-panel"],
+                            isDefault,
+                        },
+                    ],
+                }),
+            }),
+        )
+        return (await res.json()).envProviders
+    }
+
+    it("holds a lone AI_MODEL that users pick next to the panel's providers", async () => {
+        vi.stubEnv("AI_MODELS_CONFIG", "")
+        vi.stubEnv("AI_PROVIDER", "openai")
+        vi.stubEnv("AI_MODEL", "gpt-env")
+        const lone = {
+            name: "OpenAI",
+            provider: "openai",
+            models: ["gpt-env"],
+            loneModel: true,
+        }
+        // The users' list keeps it as the default beside the panel's model
+        expect(await savePanelProvider(false)).toEqual([
+            { ...lone, isDefault: true },
+        ])
+        // A panel default takes its star
+        expect(await savePanelProvider(true)).toEqual([
+            { ...lone, isDefault: false },
+        ])
+    })
+
+    it("holds the providers of AI_MODELS_CONFIG, which are no lone model", async () => {
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env List",
+                        provider: "bedrock",
+                        models: ["model-a", "model-b"],
+                        default: true,
+                    },
+                ],
+            }),
+        )
+        const listed = {
+            name: "Env List",
+            provider: "bedrock",
+            models: ["model-a", "model-b"],
+            loneModel: false,
+        }
+        expect(await savePanelProvider(false)).toEqual([
+            { ...listed, isDefault: true },
+        ])
+        expect(await savePanelProvider(true)).toEqual([
+            { ...listed, isDefault: false },
+        ])
+    })
+})
