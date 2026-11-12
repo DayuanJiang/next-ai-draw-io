@@ -152,9 +152,15 @@ export async function getSession(id: string): Promise<ChatSession | null> {
     }
 }
 
+// Why the latest save failed, for the error record: the toast only says
+// that it did, and iPhones fail with small chats, where storage is not full
+let saveError: unknown
+export const lastSaveError = () => saveError
+
 // Returns false on failure (e.g. storage quota exceeded). Other sessions are
 // never deleted automatically; the caller tells the user instead.
 export async function saveSession(session: ChatSession): Promise<boolean> {
+    saveError = undefined
     if (!isIndexedDBAvailable()) return false
     try {
         const db = await getDB()
@@ -164,6 +170,7 @@ export async function saveSession(session: ChatSession): Promise<boolean> {
         return true
     } catch (error) {
         console.error("Failed to save session:", error)
+        saveError = error
         dbPromise = null
         return false
     }

@@ -15,6 +15,7 @@ import {
     getAllSessionMetadata,
     getSession,
     isIndexedDBAvailable,
+    lastSaveError,
     MAX_SESSIONS,
     readSessionCount,
     renameSession as renameSessionInDB,
@@ -91,11 +92,12 @@ const newestFirst = (a: SessionMetadata, b: SessionMetadata) =>
     b.updatedAt - a.updatedAt
 
 function notifySaveFailed(dict: Dictionary) {
-    // Same id, so repeated failures update one toast instead of stacking
+    // Same id, so repeated failures update one toast instead of stacking.
+    // The storage error goes into the record.
     toastUnexpectedError(
         dict.errors.sessionSaveFailed,
         dict.report.button,
-        undefined,
+        lastSaveError(),
         {
             id: "session-save-failed",
         },

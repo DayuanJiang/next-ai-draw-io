@@ -119,8 +119,11 @@ test.describe("Answers", () => {
             page.getByText("Here is your diagram with a test box."),
         ).toBeVisible({ timeout: 15000 })
 
-        // The user's message has one too: the answer's is the last
-        await page.getByRole("button", { name: "Copy response" }).last().click()
+        // The user's message has its own, named "Copy message"
+        await expect(
+            page.getByRole("button", { name: "Copy message" }),
+        ).toHaveCount(1)
+        await page.getByRole("button", { name: "Copy response" }).click()
         // The button shows a check mark for a moment
         await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible(
             { timeout: 3000 },

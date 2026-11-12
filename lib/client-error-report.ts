@@ -32,6 +32,8 @@ const MAX_AUTOMATIC = 5
 const MAX_AUTOMATIC_MESSAGE = 500
 // A stack line naming a file, line and column
 const FRAME = /:\d+:\d+\)?\s*$/
+// When the page last reloaded itself for a missing script chunk
+const CHUNK_RELOAD_KEY = "next-ai-draw-io-chunk-reload"
 
 let enabled: Promise<boolean> | undefined
 const recorded = new Set<string>()
@@ -124,6 +126,27 @@ export function isAppError(error: unknown): error is Error {
     return !!frame && frame.includes("/_next/")
 }
 
+/**
+ * Reloads the page when the error is a script chunk that failed to load: a
+ * new deployment replaced the files this page was loaded with, and a reload
+ * gets the new ones. At most once a minute in a tab (the time is kept in
+ * sessionStorage), so a chunk that still fails after the reload shows the
+ * crash screen. True when the page reloads.
+ */
+export function reloadForMissingChunk(error: Error): boolean {
+    if (error.name !== "ChunkLoadError") return false
+    try {
+        const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY))
+        if (Date.now() - last < 60_000) return false
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
+    } catch {
+        // Storage is blocked: nothing would end a reload loop
+        return false
+    }
+    window.location.reload()
+    return true
+}
+
 /** A new GitHub issue with the error filled in, for servers that do not
  * keep reports (the desktop app, most self-hosted ones) */
 export function githubIssueUrl(report: ErrorReport): string {
@@ -176,11 +199,16 @@ export function toastUnexpectedError(
     error?: unknown,
     options?: { id?: string; duration?: number },
 ) {
-    const detail = error instanceof Error ? error.message : ""
+    // With the error's name, which tells storage failures apart
+    // (QuotaExceededError, UnknownError): Chrome's full storage has a name
+    // and no text. A file read error's text is the toast's own.
+    const detail =
+        error instanceof Error && error.message !== text
+            ? [error.name, error.message].filter(Boolean).join(": ")
+            : ""
     const report: ErrorReport = {
         kind: "toast",
-        // A file read error's text is the toast's own
-        message: detail && detail !== text ? `${text}\n${detail}` : text,
+        message: detail ? `${text}\n${detail}` : text,
         stack: error instanceof Error ? error.stack : undefined,
         actions: recentActions(),
     }

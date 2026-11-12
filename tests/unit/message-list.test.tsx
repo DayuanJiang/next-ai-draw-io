@@ -204,11 +204,10 @@ describe("MessageList", () => {
             ),
             assistant("a1", [text("Here they are.")]),
         ])
-        const { getAllByRole } = render(list())
-        // The first is the question's, the second the answer's
-        const [question, answer] = getAllByRole("button", {
-            name: "Copy response",
-        })
+        const { getByRole } = render(list())
+        // Each button is named after what it copies
+        const question = getByRole("button", { name: "Copy message" })
+        const answer = getByRole("button", { name: "Copy response" })
         fireEvent.click(question)
         await waitFor(() =>
             expect(writeText).toHaveBeenLastCalledWith(
@@ -238,16 +237,49 @@ describe("MessageList", () => {
                 text(`Now with labels.${marker}`),
             ]),
         ])
-        const { container, getAllByRole } = render(list())
+        const { container, getByRole } = render(list())
         expect(container.textContent).toContain("I will draw four steps.")
         expect(container.textContent).toContain("Now with labels.")
         expect(container.textContent).not.toContain("DSML")
-        fireEvent.click(getAllByRole("button", { name: "Copy response" })[1])
+        fireEvent.click(getByRole("button", { name: "Copy response" }))
         await waitFor(() =>
             expect(writeText).toHaveBeenLastCalledWith(
                 "I will draw four steps.\nNow with labels.",
             ),
         )
+    })
+
+    it("tells a screen reader when the answer has ended, and what it drew", () => {
+        const question = user("u1", "Draw a box")
+        const drawn = {
+            type: "tool-display_diagram",
+            toolCallId: "call-1",
+            state: "output-available",
+            input: { xml: "<mxCell/>" },
+            output: "Successfully displayed the diagram",
+        }
+        setEngine([question, assistant("a1", [text("Here")])], {
+            status: "streaming",
+            isBusy: true,
+        })
+        const view = render(list())
+        const said = () =>
+            view.container.querySelector(".sr-only[aria-live]")?.textContent
+        // Nothing while it streams: the sentence that follows is a change
+        expect(said()).toBe("")
+
+        setEngine([question, assistant("a1", [text("Here it is.")])])
+        view.rerender(list())
+        expect(said()).toBe("Answer complete")
+
+        setEngine([question, assistant("a1", [drawn, text("Done.")])])
+        view.rerender(list())
+        expect(said()).toBe("Drew the diagram")
+
+        // An error card is an alert of its own
+        setEngine([question, notice("n1", "The provider returned an error.")])
+        view.rerender(list())
+        expect(said()).toBe("")
     })
 
     it("counts the seconds of the wait and of the thinking from the request's start", () => {

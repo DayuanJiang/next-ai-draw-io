@@ -468,6 +468,8 @@ export function ChatEngineProvider({
     const requestProviderIdRef = useRef<string | undefined>(undefined)
     // The model of this turn's requests, for error reports
     const requestModelRef = useRef<string | undefined>(undefined)
+    // Whether that model has a thinking switch, and it is on
+    const requestThinkingOnRef = useRef(false)
     // Presses of Stop: a check that began before one still knows of it after
     // the next message clears stoppedRef
     const stopCountRef = useRef(0)
@@ -634,11 +636,26 @@ export function ChatEngineProvider({
             if (originalXml) onDisplayChart(originalXml, true, "revert")
             editDiagramOriginalXmlRef.current.clear()
             abandonContinuation()
-            const [text, code] = outOfTokens
-                ? [dict.errors.llm.output_truncated, "output_truncated"]
-                : empty
-                  ? [dict.errors.emptyAnswer, "empty_answer"]
-                  : [dict.errors.answerEndedEarly, "ended_early"]
+            // Thinking took most of the turn's output, and the model has a
+            // switch for it: a higher output limit, which the other hint
+            // advises, would go to more thinking. The card names the switch
+            // and opens model settings on the provider, where it is.
+            const usage = message.metadata?.usage
+            const thinkingTookIt =
+                outOfTokens &&
+                requestThinkingOnRef.current &&
+                !!usage &&
+                usage.reasoningTokens > usage.outputTokens / 2
+            const [text, code] = thinkingTookIt
+                ? [
+                      dict.errors.llm.output_truncated_thinking,
+                      "output_truncated_thinking",
+                  ]
+                : outOfTokens
+                  ? [dict.errors.llm.output_truncated, "output_truncated"]
+                  : empty
+                    ? [dict.errors.emptyAnswer, "empty_answer"]
+                    : [dict.errors.answerEndedEarly, "ended_early"]
             void recordError({
                 kind: "chat-error",
                 message: text,
@@ -649,7 +666,14 @@ export function ChatEngineProvider({
             if (getChatGeneration() !== turnChatRef.current) return
             setMessages((currentMessages) => [
                 ...currentMessages,
-                noticeMessage({ text, actions: recentActions() }),
+                noticeMessage({
+                    text,
+                    ...(thinkingTookIt && {
+                        openModelConfig: true,
+                        providerId: requestProviderIdRef.current,
+                    }),
+                    actions: recentActions(),
+                }),
             ])
         },
         onError: (error) => {
@@ -753,6 +777,9 @@ export function ChatEngineProvider({
                             ? "connection_lost"
                             : undefined),
                 model: requestModelRef.current,
+                // Where it was thrown: an error from inside the page (React's
+                // "Minified React error #185") cannot be located without it
+                stack: error.stack,
             })
 
             // Not in another chat that came on screen meanwhile
@@ -1454,6 +1481,7 @@ export function ChatEngineProvider({
         requestModelRef.current = config.aiProvider
             ? `${config.aiProvider}/${config.aiModel}`
             : config.selectedModelId || "server default"
+        requestThinkingOnRef.current = config.thinkingEnabled === "true"
 
         const selected = selectedCells.map(({ id, label }) => ({ id, label }))
         // The canvas goes with the message only when the model's own calls

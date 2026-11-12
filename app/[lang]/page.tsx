@@ -41,13 +41,16 @@ export default async function Home({
             {/* Around the editor only: the site's pages share the layout
                 and stay free of the canvas code this brings */}
             <DiagramProvider>
-                {/* The workspace reads ?session= from the URL, which needs
-                    a Suspense boundary */}
-                <Suspense
-                    fallback={<div className="fixed inset-0 bg-canvas" />}
-                >
-                    <Workspace />
-                </Suspense>
+                {/* The page's main landmark, for screen readers. The
+                    workspace reads ?session= from the URL, which needs a
+                    Suspense boundary */}
+                <main>
+                    <Suspense
+                        fallback={<div className="fixed inset-0 bg-canvas" />}
+                    >
+                        <Workspace />
+                    </Suspense>
+                </main>
             </DiagramProvider>
         </>
     )

@@ -89,6 +89,8 @@ export function SessionMenu({
                 <PopoverTrigger asChild>{children}</PopoverTrigger>
                 <PopoverContent
                     align={align}
+                    // A dialog to screen readers, which read its name
+                    aria-label={dict.lobby.recent}
                     className="flex max-h-[min(560px,80vh)] w-[340px] flex-col overflow-hidden rounded-xl p-0 shadow-pop"
                 >
                     <div className="border-b border-border p-3">
@@ -166,6 +168,7 @@ export function SessionMenu({
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
                                     placeholder={t.searchPlaceholder}
+                                    aria-label={t.searchPlaceholder}
                                     className="h-8 w-full rounded-lg bg-muted pr-2.5 pl-8 text-[13px] outline-none placeholder:text-faint"
                                 />
                             </div>

@@ -101,6 +101,75 @@ describe("recordError", () => {
     })
 })
 
+describe("toastUnexpectedError", () => {
+    it("records the name of the error behind the toast", async () => {
+        const { toastUnexpectedError } = await load()
+        // What IndexedDB rejects a save with; the toast's text is the same
+        // for every cause. Chrome's full storage has a name and no text.
+        const full = new Error("")
+        full.name = "QuotaExceededError"
+        const lost = new Error("Connection to Indexed Database server lost.")
+        lost.name = "UnknownError"
+        toastUnexpectedError("Could not save this chat.", "Report", full)
+        toastUnexpectedError("Could not save this chat.", "Report", lost)
+        await vi.waitFor(() => expect(posts()).toHaveLength(2))
+        expect(posts().map((body) => body.message)).toEqual([
+            "Could not save this chat.\nQuotaExceededError",
+            "Could not save this chat.\nUnknownError: Connection to Indexed Database server lost.",
+        ])
+        expect(posts()[0].kind).toBe("toast")
+    })
+})
+
+describe("reloadForMissingChunk", () => {
+    const reload = vi.fn()
+    // As Turbopack throws it when a script chunk does not load
+    const gone = new Error(
+        "Failed to load chunk /_next/static/chunks/a.js from module 64893",
+    )
+    gone.name = "ChunkLoadError"
+
+    beforeEach(() => {
+        reload.mockClear()
+        sessionStorage.clear()
+        vi.stubGlobal("location", { reload })
+    })
+
+    it("reloads the page for a script chunk that failed to load", async () => {
+        const { reloadForMissingChunk } = await load()
+        expect(reloadForMissingChunk(gone)).toBe(true)
+        expect(reload).toHaveBeenCalledTimes(1)
+    })
+
+    it("leaves other errors to the crash screen", async () => {
+        const { reloadForMissingChunk } = await load()
+        expect(reloadForMissingChunk(new TypeError("boom"))).toBe(false)
+        expect(reload).not.toHaveBeenCalled()
+    })
+
+    it("does not reload again when the chunk still fails after the reload", async () => {
+        const { reloadForMissingChunk } = await load()
+        reloadForMissingChunk(gone)
+        // The page that loaded next: same tab, so the same sessionStorage
+        const next = await load()
+        expect(next.reloadForMissingChunk(gone)).toBe(false)
+        expect(reload).toHaveBeenCalledTimes(1)
+    })
+
+    it("reloads again for a later deployment", async () => {
+        vi.useFakeTimers()
+        try {
+            const { reloadForMissingChunk } = await load()
+            reloadForMissingChunk(gone)
+            vi.advanceTimersByTime(61_000)
+            expect(reloadForMissingChunk(gone)).toBe(true)
+            expect(reload).toHaveBeenCalledTimes(2)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+})
+
 describe("githubIssueUrl", () => {
     it("fills in the error, the note and the version", async () => {
         const { githubIssueUrl } = await load()

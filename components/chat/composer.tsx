@@ -548,6 +548,8 @@ export function Composer({
                     <PopoverContent
                         side="top"
                         align="start"
+                        // A dialog to screen readers, which read its name
+                        aria-label={dict.chat.attach}
                         className="w-64 p-1"
                     >
                         <MenuItem

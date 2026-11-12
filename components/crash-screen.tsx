@@ -1,13 +1,14 @@
 "use client"
 
 import { AlertCircle, RotateCcw } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useLayoutEffect, useMemo, useState } from "react"
 import { ReportForm, type ReportStrings } from "@/components/problem-report"
 import { Button } from "@/components/ui/button"
 import {
     type ErrorReport,
     recentActions,
     recordError,
+    reloadForMissingChunk,
 } from "@/lib/client-error-report"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
 
@@ -15,7 +16,8 @@ export type CrashStrings = Dictionary["crash"]
 
 /**
  * What shows when a page crashed while rendering: Reload, and a form to
- * report it. The error itself is recorded as soon as this shows.
+ * report it. The error itself is recorded as soon as this shows. A script
+ * chunk that failed to load reloads the page instead, once.
  */
 export function CrashScreen({
     error,
@@ -37,11 +39,16 @@ export function CrashScreen({
         [error],
     )
     const [sent, setSent] = useState(false)
+    // A script chunk that is gone after a new deployment: the page reloads
+    // itself, and shows nothing meanwhile. Decided before the first paint.
+    const [reloading, setReloading] = useState(false)
 
-    useEffect(() => {
-        void recordError(report)
-    }, [report])
+    useLayoutEffect(() => {
+        if (reloadForMissingChunk(error)) setReloading(true)
+        else void recordError(report)
+    }, [error, report])
 
+    if (reloading) return null
     return (
         <main className="flex min-h-dvh items-center justify-center bg-background p-6 text-foreground">
             <div className="w-full max-w-md space-y-5 rounded-2xl border border-border bg-card p-6 shadow-pop">

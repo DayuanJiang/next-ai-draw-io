@@ -8,10 +8,13 @@ let pendingWrites: (() => void)[] = []
 let readGate: Promise<void> = Promise.resolve()
 // Titles of the chats the limit deletes when a save creates a session
 let deletedByLimit: string[] = []
+// What storage rejected the latest save with
+const storageError = new Error("The quota has been exceeded.")
 
 vi.mock("@/hooks/use-dictionary", () => ({
     useDictionary: () => ({
         errors: { sessionSaveFailed: "Not saved" },
+        report: { button: "Report" },
         sessionHistory: { limitDeleted: "Keeps {max}, deleted {title}" },
         workspace: { untitled: "Untitled diagram" },
     }),
@@ -27,6 +30,7 @@ vi.mock("@/lib/session-storage", async (importActual) => {
         createEmptySession: actual.createEmptySession,
         extractTitle: actual.extractTitle,
         isIndexedDBAvailable: () => true,
+        lastSaveError: () => storageError,
         readSessionCount: async () => stored.size,
         MAX_SESSIONS: actual.MAX_SESSIONS,
         enforceSessionLimit: async () => deletedByLimit,
@@ -67,6 +71,7 @@ vi.mock("@/lib/session-storage", async (importActual) => {
 import { toast } from "sonner"
 import { useSessionManager } from "@/hooks/use-session-manager"
 import { toastUnexpectedError } from "@/lib/client-error-report"
+import { saveSession } from "@/lib/session-storage"
 
 const data = {
     messages: [
@@ -134,6 +139,22 @@ describe("saving the chat on screen", () => {
             "Keeps 50, deleted Old flowchart",
             "Keeps 50, deleted Untitled diagram",
         ])
+    })
+
+    it("gives the toast of a failed save the storage error, for its record", async () => {
+        vi.mocked(saveSession).mockResolvedValueOnce(false)
+        const { result } = await setup()
+        let save!: Promise<boolean>
+        act(() => {
+            save = result.current.saveCurrentSession(data)
+        })
+        expect(await save).toBe(false)
+        expect(toastUnexpectedError).toHaveBeenCalledWith(
+            "Not saved",
+            "Report",
+            storageError,
+            { id: "session-save-failed" },
+        )
     })
 
     it("drops a save scheduled before New Chat", async () => {

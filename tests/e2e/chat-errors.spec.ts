@@ -111,6 +111,36 @@ test("a connection that breaks while the answer streams says so in words", async
     await expect(page.getByTestId("retry-button")).toBeVisible()
 })
 
+test("the record of a chat error says where it was thrown", async ({
+    page,
+}) => {
+    // A server that keeps error records
+    const records: any[] = []
+    await page.route("**/api/log-client-error", (route) => {
+        if (route.request().method() !== "POST") {
+            return route.fulfill({ json: { enabled: true } })
+        }
+        records.push(route.request().postDataJSON())
+        return route.fulfill({ json: { logged: true } })
+    })
+    // Thrown inside the page, by the code that reads the stream: text for
+    // a part that never started
+    await chatWith(page, {
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+            { type: "start" },
+            { type: "text-delta", id: "t1", delta: "Hello" },
+        ]),
+    })
+    await expect(page.getByTestId("retry-button")).toBeVisible({
+        timeout: 15000,
+    })
+    await expect.poll(() => records.length).toBe(1)
+    expect(records[0].kind).toBe("chat-error")
+    expect(records[0].stack).toContain("/_next/static/chunks/")
+})
+
 test("a provider rate limit is not shown as this site's quota", async ({
     page,
 }) => {
@@ -199,6 +229,78 @@ test("an edit that ran on what arrived before the output limit says it was cut o
         page.getByText("The output was cut off before the diagram was"),
     ).toBeVisible()
     await expect(page.getByTestId("retry-button")).toBeVisible()
+})
+
+// An answer that spent the whole output limit thinking and drew nothing
+const ALL_THINKING = {
+    status: 200,
+    contentType: "text/event-stream",
+    body: sse([
+        { type: "start" },
+        { type: "start-step" },
+        { type: "reasoning-start", id: "r1" },
+        { type: "reasoning-delta", id: "r1", delta: "Where does each box go?" },
+        { type: "reasoning-end", id: "r1" },
+        { type: "finish-step" },
+        {
+            type: "finish",
+            finishReason: "length",
+            messageMetadata: {
+                usage: {
+                    inputTokens: 900,
+                    outputTokens: 64000,
+                    cacheReadTokens: 0,
+                    reasoningTokens: 64000,
+                    durationMs: 385000,
+                },
+            },
+        },
+    ]),
+}
+
+test("thinking that used up the output limit points to the model's thinking switch", async ({
+    page,
+}) => {
+    await page.route("**/api/chat", (route) => route.fulfill(ALL_THINKING))
+    // The user's own model, whose thinking switch is on
+    await openApp(page, {
+        config: {
+            version: 1,
+            providers: [
+                {
+                    id: "d1",
+                    provider: "deepseek",
+                    apiKey: "user-key",
+                    models: [{ id: "m1", modelId: "deepseek-v4-pro" }],
+                },
+            ],
+            selectedModelId: "m1",
+        },
+    })
+    await sendMessage(page, "Draw a box")
+    await expect(
+        page.getByText("Thinking used up most of the output limit"),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText("raise the output limit")).toHaveCount(0)
+    await expect(page.getByTestId("retry-button")).toBeVisible()
+    // The card's button opens the provider's page, where the switch is
+    await page.getByRole("button", { name: "Open model settings" }).click()
+    await expect(
+        page.getByRole("switch", { name: "Thinking mode" }),
+    ).toBeChecked()
+})
+
+test("without a thinking switch the same answer keeps the advice to raise the limit", async ({
+    page,
+}) => {
+    // A server model: its thinking is not the user's to turn off
+    await chatWith(page, ALL_THINKING)
+    await expect(
+        page.getByText("The output was cut off before the diagram was"),
+    ).toBeVisible({ timeout: 15000 })
+    await expect(
+        page.getByRole("button", { name: "Open model settings" }),
+    ).toHaveCount(0)
 })
 
 test("an answer that ends on a shape library lookup says it ended early", async ({

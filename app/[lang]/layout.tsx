@@ -37,6 +37,15 @@ const jetbrainsMono = JetBrains_Mono({
     weight: ["400", "500"],
 })
 
+// A browser's page translator (Chrome, Edge, Yandex) replaces the page's text
+// nodes with <font> elements. React still holds the old nodes: when it later
+// removes one, or inserts before one, the browser throws ("Failed to execute
+// 'insertBefore' on 'Node'") and the crash screen replaces the whole page.
+// With this, a call with a node that is no longer a child of the parent does
+// nothing, so the page stays up; at worst a translated text stays as it was.
+// draw.io's frame has its own window and keeps the browser's functions.
+const TRANSLATOR_GUARD_SCRIPT = `(function(){var p=Node.prototype,r=p.removeChild,i=p.insertBefore;p.removeChild=function(c){return c.parentNode===this?r.apply(this,arguments):c};p.insertBefore=function(n,b){return !b||b.parentNode===this?i.apply(this,arguments):n}})()`
+
 // Phones can zoom the site's pages; the editor's page has its own viewport
 export const viewport: Viewport = {
     width: "device-width",
@@ -157,6 +166,10 @@ export default async function RootLayout({
                 {/* Apply dark mode before the first paint (no white flash) */}
                 <Script id="theme-init" strategy="beforeInteractive">
                     {THEME_INIT_SCRIPT}
+                </Script>
+                {/* Before React, so its first DOM update already uses it */}
+                <Script id="translator-guard" strategy="beforeInteractive">
+                    {TRANSLATOR_GUARD_SCRIPT}
                 </Script>
                 <script
                     type="application/ld+json"

@@ -61,6 +61,20 @@ it("saved prompts are listed again after the connection was lost", async () => {
     expect(opened).toBe(2)
 })
 
+it("a save that failed keeps its error for the error record", async () => {
+    const storage = await import("@/lib/session-storage")
+    const session = { ...storage.createEmptySession(), id: "x" }
+    await storage.saveSession(session)
+    lost = true
+    expect(await storage.saveSession(session)).toBe(false)
+    expect(storage.lastSaveError()).toMatchObject({
+        message: expect.stringContaining("Indexed Database server lost"),
+    })
+    // The next save reopens the connection: nothing is left to report
+    expect(await storage.saveSession(session)).toBe(true)
+    expect(storage.lastSaveError()).toBeUndefined()
+})
+
 it("saved diagrams are read again after the connection was lost", async () => {
     const storage = await import("@/lib/session-storage")
     await storage.saveSession({

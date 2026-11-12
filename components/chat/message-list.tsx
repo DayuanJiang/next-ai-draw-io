@@ -73,14 +73,14 @@ function ActionButton({
 }
 
 /** Copies a message's text, with a short "copied" state */
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, label }: { text: string; label: string }) {
     const dict = useDictionary()
     const { copied, copy } = useCopy(() =>
         toast.error(dict.chat.failedToCopyDetail),
     )
     return (
         <ActionButton
-            label={copied ? dict.chat.copied : dict.chat.copyResponse}
+            label={copied ? dict.chat.copied : label}
             onClick={() => copy(text)}
         >
             {copied ? <Check /> : <Copy />}
@@ -307,7 +307,10 @@ function UserMessage({
                 )}
                 {/* The typed text, as the edit box and "Save as template"
                     take it; the text of attached files stays out */}
-                <CopyButton text={getUserOriginalText(message)} />
+                <CopyButton
+                    text={getUserOriginalText(message)}
+                    label={dict.chat.copyMessage}
+                />
                 <ActionButton
                     label={dict.templates.saveAsTemplate}
                     onClick={() => setSaveTemplate(true)}
@@ -618,7 +621,12 @@ function AssistantMessage({
                             "[@media(hover:hover)]:opacity-100",
                     )}
                 >
-                    {text && <CopyButton text={text} />}
+                    {text && (
+                        <CopyButton
+                            text={text}
+                            label={dict.chat.copyResponse}
+                        />
+                    )}
                     {isLastAssistant && !isCachedExample && (
                         <ActionButton
                             label={dict.chat.regenerate}
@@ -1025,8 +1033,36 @@ export function MessageList() {
         lastTool?.state !== "input-streaming" &&
         lastTool?.state !== "input-available"
 
+    // For screen readers, when the answer ends: what its last drawing did,
+    // as its version card says, or that the answer is complete. Empty while
+    // it streams (so the next answer's sentence is a change, which is read),
+    // after Stop, and on an error card, which is an alert of its own.
+    const drawing =
+        last?.role === "assistant"
+            ? last.parts.findLast(
+                  (part) =>
+                      (part.type === "tool-display_diagram" ||
+                          part.type === "tool-edit_diagram") &&
+                      part.state === "output-available",
+              )
+            : undefined
+    const answerOutcome =
+        engine.isBusy ||
+        last?.role !== "assistant" ||
+        noticeOf(last) ||
+        engine.stoppedRef.current
+            ? ""
+            : drawing?.type === "tool-edit_diagram"
+              ? dict.versions.edited
+              : drawing
+                ? dict.versions.created
+                : dict.chat.answerComplete
+
     return (
         <div className="space-y-4 px-4 pt-4 pb-2">
+            <div className="sr-only" aria-live="polite">
+                {answerOutcome}
+            </div>
             {messages.map((message, index) => {
                 const isRestored = engine.loadedMessageIdsRef.current.has(
                     message.id,

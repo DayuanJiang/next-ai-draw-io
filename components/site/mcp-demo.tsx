@@ -87,7 +87,9 @@ export function McpDemo({ texts }: { texts: McpDemoTexts }) {
         }
         for (const e of EDGES) {
             const path = line(e)
-            if (!path) continue
+            // A browser reported "getTotalLength is not a function" here and
+            // the demo never started: there the line shows without being drawn
+            if (typeof path?.getTotalLength !== "function") continue
             const length = Math.ceil(path.getTotalLength())
             path.style.strokeDasharray = `${length}`
             path.style.strokeDashoffset = `${length}`
