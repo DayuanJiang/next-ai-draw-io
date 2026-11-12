@@ -2,6 +2,7 @@
 
 import { FileCode, FileText, Link, Loader2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import Image from "@/components/image-with-basepath"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
@@ -83,6 +84,15 @@ export function FilePreviewList({
             setSelectedImage(null)
         }
     }, [imageUrls, selectedImage])
+    // Esc closes the full-size preview
+    useEffect(() => {
+        if (!selectedImage) return
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setSelectedImage(null)
+        }
+        window.addEventListener("keydown", onKeyDown)
+        return () => window.removeEventListener("keydown", onKeyDown)
+    }, [selectedImage])
 
     return (
         <>
@@ -93,6 +103,8 @@ export function FilePreviewList({
                     return (
                         <div key={file.name + index} className="relative group">
                             <div
+                                // The tile has room for a few letters only
+                                title={file.name}
                                 className={`w-20 h-20 border rounded-md overflow-hidden bg-muted ${
                                     file.type.startsWith("image/") && imageUrl
                                         ? "cursor-pointer"
@@ -166,7 +178,14 @@ export function FilePreviewList({
                                     key={url + index}
                                     className="relative group"
                                 >
-                                    <div className="w-20 h-20 border rounded-md overflow-hidden bg-muted">
+                                    <div
+                                        title={
+                                            data.title === url
+                                                ? url
+                                                : `${data.title}\n${url}`
+                                        }
+                                        className="w-20 h-20 border rounded-md overflow-hidden bg-muted"
+                                    >
                                         <div className="flex flex-col items-center justify-center h-full p-1">
                                             {data.isExtracting ? (
                                                 <>
@@ -209,32 +228,37 @@ export function FilePreviewList({
                     </div>
                 )}
             </div>
-            {/* Image Modal/Lightbox */}
-            {selectedImage && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-                    onClick={() => setSelectedImage(null)}
-                >
-                    <button
-                        className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors"
+            {/* Full-size preview, put in the body: inside the chat panel,
+                whose opening animation leaves a transform, "fixed" would
+                cover the panel only */}
+            {selectedImage &&
+                createPortal(
+                    <div
+                        className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
                         onClick={() => setSelectedImage(null)}
-                        aria-label={dict.common.close}
                     >
-                        <X className="h-6 w-6" />
-                    </button>
-                    <div className="relative w-auto h-auto max-w-[90vw] max-h-[90vh]">
-                        <Image
-                            src={selectedImage}
-                            alt="Full size preview of uploaded diagram or image"
-                            width={1200}
-                            height={900}
-                            className="object-contain max-w-full max-h-[90vh] w-auto h-auto"
-                            onClick={(e) => e.stopPropagation()}
-                            unoptimized
-                        />
-                    </div>
-                </div>
-            )}
+                        <button
+                            type="button"
+                            className="absolute top-4 right-4 z-10 bg-white text-black rounded-full p-2 hover:bg-gray-200 transition-colors"
+                            onClick={() => setSelectedImage(null)}
+                            aria-label={dict.common.close}
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
+                        <div className="relative w-auto h-auto max-w-[90vw] max-h-[90vh]">
+                            <Image
+                                src={selectedImage}
+                                alt="Full size preview of uploaded diagram or image"
+                                width={1200}
+                                height={900}
+                                className="object-contain max-w-full max-h-[90vh] w-auto h-auto"
+                                onClick={(e) => e.stopPropagation()}
+                                unoptimized
+                            />
+                        </div>
+                    </div>,
+                    document.body,
+                )}
         </>
     )
 }

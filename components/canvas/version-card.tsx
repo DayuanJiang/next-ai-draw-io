@@ -72,18 +72,24 @@ export function SummaryLink({
     children: React.ReactNode
 }) {
     // A text link, so the card's only button is the action (undo or
-    // restore); it wraps as one unit with its separator
+    // restore); it wraps as one unit with its separator. The space before
+    // the unit is outside it, so a line can end there: with the space
+    // inside, a narrow panel had to break in the summary's last word
+    // (Japanese 追加 became 追 and 加)
     return (
-        <span className="whitespace-nowrap">
-            <span aria-hidden> · </span>
-            <button
-                type="button"
-                onClick={onClick}
-                className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
-            >
-                {children}
-            </button>
-        </span>
+        <>
+            {" "}
+            <span className="whitespace-nowrap">
+                <span aria-hidden>· </span>
+                <button
+                    type="button"
+                    onClick={onClick}
+                    className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
+                >
+                    {children}
+                </button>
+            </span>
+        </>
     )
 }
 

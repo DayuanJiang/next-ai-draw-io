@@ -44,7 +44,13 @@ import { extractUrlContent } from "@/lib/url-utils"
 import { cn } from "@/lib/utils"
 import { isSendKey, useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
-import { ATTACHMENT_ACCEPT, isDiagramFile, validateFiles } from "./attachments"
+import {
+    ATTACHMENT_ACCEPT,
+    isDiagramFile,
+    isOversizedImage,
+    shrinkImage,
+    validateFiles,
+} from "./attachments"
 import { useChatEngine } from "./chat-engine"
 
 /**
@@ -173,6 +179,7 @@ export function Composer({
     const sendShortcut = useSettingsStore((s) => s.sendShortcut)
     const openSettings = useUiStore((s) => s.openSettings)
     const focusToken = useUiStore((s) => s.focusComposerToken)
+    const focusComposer = useUiStore((s) => s.focusComposer)
 
     const formRef = useRef<HTMLFormElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -211,21 +218,15 @@ export function Composer({
         }
     }, [isHero, attachmentCount])
 
-    // Focus requests from elsewhere (new chat, "ask AI" button, ⌘/)
-    useEffect(() => {
-        if (focusToken === 0 && !autoFocus) return
-        const timer = setTimeout(() => textareaRef.current?.focus(), 60)
-        return () => clearTimeout(timer)
-    }, [focusToken, autoFocus])
-
-    // The chat is left while the user types (browser back): the browser
-    // takes the focus from the input it disables, after this runs. It gets
-    // the focus back once enabled, unless something else took it meanwhile.
+    // An answer in progress, or leaving the chat (browser back), disables
+    // the input the user types in: the browser takes the focus from the
+    // input it disables, after this runs. It gets the focus back once
+    // enabled, so the next message can be typed at once, unless something
+    // else took the focus meanwhile.
     const refocusRef = useRef(false)
-    const isLeaving = engine.isLeaving
     useLayoutEffect(() => {
         if (isDisabled) {
-            if (isLeaving && document.activeElement === textareaRef.current) {
+            if (document.activeElement === textareaRef.current) {
                 refocusRef.current = true
             }
             return
@@ -235,24 +236,104 @@ export function Composer({
         if (document.activeElement === document.body) {
             textareaRef.current?.focus()
         }
-    }, [isDisabled, isLeaving])
+    }, [isDisabled])
 
-    const addFiles = (added: File[]) => {
+    // Focus requests from elsewhere (new chat, "ask AI" button, ⌘/, the
+    // start screen's box once its message is sent). A box that an answer in
+    // progress disables takes the focus when the answer ends.
+    useEffect(() => {
+        if (focusToken === 0 && !autoFocus) return
+        if (textareaRef.current?.disabled) {
+            refocusRef.current = true
+            return
+        }
+        const timer = setTimeout(() => textareaRef.current?.focus(), 60)
+        return () => clearTimeout(timer)
+    }, [focusToken, autoFocus])
+
+    const send = () => {
+        if (!canSend) return
+        engine.submit()
+        // The answer shows in the chat panel, whose box takes the focus
+        // over for the next message. Not on phones, where a focused box
+        // brings up the keyboard: there this box does not focus itself.
+        if (isHero && autoFocus) focusComposer()
+    }
+
+    const addFiles = async (added: File[]) => {
         // A draw.io file is opened as the diagram, as "Open .drawio file"
         // does; what is typed and attached stays for the next message
         const diagram = added.find(isDiagramFile)
         if (diagram) engine.openDiagramFile(diagram, { keepComposer: true })
-        const newFiles = added.filter((file) => !isDiagramFile(file))
+        // A file that is attached already is not attached a second time
+        const newFiles = added.filter(
+            (file) =>
+                !isDiagramFile(file) &&
+                !files.some(
+                    (f) =>
+                        f.name === file.name &&
+                        f.size === file.size &&
+                        f.lastModified === file.lastModified,
+                ),
+        )
         if (newFiles.length === 0) return
+        // A picture over the size limit (a phone photo, a large screenshot)
+        // is scaled down to fit. The attachments can change meanwhile, so
+        // from here on they are read from the ref.
+        const sized = await Promise.all(
+            newFiles.map((file) =>
+                isOversizedImage(file) ? shrinkImage(file) : file,
+            ),
+        )
+        const attached = filesRef.current
         const { validFiles, errors } = validateFiles(
-            newFiles,
-            files.length,
+            sized,
+            attached.length,
             dict,
         )
         showValidationErrors(errors, dict)
-        if (validFiles.length > 0) setFiles([...files, ...validFiles])
+        if (validFiles.length > 0) setFiles([...attached, ...validFiles])
         warnIfNoImageInput(validFiles, selectedModel, dict)
     }
+
+    // A file dragged anywhere over the page goes to the message box: the
+    // browser opens a file dropped beside the box in a new tab (Firefox: in
+    // place of the app). The canvas is draw.io's own frame and takes the
+    // files dropped on it. Set up again on every render, so the handlers
+    // see the current attachments.
+    useEffect(() => {
+        const hasFiles = (e: DragEvent) =>
+            e.dataTransfer?.types.includes("Files")
+        const onDragOver = (e: DragEvent) => {
+            if (!hasFiles(e)) return
+            e.preventDefault()
+            setIsDragging(true)
+        }
+        // The drag left the page: out of the window (no related target),
+        // or onto the canvas
+        const onDragLeave = (e: DragEvent) => {
+            if (
+                !e.relatedTarget ||
+                e.relatedTarget instanceof HTMLIFrameElement
+            ) {
+                setIsDragging(false)
+            }
+        }
+        const onDrop = (e: DragEvent) => {
+            if (!hasFiles(e)) return
+            e.preventDefault()
+            setIsDragging(false)
+            if (!isDisabled) addFiles(Array.from(e.dataTransfer?.files ?? []))
+        }
+        window.addEventListener("dragover", onDragOver)
+        window.addEventListener("dragleave", onDragLeave)
+        window.addEventListener("drop", onDrop)
+        return () => {
+            window.removeEventListener("dragover", onDragOver)
+            window.removeEventListener("dragleave", onDragLeave)
+            window.removeEventListener("drop", onDrop)
+        }
+    })
 
     // Switching to a model that cannot read images while one is attached
     // warns too. The attached files are read from a ref, so attaching is
@@ -274,28 +355,34 @@ export function Composer({
         if (e.nativeEvent.isComposing || e.keyCode === 229) return
         if (isSendKey(e, sendShortcut)) {
             e.preventDefault()
-            if (canSend) engine.submit()
+            send()
         }
     }
 
-    const handlePaste = async (e: React.ClipboardEvent) => {
+    const handlePaste = (e: React.ClipboardEvent) => {
         if (isDisabled) return
-        const imageItems = Array.from(e.clipboardData.items).filter((item) =>
-            item.type.startsWith("image/"),
+        const pasted = Array.from(e.clipboardData.files)
+        if (pasted.length === 0) return
+        // SVG is read as text and keeps its name, as a .drawio.svg must
+        const isPicture = (file: File) =>
+            file.type.startsWith("image/") && !isTextFile(file)
+        // A file copied in the file manager (a PDF, a text file, a .drawio
+        // file) comes with its name as text, which stays out of the box. A
+        // copied picture can come with text of its own (a spreadsheet's
+        // cells), which is pasted as usual.
+        if (!pasted.every(isPicture)) e.preventDefault()
+        addFiles(
+            pasted.map((file, index) =>
+                // A picture from the clipboard is always named "image.png"
+                isPicture(file)
+                    ? new File(
+                          [file],
+                          `pasted-image-${Date.now()}-${index}.${file.type.split("/")[1]}`,
+                          { type: file.type },
+                      )
+                    : file,
+            ),
         )
-        if (imageItems.length === 0) return
-        const imageFiles = imageItems
-            .map((item, index) => {
-                const file = item.getAsFile()
-                if (!file) return null
-                return new File(
-                    [file],
-                    `pasted-image-${Date.now()}-${index}.${file.type.split("/")[1]}`,
-                    { type: file.type },
-                )
-            })
-            .filter((f): f is File => f !== null)
-        addFiles(imageFiles)
     }
 
     const handleUrlExtract = async (url: string) => {
@@ -356,20 +443,7 @@ export function Composer({
             id={isHero ? "hero-chat-form" : "chat-form"}
             onSubmit={(e) => {
                 e.preventDefault()
-                if (canSend) engine.submit()
-            }}
-            onDragOver={(e) => {
-                e.preventDefault()
-                setIsDragging(true)
-            }}
-            onDragLeave={(e) => {
-                e.preventDefault()
-                setIsDragging(false)
-            }}
-            onDrop={(e) => {
-                e.preventDefault()
-                setIsDragging(false)
-                if (!isDisabled) addFiles(Array.from(e.dataTransfer.files))
+                send()
             }}
             className={cn(
                 "group/composer relative w-full rounded-[14px] border border-border bg-card transition-[border-color,box-shadow] duration-150",
@@ -429,10 +503,14 @@ export function Composer({
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder={
-                    placeholder ??
-                    (chatSelection.length > 0
-                        ? dict.selection.placeholder
-                        : dict.chat.placeholder)
+                    // An attachment alone cannot be sent: the box says what
+                    // is missing while Send stays grey
+                    attachmentCount > 0
+                        ? dict.chat.placeholderAttached
+                        : (placeholder ??
+                          (chatSelection.length > 0
+                              ? dict.selection.placeholder
+                              : dict.chat.placeholder))
                 }
                 disabled={isDisabled}
                 aria-label={dict.chat.inputLabel}

@@ -114,6 +114,8 @@
     --font-cjk:
         "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP",
         "Yu Gothic UI", "Meiryo", "PingFang SC";
+    /* No line starts with a small kana or a long-vowel mark (ー) */
+    line-break: strict;
 }
 :root:lang(zh-Hant) {
     --font-cjk:

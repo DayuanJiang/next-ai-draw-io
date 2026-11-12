@@ -354,6 +354,7 @@ export function ChatEngineProvider({
 
     const { files, pdfData, handleFileChange, setFiles } = useFileProcessor({
         tooLong: dict.errors.fileTooLong,
+        noText: dict.errors.fileNoText,
         readFailed: dict.errors.fileReadFailed,
         report: dict.report.button,
     })

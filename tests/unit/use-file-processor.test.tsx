@@ -1,9 +1,14 @@
 import { act, renderHook } from "@testing-library/react"
+import { toast } from "sonner"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { toastUnexpectedError } from "@/lib/client-error-report"
 import { extractPdfText, extractTextFileContent } from "@/lib/pdf-utils"
 import { useFileProcessor } from "@/lib/use-file-processor"
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }))
+vi.mock("@/lib/client-error-report", () => ({
+    toastUnexpectedError: vi.fn(),
+}))
 vi.mock("@/lib/pdf-utils", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/lib/pdf-utils")>()),
     extractPdfText: vi.fn(),
@@ -25,6 +30,7 @@ const textFile = () => new File(["notes"], "notes.txt", { type: "text/plain" })
 // The toast texts the hook formats; toast is mocked, so any texts do
 const messages = {
     tooLong: "{name} too long",
+    noText: "{name} has no text",
     readFailed: "failed {name}",
     report: "Report",
 }
@@ -104,5 +110,35 @@ describe("useFileProcessor", () => {
         })
         expect(result.current.pdfData.has(a)).toBe(false)
         expect(result.current.files).toEqual([])
+    })
+
+    it("turns away a PDF without text and keeps the other files", async () => {
+        // unpdf gives the line breaks between the pages of a scanned PDF
+        vi.mocked(extractPdfText).mockResolvedValue("\n\n")
+        vi.mocked(extractTextFileContent).mockResolvedValue("notes")
+        const scan = pdfFile()
+        const b = textFile()
+        const { result } = renderHook(() => useFileProcessor(messages))
+
+        await act(async () => {
+            await result.current.handleFileChange([scan, b])
+        })
+        expect(result.current.files).toEqual([b])
+        expect(result.current.pdfData.has(scan)).toBe(false)
+        expect(toast.error).toHaveBeenCalledWith("slow.pdf has no text")
+    })
+
+    it("takes a file that could not be read off the list", async () => {
+        vi.mocked(extractPdfText).mockRejectedValue(new Error("Invalid PDF"))
+        vi.spyOn(console, "error").mockImplementation(() => {})
+        const broken = pdfFile()
+        const { result } = renderHook(() => useFileProcessor(messages))
+
+        await act(async () => {
+            await result.current.handleFileChange([broken])
+        })
+        expect(result.current.files).toEqual([])
+        expect(result.current.pdfData.has(broken)).toBe(false)
+        expect(toastUnexpectedError).toHaveBeenCalled()
     })
 })

@@ -3,6 +3,7 @@
 import { ArrowUpRight, Terminal, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
+import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { usePathLocale } from "@/hooks/use-path-locale"
 import { getAssetUrl } from "@/lib/base-path"
@@ -28,13 +29,18 @@ function useVideoClosed() {
 
 function PromoVideo({ className }: { className?: string }) {
     const video = useRef<HTMLVideoElement>(null)
-    // Plays by itself only when the system does not ask for reduced motion
+    const { isDrawioReady } = useDiagram()
+    // Plays by itself only when the system does not ask for reduced motion.
+    // Playing downloads the whole file (2 MB), so it starts once draw.io has
+    // loaded: before that the two would share the connection, and the
+    // editor comes first. Until then the poster shows.
     useEffect(() => {
+        if (!isDrawioReady) return
         if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
             return
         }
         video.current?.play().catch(() => {})
-    }, [])
+    }, [isDrawioReady])
     return (
         <video
             ref={video}
@@ -44,7 +50,7 @@ function PromoVideo({ className }: { className?: string }) {
             loop
             playsInline
             controls
-            preload="metadata"
+            preload="none"
             className={cn("aspect-video w-full rounded-lg bg-black", className)}
             data-testid="mcp-video"
         />

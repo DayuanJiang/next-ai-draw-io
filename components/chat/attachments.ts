@@ -27,6 +27,52 @@ function isValidFileType(file: File): boolean {
     )
 }
 
+// Longest side of a picture after it is scaled down; the models scale
+// larger pictures down themselves
+const MAX_IMAGE_SIDE = 2000
+
+/** A picture over the size limit, which shrinkImage can scale down */
+export function isOversizedImage(file: File): boolean {
+    return (
+        SUPPORTED_IMAGE_TYPES.includes(file.type) && file.size > MAX_IMAGE_SIZE
+    )
+}
+
+/**
+ * The picture as a JPEG of at most 2000 pixels a side: a phone photo or a
+ * large screenshot is over the size limit as it is. A file the browser
+ * cannot read as a picture is returned unchanged.
+ */
+export async function shrinkImage(file: File): Promise<File> {
+    try {
+        const bitmap = await createImageBitmap(file)
+        const scale = Math.min(
+            1,
+            MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height),
+        )
+        const canvas = document.createElement("canvas")
+        canvas.width = Math.round(bitmap.width * scale)
+        canvas.height = Math.round(bitmap.height * scale)
+        const context = canvas.getContext("2d")
+        if (!context) return file
+        // JPEG has no transparency: see-through parts are painted white,
+        // which a bare canvas would turn black
+        context.fillStyle = "white"
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+        bitmap.close()
+        const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, "image/jpeg", 0.85),
+        )
+        if (!blob) return file
+        return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, {
+            type: "image/jpeg",
+        })
+    } catch {
+        return file
+    }
+}
+
 function formatFileSize(bytes: number): string {
     const mb = bytes / 1024 / 1024
     if (mb < 0.01) return `${(bytes / 1024).toFixed(0)}KB`
@@ -48,11 +94,16 @@ export function validateFiles(
         return { validFiles, errors }
     }
 
-    for (const file of newFiles) {
+    for (const [index, file] of newFiles.entries()) {
         if (validFiles.length >= availableSlots) {
             errors.push(
                 formatMessage(dict.errors.onlyMoreAllowed, {
                     slots: availableSlots,
+                    // The files left out, so the user knows which they are
+                    names: newFiles
+                        .slice(index)
+                        .map((f) => f.name)
+                        .join(", "),
                 }),
             )
             break

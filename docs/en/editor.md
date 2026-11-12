@@ -12,7 +12,7 @@ On the start screen, the examples show what the editor can do. Pick one and pres
 
 To start from something you already have:
 
-- **Pictures**: attach a screenshot, a photo of a whiteboard or a diagram from another tool, and ask the AI to redraw it. PNG, JPEG, GIF and WebP images up to 2 MB each.
+- **Pictures**: attach a screenshot, a photo of a whiteboard or a diagram from another tool, and ask the AI to redraw it. PNG, JPEG, GIF and WebP images; a picture over 2 MB is scaled down first.
 - **Documents**: attach a PDF or a text file (Markdown, JSON, CSV, YAML, code and more), and ask for a diagram of what it describes. Their text is read, up to 150,000 characters per file.
 - **Web pages**: choose Add, then Extract from URL, and paste the address of a page.
 - **draw.io files**: attach a `.drawio` or `.drawio.svg` file to open it on the canvas.

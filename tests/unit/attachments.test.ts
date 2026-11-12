@@ -17,4 +17,16 @@ describe("validateFiles", () => {
             '"pasted.png" is empty (0 bytes). Copy or save it again, then attach it.',
         ])
     })
+
+    it("names the files that are over the limit of five", () => {
+        const picked = ["a", "b", "c", "d"].map(
+            (name) => new File(["x"], `${name}.md`, { type: "text/markdown" }),
+        )
+        // Three are attached already: two more fit
+        const { validFiles, errors } = validateFiles(picked, 3, en)
+        expect(validFiles).toEqual(picked.slice(0, 2))
+        expect(errors).toEqual([
+            "Only 2 more file(s) allowed. Not attached: c.md, d.md",
+        ])
+    })
 })
