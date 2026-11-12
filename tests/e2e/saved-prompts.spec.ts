@@ -99,7 +99,7 @@ test.describe("Saved prompts", () => {
             buffer: Buffer.from('{"templates": []}'),
         })
         const failed = dialog.getByText(
-            "Import failed: Missing or invalid schemaVersion",
+            "This file is not a saved prompts export from this app.",
         )
         await expect(failed).toBeVisible()
         await page.waitForTimeout(3500)

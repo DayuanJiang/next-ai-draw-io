@@ -628,7 +628,7 @@ test("an AI write waits while the user types a label, and the label is kept in H
     // The finished label lost against the write: the page says so, the
     // write is on the canvas and the label is in History
     await expect(
-        page.getByText(/Your last change was saved in History/),
+        page.getByText(/Your last change was saved in the Versions panel/),
     ).toBeVisible({ timeout: 10_000 })
     await expect(frame.getByText("AI wrote")).toBeVisible({ timeout: 10_000 })
     const kept = await page.evaluate(async () => {

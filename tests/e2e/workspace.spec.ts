@@ -318,7 +318,9 @@ test.describe("Workspace", () => {
         const title = page.locator('[data-testid="session-title"]')
         await expect(title).toContainText("Create a flowchart")
         const icon = await title.locator("svg").first().boundingBox()
-        expect(icon?.width).toBe(16)
+        // (Squeezed it was 3 px wide; the box of the 16 px icon is a
+        // fraction under 16 while the panel's entrance still plays)
+        expect(icon?.width).toBeGreaterThan(15)
     })
 
     test("a click on the canvas closes the diagram list and the add menu", async ({
