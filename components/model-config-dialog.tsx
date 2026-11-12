@@ -400,6 +400,15 @@ export function ModelConfigDialog({
                   },
         )
 
+    // This server refused the access code: say so, as after a chat message,
+    // and show the General tab, where the code is entered. The settings
+    // stay as they are when this view is gone by then (another tab picked,
+    // or the settings closed)
+    const showAccessCodeField = () => {
+        toast.error(dict.errors.invalidAccessCode)
+        if (!closedRef.current) useUiStore.getState().setSettingsTab("general")
+    }
+
     /**
      * Fetch the shown provider's model list. A click opens the picker with
      * the result and shows what went wrong; the automatic fetch after
@@ -435,6 +444,13 @@ export function ModelConfigDialog({
                 },
             )
             const data = await response.json().catch(() => ({}))
+            // This server refused the access code (its only 401) and asked
+            // the provider nothing, so the list did not fail. A click shows
+            // where the code goes, as a Test does
+            if (response.status === 401) {
+                if (!auto) showAccessCodeField()
+                return
+            }
             if (credentialsOf(providerId) !== askedWith) return
             // The picker and the error belong to the provider shown
             const stillShown = selectedProviderIdRef.current === providerId
@@ -828,11 +844,8 @@ export function ModelConfigDialog({
         )
         if (run !== latestTestRun.get(selectedProviderId)) return
         if (accessDenied) {
-            // As after a chat message: say so, and show the General tab,
-            // where the code is entered
             setValidationStatus("idle")
-            toast.error(dict.errors.invalidAccessCode)
-            useUiStore.getState().setSettingsTab("general")
+            showAccessCodeField()
             return
         }
         if (credentialsOf(selectedProviderId) !== askedWith) {

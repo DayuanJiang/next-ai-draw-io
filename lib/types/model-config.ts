@@ -102,16 +102,18 @@ export function createModelConfig(modelId: string): ModelConfig {
  * A provider's name in the model picker and the settings list: its display
  * name, else its type's label. Providers that would show the same name
  * (two OpenAI-compatible servers without a display name) get the host of
- * their base URL added, where that tells them apart.
+ * their base URL added, where that tells them apart, else the host with
+ * the path (two paths of one gateway).
  */
 export function providerLabel(
     provider: ProviderConfig,
     all: ProviderConfig[],
 ): string {
     const name = (p: ProviderConfig) => p.name || PROVIDERS[p.provider].label
-    const host = (p: ProviderConfig) => {
+    const address = (p: ProviderConfig, withPath: boolean) => {
         try {
-            return new URL(p.baseUrl ?? "").host
+            const { host, pathname } = new URL(p.baseUrl ?? "")
+            return withPath ? (host + pathname).replace(/\/+$/, "") : host
         } catch {
             return ""
         }
@@ -119,11 +121,14 @@ export function providerLabel(
     const sameName = all.filter(
         (p) => p !== provider && name(p) === name(provider),
     )
-    return host(provider) &&
-        sameName.length > 0 &&
-        sameName.every((p) => host(p) !== host(provider))
-        ? `${name(provider)} (${host(provider)})`
-        : name(provider)
+    if (sameName.length === 0) return name(provider)
+    for (const withPath of [false, true]) {
+        const own = address(provider, withPath)
+        if (own && sameName.every((p) => address(p, withPath) !== own)) {
+            return `${name(provider)} (${own})`
+        }
+    }
+    return name(provider)
 }
 
 // Get all models as flattened list for dropdown (user-defined only)

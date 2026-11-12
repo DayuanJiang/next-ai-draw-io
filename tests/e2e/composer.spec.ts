@@ -287,6 +287,8 @@ test.describe("Start screen examples", () => {
         await expect(dialog).toContainText("Replace current input?")
         await dialog.getByRole("button", { name: "Cancel" }).click()
         await expect(input).toHaveValue("A long request I typed myself")
+        // The confirmation gives the focus back to the example
+        await expect(page.getByTestId("example-cat")).toBeFocused()
 
         await page.getByTestId("example-cat").click()
         await dialog.getByRole("button", { name: "Replace" }).click()

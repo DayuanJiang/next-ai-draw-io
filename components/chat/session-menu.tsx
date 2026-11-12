@@ -57,6 +57,7 @@ export function SessionMenu({
     const [draftTitle, setDraftTitle] = useState("")
     const [toDelete, setToDelete] = useState<string | null>(null)
     const renameRef = useRef<HTMLInputElement>(null)
+    const triggerRef = useRef<HTMLButtonElement>(null)
 
     useEffect(() => {
         if (!open) {
@@ -86,7 +87,9 @@ export function SessionMenu({
     return (
         <>
             <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>{children}</PopoverTrigger>
+                <PopoverTrigger asChild ref={triggerRef}>
+                    {children}
+                </PopoverTrigger>
                 <PopoverContent
                     align={align}
                     // A dialog to screen readers, which read its name
@@ -256,6 +259,13 @@ export function SessionMenu({
                                             }
                                             onClick={(e) => {
                                                 e.stopPropagation()
+                                                // The list closes as the
+                                                // confirmation opens, and
+                                                // this button with it: the
+                                                // list's button takes the
+                                                // focus the confirmation
+                                                // gives back as it closes
+                                                triggerRef.current?.focus()
                                                 setToDelete(session.id)
                                             }}
                                             aria-label={t.deleteTitle}

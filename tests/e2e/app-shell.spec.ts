@@ -190,6 +190,50 @@ test.describe("Keyboard focus in the editor", () => {
         await expect(page.getByRole("tooltip")).toHaveCount(0)
     })
 
+    test("a dialog opened from a menu, the model picker or the diagram list gives the focus back to that one's button", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", (route) =>
+            route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createMockSSEResponse(SINGLE_BOX_XML, "Drew the box."),
+            }),
+        )
+        await openApp(page)
+        await sendMessage(page, "Draw a box")
+        await waitForComplete(page)
+        const dialog = page.getByRole("dialog")
+        const closeWithEscape = () =>
+            expect(async () => {
+                await page.keyboard.press("Escape")
+                await expect(dialog).toHaveCount(0, { timeout: 500 })
+            }).toPass({ timeout: 10000 })
+        // The add menu's item is gone with the menu when its dialog closes
+        await page.getByTestId("composer-add").click()
+        await dialog.getByRole("button", { name: "Extract from URL" }).click()
+        await expect(dialog.getByRole("textbox")).toBeFocused()
+        await closeWithEscape()
+        await expect(page.getByTestId("composer-add")).toBeFocused()
+        // So is the model picker's footer when the settings close
+        await page.getByTestId("model-selector").click()
+        await dialog.getByRole("button", { name: "Configure models" }).click()
+        await expect(
+            page.getByRole("dialog", { name: "Settings" }),
+        ).toBeVisible()
+        await closeWithEscape()
+        await expect(page.getByTestId("model-selector")).toBeFocused()
+        // And the diagram list's delete button, with the list
+        await page.getByTestId("session-title").click()
+        await dialog
+            .getByRole("button", { name: "Delete this diagram?", exact: true })
+            .click()
+        const confirmation = page.getByRole("alertdialog")
+        await confirmation.getByRole("button", { name: "Cancel" }).click()
+        await expect(confirmation).toHaveCount(0)
+        await expect(page.getByTestId("session-title")).toBeFocused()
+    })
+
     test("the panel's input takes the focus when the panel is shown again", async ({
         page,
     }) => {

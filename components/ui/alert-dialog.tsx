@@ -5,6 +5,7 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import { useFocusReturn } from "@/components/ui/dialog"
 
 function AlertDialog({
   ...props
@@ -40,32 +41,45 @@ function AlertDialogOverlay({
   )
 }
 
-function AlertDialogContent({
-  className,
-  ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+function AlertDialogContent(
+  props: React.ComponentProps<typeof AlertDialogPrimitive.Content>
+) {
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
-      <AlertDialogPrimitive.Content
-        data-slot="alert-dialog-content"
-        className={cn(
-          "fixed top-[50%] left-[50%] z-50 w-full",
-          "max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
-          "grid gap-4 p-6",
-          // The same surface, corners, shadow and animation as dialog.tsx,
-          // so a confirmation looks like the app's other dialogs
-          "bg-surface-0 rounded-2xl border border-border-subtle shadow-pop",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out",
-          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-          "data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98]",
-          "data-[state=closed]:slide-out-to-top-[2%] data-[state=open]:slide-in-from-top-[2%]",
-          "duration-200 sm:max-w-lg",
-          className
-        )}
-        {...props}
-      />
+      <AlertDialogBox {...props} />
     </AlertDialogPortal>
+  )
+}
+
+// Inside the portal, which mounts it as the dialog opens
+function AlertDialogBox({
+  className,
+  onCloseAutoFocus,
+  ...props
+}: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+  // The confirmations open from state, as the dialogs of dialog.tsx do
+  const returnFocus = useFocusReturn(onCloseAutoFocus)
+  return (
+    <AlertDialogPrimitive.Content
+      data-slot="alert-dialog-content"
+      className={cn(
+        "fixed top-[50%] left-[50%] z-50 w-full",
+        "max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
+        "grid gap-4 p-6",
+        // The same surface, corners, shadow and animation as dialog.tsx,
+        // so a confirmation looks like the app's other dialogs
+        "bg-surface-0 rounded-2xl border border-border-subtle shadow-pop",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98]",
+        "data-[state=closed]:slide-out-to-top-[2%] data-[state=open]:slide-in-from-top-[2%]",
+        "duration-200 sm:max-w-lg",
+        className
+      )}
+      {...props}
+      onCloseAutoFocus={returnFocus}
+    />
   )
 }
 

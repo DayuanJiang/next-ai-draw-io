@@ -343,7 +343,18 @@ test.describe("Workspace", () => {
             await expect(popup).toBeVisible()
             await canvas.click({ position: { x: 10, y: 10 } })
             await expect(popup).toHaveCount(0)
+            // The focus stays in the canvas, where the keys go; a closed
+            // menu gives it back to its button a moment after it is gone
+            await page.waitForTimeout(300)
+            await expect(getIframe(page)).toBeFocused()
         }
+        // Another window or tab taking over leaves the list open, with
+        // what was typed in its search
+        await page.getByTestId("session-title").click()
+        await popup.getByRole("textbox").fill("flow")
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")))
+        await page.waitForTimeout(300)
+        await expect(popup.getByRole("textbox")).toHaveValue("flow")
     })
 
     test("opening a .drawio file loads it into a new diagram", async ({

@@ -288,10 +288,12 @@ export function extractTitle(messages: StoredMessage[]): string {
     if (!textPart || typeof textPart.text !== "string") return "New Chat"
 
     // The typed text only, on one line, without the bold and heading marks
-    // the chat renders as Markdown (the title is plain text)
+    // the chat renders as Markdown (the title is plain text). Bold marks
+    // hug their text and stand apart from letters, digits and other stars
+    // outside it: "2 ** 3" and "f(**kwargs)" are operators and stay
     const text = textPart.text
         .replace(APPENDED_SECTIONS, "")
-        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/(?<![\w*])\*\*(\S(?:.*?\S)?)\*\*(?![\w*])/g, "$1")
         .replace(/^#+\s+/gm, "")
         .replace(/\s+/g, " ")
         .trim()

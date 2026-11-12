@@ -9,6 +9,7 @@ import {
     savedModelConfigs,
     sendMessage,
     settingsDialog,
+    sleep,
     TWO_PROVIDERS,
     test,
 } from "./lib/fixtures"
@@ -247,6 +248,29 @@ test("the narrowest chat panel shows the model's name in full", async ({
     await expect(name).toBeVisible()
 })
 
+test("a model name of two letters shows on the model button", async ({
+    page,
+}) => {
+    await openApp(page, {
+        config: {
+            version: 1,
+            selectedModelId: "m1",
+            providers: [
+                {
+                    id: "p1",
+                    provider: "openai",
+                    apiKey: "sk-test",
+                    models: [{ id: "m1", modelId: "o3", validated: true }],
+                },
+            ],
+        },
+    })
+    // Narrower than the room a cut name needs, yet whole
+    await expect(
+        page.getByTestId("model-selector").getByText("o3", { exact: true }),
+    ).toBeVisible()
+})
+
 test("an old setting to hide untested models is ignored", async ({ page }) => {
     await openApp(page, {
         config: { ...PROVIDERS, showUnvalidatedModels: false },
@@ -354,6 +378,68 @@ test("a Test refused for the access code keeps the models' results and shows whe
     await expect(dialog.getByTestId("test-models")).toBeEnabled()
     const saved = await savedModelConfigs(page)
     expect(saved.providers[2].models[0].validated).toBe(true)
+})
+
+test("a model list refused for the access code shows where the code goes", async ({
+    page,
+}) => {
+    await page.route("**/api/config", (route) =>
+        route.fulfill({ json: { accessCodeRequired: true } }),
+    )
+    await page.route("**/api/provider-models", (route) =>
+        route.fulfill({
+            status: 401,
+            json: {
+                error: "Invalid or missing access code. Please configure it in Settings.",
+            },
+        }),
+    )
+    await openApp(page, { config: PROVIDERS })
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await dialog.getByTestId("provider-row-p3").click()
+    await dialog.getByRole("button", { name: /^Get all models from/ }).click()
+    // As after a Test: the General tab and a note
+    await expect(dialog.locator("#access-code")).toBeVisible()
+    await expect(
+        page.getByText(
+            "Invalid or missing access code. Please configure it in Settings.",
+        ),
+    ).toBeVisible()
+    // The provider was not asked: its page says nothing about its list
+    await dialog.getByTestId("settings-tab-models").click()
+    await expect(dialog.getByTestId("test-models")).toBeVisible()
+    await expect(dialog.getByText(/access code/i)).toHaveCount(0)
+})
+
+test("an access code refused after the models tab was left changes no tab", async ({
+    page,
+}) => {
+    await page.route("**/api/config", (route) =>
+        route.fulfill({ json: { accessCodeRequired: true } }),
+    )
+    await page.route("**/api/validate-model", async (route) => {
+        await sleep(1000)
+        await route.fulfill({
+            status: 401,
+            json: {
+                error: "Invalid or missing access code. Please configure it in Settings.",
+            },
+        })
+    })
+    await openApp(page, { config: PROVIDERS })
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await dialog.getByTestId("provider-row-p3").click()
+    await dialog.getByTestId("test-models").click()
+    // On another tab by the time the answer comes: the note shows there
+    await dialog.getByTestId("settings-tab-drawing").click()
+    await expect(
+        page.getByText(
+            "Invalid or missing access code. Please configure it in Settings.",
+        ),
+    ).toBeVisible()
+    await expect(dialog.locator("#max-output-tokens")).toBeVisible()
 })
 
 test("an access code error reads in the interface's language", async ({
@@ -802,7 +888,6 @@ test("a refused key names Get API key only where the provider has that link", as
 }) => {
     await page.route("**/api/provider-models", (route) =>
         route.fulfill({
-            status: 401,
             json: { code: "invalid_api_key", error: "Incorrect API key" },
         }),
     )

@@ -187,6 +187,14 @@ export function Composer({
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [addOpen, setAddOpen] = useState(false)
+    const addButtonRef = useRef<HTMLButtonElement>(null)
+    // For an item of the add menu that opens a dialog: closing, the dialog
+    // gives the focus back to what has it as it opens. The item goes away
+    // with the menu, so the menu's button takes the focus first
+    const closeAddMenu = () => {
+        setAddOpen(false)
+        addButtonRef.current?.focus()
+    }
     const [templatesOpen, setTemplatesOpen] = useState(false)
     const templatePickedRef = useRef(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
@@ -537,6 +545,7 @@ export function Composer({
                 <Popover open={addOpen} onOpenChange={setAddOpen}>
                     <PopoverTrigger asChild>
                         <IconButton
+                            ref={addButtonRef}
                             label={dict.chat.attach}
                             tooltipSide="top"
                             disabled={isDisabled}
@@ -564,7 +573,7 @@ export function Composer({
                         <MenuItem
                             icon={<Globe />}
                             onClick={() => {
-                                setAddOpen(false)
+                                closeAddMenu()
                                 setShowUrlDialog(true)
                             }}
                         >
@@ -575,7 +584,7 @@ export function Composer({
                             disabled={!input.trim()}
                             disabledHint={dict.templates.saveDisabledHint}
                             onClick={() => {
-                                setAddOpen(false)
+                                closeAddMenu()
                                 setSaveTemplateOpen(true)
                             }}
                         >

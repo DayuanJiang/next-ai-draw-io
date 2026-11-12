@@ -45,6 +45,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { FlattenedModel, ProviderName } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
+import { useUiStore } from "@/stores/ui-store"
 
 interface ModelSelectorProps {
     models: FlattenedModel[]
@@ -202,13 +203,22 @@ export function ModelSelector({
     )
 
     // Leaving for the settings: closing, the picker must not give the focus
-    // back to its button, behind the settings dialog
+    // back to its button, behind the settings dialog. The button gets it as
+    // the settings close: the footer's button, which had it as they opened,
+    // went with the picker
     const toSettingsRef = useRef(false)
     const goToSettings = (openSettings: () => void) => {
         toSettingsRef.current = true
         setOpen(false)
         openSettings()
     }
+    const buttonRef = useRef<HTMLButtonElement>(null)
+    const settingsOpen = useUiStore((s) => s.settingsOpen)
+    useEffect(() => {
+        if (settingsOpen || !toSettingsRef.current) return
+        toSettingsRef.current = false
+        buttonRef.current?.focus()
+    }, [settingsOpen])
     const footerButton =
         "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
 
@@ -284,12 +294,16 @@ export function ModelSelector({
     // The model's name takes the room there is and is cut short where there
     // is less. With room for under three letters (a narrow panel while the
     // send key hint shows) it would be a sliver of a letter: it is hidden
-    // then, keeping its box, so the measure does not change with it.
+    // then, keeping its box, so the measure does not change with it. A name
+    // that fits whole shows, however short ("o3" is 12 px wide).
     const nameRef = useRef<HTMLSpanElement>(null)
     const [nameSqueezed, setNameSqueezed] = useState(false)
     useEffect(() => {
-        const observer = new ResizeObserver(([entry]) =>
-            setNameSqueezed(entry.contentRect.width < 24),
+        const observer = new ResizeObserver(([{ target, contentRect }]) =>
+            setNameSqueezed(
+                target.scrollWidth > target.clientWidth &&
+                    contentRect.width < 24,
+            ),
         )
         observer.observe(nameRef.current as HTMLSpanElement)
         return () => observer.disconnect()
@@ -310,6 +324,7 @@ export function ModelSelector({
                     <TooltipTrigger asChild>
                         <DialogTrigger asChild>
                             <Button
+                                ref={buttonRef}
                                 variant="ghost"
                                 size="sm"
                                 disabled={disabled}
@@ -355,9 +370,7 @@ export function ModelSelector({
                 <DialogContent
                     className="p-0"
                     onCloseAutoFocus={(e) => {
-                        if (!toSettingsRef.current) return
-                        toSettingsRef.current = false
-                        e.preventDefault()
+                        if (toSettingsRef.current) e.preventDefault()
                     }}
                 >
                     <DialogTitle className="sr-only">

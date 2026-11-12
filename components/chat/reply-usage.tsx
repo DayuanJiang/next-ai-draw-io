@@ -51,7 +51,9 @@ export const ReplyUsageNote = memo(function ReplyUsageNote({
     ].filter((row) => !row.part || row.tokens > 0)
 
     return (
-        <Tooltip>
+        // The pointer can move on to the details, to read them with a screen
+        // magnifier or select a number
+        <Tooltip disableHoverableContent={false}>
             <TooltipTrigger asChild>
                 <span
                     // Focusable, so the keyboard reaches the details too

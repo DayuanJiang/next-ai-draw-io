@@ -48,6 +48,19 @@ describe("extractTitle", () => {
         expect(
             extractTitle(userMessage("# Login flow\n## Steps: 2 ** 3")),
         ).toBe("Login flow Steps: 2 ** 3")
+        expect(extractTitle(userMessage("把**重点**画出来"))).toBe(
+            "把重点画出来",
+        )
+    })
+
+    it("keeps pairs of ** that are operators, not bold marks", () => {
+        for (const prompt of [
+            "Draw 2 ** 3 and 4 ** 5",
+            "Explain def f(*args, **kwargs) calling g(**kwargs)",
+            "Draw 2**3**4 as a tree",
+        ]) {
+            expect(extractTitle(userMessage(prompt))).toBe(prompt)
+        }
     })
 
     it("shortens a long prompt", () => {

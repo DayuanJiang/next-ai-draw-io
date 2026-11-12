@@ -161,6 +161,28 @@ describe("providerLabel", () => {
         ])
     })
 
+    it("adds the path too where two providers share a host", () => {
+        const teamA = custom("a", "https://gateway.example.com/team-a/v1")
+        const teamB = custom("b", "https://gateway.example.com/team-b/v1/")
+        const other = custom("c", "https://llm.example.com/v1")
+        const all = [teamA, teamB, other]
+        expect(all.map((p) => providerLabel(p, all))).toEqual([
+            "OpenAI-compatible (gateway.example.com/team-a/v1)",
+            "OpenAI-compatible (gateway.example.com/team-b/v1)",
+            "OpenAI-compatible (llm.example.com)",
+        ])
+        // The model picker keeps them in two groups
+        const config = {
+            version: 1 as const,
+            providers: [teamA, teamB].map((p) => ({
+                ...p,
+                models: [{ id: `m-${p.id}`, modelId: "same-model" }],
+            })),
+        }
+        const labels = flattenModels(config).map((m) => m.providerLabel)
+        expect(new Set(labels).size).toBe(2)
+    })
+
     it("leaves a name alone when it is the only one, or the host says nothing", () => {
         const local = custom("a", "http://127.0.0.1:7140/v1")
         expect(providerLabel(local, [local])).toBe("OpenAI-compatible")

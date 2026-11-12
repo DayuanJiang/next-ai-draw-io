@@ -55,6 +55,34 @@ function DialogContent(
   )
 }
 
+/**
+ * The onCloseAutoFocus of a dialog's content, for a component inside the
+ * portal, which mounts it as the dialog opens. Radix gives the focus back
+ * to a DialogTrigger. Most dialogs here open from state and have none (the
+ * focus would be left on <body>): it goes back to what had it. An item of
+ * a menu that closes as the dialog opens is gone by then, so such a menu
+ * gives the focus to its own button before it opens the dialog.
+ */
+function useFocusReturn(onCloseAutoFocus?: (event: Event) => void) {
+  // What has the focus as the dialog opens, read while rendering: once the
+  // dialog is in the page, a field with autoFocus has taken it
+  const [opener] = React.useState(() => document.activeElement)
+  return (event: Event) => {
+    onCloseAutoFocus?.(event)
+    if (
+      !event.defaultPrevented &&
+      opener instanceof HTMLElement &&
+      opener !== document.body
+    ) {
+      event.preventDefault()
+      // Without scrolling to it, as Radix focuses a trigger: what the
+      // dialog did may have brought something else into view (the
+      // versions strip shows the version just restored)
+      opener.focus({ preventScroll: true })
+    }
+  }
+}
+
 // Inside the portal, which mounts it as the dialog opens
 function DialogBox({
   className,
@@ -63,9 +91,7 @@ function DialogBox({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   const dict = useDictionary()
-  // What has the focus as the dialog opens, read while rendering: once the
-  // dialog is in the page, a field with autoFocus has taken it
-  const [opener] = React.useState(() => document.activeElement)
+  const returnFocus = useFocusReturn(onCloseAutoFocus)
   return (
     <DialogPrimitive.Content
       data-slot="dialog-content"
@@ -89,23 +115,7 @@ function DialogBox({
         className
       )}
       {...props}
-      onCloseAutoFocus={(event) => {
-        onCloseAutoFocus?.(event)
-        // Radix gives the focus back to a DialogTrigger. Most dialogs
-        // here open from state and have none (the focus was left on
-        // <body>): it goes back to what had it.
-        if (
-          !event.defaultPrevented &&
-          opener instanceof HTMLElement &&
-          opener !== document.body
-        ) {
-          event.preventDefault()
-          // Without scrolling to it, as Radix focuses a trigger: what the
-          // dialog did may have brought something else into view (the
-          // versions strip shows the version just restored)
-          opener.focus({ preventScroll: true })
-        }
-      }}
+      onCloseAutoFocus={returnFocus}
     >
       {children}
       <DialogPrimitive.Close className={cn(
@@ -187,4 +197,5 @@ export {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  useFocusReturn,
 }
