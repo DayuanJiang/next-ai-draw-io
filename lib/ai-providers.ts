@@ -30,7 +30,7 @@ import {
     publicDefaultUrl,
 } from "@/lib/providers"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
-import { thinkingSwitchOf } from "@/lib/thinking-capabilities"
+import { thinkingSwitchOf, thinksByDefault } from "@/lib/thinking-capabilities"
 import {
     isOfficialOpenAIUrl,
     normalizeBaseUrl,
@@ -304,7 +304,7 @@ function geminiThinkingOptions(
  * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low/medium/high)
  * - AZURE_REASONING_SUMMARY: Azure reasoning summary (none/brief/detailed)
  * - BEDROCK_REASONING_BUDGET_TOKENS: Bedrock Claude reasoning budget in tokens (1024-64000)
- * - BEDROCK_REASONING_EFFORT: Bedrock Nova reasoning effort (low/medium/high)
+ * - BEDROCK_REASONING_EFFORT: Bedrock reasoning effort (low/medium/high) for Nova, the GPT models and Claude 5 on the server's keys
  * - OLLAMA_ENABLE_THINKING: Enable Ollama thinking mode (set to "true")
  */
 function buildProviderOptions(
@@ -444,6 +444,14 @@ function buildProviderOptions(
 
                 options.bedrock = { reasoningConfig }
             }
+            // The GPT models take the effort alone. Left to themselves they
+            // think for most of the wait (GPT-6 Luna, a 40 node flowchart:
+            // 87 of 118 seconds).
+            else if (modelId?.includes("openai.") && reasoningEffort) {
+                options.bedrock = {
+                    reasoningConfig: { maxReasoningEffort: reasoningEffort },
+                }
+            }
             break
         }
 
@@ -558,6 +566,55 @@ export function applyThinkingSwitch(
     }
 
     return Object.keys(options).length > 0 ? options : undefined
+}
+
+// How much a Claude model on the server's keys thinks, unless
+// BEDROCK_REASONING_EFFORT says otherwise. Measured on Bedrock with a 12
+// step and a 40 node flowchart. Sonnet 5.5 at "medium": 10 to 27 s and
+// 168 s, where its own effort gave no answer to the second in 300 s.
+// Haiku 5.5 at "medium" draws the first like at its own effort, and on the
+// second its thinking still uses up the 64,000 token output limit in four
+// runs of six. At "low" it draws the second every time (17,000 to 41,000
+// tokens), and in 11 runs of 27 it writes a mid-size diagram's XML into
+// its answer without calling the tool, against 3 of 26 at its own effort
+// and 3 of 32 at "medium".
+const SERVER_THINKING_EFFORT = "medium"
+
+/**
+ * The provider options for a model on the server's keys, where the user's
+ * thinking switch does not apply. A Claude model that thinks by default
+ * (lib/thinking-capabilities.ts) leaves the text of its thinking out, so
+ * the chat showed nothing while it thought (Haiku 5.5: 80 seconds for a
+ * 12 step flowchart, four minutes for 40 nodes). It is asked for a summary
+ * of its thinking as it goes, at the effort above. These models take no
+ * thinking budget, so one from the environment gives way.
+ */
+export function serverThinkingDefaults(
+    providerOptions: Record<string, any> | undefined,
+    provider: ProviderName,
+    modelId: string,
+): Record<string, any> | undefined {
+    if (!thinksByDefault(provider, modelId)) return providerOptions
+    const thinking = { type: "adaptive", display: "summarized" }
+    if (provider === "bedrock") {
+        const effort =
+            process.env.BEDROCK_REASONING_EFFORT || SERVER_THINKING_EFFORT
+        return {
+            ...providerOptions,
+            bedrock: {
+                ...providerOptions?.bedrock,
+                reasoningConfig: { ...thinking, maxReasoningEffort: effort },
+            },
+        }
+    }
+    return {
+        ...providerOptions,
+        anthropic: {
+            ...providerOptions?.anthropic,
+            thinking,
+            effort: SERVER_THINKING_EFFORT,
+        },
+    }
 }
 
 /**

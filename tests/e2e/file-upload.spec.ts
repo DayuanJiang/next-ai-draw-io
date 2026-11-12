@@ -148,6 +148,11 @@ test.describe("File Upload", () => {
         expect(users).toHaveLength(2)
         expect(files(users[0])).toHaveLength(0)
         expect(files(users[1])).toHaveLength(1)
+        // A note takes the first image's place, so the model can tell the
+        // user to attach it again
+        expect(JSON.stringify(users[0].parts)).toContain(
+            "[Image]\\n[This attachment is no longer in context.",
+        )
         // The chat itself keeps both images
         await expect(page.getByAltText("Attached image")).toHaveCount(2)
     })

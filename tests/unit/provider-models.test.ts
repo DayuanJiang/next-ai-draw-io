@@ -205,6 +205,19 @@ describe("POST /api/provider-models", () => {
         expect(await res.json()).toMatchObject({ code: "invalid_api_key" })
     })
 
+    it("names a wrong Google key, which comes as 400", async () => {
+        const body = {
+            error: {
+                code: 400,
+                message: "API key not valid. Please pass a valid API key.",
+                details: [{ reason: "API_KEY_INVALID" }],
+            },
+        }
+        vi.stubGlobal("fetch", answer(body, 400).fn)
+        const res = await post({ provider: "google", apiKey: "wrong" })
+        expect(await res.json()).toMatchObject({ code: "invalid_api_key" })
+    })
+
     // The base URL is the caller's, and private addresses are allowed by
     // default (local Ollama), so the answer must not reveal what an
     // internal address sent back

@@ -16,6 +16,7 @@ import {
     edgeOneEndpoint,
     getAIModel,
     getServerProvider,
+    serverThinkingDefaults,
     supportsPromptCaching,
     usesServerCredentials,
     usesServerEndpoint,
@@ -46,7 +47,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
-import { classifyLLMError, streamErrorText } from "@/lib/llm-errors"
+import { classifyLLMError, logText, streamErrorText } from "@/lib/llm-errors"
 import { estimateCost } from "@/lib/model-catalog"
 import {
     resolveMaxOutputTokens,
@@ -259,18 +260,43 @@ async function handleChatRequest(req: Request): Promise<Response> {
         provider: resolvedProvider,
     } = getAIModel(clientOverrides)
 
-    // On the server's own keys, only run models the server offers: a server
-    // model picked by id (its model name is fixed above) or one in AI_MODEL
-    // on AI_PROVIDER. With their own key, users can run any model.
+    // What runs on the server's keys, or on the server's own endpoints:
+    // EdgeOne, its keyless Ollama, and anything at a private address (the
+    // server's network, which ignores a dummy key header). Bedrock and
+    // EdgeOne never use the base URL header. In the desktop app every
+    // endpoint is the user's.
     const onServerCredentials = usesServerCredentials(
         resolvedProvider,
         clientOverrides,
     )
+    const clientBaseUrl = normalizeBaseUrl(
+        req.headers.get("x-ai-base-url") ?? "",
+    )
+    const onServerEndpoint = await usesServerEndpoint(
+        resolvedProvider,
+        clientBaseUrl,
+        clientOverrides.apiKey,
+    )
+
+    // On the server's own keys, only run models the server offers: a server
+    // model picked by id (its model name is fixed above) or one in AI_MODEL
+    // on AI_PROVIDER. With their own key, users can run any model. The
+    // server's keyless Ollama runs any installed model, which a home
+    // server's users rely on, unless private URLs are blocked: it is an
+    // internal address, reached without the request naming it.
     const envModels =
         process.env.AI_MODEL?.split(",").map((m) => m.trim()) || []
     const offeredInEnv =
         envModels.includes(modelId) && resolvedProvider === getServerProvider()
-    if (onServerCredentials && !serverModel && !offeredInEnv) {
+    const onBlockedOllama =
+        onServerEndpoint &&
+        !allowPrivateUrls() &&
+        PROVIDERS[resolvedProvider].credential === "optionalKey"
+    if (
+        (onServerCredentials || onBlockedOllama) &&
+        !serverModel &&
+        !offeredInEnv
+    ) {
         return Response.json(
             {
                 error: `Model "${modelId}" is not available on this server. Add your own API key in Settings to use it.`,
@@ -281,28 +307,29 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // === SERVER-SIDE QUOTA CHECK START ===
     // Quota is opt-in (DYNAMODB_QUOTA_TABLE) and counts what runs on the
-    // server's keys, or on the server's own endpoints: EdgeOne, its keyless
-    // Ollama, and anything at a private address (the server's network,
-    // which ignores a dummy key header). Bedrock and EdgeOne never use the
-    // base URL header. In the desktop app every endpoint is the user's.
-    const clientBaseUrl = normalizeBaseUrl(
-        req.headers.get("x-ai-base-url") ?? "",
-    )
-    const onServerEndpoint = await usesServerEndpoint(
-        resolvedProvider,
-        clientBaseUrl,
-        clientOverrides.apiKey,
-    )
+    // server's keys or on the server's own endpoints
     const countsQuota =
         isQuotaEnabled() &&
         (onServerCredentials || onServerEndpoint) &&
         userId !== "anonymous"
     if (countsQuota) {
-        const quotaCheck = await checkAndIncrementRequest(userId, {
-            requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
-            tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
-            tpm: Number(process.env.TPM_LIMIT) || 20000,
-        })
+        // A turn's later requests (the retry after a tool error, the rest
+        // of a diagram that was cut off) belong to the message the user
+        // already sent. They count no request and skip the per-minute
+        // limit, which the turn's first step alone can use up; the daily
+        // token limit still applies.
+        const followUp = lastMessage?.role === "assistant"
+        const quotaCheck = await checkAndIncrementRequest(
+            userId,
+            {
+                requests: followUp
+                    ? 0
+                    : Number(process.env.DAILY_REQUEST_LIMIT) || 10,
+                tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
+                tpm: followUp ? 0 : Number(process.env.TPM_LIMIT) || 20000,
+            },
+            followUp ? 0 : 1,
+        )
         if (!quotaCheck.allowed) {
             return Response.json(
                 {
@@ -337,14 +364,16 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // server's settings decide what it pays for
     const thinking = req.headers.get("x-ai-thinking-enabled")
     const options =
-        thinking && !onServerCredentials && !onServerEndpoint
-            ? applyThinkingSwitch(
-                  providerOptions,
-                  resolvedProvider,
-                  modelId,
-                  thinking === "true",
-              )
-            : providerOptions
+        onServerCredentials || onServerEndpoint
+            ? serverThinkingDefaults(providerOptions, resolvedProvider, modelId)
+            : thinking
+              ? applyThinkingSwitch(
+                    providerOptions,
+                    resolvedProvider,
+                    modelId,
+                    thinking === "true",
+                )
+              : providerOptions
 
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
@@ -546,7 +575,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         },
         // onFinish is skipped when the stream fails or is aborted, so end the trace here
         onError: ({ error }) => {
-            console.error(error) // what AI SDK does without an onError
+            console.error(logText(error)) // what AI SDK does without an onError
             endTrace()
         },
         onAbort: () => endTrace(),
@@ -588,7 +617,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
 // Errors before the stream starts, as JSON the chat panel reads
 function handleError(error: unknown): Response {
-    console.error("Error in chat route:", error)
+    console.error("Error in chat route:", logText(error))
 
     const isDev = process.env.NODE_ENV === "development"
     const classified = classifyLLMError(error)

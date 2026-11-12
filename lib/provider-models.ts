@@ -109,9 +109,12 @@ async function getJson(
         signal: AbortSignal.timeout(15_000),
     })
     if (!response.ok) {
+        // Google answers a wrong key with 400 and the reason in the body.
+        // The body stays here; the hint goes by the status.
+        const wrongKey = (await response.text()).includes("API_KEY_INVALID")
         throw new ModelListError(
             `The model list request failed (${response.status})`,
-            response.status,
+            wrongKey ? 401 : response.status,
         )
     }
     const text = await response.text()

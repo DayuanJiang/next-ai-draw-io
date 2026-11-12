@@ -10,7 +10,7 @@ import {
     waitForComplete,
     waitForText,
 } from "./lib/fixtures"
-import { createTextOnlyResponse } from "./lib/helpers"
+import { createTextOnlyResponse, sse } from "./lib/helpers"
 
 test.describe("Multi-turn Conversation", () => {
     test("handles multiple diagram requests in sequence", async ({ page }) => {
@@ -105,5 +105,56 @@ test.describe("Multi-turn Conversation", () => {
         await expect(
             getIframeContent(page).getByText("Architecture", { exact: true }),
         ).toBeVisible({ timeout: 15000 })
+    })
+
+    test("sends the thinking of an earlier answer with its own turn only", async ({
+        page,
+    }) => {
+        // Signed or encrypted for the model that wrote it (GPT-6 Luna through
+        // Bedrock): another model refuses it, and it is most of a long
+        // chat's request
+        const bodies: any[] = []
+        await page.route("**/api/chat", async (route) => {
+            bodies.push(route.request().postDataJSON())
+            const n = bodies.length
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: sse([
+                    { type: "start", messageId: `msg_${n}` },
+                    { type: "start-step" },
+                    { type: "reasoning-start", id: `r${n}` },
+                    {
+                        type: "reasoning-delta",
+                        id: `r${n}`,
+                        delta: `Plan ${n}`,
+                    },
+                    {
+                        type: "reasoning-end",
+                        id: `r${n}`,
+                        providerMetadata: {
+                            bedrock: { redactedContent: `ENCRYPTED-${n}` },
+                        },
+                    },
+                    { type: "text-start", id: `t${n}` },
+                    { type: "text-delta", id: `t${n}`, delta: `Answer ${n}` },
+                    { type: "text-end", id: `t${n}` },
+                    { type: "finish-step" },
+                    { type: "finish" },
+                ]),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "First question")
+        await waitForText(page, "Answer 1")
+        // The chat keeps the thinking of the first answer
+        await expect(page.getByText("Plan 1")).toBeAttached()
+        await sendMessage(page, "Second question")
+        await waitForText(page, "Answer 2")
+
+        const sent = JSON.stringify(bodies[1].messages)
+        expect(sent).toContain("Answer 1")
+        expect(sent).not.toContain("Plan 1")
+        expect(sent).not.toContain("ENCRYPTED-1")
     })
 })

@@ -189,45 +189,58 @@ export async function recordTokenUsage(
     const sk = getTodayInTimezone() // Date as sort key (YYYY-MM-DD)
     const currentMinute = Math.floor(Date.now() / 60000).toString()
 
+    // Try to update for same minute OR new item (most common cases)
+    // Handles: 1) new item (no lastMinute), 2) same minute (lastMinute matches)
+    const addToMinute = new UpdateItemCommand({
+        TableName: TABLE,
+        Key: {
+            PK: { S: pk },
+            SK: { S: sk },
+        },
+        UpdateExpression:
+            "SET lastMinute = if_not_exists(lastMinute, :minute) ADD tokenCount :tokens, tpmCount :tokens",
+        ConditionExpression:
+            "attribute_not_exists(lastMinute) OR lastMinute = :minute",
+        ExpressionAttributeValues: {
+            ":minute": { S: currentMinute },
+            ":tokens": { N: String(tokens) },
+        },
+    })
+
     try {
-        // Try to update for same minute OR new item (most common cases)
-        // Handles: 1) new item (no lastMinute), 2) same minute (lastMinute matches)
-        await client.send(
-            new UpdateItemCommand({
-                TableName: TABLE,
-                Key: {
-                    PK: { S: pk },
-                    SK: { S: sk },
-                },
-                UpdateExpression:
-                    "SET lastMinute = if_not_exists(lastMinute, :minute) ADD tokenCount :tokens, tpmCount :tokens",
-                ConditionExpression:
-                    "attribute_not_exists(lastMinute) OR lastMinute = :minute",
-                ExpressionAttributeValues: {
-                    ":minute": { S: currentMinute },
-                    ":tokens": { N: String(tokens) },
-                },
-            }),
-        )
+        await client.send(addToMinute)
     } catch (e: any) {
         if (e instanceof ConditionalCheckFailedException) {
-            // Different minute - reset TPM count and set new minute
+            // Different minute - reset TPM count and set new minute. Only
+            // from an earlier minute: when two answers of a user end
+            // together as a minute's first, the second reset would replace
+            // the first one's count, so it adds to it instead.
             try {
-                await client.send(
-                    new UpdateItemCommand({
-                        TableName: TABLE,
-                        Key: {
-                            PK: { S: pk },
-                            SK: { S: sk },
-                        },
-                        UpdateExpression:
-                            "SET lastMinute = :minute, tpmCount = :tokens ADD tokenCount :tokens",
-                        ExpressionAttributeValues: {
-                            ":minute": { S: currentMinute },
-                            ":tokens": { N: String(tokens) },
-                        },
-                    }),
-                )
+                await client
+                    .send(
+                        new UpdateItemCommand({
+                            TableName: TABLE,
+                            Key: {
+                                PK: { S: pk },
+                                SK: { S: sk },
+                            },
+                            UpdateExpression:
+                                "SET lastMinute = :minute, tpmCount = :tokens ADD tokenCount :tokens",
+                            ConditionExpression: "lastMinute <> :minute",
+                            ExpressionAttributeValues: {
+                                ":minute": { S: currentMinute },
+                                ":tokens": { N: String(tokens) },
+                            },
+                        }),
+                    )
+                    .catch((raced) => {
+                        if (
+                            !(raced instanceof ConditionalCheckFailedException)
+                        ) {
+                            throw raced
+                        }
+                        return client.send(addToMinute)
+                    })
             } catch (retryError: any) {
                 console.error(
                     `[quota] Failed to record tokens (retry), IP prefix: ${ip.slice(0, 8)}..., tokens: ${tokens}, error: ${retryError.message}`,

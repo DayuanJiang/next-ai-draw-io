@@ -13,6 +13,7 @@ import { z } from "zod"
 import {
     classifyLLMError,
     isToolCallError,
+    logText,
     streamErrorText,
 } from "@/lib/llm-errors"
 
@@ -67,6 +68,32 @@ describe("classifyLLMError", () => {
         expect(classifyLLMError(apiError(403, "Forbidden")).code).toBe(
             "forbidden",
         )
+    })
+
+    it("names a wrong key that does not come as 401", () => {
+        // Google: 400, with the reason in the body
+        const google = apiError(
+            400,
+            "API key not valid. Please pass a valid API key.",
+            '{"error":{"code":400,"status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}',
+        )
+        // Bedrock: 403 for a wrong access key ID or secret access key
+        const awsKeyId = apiError(
+            403,
+            "The security token included in the request is invalid.",
+        )
+        const awsSecret = apiError(
+            403,
+            "The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method.",
+        )
+        for (const error of [google, awsKeyId, awsSecret]) {
+            expect(classifyLLMError(error).code).toBe("invalid_api_key")
+        }
+    })
+
+    it("points to the model id when Bedrock does not know it", () => {
+        const error = apiError(400, "The provided model identifier is invalid.")
+        expect(classifyLLMError(error).code).toBe("model_not_found")
     })
 
     it("uses the last attempt after retries", () => {
@@ -273,6 +300,31 @@ describe("streamErrorText", () => {
             message: "Too many tokens, please wait before trying again.",
         }
         expect(JSON.parse(streamErrorText(throttled)).code).toBe("rate_limited")
+    })
+})
+
+describe("logText", () => {
+    // Some gateways answer a wrong key with the whole key in the text
+    const echoed = apiError(
+        401,
+        "Incorrect API key provided: my-own-key-12345. Check your key.",
+        '{"error":{"message":"Incorrect API key provided: my-own-key-12345"}}',
+    )
+
+    it("keeps a key the provider echoed back out of the server log", () => {
+        const text = logText(echoed)
+        expect(text).not.toContain("my-own-key-12345")
+        expect(text).toContain("Incorrect API key provided: [redacted]")
+        // The rest of the error is there as before
+        expect(text).toContain("statusCode: 401")
+        expect(classifyLLMError(echoed).message).toBe(
+            "Incorrect API key provided: [redacted] Check your key.",
+        )
+    })
+
+    it("leaves the key OpenAI masks itself", () => {
+        const masked = "Incorrect API key provided: sk-proj-********1234."
+        expect(logText(masked)).toBe(masked)
     })
 })
 

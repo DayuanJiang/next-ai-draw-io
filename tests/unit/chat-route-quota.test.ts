@@ -2,11 +2,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Quota on, and every check answers that the daily limit is used up
-const quota = vi.hoisted(() => ({ checks: 0 }))
+const quota = vi.hoisted(() => ({
+    checks: 0,
+    // The limits and the request increment of each check
+    calls: [] as Array<{ limits: unknown; increment: unknown }>,
+}))
 vi.mock("@/lib/dynamo-quota-manager", () => ({
     isQuotaEnabled: () => true,
-    checkAndIncrementRequest: async () => {
+    checkAndIncrementRequest: async (
+        _user: string,
+        limits: unknown,
+        increment?: number,
+    ) => {
         quota.checks++
+        quota.calls.push({ limits, increment })
         return {
             allowed: false,
             error: "Daily limit reached",
@@ -32,6 +41,7 @@ beforeEach(() => {
     vi.stubEnv("AI_MODEL", "gpt-5.5")
     vi.stubEnv("OPENAI_API_KEY", "server-key")
     quota.checks = 0
+    quota.calls = []
     // No request may reach a provider
     vi.stubGlobal(
         "fetch",
@@ -45,7 +55,13 @@ afterEach(() => {
     vi.unstubAllGlobals()
 })
 
-const send = (headers: Record<string, string>) =>
+const FIRST_MESSAGE: Record<string, unknown> = {
+    id: "u1",
+    role: "user",
+    parts: [{ type: "text", text: "Draw two boxes" }],
+}
+
+const send = (headers: Record<string, string>, messages = [FIRST_MESSAGE]) =>
     chat(
         new Request("http://localhost/api/chat", {
             method: "POST",
@@ -54,20 +70,38 @@ const send = (headers: Record<string, string>) =>
                 "x-forwarded-for": "203.0.113.7",
                 ...headers,
             },
-            body: JSON.stringify({
-                messages: [
-                    {
-                        id: "u1",
-                        role: "user",
-                        parts: [{ type: "text", text: "Draw two boxes" }],
-                    },
-                ],
-                xml: "",
-            }),
+            body: JSON.stringify({ messages, xml: "" }),
         }),
     )
 
 describe("chat quota", () => {
+    it("counts a turn's follow-up request as part of the user's message", async () => {
+        const limits = { requests: 10, tokens: 200000, tpm: 20000 }
+        await send({ "x-ai-provider": "openai" })
+        // What the browser sends by itself after a diagram was cut off: the
+        // step before used up the minute's tokens, and it is no new request
+        await send({ "x-ai-provider": "openai" }, [
+            FIRST_MESSAGE,
+            {
+                id: "a1",
+                role: "assistant",
+                parts: [
+                    {
+                        type: "tool-display_diagram",
+                        toolCallId: "call-1",
+                        state: "output-error",
+                        input: { xml: "<mxCell" },
+                        errorText: "The output was cut off",
+                    },
+                ],
+            },
+        ])
+        expect(quota.calls).toEqual([
+            { limits, increment: 1 },
+            { limits: { ...limits, requests: 0, tpm: 0 }, increment: 0 },
+        ])
+    })
+
     it("counts a request whose key header the provider never reads", async () => {
         // OpenAI ignores the AWS key, so this runs on the server's key
         const res = await send({

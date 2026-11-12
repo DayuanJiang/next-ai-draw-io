@@ -71,7 +71,10 @@ const drawing = (id: string) => ({
 })
 
 /** The messages the provider receives for one chat request */
-async function promptFor(body: Record<string, unknown>) {
+async function promptFor(
+    body: Record<string, unknown>,
+    headers: Record<string, string> = {},
+) {
     let sent: any
     vi.stubGlobal(
         "fetch",
@@ -86,7 +89,7 @@ async function promptFor(body: Record<string, unknown>) {
     const res = await chat(
         new Request("http://localhost/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...headers },
             body: JSON.stringify(body),
         }),
     )
@@ -323,13 +326,17 @@ describe("the diagram in the request to the model", () => {
         }
     })
 
-    it("sends attached documents and images with their own turn only", async () => {
+    it("keeps the small documents of earlier messages and notes what was left out", async () => {
+        const LEFT_OUT =
+            "[This attachment is no longer in context. To use it, the user must attach it again.]"
+        // Over the 30,000 characters the earlier messages keep
+        const long = `LONG-BODY-TEXT ${"x".repeat(31000)}`
         const withDocs = {
             ...userMessage("u1", "", { diagram: { xml: "", pageId: null } }),
             parts: [
                 {
                     type: "text",
-                    text: "Draw this\n\n[PDF: spec.pdf]\nSPEC-BODY-TEXT\n\n[URL: https://example.test/a]\nTitle: A\n\nPAGE-BODY-TEXT\n\n[File: notes [v2].txt]\nNAMED-BODY-TEXT",
+                    text: `Draw this\n\n[PDF: spec.pdf]\nSPEC-BODY-TEXT\n\n[URL: https://example.test/a]\nTitle: A\n\nPAGE-BODY-TEXT\n\n[File: notes [v2].txt]\n${long}`,
                 },
                 {
                     type: "file",
@@ -349,24 +356,27 @@ describe("the diagram in the request to the model", () => {
             const first = await firstUser(messages)
             expect(first.text).toContain("SPEC-BODY-TEXT")
             expect(first.text).toContain("PAGE-BODY-TEXT")
+            expect(first.text).toContain("LONG-BODY-TEXT")
             expect(first.raw).toContain("iVBORw0KGgo")
         }
 
-        // After the next user message: the names stay, the text and the
-        // image go
+        // After the next user message: the small documents stay, so a
+        // follow-up can use them; the long one and the image give way to a
+        // note the model can pass on
         const { text: first, raw } = await firstUser([
             withDocs,
             drawing("a1"),
             userMessage("u2", "Make it blue", { diagram: { unchanged: true } }),
         ])
-        expect(raw).not.toContain("iVBORw0KGgo")
         expect(first).toContain("Draw this")
-        expect(first).toContain("[PDF: spec.pdf]")
-        expect(first).not.toContain("NAMED-BODY-TEXT")
-        expect(first).toContain("[File: notes [v2].txt]")
-        expect(first).toContain("[URL: https://example.test/a]")
-        expect(first).not.toContain("SPEC-BODY-TEXT")
-        expect(first).not.toContain("PAGE-BODY-TEXT")
+        expect(first).toContain("[PDF: spec.pdf]\nSPEC-BODY-TEXT")
+        expect(first).toContain(
+            "[URL: https://example.test/a]\nTitle: A\n\nPAGE-BODY-TEXT",
+        )
+        expect(first).not.toContain("LONG-BODY-TEXT")
+        expect(first).toContain(`[File: notes [v2].txt]\n${LEFT_OUT}`)
+        expect(raw).not.toContain("iVBORw0KGgo")
+        expect(first).toContain(`[Image]\n${LEFT_OUT}`)
     })
 
     it("leaves out Claude's thinking of earlier turns", async () => {
@@ -413,5 +423,47 @@ describe("the diagram in the request to the model", () => {
             diagram: { xml: "", pageId: null },
         })
         expect(await signed([plain, answer("a1"), next])).toEqual([])
+    })
+
+    it("leaves out another model's thinking after a switch", async () => {
+        // GPT-6 Luna on Bedrock returns its thinking encrypted. Sent on to
+        // Claude, Bedrock refuses the request: "Invalid `data` in
+        // `redacted_thinking` block"
+        const answer = (id: string) => ({
+            ...drawing(id),
+            parts: [
+                {
+                    type: "reasoning",
+                    text: "",
+                    providerMetadata: {
+                        bedrock: { redactedContent: `encrypted-${id}` },
+                    },
+                },
+                ...drawing(id).parts,
+            ],
+        })
+        const toClaude = async (messages: unknown[]) =>
+            JSON.stringify(
+                await promptFor(
+                    { messages, xml: BOXES },
+                    {
+                        "x-ai-provider": "bedrock",
+                        "x-ai-api-key": "bedrock-api-key",
+                        "x-aws-region": "us-east-1",
+                        "x-ai-model": "global.anthropic.claude-haiku-5-5",
+                    },
+                ),
+            ).match(/encrypted-a\d/g) ?? []
+        const first = userMessage("u1", "Draw a box", {
+            diagram: { xml: "", pageId: null },
+        })
+        const next = userMessage("u2", "Make it blue", {
+            diagram: { unchanged: true },
+        })
+        expect(await toClaude([first, answer("a1"), next])).toEqual([])
+        // The turn running now keeps its own
+        expect(
+            await toClaude([first, answer("a1"), next, answer("a2")]),
+        ).toEqual(["encrypted-a2"])
     })
 })

@@ -69,60 +69,106 @@ const isImagePart = (part: any) =>
     part.type === "image" ||
     (part.type === "file" && String(part.mediaType).startsWith("image/"))
 
-// The chat request leaves out the images of the user messages before the
-// newest one: the model gets them with their own turn only, and sent with
-// every request they soon pass the 10 MB the server reads of a request
-export function withoutOldImageParts<T extends { role: string; parts: any[] }>(
-    messages: T[],
-): T[] {
+const isThinkingPart = (part: any) => part.type === "reasoning"
+
+// What the model reads in place of an attachment that was left out of an
+// earlier message: without it, it cannot tell the user why it has no file
+const LEFT_OUT =
+    "[This attachment is no longer in context. To use it, the user must attach it again.]"
+const IMAGE_LEFT_OUT = { type: "text", text: `\n\n[Image]\n${LEFT_OUT}` }
+
+// Characters of document text the messages before the newest one keep
+const EARLIER_DOCUMENTS_BUDGET = 30000
+
+// The chat request leaves out two things from the messages before the
+// newest user message. The user's images: the model gets them with their
+// own turn only, and sent with every request they soon pass the 10 MB the
+// server reads of a request; a note takes each one's place. The answers'
+// thinking: the model does not get it either (withoutOldAttachments), and
+// encrypted thinking is some 7 kB a turn, most of a long chat's request.
+export function withoutOldImagesAndThinking<
+    T extends { role: string; parts: any[] },
+>(messages: T[]): T[] {
     let newest = -1
     messages.forEach((msg, i) => {
         if (msg.role === "user") newest = i
     })
-    return messages.map((msg, i) =>
-        msg.role === "user" && i < newest && msg.parts.some(isImagePart)
-            ? { ...msg, parts: msg.parts.filter((part) => !isImagePart(part)) }
-            : msg,
-    )
+    return messages.map((msg, i) => {
+        if (i >= newest) return msg
+        if (msg.role === "user") {
+            if (!msg.parts.some(isImagePart)) return msg
+            const parts = msg.parts.map((part) =>
+                isImagePart(part) ? IMAGE_LEFT_OUT : part,
+            )
+            return { ...msg, parts }
+        }
+        const parts = msg.parts.filter((part) => !isThinkingPart(part))
+        // The server refuses a message without parts (an answer stopped
+        // while it was thinking)
+        return parts.length === msg.parts.length || parts.length === 0
+            ? msg
+            : { ...msg, parts }
+    })
 }
 
-// Claude's thinking on Anthropic's API, signed for the messages before it
-const isAnthropicThinking = (part: any) =>
-    part.type === "reasoning" && !!part.providerOptions?.anthropic
-
-// An attached document or image goes to the model with its own turn only:
-// the user messages before the newest one keep just a document's name line
-// (the browser leaves out their images already).
-// Anthropic refuses thinking once a message before it changed ("bound to a
-// different conversation"), so the earlier turns go without theirs. The
-// answers after the newest user message are the turn running now and keep
-// their thinking.
+// What the messages before the newest user message keep of their
+// attachments. A document's text stays while it fits the budget, the newest
+// first, so a follow-up can still use a document of a few pages. Larger
+// ones and images go to the model with their own turn only (the browser
+// leaves the images out already), and a note takes their place.
+// The earlier turns go without their thinking, whatever the provider. It is
+// signed or encrypted for the model that wrote it, so after a switch the
+// next model refuses the request (Bedrock: "Invalid `data` in
+// `redacted_thinking` block"); Anthropic refuses its own once a message
+// before it changed ("bound to a different conversation"); and encrypted
+// thinking costs input tokens in every later request (GPT-6 Luna: some
+// 7 kB a turn). The answers after the newest user message are the turn
+// running now and keep their thinking.
 export function withoutOldAttachments(messages: any[]): any[] {
     let newest = -1
     messages.forEach((msg, i) => {
         if (msg.role === "user") newest = i
     })
-    return messages.flatMap((msg, i) => {
-        if (i >= newest || !Array.isArray(msg.content)) return [msg]
-        if (msg.role === "assistant") {
-            const content = msg.content.filter(
-                (part: any) => !isAnthropicThinking(part),
+    let budget = EARLIER_DOCUMENTS_BUDGET
+    // A document as it is while its text fits what is left of the budget,
+    // else its heading with the note
+    const withinBudget = (section: string, heading: string) => {
+        const size = section.length - heading.length
+        if (size > budget) return `${heading}\n${LEFT_OUT}`
+        budget -= size
+        return section
+    }
+    // From the newest message back, so the latest documents get the budget
+    return [...messages.keys()]
+        .reverse()
+        .flatMap((i) => {
+            const msg = messages[i]
+            if (i >= newest || !Array.isArray(msg.content)) return [msg]
+            if (msg.role === "assistant") {
+                const content = msg.content.filter(
+                    (part: any) => !isThinkingPart(part),
+                )
+                if (content.length === msg.content.length) return [msg]
+                // An answer that was only thinking (stopped early) goes too
+                return content.length > 0 ? [{ ...msg, content }] : []
+            }
+            if (msg.role !== "user") return [msg]
+            const content = msg.content.map((part: any) =>
+                isImagePart(part)
+                    ? IMAGE_LEFT_OUT
+                    : part.type === "text" && typeof part.text === "string"
+                      ? {
+                            ...part,
+                            text: part.text.replace(
+                                ATTACHED_TEXT,
+                                withinBudget,
+                            ),
+                        }
+                      : part,
             )
-            if (content.length === msg.content.length) return [msg]
-            // An answer that was only thinking (stopped early) goes too
-            return content.length > 0 ? [{ ...msg, content }] : []
-        }
-        if (msg.role !== "user") return [msg]
-        const content = msg.content
-            .filter((part: any) => !isImagePart(part))
-            .map((part: any) =>
-                part.type === "text" && typeof part.text === "string"
-                    ? { ...part, text: part.text.replace(ATTACHED_TEXT, "$1") }
-                    : part,
-            )
-        // Providers reject an empty message (the app always sends text)
-        return [content.length > 0 ? { ...msg, content } : msg]
-    })
+            return [{ ...msg, content }]
+        })
+        .reverse()
 }
 
 // Remove tool-calls with invalid inputs (from failed repair or interrupted streaming),
@@ -165,8 +211,9 @@ export function fixToolInputJson(input: string): string {
             // y="-20\" (opening quote unescaped, closing escaped) becomes y=\"-20\".
             // Must run before the key fix below, which would rewrite the `="`.
             .replace(/(\w+)="([^"]*?)\\"/g, '$1=\\"$2\\"')
-            // `:=` instead of `: `
-            .replace(/:=/g, ": ")
+            // `"key":= ` instead of `"key": `, only after a JSON key: a
+            // label may hold `:=` (i := 0), and quotes inside it are escaped
+            .replace(/("\w+")\s*:=\s*/g, "$1: ")
             // `"key"= "` instead of `"key": "`, only for JSON keys
             .replace(/"(\w+)"\s*=\s*"/g, '"$1": "')
     )

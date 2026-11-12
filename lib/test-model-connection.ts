@@ -11,7 +11,7 @@ import {
     checkAndIncrementRequest,
     isQuotaEnabled,
 } from "@/lib/dynamo-quota-manager"
-import { classifyLLMError } from "@/lib/llm-errors"
+import { classifyLLMError, logText } from "@/lib/llm-errors"
 import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
@@ -248,6 +248,9 @@ export async function testModelConnection(
             // Ends with the request: the user closed the dialog or the page
             abortSignal: req.signal,
             timeout: TEST_TIMEOUT_MS,
+            // The SDK would log the error as it is; the catch below logs it
+            // without a key the provider echoed back
+            onError: () => {},
         })
         let calledTool = false
         let finishReason: string | undefined
@@ -279,7 +282,7 @@ export async function testModelConnection(
                 finishReason !== "length" && { warning: NO_TOOL_CALL_WARNING }),
         })
     } catch (error) {
-        console.error("[validate-model] Error:", error)
+        console.error("[validate-model] Error:", logText(error))
 
         const { code, message } = classifyLLMError(error)
         return NextResponse.json(

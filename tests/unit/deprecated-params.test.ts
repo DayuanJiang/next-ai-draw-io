@@ -62,6 +62,23 @@ describe("withoutDeprecatedParams", () => {
         })
     })
 
+    it("drops the temperature a GPT model on Bedrock refuses", () => {
+        // Bedrock's answer for global.openai.gpt-6-luna with TEMPERATURE set
+        const message =
+            "This model doesn't support the temperature field. Remove temperature and try again."
+        const refused = {
+            statusCode: 400,
+            message,
+            responseBody: JSON.stringify({ message }),
+        }
+        expect(
+            withoutDeprecatedParams(refused, {
+                temperature: 0.7,
+                maxOutputTokens: 1000,
+            }),
+        ).toEqual({ maxOutputTokens: 1000 })
+    })
+
     it("leaves other errors and requests with nothing to drop alone", () => {
         expect(withoutDeprecatedParams(rejection("bad key"), params)).toBeNull()
         expect(

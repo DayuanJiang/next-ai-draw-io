@@ -36,7 +36,7 @@ import {
 import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
-import { withoutOldImageParts } from "@/lib/chat-helpers"
+import { withoutOldImagesAndThinking } from "@/lib/chat-helpers"
 import {
     type ChatToolName,
     type ChatUIMessage,
@@ -509,7 +509,7 @@ export function ChatEngineProvider({
                             ),
                         }),
                         id,
-                        messages: withoutOldImageParts(messages),
+                        messages: withoutOldImagesAndThinking(messages),
                         trigger,
                         messageId,
                     },
