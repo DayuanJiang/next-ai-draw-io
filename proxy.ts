@@ -30,6 +30,16 @@ function getLocale(request: NextRequest): string {
     return matchLocale(languages, locales, i18n.defaultLocale)
 }
 
+// The locale that a path's first segment names: the locale itself, in any
+// case (/zh-hant, /EN), or a regional Chinese tag (/zh-TW, /zh-CN)
+function localeOfSegment(segment: string): string | undefined {
+    if (TRADITIONAL_CHINESE.test(segment)) return "zh-Hant"
+    if (/^zh-(hans|cn|sg)\b/i.test(segment)) return "zh"
+    return i18n.locales.find(
+        (locale) => locale.toLowerCase() === segment.toLowerCase(),
+    )
+}
+
 // intl-localematcher throws on a malformed tag, and "*" is not a tag
 function isLanguageTag(language: string): boolean {
     try {
@@ -65,13 +75,20 @@ export function proxy(request: NextRequest) {
     }
 
     // Check if there is any supported locale in the pathname
-    const pathnameIsMissingLocale = i18n.locales.every(
-        (locale) =>
-            !pathname.startsWith(`/${locale}/`) && pathname !== `/${locale}`,
-    )
+    const first = pathname.split("/")[1]
+    const pathLocale = localeOfSegment(first)
+
+    // A locale written another way goes to the page's own address. Taken
+    // for a page's name it got a locale in front (/zh-Hant/zh-hant/about):
+    // a permanent redirect to a 404.
+    if (pathLocale && pathLocale !== first) {
+        const url = request.nextUrl.clone()
+        url.pathname = `/${pathLocale}${pathname.slice(first.length + 1)}`
+        return NextResponse.redirect(url, 308)
+    }
 
     // Redirect if there is no locale
-    if (pathnameIsMissingLocale) {
+    if (!pathLocale) {
         const locale = getLocale(request)
 
         // Redirect to localized path. Cloning nextUrl keeps the basePath

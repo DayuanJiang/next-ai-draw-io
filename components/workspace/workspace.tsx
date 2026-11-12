@@ -185,6 +185,9 @@ function WorkspaceLayout() {
             if (!event.shiftKey && (event.key === "b" || event.key === "B")) {
                 if (isMobile) return false
                 togglePanel()
+                // Shown again, its input takes the focus, which went to
+                // <body> when the panel was hidden
+                if (useUiStore.getState().panelOpen) focusComposer()
                 return true
             }
             if (event.key === "/") {
@@ -253,6 +256,8 @@ function WorkspaceLayout() {
     }, [sliding])
     // The panel floats on the right; the canvas ends where it begins
     const canvasRight = panelVisible ? panelWidth + PANEL_GAP * 2 : 0
+    // Desktop: the start screen lies over the canvas
+    const heroCoversCanvas = !isMobile && showHero
 
     return (
         <div
@@ -263,29 +268,40 @@ function WorkspaceLayout() {
                 and lose its undo history */}
             <div className="absolute inset-0 flex flex-col">
                 <div className="relative min-h-0 flex-1">
-                    <CanvasStage
-                        className={
-                            isMobile
-                                ? cn(
-                                      "inset-0",
-                                      mobileView !== "canvas" && "invisible",
-                                  )
-                                : cn(
-                                      "inset-y-0 left-0",
-                                      sliding &&
-                                          "transition-[right] duration-300 ease-[var(--ease-out)]",
-                                  )
-                        }
-                        style={isMobile ? undefined : { right: canvasRight }}
-                        hideOverlays={!isMobile && showHero}
-                        overlay={(size) => (
-                            <SelectionAsk
-                                width={size.width}
-                                height={size.height}
-                            />
-                        )}
-                        waitForSavedLocale
-                    />
+                    {/* Under the start screen the canvas takes no focus:
+                        Tab went into the hidden draw.io, and keys typed
+                        there drew shapes */}
+                    <div className="absolute inset-0" inert={heroCoversCanvas}>
+                        <CanvasStage
+                            className={
+                                isMobile
+                                    ? cn(
+                                          "inset-0",
+                                          mobileView !== "canvas" &&
+                                              "invisible",
+                                      )
+                                    : cn(
+                                          "inset-y-0 left-0",
+                                          sliding &&
+                                              // Reduced motion: at once. Still a
+                                              // transition, as the canvas stage
+                                              // re-centres the diagram at its end.
+                                              "transition-[right] duration-300 ease-[var(--ease-out)] motion-reduce:duration-[1ms]",
+                                      )
+                            }
+                            style={
+                                isMobile ? undefined : { right: canvasRight }
+                            }
+                            hideOverlays={heroCoversCanvas}
+                            overlay={(size) => (
+                                <SelectionAsk
+                                    width={size.width}
+                                    height={size.height}
+                                />
+                            )}
+                            waitForSavedLocale
+                        />
+                    </div>
                     {isMobile ? (
                         mobileView === "chat" &&
                         (showHero ? (
@@ -320,7 +336,9 @@ function WorkspaceLayout() {
                                     <IconButton
                                         label={dict.nav.showPanel}
                                         shortcut={`${modKey}B`}
-                                        onClick={() => setPanelOpen(true)}
+                                        // The button goes away: the focus
+                                        // moves on to the panel's input
+                                        onClick={focusComposer}
                                         data-testid="show-panel"
                                     >
                                         <PanelRightOpen />

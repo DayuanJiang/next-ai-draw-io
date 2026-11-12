@@ -25,6 +25,10 @@ export function ProviderLogo({
             aria-hidden="true"
             className={cn("size-4 dark:invert", className)}
             height={16}
+            // Fetched when it comes into view. React preloads an eager
+            // image, also for a page that only prefetches /about: every
+            // site page fetched all 19 logos.
+            loading="lazy"
             src={`https://models.dev/logos/${logo ?? provider}.svg`}
             width={16}
         />

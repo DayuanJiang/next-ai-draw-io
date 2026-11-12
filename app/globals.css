@@ -304,7 +304,11 @@
     .animate-fade-in,
     .animate-message-in,
     .animate-panel-in,
-    .animate-shimmer {
+    .animate-shimmer,
+    /* Dialogs, menus and tooltips: the zoom and slide of tailwindcss-animate,
+       whose class may come after a variant (data-[state=open]:animate-in) */
+    [class*="animate-in"],
+    [class*="animate-out"] {
         animation: none;
     }
 }

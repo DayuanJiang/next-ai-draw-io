@@ -6,7 +6,6 @@ import Script from "next/script"
 import { LocaleProvider } from "@/components/canvas/locale-context"
 import { ProblemReports } from "@/components/problem-report"
 import { AppToaster } from "@/components/workspace/app-toaster"
-import { DiagramProvider } from "@/contexts/diagram-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Locale } from "@/lib/i18n/config"
 import { i18n } from "@/lib/i18n/config"
@@ -31,11 +30,10 @@ const jetbrainsMono = JetBrains_Mono({
     weight: ["400", "500"],
 })
 
+// Phones can zoom the site's pages; the editor's page has its own viewport
 export const viewport: Viewport = {
     width: "device-width",
     initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
 }
 
 // Generate static params for all locales
@@ -174,7 +172,7 @@ export default async function RootLayout({
             >
                 <DictionaryProvider dictionary={dictionary}>
                     <LocaleProvider locale={validLang}>
-                        <DiagramProvider>{children}</DiagramProvider>
+                        {children}
                     </LocaleProvider>
                     {/* Inside: toasts such as the quota one read the dictionary */}
                     <AppToaster />

@@ -44,49 +44,76 @@ function DialogOverlay({
   )
 }
 
-function DialogContent({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
-  const dict = useDictionary()
+function DialogContent(
+  props: React.ComponentProps<typeof DialogPrimitive.Content>
+) {
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          // Base styles
-          "fixed top-[50%] left-[50%] z-50 w-full",
-          "max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
-          "grid gap-4 p-6",
-          // Refined visual treatment
-          "bg-surface-0 rounded-2xl border border-border-subtle shadow-pop",
-          // Entry/exit animations
-          "data-[state=open]:animate-in data-[state=closed]:animate-out",
-          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-          "data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98]",
-          "data-[state=closed]:slide-out-to-top-[2%] data-[state=open]:slide-in-from-top-[2%]",
-          "duration-200 sm:max-w-lg",
-          className
-        )}
-        {...props}
-      >
-        {children}
-        <DialogPrimitive.Close className={cn(
-          "absolute top-4 right-4 rounded-xl p-1.5",
-          "text-muted-foreground/60 hover:text-foreground",
-          "hover:bg-interactive-hover",
-          "transition-all duration-150",
-          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-          "disabled:pointer-events-none",
-          "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4"
-        )}>
-          <XIcon />
-          <span className="sr-only">{dict.common.close}</span>
-        </DialogPrimitive.Close>
-      </DialogPrimitive.Content>
+      <DialogBox {...props} />
     </DialogPortal>
+  )
+}
+
+// Inside the portal, which mounts it as the dialog opens
+function DialogBox({
+  className,
+  children,
+  onCloseAutoFocus,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const dict = useDictionary()
+  // What has the focus as the dialog opens, read while rendering: once the
+  // dialog is in the page, a field with autoFocus has taken it
+  const [opener] = React.useState(() => document.activeElement)
+  return (
+    <DialogPrimitive.Content
+      data-slot="dialog-content"
+      className={cn(
+        // Base styles
+        "fixed top-[50%] left-[50%] z-50 w-full",
+        "max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
+        "grid gap-4 p-6",
+        // Refined visual treatment
+        "bg-surface-0 rounded-2xl border border-border-subtle shadow-pop",
+        // Entry/exit animations
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98]",
+        "data-[state=closed]:slide-out-to-top-[2%] data-[state=open]:slide-in-from-top-[2%]",
+        "duration-200 sm:max-w-lg",
+        className
+      )}
+      {...props}
+      onCloseAutoFocus={(event) => {
+        onCloseAutoFocus?.(event)
+        // Radix gives the focus back to a DialogTrigger. Most dialogs
+        // here open from state and have none (the focus was left on
+        // <body>): it goes back to what had it.
+        if (
+          !event.defaultPrevented &&
+          opener instanceof HTMLElement &&
+          opener !== document.body
+        ) {
+          event.preventDefault()
+          opener.focus()
+        }
+      }}
+    >
+      {children}
+      <DialogPrimitive.Close className={cn(
+        "absolute top-4 right-4 rounded-xl p-1.5",
+        "text-muted-foreground/60 hover:text-foreground",
+        "hover:bg-interactive-hover",
+        "transition-all duration-150",
+        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+        "disabled:pointer-events-none",
+        "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4"
+      )}>
+        <XIcon />
+        <span className="sr-only">{dict.common.close}</span>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
   )
 }
 

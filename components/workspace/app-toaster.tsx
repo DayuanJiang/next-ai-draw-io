@@ -1,11 +1,20 @@
 "use client"
 
+import { useLayoutEffect } from "react"
 import { Toaster } from "sonner"
 import { useSettingsStore } from "@/stores/settings-store"
 
 /** The single toast container, mounted once at the root */
 export function AppToaster() {
     const isDark = useSettingsStore((s) => s.isDark)
+    // Reads the stored theme on every page (the site's pages and the 404
+    // page have no editor to read it). The layout mounts again for each
+    // language, and React then renders <html> without the dark class that
+    // the inline script added: hydrate() puts it back before the paint.
+    // (The MCP shell has set its own theme by now, which hydrate() keeps.)
+    useLayoutEffect(() => {
+        useSettingsStore.getState().hydrate()
+    }, [])
     return (
         <Toaster
             position="bottom-center"

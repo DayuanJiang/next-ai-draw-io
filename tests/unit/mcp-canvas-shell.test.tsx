@@ -42,10 +42,11 @@ beforeEach(() => {
     server.file = null
     server.history = null
     localStorage.clear()
-    // The export dialog asks whether the pointer is fine
+    // The export dialog asks whether the pointer is fine, and the toaster's
+    // settings listen for a change of the system's colour scheme
     vi.stubGlobal(
         "matchMedia",
-        vi.fn(() => ({ matches: false })),
+        vi.fn(() => ({ matches: false, addEventListener: vi.fn() })),
     )
 })
 

@@ -1,8 +1,19 @@
+import type { Viewport } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { Workspace } from "@/components/workspace/workspace"
+import { DiagramProvider } from "@/contexts/diagram-context"
 import { getDictionary, hasLocale } from "@/lib/i18n/dictionaries"
+
+// The editor fills the window and the canvas has its own zoom, so the page
+// around it keeps its size under a pinch
+export const viewport: Viewport = {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+}
 
 export default async function Home({
     params,
@@ -22,13 +33,22 @@ export default async function Home({
             <div className="sr-only">
                 <h1>Next AI Draw.io</h1>
                 <p>{dict.lobby.lede}</p>
-                <Link href={`/${lang}/about`}>{dict.settings.tabAbout}</Link>
+                {/* For crawlers; Tab skips a link nobody can see */}
+                <Link href={`/${lang}/about`} tabIndex={-1}>
+                    {dict.settings.tabAbout}
+                </Link>
             </div>
-            {/* The workspace reads ?session= from the URL, which needs a
-                Suspense boundary */}
-            <Suspense fallback={<div className="fixed inset-0 bg-canvas" />}>
-                <Workspace />
-            </Suspense>
+            {/* Around the editor only: the site's pages share the layout
+                and stay free of the canvas code this brings */}
+            <DiagramProvider>
+                {/* The workspace reads ?session= from the URL, which needs
+                    a Suspense boundary */}
+                <Suspense
+                    fallback={<div className="fixed inset-0 bg-canvas" />}
+                >
+                    <Workspace />
+                </Suspense>
+            </DiagramProvider>
         </>
     )
 }

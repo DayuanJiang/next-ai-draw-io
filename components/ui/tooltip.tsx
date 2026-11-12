@@ -7,12 +7,17 @@ import { cn } from "@/lib/utils"
 
 function TooltipProvider({
   delayDuration = 0,
+  // Closes when the pointer leaves the button. A tooltip that can be hovered
+  // closes on the page's pointer moves, and the page gets none while the
+  // pointer is over the draw.io frame: the tooltip stayed up.
+  disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
+      disableHoverableContent={disableHoverableContent}
       {...props}
     />
   )
@@ -29,9 +34,24 @@ function Tooltip({
 }
 
 function TooltipTrigger({
+  onFocus,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      {...props}
+      // Radix opens the tooltip on any focus. It is for the keyboard, with
+      // the focus ring: a dialog closed with the mouse gives the focus back
+      // to its button, and the tooltip stays away (Radix skips its handler).
+      onFocus={(event) => {
+        onFocus?.(event)
+        if (!event.currentTarget.matches(":focus-visible")) {
+          event.preventDefault()
+        }
+      }}
+    />
+  )
 }
 
 function TooltipContent({
