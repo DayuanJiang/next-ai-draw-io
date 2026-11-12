@@ -19,13 +19,15 @@ import {
     type ProviderName,
 } from "@/lib/types/model-config"
 
-const isKnownProvider = (p: { provider: string }) =>
-    Object.hasOwn(PROVIDERS, p.provider)
+// A provider of a known type that holds a list of models
+const isKnownProvider = (p: { provider: string; models?: unknown }) =>
+    Object.hasOwn(PROVIDERS, p.provider) && Array.isArray(p.models)
 
 /**
- * The stored config without providers this version does not know (saved
- * by another version, or edited by hand): they would break every list of
- * models. They stay in storage (saveConfig keeps them). Throws on bad JSON.
+ * The stored config without providers this version does not know or
+ * cannot read (saved by another version, or edited by hand): they would
+ * break every list of models, and the page with them on every load. They
+ * stay in storage (saveConfig keeps them). Throws on bad JSON.
  */
 function parseStoredConfig(stored: string): MultiModelConfig {
     const config = JSON.parse(stored) as MultiModelConfig

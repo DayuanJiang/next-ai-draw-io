@@ -3972,7 +3972,9 @@ test.describe("Edge cases", () => {
         await expect.poll(() => prompts.length).toBe(2)
         expect(prompts[1]).toBe("Template prompt for a shop")
         await page.getByRole("button", { name: "Saved prompts" }).click()
-        await expect(page.getByRole("dialog").getByText("1 uses")).toBeVisible()
+        await expect(
+            page.getByRole("dialog").getByText("Used 1×"),
+        ).toBeVisible()
     })
 
     test("a saved prompt picked over typed text replaces it only when confirmed", async ({

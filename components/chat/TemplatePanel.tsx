@@ -204,18 +204,22 @@ export function TemplatePanel({
         }
 
         try {
-            const text = await file.text()
-            const data = JSON.parse(text)
+            // A file that is not JSON fails the check below, like any
+            // other file this app did not export
+            const data = await file
+                .text()
+                .then(JSON.parse)
+                .catch(() => null)
 
             // Validate import data
             const validation = validateImportData(data)
             if (!validation.valid) {
+                // The reason is English, for developers: it goes to the
+                // console, the user reads a sentence in their language
+                console.error("Failed to import templates:", validation.error)
                 setImportMessage({
                     type: "error",
-                    text: dict.templates.importFailed.replace(
-                        "{error}",
-                        validation.error || "Invalid data",
-                    ),
+                    text: dict.templates.importInvalid,
                 })
                 return
             }

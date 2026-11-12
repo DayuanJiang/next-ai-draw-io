@@ -44,9 +44,23 @@ export function filterProviderGroups(query: string) {
 
 const LEGACY_AZURE_PLACEHOLDER = "https://your-resource.openai.azure.com/openai"
 
+/**
+ * A base URL a request can go to: http or https with a host. "not a url"
+ * and an address typed without its scheme ("127.0.0.1:8000/v1") are not.
+ */
+export function isValidBaseUrl(url: string): boolean {
+    try {
+        return /^https?:$/.test(new URL(url).protocol)
+    } catch {
+        return false
+    }
+}
+
 /** The credentials a test or a chat request needs are filled in */
 export function hasCredentials(p: ProviderConfig): boolean {
     const def = PROVIDERS[p.provider]
+    // A base URL that is typed in is part of them, whatever the provider
+    if (p.baseUrl && !isValidBaseUrl(p.baseUrl)) return false
     switch (def.credential) {
         case "aws":
             return (

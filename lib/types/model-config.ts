@@ -98,21 +98,45 @@ export function createModelConfig(modelId: string): ModelConfig {
     }
 }
 
+/**
+ * A provider's name in the model picker and the settings list: its display
+ * name, else its type's label. Providers that would show the same name
+ * (two OpenAI-compatible servers without a display name) get the host of
+ * their base URL added, where that tells them apart.
+ */
+export function providerLabel(
+    provider: ProviderConfig,
+    all: ProviderConfig[],
+): string {
+    const name = (p: ProviderConfig) => p.name || PROVIDERS[p.provider].label
+    const host = (p: ProviderConfig) => {
+        try {
+            return new URL(p.baseUrl ?? "").host
+        } catch {
+            return ""
+        }
+    }
+    const sameName = all.filter(
+        (p) => p !== provider && name(p) === name(provider),
+    )
+    return host(provider) &&
+        sameName.length > 0 &&
+        sameName.every((p) => host(p) !== host(provider))
+        ? `${name(provider)} (${host(provider)})`
+        : name(provider)
+}
+
 // Get all models as flattened list for dropdown (user-defined only)
 export function flattenModels(config: MultiModelConfig): FlattenedModel[] {
     const models: FlattenedModel[] = []
 
     for (const provider of config.providers) {
-        // Use custom name if provided, otherwise use default provider label
-        const providerLabel =
-            provider.name || PROVIDERS[provider.provider].label
-
         for (const model of provider.models) {
             models.push({
                 id: model.id,
                 modelId: model.modelId,
                 provider: provider.provider,
-                providerLabel,
+                providerLabel: providerLabel(provider, config.providers),
                 apiKey: provider.apiKey,
                 baseUrl: provider.baseUrl,
                 // AWS Bedrock fields

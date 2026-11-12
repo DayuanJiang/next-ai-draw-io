@@ -16,6 +16,7 @@ import {
     X,
 } from "lucide-react"
 import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { toast } from "sonner"
 import { useChatEngine } from "@/components/chat/chat-engine"
 import {
     ProviderCredentialsFields,
@@ -56,7 +57,7 @@ import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { ListedModel } from "@/lib/provider-models"
-import { hasCredentials } from "@/lib/provider-setup"
+import { hasCredentials, isValidBaseUrl } from "@/lib/provider-setup"
 import { PROVIDERS, publicDefaultUrl } from "@/lib/providers"
 import { STORAGE_KEYS } from "@/lib/storage"
 import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
@@ -699,6 +700,9 @@ export function ModelConfigDialog({
         let errorCount = 0
         let idChanged = false
         let rejected = false
+        // This server refused the access code (its only 401; a provider's
+        // refusal comes as a result): no model was tested
+        let accessDenied = false
         const askedWith = credentialsOf(selectedProviderId)
         const run = (latestTestRun.get(selectedProviderId) ?? 0) + 1
         latestTestRun.set(selectedProviderId, run)
@@ -750,6 +754,7 @@ export function ModelConfigDialog({
                         },
                     )
                     const data = await response.json().catch(() => ({}))
+                    if (response.status === 401) accessDenied = true
                     code = data.valid ? undefined : data.code
                     update = data.valid
                         ? {
@@ -781,8 +786,13 @@ export function ModelConfigDialog({
                 if (run !== latestTestRun.get(selectedProviderId)) return
                 // Credentials changed during the test: drop the result. A
                 // change in another tab left the spinner on, so clear it
-                // (model ids are unique, whatever provider is shown).
-                if (credentialsOf(selectedProviderId) !== askedWith) {
+                // (model ids are unique, whatever provider is shown). An
+                // access code refused says nothing about the model either:
+                // its last result stays.
+                if (
+                    accessDenied ||
+                    credentialsOf(selectedProviderId) !== askedWith
+                ) {
                     setValidatingModelIds((prev) => {
                         const next = new Set(prev)
                         next.delete(model.id)
@@ -817,6 +827,14 @@ export function ModelConfigDialog({
             }),
         )
         if (run !== latestTestRun.get(selectedProviderId)) return
+        if (accessDenied) {
+            // As after a chat message: say so, and show the General tab,
+            // where the code is entered
+            setValidationStatus("idle")
+            toast.error(dict.errors.invalidAccessCode)
+            useUiStore.getState().setSettingsTab("general")
+            return
+        }
         if (credentialsOf(selectedProviderId) !== askedWith) {
             // The status line is about the provider shown now
             if (selectedProviderIdRef.current === selectedProviderId) {
@@ -1122,11 +1140,13 @@ export function ModelConfigDialog({
         const def = PROVIDERS[provider.provider]
         // A key-only provider without a default URL (Azure) needs its URL too
         const testBlocker = !credentialsDone
-            ? def.credential === "aws"
-                ? t.needAws
-                : def.credential === "apiKey" && !def.defaultBaseUrl
-                  ? t.needUrl
-                  : t.needKey
+            ? provider.baseUrl && !isValidBaseUrl(provider.baseUrl)
+                ? t.baseUrlInvalid
+                : def.credential === "aws"
+                  ? t.needAws
+                  : def.credential === "apiKey" && !def.defaultBaseUrl
+                    ? t.needUrl
+                    : t.needKey
             : models.length === 0
               ? t.needModel
               : ""

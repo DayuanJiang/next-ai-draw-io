@@ -185,6 +185,68 @@ test("the model picker lists untested and failed models", async ({ page }) => {
     await expect(page.getByTestId("model-selector")).toContainText("gpt-6-luna")
 })
 
+test("two providers of one kind without a display name are told apart by their address", async ({
+    page,
+}) => {
+    const server = (id: string, baseUrl: string, model: string) => ({
+        id,
+        provider: "custom",
+        apiKey: "k",
+        baseUrl,
+        models: [{ id: model, modelId: "same-model", validated: true }],
+    })
+    await openApp(page, {
+        config: {
+            version: 1,
+            providers: [
+                server("c1", "http://127.0.0.1:1234/v1", "x1"),
+                server("c2", "https://llm.example.com/v1", "x2"),
+            ],
+        },
+    })
+    const names = [
+        "OpenAI-compatible (127.0.0.1:1234)",
+        "OpenAI-compatible (llm.example.com)",
+    ]
+    // Two groups in the model picker, each with its own model
+    await page.getByTestId("model-selector").click()
+    const picker = page.getByRole("dialog")
+    for (const name of names) {
+        await expect(picker.getByText(name, { exact: true })).toBeVisible()
+    }
+    await page.keyboard.press("Escape")
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await expect(dialog.getByTestId("provider-row-c1")).toContainText(names[0])
+    await expect(dialog.getByTestId("provider-row-c2")).toContainText(names[1])
+})
+
+test("the narrowest chat panel shows the model's name in full", async ({
+    page,
+}) => {
+    await page.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-panel-width", "320")
+    })
+    await openApp(page, { config: PROVIDERS })
+    // The panel at the side, as after a first diagram
+    await page.getByTestId("draw-yourself").click()
+    const name = page.getByTestId("model-selector").getByText("deepseek-chat")
+    await expect(name).toBeVisible()
+    // Shown, not only kept for screen readers, and not cut short
+    await expect
+        .poll(async () => (await name.boundingBox())?.width ?? 0)
+        .toBeGreaterThan(60)
+    expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+        true,
+    )
+    // While a message is typed the send key hint takes the room: a sliver
+    // of the name's first letter is not shown
+    await page.getByTestId("chat-input").fill("Draw a box")
+    await expect(name).toBeHidden()
+    await page.getByTestId("chat-input").fill("")
+    await expect(name).toBeVisible()
+})
+
 test("an old setting to hide untested models is ignored", async ({ page }) => {
     await openApp(page, {
         config: { ...PROVIDERS, showUnvalidatedModels: false },
@@ -242,6 +304,56 @@ test("an access code error opens the general tab with the code field", async ({
         "aria-current",
         "page",
     )
+    // No code saved yet: the cursor is in the field, ready to type
+    await expect(dialog.locator("#access-code")).toBeFocused()
+    // With a code saved, opening the page leaves the focus alone
+    await page.keyboard.type("abc")
+    await page.route("**/api/verify-access-code", (route) =>
+        route.fulfill({ json: { valid: true } }),
+    )
+    await page.keyboard.press("Enter")
+    await expect(page.getByText("Access code saved")).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(dialog).toHaveCount(0)
+    await openSettingsTab(page, "general")
+    await expect(dialog.locator("#access-code")).toHaveValue("abc")
+    await expect(dialog.locator("#access-code")).not.toBeFocused()
+})
+
+test("a Test refused for the access code keeps the models' results and shows where the code goes", async ({
+    page,
+}) => {
+    await page.route("**/api/config", (route) =>
+        route.fulfill({ json: { accessCodeRequired: true } }),
+    )
+    // The server's access code check answers before any model is asked
+    await page.route("**/api/validate-model", (route) =>
+        route.fulfill({
+            status: 401,
+            json: {
+                error: "Invalid or missing access code. Please configure it in Settings.",
+            },
+        }),
+    )
+    await openApp(page, { config: PROVIDERS })
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await dialog.getByTestId("provider-row-p3").click()
+    await dialog.getByTestId("test-models").click()
+    // The General tab, where the code is entered, and a note saying why
+    await expect(dialog.locator("#access-code")).toBeVisible()
+    await expect(
+        page.getByText(
+            "Invalid or missing access code. Please configure it in Settings.",
+        ),
+    ).toBeVisible()
+    // Back on the provider's page the model still works: it was not tested
+    await dialog.getByTestId("settings-tab-models").click()
+    await expect(dialog.getByText("Works", { exact: true })).toBeVisible()
+    await expect(dialog.getByText("Failed", { exact: true })).toHaveCount(0)
+    await expect(dialog.getByTestId("test-models")).toBeEnabled()
+    const saved = await savedModelConfigs(page)
+    expect(saved.providers[2].models[0].validated).toBe(true)
 })
 
 test("an access code error reads in the interface's language", async ({
@@ -661,6 +773,19 @@ test("the OpenAI-compatible preset takes any URL and shows where requests go", a
     await expect(
         dialog.getByText("Fill in the API key and the base URL first."),
     ).toBeVisible()
+    // An address without its scheme is no URL a request can go to: the
+    // field says so, and the step stays open
+    const hint = dialog.getByText(
+        "The address must start with http:// or https://",
+    )
+    await dialog.locator("#base-url").fill("127.0.0.1:1234/v1")
+    await expect(hint).toHaveCount(2)
+    await expect(dialog.getByText(/Requests go to/)).toHaveCount(0)
+    await expect(dialog.getByTestId("step-1-todo")).toBeVisible()
+    await expect(dialog.getByTestId("test-models")).toBeDisabled()
+    // Not while the scheme itself is being typed
+    await dialog.locator("#base-url").fill("https:/")
+    await expect(dialog.locator("#base-url ~ p")).toHaveCount(0)
     // Its options start open; the URL field shows the chat endpoint
     await dialog.locator("#base-url").fill("http://127.0.0.1:1234/v1")
     await expect(
@@ -668,6 +793,7 @@ test("the OpenAI-compatible preset takes any URL and shows where requests go", a
             "Requests go to http://127.0.0.1:1234/v1/chat/completions",
         ),
     ).toBeVisible()
+    await expect(hint).toHaveCount(0)
     await expect(dialog.getByTestId("step-1-done")).toBeVisible()
 })
 

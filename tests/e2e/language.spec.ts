@@ -68,6 +68,30 @@ test.describe("Language Switching", () => {
         })
     })
 
+    test("importing a file that is not a saved prompts export says so in the page's language", async ({
+        page,
+    }) => {
+        await openApp(page, { path: "/zh" })
+        await page.getByRole("button", { name: "常用提示词" }).click()
+        const dialog = page.getByRole("dialog")
+        const input = dialog.locator('input[type="file"][accept*="json"]')
+        // Another app's JSON, then a file that is not JSON at all
+        for (const body of ['{"name":"something else"}', "not json"]) {
+            await input.setInputFiles({
+                name: "other.json",
+                mimeType: "application/json",
+                buffer: Buffer.from(body),
+            })
+            await expect(
+                dialog.getByText("这不是本应用导出的提示词文件。"),
+            ).toBeVisible()
+            await expect(dialog.getByText(/schemaVersion|JSON/)).toHaveCount(0)
+            // The next file shows the message again
+            await page.keyboard.press("Escape")
+            await page.getByRole("button", { name: "常用提示词" }).click()
+        }
+    })
+
     test("a stale offer to switch without saving does nothing once a message is being sent", async ({
         page,
     }) => {

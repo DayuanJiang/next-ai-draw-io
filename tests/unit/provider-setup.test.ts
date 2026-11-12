@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest"
 import {
     filterProviderGroups,
     hasCredentials,
+    isValidBaseUrl,
     PROVIDER_GROUPS,
     providerStatus,
 } from "@/lib/provider-setup"
 import { PROVIDERS } from "@/lib/providers"
-import type { ProviderConfig } from "@/lib/types/model-config"
+import {
+    flattenModels,
+    type ProviderConfig,
+    providerLabel,
+} from "@/lib/types/model-config"
 import { useUiStore } from "@/stores/ui-store"
 
 const provider = (p: Partial<ProviderConfig>): ProviderConfig => ({
@@ -102,6 +107,69 @@ describe("hasCredentials", () => {
         for (const [p, expected] of cases) {
             expect([p, hasCredentials(provider(p))]).toEqual([p, expected])
         }
+    })
+
+    it("does not count a base URL that no request can go to", () => {
+        for (const baseUrl of ["not a url", "127.0.0.1:7140/v1", "ftp://x"]) {
+            expect([baseUrl, isValidBaseUrl(baseUrl)]).toEqual([baseUrl, false])
+            // Required (custom), in place of the default (openai), optional
+            // (ollama): typed in, it is where the requests would go
+            for (const name of ["custom", "openai", "ollama"] as const) {
+                expect(
+                    hasCredentials(
+                        provider({ provider: name, apiKey: "k", baseUrl }),
+                    ),
+                ).toBe(false)
+            }
+        }
+        for (const baseUrl of [
+            "http://127.0.0.1:7140/v1",
+            "https://api.example.com/v1",
+            " HTTPS://API.EXAMPLE.COM ",
+        ]) {
+            expect([baseUrl, isValidBaseUrl(baseUrl)]).toEqual([baseUrl, true])
+        }
+    })
+})
+
+describe("providerLabel", () => {
+    const custom = (id: string, baseUrl: string, name?: string) =>
+        provider({ id, provider: "custom", apiKey: "k", baseUrl, name })
+
+    it("adds the host to providers that would show the same name", () => {
+        const local = custom("a", "http://127.0.0.1:7140/v1")
+        const gateway = custom("b", "https://llm.example.com/v1")
+        const named = custom("c", "https://other.example.com/v1", "Work")
+        const all = [local, gateway, named]
+        expect(all.map((p) => providerLabel(p, all))).toEqual([
+            "OpenAI-compatible (127.0.0.1:7140)",
+            "OpenAI-compatible (llm.example.com)",
+            "Work",
+        ])
+        // The model picker's groups carry the same names
+        const config = {
+            version: 1 as const,
+            providers: all.map((p) => ({
+                ...p,
+                models: [{ id: `m-${p.id}`, modelId: "same-model" }],
+            })),
+        }
+        expect(flattenModels(config).map((m) => m.providerLabel)).toEqual([
+            "OpenAI-compatible (127.0.0.1:7140)",
+            "OpenAI-compatible (llm.example.com)",
+            "Work",
+        ])
+    })
+
+    it("leaves a name alone when it is the only one, or the host says nothing", () => {
+        const local = custom("a", "http://127.0.0.1:7140/v1")
+        expect(providerLabel(local, [local])).toBe("OpenAI-compatible")
+        // Two keys for the same endpoint
+        const twin = custom("b", "http://127.0.0.1:7140/v1")
+        expect(providerLabel(local, [local, twin])).toBe("OpenAI-compatible")
+        // No address yet
+        const empty = custom("c", "")
+        expect(providerLabel(empty, [local, empty])).toBe("OpenAI-compatible")
     })
 })
 

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
+import { isValidBaseUrl } from "@/lib/provider-setup"
 import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import { chatRequestUrl, normalizeBaseUrl } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
@@ -31,20 +32,43 @@ export type SecretField =
 /** Bedrock signs in with an API key or with an access key pair */
 export type BedrockAuth = "apiKey" | "accessKey"
 
-// AWS regions offered for Bedrock (shared by both screens)
+// AWS regions offered for Bedrock (shared by both screens): every region
+// with a Bedrock runtime endpoint, as an account can be limited to one
 export const AWS_REGIONS: Array<[string, string]> = [
     ["us-east-1", "N. Virginia"],
     ["us-east-2", "Ohio"],
+    ["us-west-1", "N. California"],
     ["us-west-2", "Oregon"],
+    ["us-gov-east-1", "GovCloud US-East"],
+    ["us-gov-west-1", "GovCloud US-West"],
+    ["ca-central-1", "Canada Central"],
+    ["ca-west-1", "Calgary"],
+    ["mx-central-1", "Mexico"],
     ["eu-west-1", "Ireland"],
     ["eu-west-2", "London"],
     ["eu-west-3", "Paris"],
     ["eu-central-1", "Frankfurt"],
+    ["eu-central-2", "Zurich"],
+    ["eu-north-1", "Stockholm"],
+    ["eu-south-1", "Milan"],
+    ["eu-south-2", "Spain"],
+    ["il-central-1", "Tel Aviv"],
+    ["me-central-1", "UAE"],
+    ["me-south-1", "Bahrain"],
+    ["af-south-1", "Cape Town"],
     ["ap-south-1", "Mumbai"],
+    ["ap-south-2", "Hyderabad"],
     ["ap-northeast-1", "Tokyo"],
     ["ap-northeast-2", "Seoul"],
+    ["ap-northeast-3", "Osaka"],
     ["ap-southeast-1", "Singapore"],
     ["ap-southeast-2", "Sydney"],
+    ["ap-southeast-3", "Jakarta"],
+    ["ap-southeast-4", "Melbourne"],
+    ["ap-southeast-5", "Malaysia"],
+    ["ap-southeast-6", "New Zealand"],
+    ["ap-southeast-7", "Thailand"],
+    ["ap-east-2", "Taipei"],
     ["sa-east-1", "São Paulo"],
 ]
 
@@ -99,7 +123,20 @@ export function ProviderCredentialsFields({
             : formatMessage(dict.modelConfig.baseUrlWithExample, {
                   example: info.defaultBaseUrl || "https://api.example.com/v1",
               })
-    const requestUrl = baseUrl ? chatRequestUrl(provider, baseUrl) : null
+    const requestUrl =
+        baseUrl && isValidBaseUrl(baseUrl)
+            ? chatRequestUrl(provider, baseUrl)
+            : null
+    // Said once what is typed cannot become an http(s) address any more
+    // (not while "https://" itself is being typed)
+    const typedUrl = (baseUrl ?? "").trim().toLowerCase()
+    const baseUrlError = !!typedUrl &&
+        !isValidBaseUrl(typedUrl) &&
+        !["http://", "https://"].some((s) => s.startsWith(typedUrl)) && (
+            <p className="text-xs text-destructive">
+                {dict.modelConfig.baseUrlInvalid}
+            </p>
+        )
     // Open when it holds something the user set, or for a provider whose
     // base URL usually needs changing or comes with a hint
     const [optionsOpen, setOptionsOpen] = useState(
@@ -188,6 +225,7 @@ export function ProviderCredentialsFields({
                 placeholder={dict.modelConfig.customEndpoint}
                 className="h-9 font-mono text-xs"
             />
+            {baseUrlError}
         </div>
     )
     // API key, with a link to where the provider issues keys
@@ -243,6 +281,7 @@ export function ProviderCredentialsFields({
                 }
                 className="h-9 rounded-xl font-mono text-xs"
             />
+            {baseUrlError}
             {requestUrl && (
                 <p className="text-xs text-muted-foreground font-mono break-all">
                     {formatMessage(dict.modelConfig.requestUrl, {

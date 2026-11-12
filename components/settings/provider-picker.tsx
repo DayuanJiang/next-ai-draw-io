@@ -105,15 +105,18 @@ export function ProviderPicker({
                                             type="button"
                                             onClick={() => onPick(provider)}
                                             data-testid={`pick-provider-${provider}`}
-                                            className="flex h-[46px] min-w-0 items-center gap-2.5 rounded-xl border border-border px-3 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            className="flex min-h-[46px] min-w-0 items-center gap-2.5 rounded-xl border border-border px-2.5 py-1 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
                                             <ProviderLogo
                                                 provider={provider}
                                                 className="shrink-0"
                                             />
                                             <span className="min-w-0 leading-tight">
+                                                {/* A long name ("OpenAI-compatible")
+                                                    takes a second line instead
+                                                    of being cut short */}
                                                 <span
-                                                    className="block truncate text-[12.5px] font-medium"
+                                                    className="line-clamp-2 text-[12.5px] font-medium"
                                                     title={
                                                         PROVIDERS[provider]
                                                             .label

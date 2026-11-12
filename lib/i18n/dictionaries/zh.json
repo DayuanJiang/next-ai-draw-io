@@ -99,6 +99,8 @@
         "customSystemMessagePlaceholder": "例如：图表始终使用蓝色配色方案...",
         "maxOutputTokens": "输出 token 上限",
         "maxOutputTokensDescription": "单次回复的额度，思考过程和图表 XML 共用。如果 AI 一直在思考却没有生成图表，请把它调大。留空则使用默认值。",
+        "maxOutputTokensIgnored": "请输入 1 到 {max} 之间的整数。其他数值会被忽略，按默认值处理。",
+        "maxOutputTokensServerCap": "服务器提供的模型最多用到 {limit}。更高的数值只对使用您自己 API Key 的模型生效。",
         "tabModels": "模型",
         "tabAbout": "关于",
         "themeLight": "浅色",
@@ -244,7 +246,7 @@
         "deleteDescription": "图纸和它的对话会被永久删除。",
         "justNow": "刚刚",
         "searchPlaceholder": "搜索图纸…",
-        "noResults": "未找到对话",
+        "noResults": "未找到图纸",
         "rename": "重命名",
         "busyHint": "回答完成后才能切换"
     },
@@ -290,6 +292,7 @@
         "exportSuccess": "已导出 {count} 个提示词",
         "importNoFile": "请选择一个 JSON 文件",
         "importFailed": "导入失败：{error}",
+        "importInvalid": "这不是本应用导出的提示词文件。",
         "importSuccess": "已导入 {imported} 个提示词，跳过 {skipped} 个重复",
         "saveDisabledHint": "先在输入框里写好提示词"
     },
@@ -334,6 +337,7 @@
         "requestUrl": "请求将发往 {url}",
         "baseUrlWithExample": "基础 URL（可选，例如 {example}）",
         "baseUrlRequired": "基础 URL（必填）",
+        "baseUrlInvalid": "地址要以 http:// 或 https:// 开头",
         "customEndpoint": "自定义端点 URL",
         "models": "模型",
         "customModelId": "自定义模型 ID...",

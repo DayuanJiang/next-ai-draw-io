@@ -467,8 +467,9 @@ export function ModelsSection({
 
     return (
         <div className="flex min-h-72 flex-col sm:flex-row">
-            {/* Provider list */}
-            <div className="flex w-full shrink-0 flex-col border-b sm:w-52 sm:border-b-0 sm:border-r">
+            {/* Provider list, wide enough for "Amazon Bedrock" beside its
+                source label and star */}
+            <div className="flex w-full shrink-0 flex-col border-b sm:w-64 sm:border-b-0 sm:border-r">
                 <div className="flex-1 space-y-1 p-2">
                     {providers.length === 0 && envProviders.length === 0 && (
                         <p className="px-2 py-6 text-center text-xs text-muted-foreground">
