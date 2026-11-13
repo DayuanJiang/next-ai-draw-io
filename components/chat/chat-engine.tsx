@@ -59,6 +59,7 @@ import { pageModelXml, placeOnPage } from "@/lib/diagram-pages"
 import { EMPTY_DRAWIO_DOCUMENT } from "@/lib/drawio/drawio-config"
 import { clearHighlights } from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
+import { isLookupTool } from "@/lib/lookup-tools"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import type { SessionMetadata, StoredMessage } from "@/lib/session-storage"
 import { sanitizeMessages } from "@/lib/session-storage"
@@ -629,14 +630,15 @@ export function ChatEngineProvider({
                         last?.role === "assistant" ? last.parts.at(-1) : null
                     const lastTool =
                         lastPart && isToolUIPart(lastPart) ? lastPart : null
-                    // The answer goes on after a shape library lookup (the
-                    // model draws next) and after a failed call (the app
-                    // sends it back): their rows say "loaded" and "failed"
+                    // The answer goes on after a lookup (a shape library, a
+                    // drawing guide: the model draws next) and after a failed
+                    // call (the app sends it back): their rows say "loaded"
+                    // and "failed"
                     const wentOn =
                         lastTool?.state === TOOL_ERROR_STATE
                             ? lastTool.errorText !== "Stopped by user"
                             : lastTool?.state === "output-available" &&
-                              getToolName(lastTool) === "get_shape_library"
+                              isLookupTool(getToolName(lastTool))
                     return lastTool && !wentOn
                         ? current
                         : [
@@ -714,14 +716,12 @@ export function ChatEngineProvider({
             const outOfTokens =
                 finishReason === "length" &&
                 lastTool?.state !== TOOL_ERROR_STATE
-            // The server's step limit ended the answer on a step of shape
-            // library lookups, before the model drew with what it found
+            // The server's step limit ended the answer on a step of
+            // lookups, before the model drew with what it found
             const lookupOnly =
                 finishReason === "tool-calls" &&
                 lastTool?.state === "output-available" &&
-                stepTools.every(
-                    (part) => getToolName(part) === "get_shape_library",
-                )
+                stepTools.every((part) => isLookupTool(getToolName(part)))
             // The model answered with nothing: no words and no tool call
             // (some providers do when a filter drops the content)
             const empty =
@@ -1938,7 +1938,7 @@ export function ChatEngineProvider({
                         (p) =>
                             isToolUIPart(p) &&
                             p.state === "output-available" &&
-                            getToolName(p) !== "get_shape_library",
+                            !isLookupTool(getToolName(p)),
                     ),
                 )
         const xml = drawnSince ? savedXml : chartXMLRef.current || savedXml

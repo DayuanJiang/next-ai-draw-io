@@ -16,6 +16,7 @@ import {
 import { CodeBlock } from "@/components/code-block"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { useCopy } from "@/lib/clipboard"
+import { isLookupTool } from "@/lib/lookup-tools"
 import { cn, isMxCellXmlComplete } from "@/lib/utils"
 import { type DiagramVersion, useVersionsStore } from "@/stores/versions-store"
 import { useChatEngine } from "./chat-engine"
@@ -277,17 +278,25 @@ export function ToolActivity({
     // The answer ended before the call did (stopped, network error)
     const running = isLastMessage && engine.isBusy
 
-    if (toolName === "get_shape_library" && state !== "output-error") {
+    if (isLookupTool(toolName) && state !== "output-error") {
         const isDone = state === "output-available"
+        // A shape library, or the drawing guide of a diagram type
+        const isGuide = toolName === "get_diagram_guide"
         return (
             <ToolRow
                 part={part}
                 icon={<Library />}
                 label={
                     isDone ? (
-                        t.libraryLoaded
+                        isGuide ? (
+                            t.guideLoaded
+                        ) : (
+                            t.libraryLoaded
+                        )
                     ) : running ? (
-                        <Shimmer as="span">{t.loadingLibrary}</Shimmer>
+                        <Shimmer as="span">
+                            {isGuide ? t.loadingGuide : t.loadingLibrary}
+                        </Shimmer>
                     ) : (
                         t.stopped
                     )

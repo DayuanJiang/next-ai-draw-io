@@ -2,6 +2,10 @@ import { type InferUITools, tool } from "ai"
 import path from "path"
 import { z } from "zod"
 import {
+    DIAGRAM_TYPE_LIST,
+    getDiagramGuide,
+} from "@/packages/mcp-server/src/diagram-types/index.ts"
+import {
     getShapeLibrary,
     SHAPE_LIBRARY_LIST,
 } from "@/packages/mcp-server/src/shape-library.ts"
@@ -14,7 +18,7 @@ import {
  * The chat's tools. display_diagram, edit_diagram and append_diagram run in
  * the browser: the chat engine's tool handler puts their result on the
  * canvas and reports it back as text, so they have an output schema and no
- * execute. get_shape_library runs on the server.
+ * execute. get_shape_library and get_diagram_guide run on the server.
  */
 export const chatTools = {
     display_diagram: tool({
@@ -132,6 +136,21 @@ Call this tool to get shape names and usage syntax for a specific library.`,
             const result = await getShapeLibrary(
                 library,
                 path.join(process.cwd(), "docs/shape-libraries"),
+            )
+            return result.ok ? result.text : result.error
+        },
+    }),
+    get_diagram_guide: tool({
+        description: `Get the drawing guide for a diagram type: the shapes, styles and positions that draw it correctly in draw.io. Call it before display_diagram when the diagram to draw is one of these types, whether or not the user named the type:
+${DIAGRAM_TYPE_LIST}`,
+        inputSchema: z.object({
+            type: z.string().describe("Diagram type (e.g., 'sequence')"),
+        }),
+        execute: async ({ type }) => {
+            const result = getDiagramGuide(
+                type,
+                "display_diagram",
+                "edit_diagram",
             )
             return result.ok ? result.text : result.error
         },

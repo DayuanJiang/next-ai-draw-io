@@ -41,6 +41,7 @@ import {
     guideWithCustomInstructions,
 } from "./custom-instructions.ts"
 import { notesText } from "./diagram-operations.ts"
+import { DIAGRAM_TYPE_NAMES, getDiagramGuide } from "./diagram-types/index.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
@@ -469,18 +470,36 @@ registerTool(
         description:
             "Return the drawing guide: XML format, layout, edge routing, style and editing rules. " +
             "start_session already returns it; call this only if the guide is no longer in your context. " +
-            "With topic, returns a short XML reference for tables, layers or groups.",
+            "With topic, returns a short XML reference for tables, layers or groups, " +
+            `or the drawing guide of a diagram type (${DIAGRAM_TYPE_NAMES.join(", ")}): call that before drawing a diagram of the type.`,
         inputSchema: {
             topic: z
-                .enum(["tables", "layers", "groups"])
+                .string()
                 .optional()
                 .describe(
-                    "Return only the XML reference for this topic instead of the whole guide.",
+                    `Return only this topic instead of the whole guide: tables, layers, groups, or a diagram type (${DIAGRAM_TYPE_NAMES.join(", ")}).`,
                 ),
         },
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ topic }) => ok(topic ? XML_REFERENCE[topic] : guideText()),
+    async ({ topic }) => {
+        if (!topic) return ok(guideText())
+        const name = topic.trim().toLowerCase()
+        if (Object.hasOwn(XML_REFERENCE, name)) {
+            return ok(XML_REFERENCE[name as keyof typeof XML_REFERENCE])
+        }
+        // The user's own drawing rules come along, as with the whole guide
+        const guide = getDiagramGuide(
+            name,
+            "create_new_diagram",
+            "edit_diagram",
+        )
+        return guide.ok
+            ? ok(guideWithCustomInstructions(guide.text))
+            : fail(
+                  `${guide.error} Other topics: ${Object.keys(XML_REFERENCE).join(", ")}.`,
+              )
+    },
 )
 
 // Tool: get_shape_library

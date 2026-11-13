@@ -222,6 +222,36 @@ describe("MCP server wiring", () => {
         expect(text).toContain("shape=table")
         expect(text).not.toContain("Edge routing rules")
     })
+
+    it("serves a diagram type's guide with topic=sequence, with the user's rules", async () => {
+        const result = await callTool("get_drawing_guide", {
+            topic: "sequence",
+        })
+        expect(result.isError).toBeFalsy()
+        const text = textOf(result)
+        expect(text).toContain("shape=umlLifeline")
+        // Written for this server's tools
+        expect(text).toContain("Now call create_new_diagram.")
+        expect(text).not.toContain("Edge routing rules")
+        expect(
+            text.endsWith(`\n\n## Custom Instructions\n${CUSTOM_RULE}`),
+        ).toBe(true)
+    })
+
+    it("names the topics when asked for one it does not have", async () => {
+        const result = await callTool("get_drawing_guide", {
+            topic: "flowchart",
+        })
+        expect(result.isError).toBe(true)
+        expect(textOf(result)).toContain("sequence")
+        expect(textOf(result)).toContain("tables")
+    })
+
+    it("lists the diagram types with a guide in the drawing guide", async () => {
+        const text = textOf(await callTool("get_drawing_guide", {}))
+        expect(text).toContain("topic=<type>")
+        expect(text).toContain("  - sequence: ")
+    })
 })
 
 describe("load_diagram dual-source arguments", () => {

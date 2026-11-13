@@ -8,6 +8,7 @@
  * (app/api/chat/route.ts); when they change there, update this file too.
  */
 
+import { DIAGRAM_TYPE_LIST } from "./diagram-types/index.ts"
 import {
     CUSTOM_DATA_EXAMPLE,
     CUSTOM_DATA_RULE,
@@ -72,7 +73,8 @@ Large diagrams: if the diagram will not fit one call, send the first cells with 
 - Start near x=40, y=40 and keep elements grouped closely.
 - For large diagrams, stack vertically or use a grid instead of spreading wide.
 - Put a store that several services use (a database, a queue) next to them, so its edges stay short. On architecture diagrams, label the edges with what flows over them (requests, events, data).
-- Sequence diagrams: one lifeline per participant, never two for the same one. Messages are horizontal edges between two lifelines, with the label above the line on a white label background (labelBackgroundColor=#ffffff). Notes go beside a lifeline, never on it.
+- Diagram types with a guide of their own: before drawing one, named by the user or not, call get_drawing_guide with topic=<type> and follow it:
+${DIAGRAM_TYPE_LIST.replace(/^/gm, "  ")}
 
 ## Edge routing rules
 Rule 1: Never let two edges share a path. Two edges between the same nodes exit and enter at different points (exitY=0.3 for the first, exitY=0.7 for the second, not both 0.5).
