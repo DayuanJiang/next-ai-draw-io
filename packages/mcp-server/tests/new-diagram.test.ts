@@ -579,6 +579,37 @@ describe("a number attribute written without its closing quote", () => {
     })
 })
 
+describe("a wrapped cell with its parent written on the wrapper", () => {
+    // draw.io reads parent, style and geometry only on the mxCell inside. A
+    // model put them on the <object> of every step of a swimlane diagram:
+    // the steps, placed from their lane's corner, all stood in the page's
+    const LANE =
+        '<mxCell id="2" value="Lane" style="swimlane;startSize=30;" x="40" y="40" w="220" h="300"/>'
+
+    it("moves parent and style to the cell, so the step stays in its lane", () => {
+        const out = prepareNewDiagram(
+            `${LANE}<object label="Step" tooltip="more" id="3" parent="2" style="rounded=1;"><mxCell x="40" y="50" w="140" h="60"/></object>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<object label="Step" tooltip="more" id="3"><mxCell style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="2">',
+        )
+        expect(out.notes).toEqual([])
+    })
+
+    it("keeps what the cell says itself, and the wrapper's own data", () => {
+        const out = prepareNewDiagram(
+            `${LANE}<UserObject label="Step" link="https://example.com" id="3" parent="9"><mxCell parent="2" x="40" y="50" w="140" h="60"/></UserObject>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<UserObject label="Step" link="https://example.com" id="3" parent="9"><mxCell vertex="1" parent="2"',
+        )
+    })
+})
+
 describe("a line written with waypoints and no ends", () => {
     // GPT-6 Luna writes a sequence diagram's message to itself this way in
     // some drawings. As a shape it was a text of no width at the corner of

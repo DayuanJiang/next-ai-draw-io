@@ -165,74 +165,128 @@ export function hasShapeWithoutPlace(xml: string): boolean {
     })
 }
 
+// What belongs on the mxCell inside an <object> or <UserObject> wrapper
+const CELL_ATTRS = [
+    "style",
+    "parent",
+    "source",
+    "target",
+    "vertex",
+    "edge",
+    "connectable",
+    "x",
+    "y",
+    "w",
+    "h",
+    "width",
+    "height",
+]
+
+/**
+ * A model sometimes writes a wrapped cell's parent, style or size on the
+ * wrapper. draw.io reads them only on the mxCell inside, so the cell would
+ * land on the page's layer: the steps of a swimlane diagram, written with
+ * positions counted from their lane, all in the page's corner. They are
+ * moved to the mxCell, unless that has the attribute itself.
+ */
+function wrapperAttributesToCell(xml: string): string {
+    return xml.replace(
+        WRAPPED_CELL_BLOCK,
+        (block, wrapperText: string | undefined, cellText: string) => {
+            if (wrapperText === undefined) return block
+            const own = new Set(readAttributes(cellText).map((a) => a.name))
+            const outer = readAttributes(wrapperText)
+            const moved = outer.filter(
+                (a) => CELL_ATTRS.includes(a.name) && !own.has(a.name),
+            )
+            if (moved.length === 0) return block
+            const tag = block.startsWith("<UserObject")
+                ? "UserObject"
+                : "object"
+            const kept = outer.filter((a) => !moved.includes(a))
+            const cell = block.slice(block.indexOf("<mxCell"))
+            return `<${tag}${attributeText(kept)}>${cell.replace("<mxCell", `<mxCell${attributeText(moved)}`)}`
+        },
+    )
+}
+
 /**
  * Turn compact shapes and edges into standard draw.io cells. A cell with no
  * parent goes on `layer`, the page's default layer (defaultLayerOf; "1" on
  * a new page).
  */
 export function expandCompactCells(xml: string, layer = "1"): string {
-    return xml.replace(CELL_BLOCK, (block, attrText: string, body?: string) => {
-        const attrs = readAttributes(attrText)
-        const byName = new Map(attrs.map((a) => [a.name, a.value]))
-        const size = attrs.filter((a) => isSize(a.name))
-        const inner = body ?? ""
-        const hasGeometry = OWN_GEOMETRY.test(inner)
-        const kind = kindOf(byName, inner)
-        // Root cells and anything else the model wrote in full are left alone
-        if (!kind) return block
-        const isEdge = kind === "edge"
-        const isVertex = kind === "vertex"
-        const complete =
-            size.length === 0 &&
-            byName.has(isEdge ? "edge" : "vertex") &&
-            byName.has("parent") &&
-            hasGeometry
-        if (complete) return block
+    const cells = wrapperAttributesToCell(xml)
+    return cells.replace(
+        CELL_BLOCK,
+        (block, attrText: string, body?: string) => {
+            const attrs = readAttributes(attrText)
+            const byName = new Map(attrs.map((a) => [a.name, a.value]))
+            const size = attrs.filter((a) => isSize(a.name))
+            const inner = body ?? ""
+            const hasGeometry = OWN_GEOMETRY.test(inner)
+            const kind = kindOf(byName, inner)
+            // Root cells and anything else the model wrote in full are left alone
+            if (!kind) return block
+            const isEdge = kind === "edge"
+            const isVertex = kind === "vertex"
+            const complete =
+                size.length === 0 &&
+                byName.has(isEdge ? "edge" : "vertex") &&
+                byName.has("parent") &&
+                hasGeometry
+            if (complete) return block
 
-        // The compact attributes become the geometry; when the cell has its
-        // own geometry already they stay as written, in case they mean
-        // something else to whoever wrote them
-        const consumed = !hasGeometry && isVertex
-        const rest = attrs.filter(
-            (a) =>
-                !FIRST.includes(a.name) &&
-                !LAST.includes(a.name) &&
-                !(consumed && isSize(a.name)) &&
-                !(isEdge && isSize(a.name)),
-        )
-        // Rebuilt in the usual order: id, value, style, the rest, then the
-        // flags and the connections
-        const ordered: [string, string][] = [
-            ...FIRST.flatMap((n): [string, string][] =>
-                byName.has(n) ? [[n, byName.get(n) ?? ""]] : [],
-            ),
-            ...rest.map((a): [string, string] => [a.name, a.value]),
-            [isEdge ? "edge" : "vertex", "1"],
-            ["parent", byName.get("parent") ?? layer],
-            ...["source", "target"].flatMap((n): [string, string][] =>
-                byName.has(n) ? [[n, byName.get(n) ?? ""]] : [],
-            ),
-        ]
-        const written = ordered.map(([n, v]) => attr(n, v)).join("")
-        let geometry = ""
-        if (!hasGeometry) {
-            if (isEdge) {
-                geometry = '<mxGeometry relative="1" as="geometry"/>'
-            } else {
-                // A model may end a number as it ends a style entry (h="19;").
-                // draw.io reads 19 and writes 19 back, so the semicolon is
-                // dropped here: left in, draw.io's copy of the cell would
-                // differ from the saved one and look like a hand edit
-                const get = (short: string, long: string, fallback: string) =>
-                    (byName.get(short) ?? byName.get(long) ?? fallback).replace(
-                        /^(-?\d+(?:\.\d+)?);$/,
-                        "$1",
-                    )
-                geometry = `<mxGeometry${attr("x", get("x", "x", "0"))}${attr("y", get("y", "y", "0"))}${attr("width", get("w", "width", "120"))}${attr("height", get("h", "height", "60"))} as="geometry"/>`
+            // The compact attributes become the geometry; when the cell has its
+            // own geometry already they stay as written, in case they mean
+            // something else to whoever wrote them
+            const consumed = !hasGeometry && isVertex
+            const rest = attrs.filter(
+                (a) =>
+                    !FIRST.includes(a.name) &&
+                    !LAST.includes(a.name) &&
+                    !(consumed && isSize(a.name)) &&
+                    !(isEdge && isSize(a.name)),
+            )
+            // Rebuilt in the usual order: id, value, style, the rest, then the
+            // flags and the connections
+            const ordered: [string, string][] = [
+                ...FIRST.flatMap((n): [string, string][] =>
+                    byName.has(n) ? [[n, byName.get(n) ?? ""]] : [],
+                ),
+                ...rest.map((a): [string, string] => [a.name, a.value]),
+                [isEdge ? "edge" : "vertex", "1"],
+                ["parent", byName.get("parent") ?? layer],
+                ...["source", "target"].flatMap((n): [string, string][] =>
+                    byName.has(n) ? [[n, byName.get(n) ?? ""]] : [],
+                ),
+            ]
+            const written = ordered.map(([n, v]) => attr(n, v)).join("")
+            let geometry = ""
+            if (!hasGeometry) {
+                if (isEdge) {
+                    geometry = '<mxGeometry relative="1" as="geometry"/>'
+                } else {
+                    // A model may end a number as it ends a style entry (h="19;").
+                    // draw.io reads 19 and writes 19 back, so the semicolon is
+                    // dropped here: left in, draw.io's copy of the cell would
+                    // differ from the saved one and look like a hand edit
+                    const get = (
+                        short: string,
+                        long: string,
+                        fallback: string,
+                    ) =>
+                        (
+                            byName.get(short) ??
+                            byName.get(long) ??
+                            fallback
+                        ).replace(/^(-?\d+(?:\.\d+)?);$/, "$1")
+                    geometry = `<mxGeometry${attr("x", get("x", "x", "0"))}${attr("y", get("y", "y", "0"))}${attr("width", get("w", "width", "120"))}${attr("height", get("h", "height", "60"))} as="geometry"/>`
+                }
             }
-        }
-        return `<mxCell${written}>${geometry}${inner}</mxCell>`
-    })
+            return `<mxCell${written}>${geometry}${inner}</mxCell>`
+        },
+    )
 }
 
 /** Attributes of a single self-closing mxGeometry, or null for anything else */
