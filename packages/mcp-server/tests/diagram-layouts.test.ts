@@ -432,8 +432,8 @@ describe("the sequence layout", () => {
 <mxCell id="4" value="start" style="msg;${at(80)}" source="2" target="3"/>
 <mxCell id="5" value="loop" style="shape=umlFrame;width=50;height=20;fillColor=none;" x="90" y="130" w="220" h="110"/>
 <mxCell id="6" value="while items remain" style="text;align=left;" x="150" y="130" w="150" h="20"/>
-<mxCell id="7" value="next item" style="msg;${at(120)}" source="2" target="3"/>
-<mxCell id="8" value="done" style="msg;${at(160)}" source="3" target="2"/>`,
+<mxCell id="7" value="next item" style="msg;${at(140)}" source="2" target="3"/>
+<mxCell id="8" value="done" style="msg;${at(180)}" source="3" target="2"/>`,
             {},
             "sequence",
         )
@@ -480,6 +480,30 @@ describe("the sequence layout", () => {
         expect(styleNumber(cell("6"), "exitDy")).toBeGreaterThanOrEqual(
             styleNumber(cell("5"), "entryDy") + 20,
         )
+    })
+
+    it("takes a message drawn in a frame's title row for the last one before the frame", () => {
+        // The frame starts at 130 and its tab is 20 high: the message at
+        // 40 + 120 = 160 lies in the title row, on the frame's condition
+        const out = prepareNewDiagram(
+            `${STYLES}
+<mxCell id="2" value="A" style="life;" x="40" y="40" w="120" h="240"/>
+<mxCell id="3" value="B" style="life;" x="240" y="40" w="120" h="240"/>
+<mxCell id="4" value="start" style="msg;${at(80)}" source="2" target="3"/>
+<mxCell id="5" value="loop" style="shape=umlFrame;width=50;height=20;fillColor=none;" x="90" y="130" w="220" h="110"/>
+<mxCell id="6" value="while items remain" style="text;align=left;" x="150" y="130" w="150" h="20"/>
+<mxCell id="7" value="ready" style="msg;${at(120)}" source="3" target="2"/>
+<mxCell id="8" value="next item" style="msg;${at(160)}" source="2" target="3"/>`,
+            {},
+            "sequence",
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        const { cell, number } = page(out.xml)
+        const row = (id: string) => 40 + styleNumber(cell(id), "exitDy")
+        expect(row("7")).toBeLessThan(number("5", "y"))
+        expect(row("8")).toBeGreaterThan(number("5", "y") + 20)
+        expect(row("8")).toBeLessThan(number("5", "y") + number("5", "height"))
     })
 
     it("leaves a drawing with shapes on its lifelines alone", () => {

@@ -152,9 +152,14 @@ export function layoutSequence(root: Element): string[] {
         )
         .map((cell) => {
             const drawn = boxOf(cell) as Box
+            const tabH = Number(styleValue(cell.style, "height") ?? 30)
+            // (a message drawn in the frame's title row is the last one
+            // before the frame: models put it there now and then)
             const inside = messages
                 .map((m, i) =>
-                    m.y > drawn.y && m.y < drawn.y + drawn.h ? i : -1,
+                    m.y > drawn.y + tabH + 12 && m.y < drawn.y + drawn.h
+                        ? i
+                        : -1,
                 )
                 .filter((i) => i >= 0)
             return {
