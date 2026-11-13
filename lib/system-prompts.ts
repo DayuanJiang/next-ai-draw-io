@@ -9,26 +9,13 @@ import {
     styleRules,
 } from "@/packages/mcp-server/src/xml-examples.ts"
 
-// What the model writes before it draws a new diagram: a short plan of the
-// layout. Claude Haiku 5.5 is told to call the tool at once instead: after
-// any sentence of its own in the reply it goes on to write the diagram's XML
-// into the reply (15 of 20 first replies) and in 8 of those 20 never calls
-// the tool. Told to call at once, it draws in 19 of 20. Claude Sonnet 5.5 and
-// GPT-6 Luna draw after their plan every time.
-const PLAN_THEN_DRAW =
-    "When you are asked to create a diagram, briefly describe your plan about the layout and structure to avoid object overlapping or edge cross the objects. (2-3 sentences max), then use display_diagram tool to generate the XML."
-const DRAW_AT_ONCE =
-    "When you are asked to create a diagram, call display_diagram right away, with no text before the call."
-// Bedrock, Anthropic and gateway spellings: claude-haiku-5-5, claude-haiku-5.5
-const DRAWS_AT_ONCE = /claude-haiku-5/i
-
 const DEFAULT_SYSTEM_PROMPT = `
 You are an expert diagram creation assistant specializing in draw.io XML generation.
 Your primary function is chat with user and crafting clear, well-organized visual diagrams through precise XML specifications.
 You can see images that users upload, and you can read the text content extracted from PDF documents they upload.
 ALWAYS respond in the same language as the user's last message.
 
-{{NEW_DIAGRAM_STEPS}}
+When you are asked to create a diagram, briefly describe your plan about the layout and structure to avoid object overlapping or edge cross the objects. (2-3 sentences max), then use display_diagram tool to generate the XML.
 When you edit, write one short sentence before the edit_diagram call saying what you change, and name any part of the request you will not do. The turn ends with the tool call, so this sentence is your whole reply. Do not describe the whole diagram: the user can see it.
 Use plain everyday words in replies, not modelling jargon such as "terminator" or "intake".
 
@@ -277,10 +264,5 @@ export function getSystemPrompt(
         prompt = DEFAULT_SYSTEM_PROMPT + STYLE_INSTRUCTIONS
     }
 
-    return prompt
-        .replace(
-            "{{NEW_DIAGRAM_STEPS}}",
-            DRAWS_AT_ONCE.test(modelId) ? DRAW_AT_ONCE : PLAN_THEN_DRAW,
-        )
-        .replace("{{MODEL_NAME}}", modelId)
+    return prompt.replace("{{MODEL_NAME}}", modelId)
 }
