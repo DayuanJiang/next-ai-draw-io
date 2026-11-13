@@ -196,6 +196,10 @@ function placeBehind(
     return { before, covered }
 }
 
+// A UML stereotype as it is typed: <<include>>, <<use case>>. With a space
+// after the first pair ("a << b") draw.io shows the text as written
+const STEREOTYPE = /<<(\p{L}[^<>]{0,40})>>/gu
+
 /** Up to ten ids, and how many more there are */
 const listIds = (ids: string[]) =>
     ids.slice(0, 10).join(", ") +
@@ -209,7 +213,9 @@ const listIds = (ids: string[]) =>
  * repairs: a source or target that names no cell of the page is removed, and
  * a cell whose parent is missing goes on the page's layer. draw.io does both
  * when it loads the page; its corrected copy would then come back from the
- * browser looking like a hand edit by the user. Each repair is also a note.
+ * browser looking like a hand edit by the user. A stereotype typed as
+ * <<include>> becomes «include»: draw.io would show "<>" (4 of 10 use case
+ * diagrams of real requests had one). Each repair is also a note.
  *
  * notes: shapes that reach outside their container (a child's x and y count
  * from the container's corner; a model that writes page coordinates there
@@ -230,6 +236,7 @@ export function reviewCells(
     const outside: string[] = []
     const literal: string[] = []
     const pictures: string[] = []
+    const stereotypes: string[] = []
     for (const id of ids ?? cells.keys()) {
         const cell = cells.get(id)
         const inner = cell && innerCell(cell)
@@ -261,13 +268,29 @@ export function reviewCells(
         ) {
             outside.push(id)
         }
+        // getAttributeNode gives the decoded value (linkedom's getAttribute
+        // escapes it again in an XML document)
         const label =
-            cell.getAttribute("value") ?? cell.getAttribute("label") ?? ""
+            (cell.getAttributeNode("value") ?? cell.getAttributeNode("label"))
+                ?.value ?? ""
         // (a Windows path, C:\new or \\nas01\backup, has one by its nature)
         if (label.includes("\\n") && !/[A-Za-z]:\\|\\\\/.test(label)) {
             literal.push(id)
         }
-        if (inner.getAttribute("style")?.includes("embedded-image-")) {
+        // A stereotype typed as <<include>>: an html=1 label is HTML, so
+        // draw.io takes <include> for a tag and shows only "<>"
+        const style = inner.getAttribute("style") ?? ""
+        const kept = /(^|;)html=1(;|$)/.test(style)
+            ? label.replace(STEREOTYPE, "«$1»")
+            : label
+        if (kept !== label) {
+            cell.setAttribute(
+                cell.hasAttribute("value") ? "value" : "label",
+                kept,
+            )
+            stereotypes.push(id)
+        }
+        if (style.includes("embedded-image-")) {
             pictures.push(id)
         }
     }
@@ -280,6 +303,11 @@ export function reviewCells(
     if (orphans.length > 0) {
         repairs.push(
             `Put on the page itself, as the parent is no cell on this page: ${orphans.join(", ")}.`,
+        )
+    }
+    if (stereotypes.length > 0) {
+        repairs.push(
+            `Wrote <<name>> as «name» in: ${listIds(stereotypes)}. A label is HTML, so draw.io takes <name> for a tag and shows only <>.`,
         )
     }
     const notes: string[] = []

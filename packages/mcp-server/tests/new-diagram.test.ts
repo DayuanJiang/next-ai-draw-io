@@ -462,6 +462,19 @@ describe("what a drawing tells the model about its cells", () => {
         )
     })
 
+    it("writes a stereotype typed as <<name>> with « and », which draw.io shows", () => {
+        const out = prepareNewDiagram(
+            `${A}${B}<mxCell id="5" value="&lt;&lt;include&gt;&gt;" source="2" target="3"/><mxCell id="6" value="x &lt;&lt; 2" x="40" y="140" w="120" h="60"/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('<mxCell id="5" value="«include»"')
+        expect(out.xml).toContain('<mxCell id="6" value="x &lt;&lt; 2"')
+        expect(out.fixes).toEqual([
+            "Wrote <<name>> as «name» in: 5. A label is HTML, so draw.io takes <name> for a tag and shows only <>.",
+        ])
+    })
+
     it("writes an embedded picture the way draw.io does, without ;base64", () => {
         const out = prepareNewDiagram(
             '<mxCell id="2" style="shape=image;image=data:image/png;base64,iVBORw0KGgo=;" x="0" y="0" w="40" h="40"/>',

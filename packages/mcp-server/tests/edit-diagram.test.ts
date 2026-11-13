@@ -495,6 +495,51 @@ describe("what an edit tells the model about the cells it wrote", () => {
         ])
     })
 
+    it("writes a stereotype typed as <<name>> with « and », which draw.io shows", () => {
+        const out = editDiagram(
+            doc,
+            [
+                add(
+                    "inc",
+                    'value="&lt;&lt;include&gt;&gt;" source="a" target="a"',
+                ),
+                add(
+                    "iface",
+                    'value="&lt;&lt;interface&gt;&gt;&lt;br&gt;&lt;b&gt;Shape&lt;/b&gt;" x="0" y="100" w="120" h="60"',
+                ),
+                // Shown as written: escaped twice, a comparison, a shift
+                add(
+                    "twice",
+                    'value="&amp;lt;&amp;lt;extend&amp;gt;&amp;gt;" x="0" y="200" w="120" h="40"',
+                ),
+                add(
+                    "less",
+                    'value="a &lt;&lt; b" x="0" y="300" w="120" h="40"',
+                ),
+                // A label that is not HTML shows every character
+                add(
+                    "plain",
+                    'value="&lt;&lt;include&gt;&gt;" style="html=0;" x="0" y="400" w="120" h="40"',
+                ),
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('id="inc" value="«include»"')
+        expect(out.xml).toContain(
+            'id="iface" value="«interface»&lt;br&gt;&lt;b&gt;Shape&lt;/b&gt;"',
+        )
+        expect(out.xml).toContain(
+            'id="twice" value="&amp;lt;&amp;lt;extend&amp;gt;&amp;gt;"',
+        )
+        expect(out.xml).toContain('id="less" value="a &lt;&lt; b"')
+        expect(out.xml).toContain('id="plain" value="&lt;&lt;include&gt;&gt;"')
+        expect(out.fixes).toEqual([
+            "Wrote <<name>> as «name» in: inc, iface. A label is HTML, so draw.io takes <name> for a tag and shows only <>.",
+        ])
+    })
+
     it("names references to pictures the diagram does not have", () => {
         const out = editDiagram(
             doc,
