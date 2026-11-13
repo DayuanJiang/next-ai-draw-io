@@ -550,23 +550,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // of the chat: the diagram goes with the user messages (above). One
     // message also suits the providers that accept only one (MiniMax, chat
     // templates of open models behind OpenAI-compatible endpoints).
-    //
-    // The system prompt names the reply language, and for every model but
-    // GPT-6 Luna the message ends with a second sentence about it. Each
-    // user message ends with canvas notes in English, and without that
-    // sentence DeepSeek V3.2 answers Japanese and Korean requests to edit
-    // a diagram with English labels in English about three times as often
-    // (217 of 400 replies, 74 of 400 with it). GPT-6 Luna (model ids that
-    // contain gpt-6-luna) gets the system prompt's sentence alone: with
-    // the second one it answers an English request that quotes its labels
-    // in Spanish or Russian about ten times as often (24 of 228 first
-    // replies, 4 of 432 without it).
     const systemMessages = [
         {
             role: "system" as const,
-            content: /gpt-6-luna/i.test(modelId)
-                ? finalSystemMessage
-                : `${finalSystemMessage}\n\nWrite your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or the canvas notes in square brackets.`,
+            content: `${finalSystemMessage}\n\nWrite your reply in the language of the user's own words in their latest message, not in the language of the diagram, attached files or the canvas notes in square brackets.`,
             ...(shouldCache && { providerOptions: CACHE_POINT }),
         },
     ]

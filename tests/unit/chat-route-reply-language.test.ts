@@ -1,18 +1,11 @@
 // @vitest-environment node
 /**
- * How often the request tells the model which language to answer in.
- *
- * GPT-6 Luna (model ids that contain gpt-6-luna): once, in the system
- * prompt. With a second sentence about it at the end of the system message
- * it answers an English request that quotes its labels in Spanish or
- * Russian about ten times as often (24 of 228 first replies, 4 of 432
- * without it).
- *
- * Every other model: twice, the second time in the last sentence of the
- * system message. Each user message ends with canvas notes in English, and
- * without that sentence DeepSeek V3.2 answers Japanese and Korean requests
- * to edit a diagram with English labels in English about three times as
- * often (217 of 400 replies, 74 of 400 with it).
+ * The request tells the model twice which language to answer in: in the
+ * system prompt and in the last sentence of the system message. Each user
+ * message ends with canvas notes in English, and without that last sentence
+ * DeepSeek V3.2 answers Japanese and Korean requests to edit a diagram with
+ * English labels in English about three times as often (217 of 400 replies,
+ * 74 of 400 with it).
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -82,21 +75,9 @@ async function systemMessageFor(model: string): Promise<string> {
 
 const REPLY_LANGUAGE = /\b(?:respond|reply)\b[^.]*?\blanguage\b/gi
 
-it("names the reply language once for GPT-6 Luna", async () => {
-    for (const model of ["global.openai.gpt-6-luna", "openai/GPT-6-Luna"]) {
-        const system = await systemMessageFor(model)
-        expect([model, system.match(REPLY_LANGUAGE)]).toEqual([
-            model,
-            ["respond in the same language"],
-        ])
-        expect(system.endsWith("## Custom Instructions\nUse blue boxes.")).toBe(
-            true,
-        )
-    }
-})
-
-it("names it a second time, in the last sentence, for every other model", async () => {
+it("names the reply language a second time, in the last sentence", async () => {
     for (const model of [
+        "global.openai.gpt-6-luna",
         "deepseek.v3.2",
         "global.anthropic.claude-haiku-5-5",
         "gpt-6",
