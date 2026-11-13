@@ -203,6 +203,41 @@ function sizeOf(text: string, style: string, fontSize: number) {
     }
 }
 
+/** How far two paths run on top of each other */
+function onEachOtherFor(p: Point[], q: Point[]): number {
+    let sum = 0
+    for (let i = 1; i < p.length; i++) {
+        const a = p[i - 1]
+        const b = p[i]
+        for (let j = 1; j < q.length; j++) {
+            const c = q[j - 1]
+            const d = q[j]
+            const flat =
+                Math.abs(a.y - b.y) < 0.5 &&
+                Math.abs(c.y - d.y) < 0.5 &&
+                Math.abs(a.y - c.y) < 2
+            const upright =
+                Math.abs(a.x - b.x) < 0.5 &&
+                Math.abs(c.x - d.x) < 0.5 &&
+                Math.abs(a.x - c.x) < 2
+            if (flat) {
+                sum += Math.max(
+                    0,
+                    Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) -
+                        Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)),
+                )
+            } else if (upright) {
+                sum += Math.max(
+                    0,
+                    Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) -
+                        Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)),
+                )
+            }
+        }
+    }
+    return sum
+}
+
 /** Only the corners of a path: no point twice, none on the straight way between its neighbours */
 function cornersOf(path: Point[]): Point[] {
     const corners: Point[] = []
@@ -929,6 +964,40 @@ export function repairLines(root: Element): string[] {
         const wrong = lines.filter((line) =>
             line.path ? hits(line, line.path) > 0 : between(line),
         )
+        // Two connectors that run on top of each other read as one, unless
+        // they leave one shape together or reach one together: the later
+        // of the two gets a path of its own
+        const together = (p: Line, q: Line) => (p.a === q.a) !== (p.b === q.b)
+        const riding = (line: Line, path: Point[]) => {
+            let sum = 0
+            for (const other of lines) {
+                if (
+                    other === line ||
+                    !other.path ||
+                    together(line, other) ||
+                    // (one that still waits for a new path)
+                    (wrong.includes(other) && !other.led)
+                ) {
+                    continue
+                }
+                sum += onEachOtherFor(path, other.path)
+            }
+            return sum
+        }
+        lines.forEach((line, i) => {
+            const path = line.path
+            if (!path || wrong.includes(line)) return
+            const rides = lines
+                .slice(0, i)
+                .some(
+                    (other) =>
+                        other.path &&
+                        !wrong.includes(other) &&
+                        !together(line, other) &&
+                        onEachOtherFor(path, other.path) >= 20,
+                )
+            if (rides) wrong.push(line)
+        })
 
         // Shapes that still stand on each other
         let overlaps = 0
@@ -1489,10 +1558,15 @@ export function repairLines(root: Element): string[] {
                 if (!path) continue
                 const now = hits(line, path)
                 const old = line.path ? hits(line, line.path) : Infinity
-                // (a new path that is no better is not worth the change)
-                if (line.led ? now > old : line.path ? now >= old : now > 0) {
-                    continue
-                }
+                // (a new path that is no better is not worth the change:
+                // it passes through less, or as little and runs less on
+                // other connectors)
+                const better = line.path
+                    ? now < old ||
+                      (now === old &&
+                          riding(line, path) < riding(line, line.path) - 10)
+                    : now === 0
+                if (line.led ? now > old : !better) continue
                 line.path = path
                 line.led = true
             }
@@ -1808,7 +1882,7 @@ export function repairLines(root: Element): string[] {
             }
             if (led > 0) {
                 said.push(
-                    `The server gave ${led} connector${led === 1 ? "" : "s"} that passed through a shape or a text a path around them.`,
+                    `The server gave ${led} connector${led === 1 ? "" : "s"} that passed through a shape or a text, or ran on top of another connector, a new path.`,
                 )
             }
             if (moved > 0) {

@@ -315,7 +315,7 @@ describe("a drawing with a diagram type", () => {
             /<mxCell id="9"[^>]*>\s*<mxGeometry[^>]*>\s*<Array/,
         )
         expect(addToolOutput.mock.lastCall?.[0].output).toBe(
-            "Successfully displayed the diagram. The server gave 1 connector that passed through a shape or a text a path around them. The cells on the canvas now have these positions and paths.",
+            "Successfully displayed the diagram. The server gave 1 connector that passed through a shape or a text, or ran on top of another connector, a new path. The cells on the canvas now have these positions and paths.",
         )
     })
 

@@ -89,7 +89,7 @@ describe("a connector that passes through a shape", () => {
             `${ROW}<mxCell id="e" source="a" target="c" style="${ACROSS}"/>`,
         )
         expect(page.out.laid).toEqual([
-            "The server gave 1 connector that passed through a shape or a text a path around them.",
+            "The server gave 1 connector that passed through a shape or a text, or ran on top of another connector, a new path.",
         ])
         expect(page.crosses("e", "b")).toBe(false)
         for (const id of ["a", "b", "c"]) {
@@ -118,6 +118,38 @@ describe("a connector that passes through a shape", () => {
         expect(kept?.style).toBe(ACROSS)
         expect(kept?.geometry?.querySelector("Array")).toBeNull()
         expect(page.crosses("e", "b")).toBe(false)
+    })
+
+    it("gets a path of its own when it runs on top of another connector", () => {
+        // There and back between the same two sides: one line on the page
+        const page = drawn(
+            `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="340" y="40" w="120" h="60"/>
+<mxCell id="e" source="a" target="b" style="${ACROSS}"/>
+<mxCell id="f" source="b" target="a" style="${ORTHOGONAL}exitX=0;exitY=0.5;entryX=1;entryY=0.5;"/>`,
+        )
+        expect(page.out.laid).toEqual([
+            "The server gave 1 connector that passed through a shape or a text, or ran on top of another connector, a new path.",
+        ])
+        // (the first stays where it was; the second no longer lies on it)
+        expect(page.paths.get("e")).toEqual([
+            { x: 160, y: 70 },
+            { x: 340, y: 70 },
+        ])
+        const back = page.paths.get("f") ?? []
+        expect(back.every((p) => p.y === 70)).toBe(false)
+    })
+
+    it("may run together with another one into the same shape", () => {
+        // Two connectors that meet on their way into C
+        const page = drawn(
+            `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="40" y="240" w="120" h="60"/>
+<mxCell id="c" value="C" x="440" y="140" w="120" h="60"/>
+<mxCell id="e" edge="1" parent="1" source="a" target="c" style="${ORTHOGONAL}exitX=1;exitY=0.5;entryX=0;entryY=0.5;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="70"/><mxPoint x="300" y="170"/></Array></mxGeometry></mxCell>
+<mxCell id="f" edge="1" parent="1" source="b" target="c" style="${ORTHOGONAL}exitX=1;exitY=0.5;entryX=0;entryY=0.5;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="300" y="270"/><mxPoint x="300" y="170"/></Array></mxGeometry></mxCell>`,
+        )
+        expect(page.out.laid).toEqual([])
     })
 
     it("is left alone when it is curved: its corners only pull at it", () => {
