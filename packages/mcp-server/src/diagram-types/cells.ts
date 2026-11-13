@@ -182,6 +182,86 @@ export function textSize(text: string, fontSize: number): Box {
     }
 }
 
+/**
+ * How wide each character from the space to "~" is in Helvetica and in
+ * Helvetica Bold, in thousandths of the font size. draw.io shows text in
+ * Helvetica by default, or in Arial, which has the same widths. From the
+ * font metrics of pdf.js (Apache-2.0, src/core/metrics.js).
+ */
+const WIDTHS = (
+    "278 278 355 556 556 889 667 191 333 333 389 584 278 333 278 278 " +
+    "556 556 556 556 556 556 556 556 556 556 278 278 584 584 584 556 " +
+    "1015 667 667 722 722 667 611 778 722 278 500 667 556 833 722 778 " +
+    "667 778 722 667 611 722 667 944 667 667 611 278 278 278 469 556 " +
+    "333 556 556 500 556 556 278 556 556 222 222 500 222 833 556 556 " +
+    "556 556 333 500 278 556 500 722 500 500 500 334 260 334 584"
+)
+    .split(" ")
+    .map(Number)
+const BOLD_WIDTHS = (
+    "278 333 474 556 556 889 722 238 333 333 389 584 278 333 278 278 " +
+    "556 556 556 556 556 556 556 556 556 556 333 333 584 584 584 611 " +
+    "975 722 722 722 722 667 611 778 722 278 556 722 611 833 722 778 " +
+    "667 778 722 667 611 722 667 944 667 667 611 333 278 333 584 556 " +
+    "333 556 611 556 611 556 333 611 611 278 278 556 278 889 611 611 " +
+    "611 611 389 556 333 611 556 778 556 556 500 389 280 389 584"
+)
+    .split(" ")
+    .map(Number)
+
+/** Some characters past "~" that drawings are full of, in the same unit */
+const MORE_WIDTHS: Record<string, number> = {
+    "\u00a0": 278,
+    "·": 278,
+    "•": 350,
+    "‘": 222,
+    "’": 222,
+    "“": 333,
+    "”": 333,
+    "«": 556,
+    "»": 556,
+    "–": 556,
+    "—": 1000,
+    "…": 1000,
+    "×": 584,
+    "÷": 584,
+    "±": 584,
+    "°": 400,
+    "→": 1000,
+    "←": 1000,
+    "↑": 500,
+    "↓": 500,
+    "↔": 1000,
+}
+
+/** How wide draw.io shows one line of text, by the width of each character */
+export function lineWidth(
+    line: string,
+    fontSize: number,
+    bold = false,
+): number {
+    const widths = bold ? BOLD_WIDTHS : WIDTHS
+    let sum = 0
+    for (const ch of line) {
+        const code = ch.codePointAt(0) ?? 0
+        if (code > 0x2e7f) {
+            // (a CJK character is as wide as the font size)
+            sum += 1000
+            continue
+        }
+        const more = MORE_WIDTHS[ch]
+        if (more !== undefined) {
+            sum += more
+            continue
+        }
+        // (a letter with an accent is as wide as the letter)
+        const base =
+            code > 126 ? (ch.normalize("NFD").codePointAt(0) ?? 0) : code
+        sum += base >= 32 && base <= 126 ? widths[base - 32] : 560
+    }
+    return (sum * fontSize) / 1000
+}
+
 /** A child element of the cell's geometry with this "as" name, taken out */
 function dropPart(geometry: Element, as: string): void {
     for (const child of Array.from(geometry.children)) {

@@ -299,9 +299,31 @@ describe("a drawing with a diagram type", () => {
         )
     })
 
-    it("draws it as written when no type is named", async () => {
+    it("only leads the connector through a shape around it when no type is named", async () => {
         const { onDisplayChart, addToolOutput, call } = setup("")
         await call("display_diagram", { xml: lanes })
+        const shown = onDisplayChart.mock.calls[0][0]
+        // The line past B has corners now; the steps stand where they
+        // were drawn, and the other line is as it was written
+        expect(shown).toMatch(
+            /<mxCell id="8"[^>]*>\s*<mxGeometry[^>]*>\s*<Array as="points">/,
+        )
+        expect(shown).toMatch(
+            /<mxCell id="5"[^>]*>\s*<mxGeometry[^>]*x="40"[^>]*y="150"/,
+        )
+        expect(shown).not.toMatch(
+            /<mxCell id="9"[^>]*>\s*<mxGeometry[^>]*>\s*<Array/,
+        )
+        expect(addToolOutput.mock.lastCall?.[0].output).toBe(
+            "Successfully displayed the diagram. The server gave 1 connector that passed through a shape or a text a path around them. The cells on the canvas now have these positions and paths.",
+        )
+    })
+
+    it("draws a drawing without such a problem as written", async () => {
+        const { onDisplayChart, addToolOutput, call } = setup("")
+        await call("display_diagram", {
+            xml: lanes.replace('<mxCell id="8" source="4" target="6"/>', ""),
+        })
         expect(onDisplayChart.mock.calls[0][0]).not.toContain("<Array")
         expect(addToolOutput.mock.lastCall?.[0].output).toBe(
             "Successfully displayed the diagram.",
