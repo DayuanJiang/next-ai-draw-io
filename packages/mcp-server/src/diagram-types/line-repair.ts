@@ -647,10 +647,12 @@ export function repairLines(root: Element): string[] {
                 (item.kids.length === 0 || item.solid),
         )
         const units = movers.filter((item) => item.named)
+        // (by their whole boxes, a diamond or an ellipse by the box inside
+        // it: the layout check counts two shapes that share 3 or more)
         const onEachOther = (p: Item, q: Item, pBox: Box, qBox: Box) => {
-            const a = core(p, pBox)
-            const b = core(q, qBox)
-            return over(a, b, 0) && !inside(a, b) && !inside(b, a)
+            const a = p.outline ? core(p, pBox) : pBox
+            const b = q.outline ? core(q, qBox) : qBox
+            return over(a, b, 2) && !inside(a, b) && !inside(b, a)
         }
         // (a shape with its name beside it)
         const reachOf = (item: Item): Box => {

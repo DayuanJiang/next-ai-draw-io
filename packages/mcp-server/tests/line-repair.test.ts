@@ -399,6 +399,20 @@ describe("shapes", () => {
         expect(Math.abs(a.y + a.h / 2 - 55)).toBeLessThanOrEqual(1)
     })
 
+    it("that grow onto a neighbour get room between them", () => {
+        // A word that cannot be wrapped makes A wider than the gap to B
+        const page = drawn(
+            `<mxCell id="a" value="https://app.example-company.com/portal" x="40" y="40" w="100" h="60"/>
+<mxCell id="b" value="B" x="160" y="40" w="120" h="60"/>
+<mxCell id="e" source="a" target="b" style="${ACROSS}"/>`,
+        )
+        const a = page.boxes.get("a") as Box
+        const b = page.boxes.get("b") as Box
+        expect(a.w).toBeGreaterThan(180)
+        expect(b.x).toBeGreaterThanOrEqual(a.x + a.w + 10)
+        expect(b.y).toBe(40)
+    })
+
     it("in a box that they reach out of get a larger box", () => {
         const page = drawn(
             `<mxCell id="p" value="Group" style="swimlane;html=1;" x="40" y="40" w="200" h="120"/>
