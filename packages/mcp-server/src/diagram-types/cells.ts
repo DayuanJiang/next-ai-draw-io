@@ -137,7 +137,18 @@ export function roomFor(cell: Cell, box: Box): { w: number; h: number } {
     // (CJK text wraps between any two characters)
     const words = text.match(/[^\s⺀-￯]+/g) ?? []
     const longest = Math.max(0, ...words.map((w) => textSize(w, size).w - 4))
-    const w = Math.max(box.w, Math.ceil((longest / share + 14) / 10) * 10)
+    // (a decision grows wider before it grows taller: wide enough for its
+    // longest line on two lines, or it would be a tall, thin diamond)
+    const halfLine = diamond
+        ? Math.max(
+              0,
+              ...text.split("\n").map((l) => (textSize(l, size).w - 4) / 2),
+          )
+        : 0
+    const w = Math.max(
+        box.w,
+        Math.ceil((Math.max(longest, halfLine) / share + 14) / 10) * 10,
+    )
     const room = Math.max(20, w * share - 12)
     const lines = text
         .split("\n")
