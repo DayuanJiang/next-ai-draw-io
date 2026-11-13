@@ -24,6 +24,7 @@ export const SEQUENCE_EXAMPLE = `<mxStyle name="life" value="shape=umlLifeline;p
 export const sequence: DiagramType = {
     name: "sequence",
     when: "who sends what to whom, in time order: requests and replies between users, apps and services",
+    example: SEQUENCE_EXAMPLE,
     guide: (draw, edit) => `# Sequence diagram
 
 Where this guide differs from the general rules, follow the guide: the diagram may grow below y=600, and a message has only the style and the exit and entry points written here (no edgeStyle, no waypoints except for a message to itself).

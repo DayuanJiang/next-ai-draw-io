@@ -73,6 +73,103 @@ describe("getDiagramGuide", () => {
     })
 })
 
+describe.each(DIAGRAM_TYPES)("the $name guide", (type) => {
+    const guide = type.guide("draw_tool", "edit_tool")
+    const prepared = prepareNewDiagram(type.example)
+    const cells = prepared.ok ? cellsOf(prepared.xml) : []
+
+    it("shows its example and ends by sending the model to the draw tool", () => {
+        expect(guide).toContain(type.example)
+        expect(
+            guide
+                .trimEnd()
+                .endsWith("Now call draw_tool. Write no text before the call."),
+        ).toBe(true)
+    })
+
+    it("has an example the server draws as written, with nothing repaired or noted", () => {
+        expect(prepared.ok).toBe(true)
+        expect(prepared.ok && prepared.fixes).toEqual([])
+        expect(prepared.ok && prepared.notes).toEqual([])
+    })
+
+    it("connects every line of its example to shapes of the example", () => {
+        const ids = new Set(cells.map((c) => c.getAttribute("id")))
+        const edges = cells.filter((c) => c.getAttribute("edge") === "1")
+        expect(edges.length).toBeGreaterThan(0)
+        for (const edge of edges) {
+            expect(ids.has(edge.getAttribute("source"))).toBe(true)
+            expect(ids.has(edge.getAttribute("target"))).toBe(true)
+        }
+    })
+
+    it("uses no named style in its example that it does not define", () => {
+        // A name without a definition stays in the style as a bare token,
+        // which draw.io ignores: the shape would lose its look
+        const known = new Set(["ellipse", "rhombus", "swimlane", "text", ""])
+        for (const cell of cells) {
+            const tokens = (cell.getAttribute("style") ?? "").split(";")
+            for (const token of tokens) {
+                if (!token.includes("=")) expect(known.has(token)).toBe(true)
+            }
+        }
+    })
+})
+
+describe("the swimlane guide's example", () => {
+    const type = DIAGRAM_TYPES.find((t) => t.name === "swimlane")
+    const prepared = prepareNewDiagram(type?.example ?? "")
+    const cells = prepared.ok ? cellsOf(prepared.xml) : []
+    const lanes = cells.filter((c) =>
+        c.getAttribute("style")?.includes("swimlane"),
+    )
+
+    it("stacks lanes of one width that touch each other", () => {
+        const boxes = lanes.map((l) => l.querySelector("mxGeometry"))
+        expect(new Set(boxes.map((g) => g?.getAttribute("width"))).size).toBe(1)
+        expect(boxes.map((g) => Number(g?.getAttribute("y")))).toEqual([
+            40, 160, 280,
+        ])
+    })
+
+    it("puts every step in a lane, and no two steps of a lane in one column", () => {
+        const laneIds = new Set(lanes.map((l) => l.getAttribute("id")))
+        const steps = cells.filter(
+            (c) => c.getAttribute("vertex") === "1" && !lanes.includes(c),
+        )
+        const places = steps.map((s) => {
+            expect(laneIds.has(s.getAttribute("parent"))).toBe(true)
+            return `${s.getAttribute("parent")}:${s.querySelector("mxGeometry")?.getAttribute("x")}`
+        })
+        expect(new Set(places).size).toBe(places.length)
+    })
+})
+
+describe("the use case guide's example", () => {
+    const type = DIAGRAM_TYPES.find((t) => t.name === "usecase")
+    const prepared = prepareNewDiagram(type?.example ?? "")
+    const cells = prepared.ok ? cellsOf(prepared.xml) : []
+    const styleOf = (c: Element) => c.getAttribute("style") ?? ""
+    const system = cells.find((c) => styleOf(c).includes("swimlane"))
+
+    it("makes every use case a child of the system and keeps the actors outside", () => {
+        const ovals = cells.filter((c) => styleOf(c).includes("ellipse"))
+        const actors = cells.filter((c) =>
+            styleOf(c).includes("shape=umlActor"),
+        )
+        expect(ovals.length).toBe(4)
+        expect(actors.length).toBe(2)
+        for (const oval of ovals) {
+            expect(oval.getAttribute("parent")).toBe(system?.getAttribute("id"))
+        }
+        for (const actor of actors) {
+            expect(actor.getAttribute("parent")).not.toBe(
+                system?.getAttribute("id"),
+            )
+        }
+    })
+})
+
 describe("the sequence guide's example", () => {
     const prepared = prepareNewDiagram(SEQUENCE_EXAMPLE)
     const cells = prepared.ok ? cellsOf(prepared.xml) : []

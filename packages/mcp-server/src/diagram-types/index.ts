@@ -4,10 +4,18 @@
  * return a guide; the model picks the type from DIAGRAM_TYPE_LIST, which
  * the system prompt and the MCP drawing guide show.
  */
+import { classDiagram } from "./class.ts"
 import { sequence } from "./sequence.ts"
+import { swimlane } from "./swimlane.ts"
 import type { DiagramType } from "./types.ts"
+import { usecase } from "./usecase.ts"
 
-export const DIAGRAM_TYPES: DiagramType[] = [sequence]
+export const DIAGRAM_TYPES: DiagramType[] = [
+    sequence,
+    swimlane,
+    classDiagram,
+    usecase,
+]
 
 export const DIAGRAM_TYPE_NAMES = DIAGRAM_TYPES.map((type) => type.name)
 

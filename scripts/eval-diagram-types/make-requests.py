@@ -196,9 +196,246 @@ def other(id_, group, text):
     return {"id": id_, "group": group, "type": None, "text": text}
 
 
+def typed(id_, type_, text, **expected):
+    """A request for another diagram type, in the group of that type.
+
+    expected: nodes (labels that must be drawn), edges ([from, to] or
+    [from, to, kind]), and what the type's scorer reads (lanes, members,
+    actors, boundary, root).
+    """
+    r = {"id": id_, "group": type_, "type": type_, "text": text}
+    r.update(expected)
+    return r
+
+
 RENAMED = [
     tuple("Mobile App" if x == "Web App" else x for x in m[:2]) + (m[2],)
     for m in SIX_M
+]
+
+MM_EN = {
+    "Market": ["Competitors", "Pricing", "Target users"],
+    "Product": ["Core features", "UX", "Performance"],
+    "Promotion": ["Social media", "Blog", "Events"],
+    "Operations": ["Support", "Monitoring", "Feedback"],
+}
+MM_ZH = {
+    "饮食": ["多吃蔬菜", "少糖", "多喝水"],
+    "运动": ["跑步", "游泳", "瑜伽"],
+    "睡眠": ["早睡", "午休"],
+    "心态": ["冥想", "社交"],
+}
+
+
+def mind_map(root, branches):
+    nodes = [root] + [n for b, leaves in branches.items() for n in [b] + leaves]
+    edges = [[root, b] for b in branches] + [
+        [b, leaf] for b, leaves in branches.items() for leaf in leaves
+    ]
+    return {"root": root, "nodes": nodes, "edges": edges}
+
+
+OTHER_TYPES = [
+    # Swimlane (cross-functional flowchart): who does which step
+    typed(
+        "sw-short",
+        "swimlane",
+        "画一个请假审批的泳道图，角色有员工、直属主管、人事",
+        lanes={"员工": [], "直属主管": [], "人事": []},
+    ),
+    typed(
+        "sw-listed",
+        "swimlane",
+        "Draw a swimlane diagram of an order refund with three lanes: Customer, "
+        "Support, Finance. Steps: Customer: 'Request refund'. Support: 'Check "
+        "order', then a decision 'Eligible?'. If no: Support 'Reject request'. "
+        "If yes: Finance 'Approve refund', then Finance 'Send money', then "
+        "Customer 'Receive refund'.",
+        lanes={
+            "Customer": ["Request refund", "Receive refund"],
+            "Support": ["Check order", "Eligible?", "Reject request"],
+            "Finance": ["Approve refund", "Send money"],
+        },
+        edges=[
+            ["Request refund", "Check order"],
+            ["Check order", "Eligible?"],
+            ["Eligible?", "Reject request"],
+            ["Eligible?", "Approve refund"],
+            ["Approve refund", "Send money"],
+            ["Send money", "Receive refund"],
+        ],
+    ),
+    typed(
+        "sw-zh-listed",
+        "swimlane",
+        "画一张跨部门流程图（泳道图），泳道：销售、仓库、财务。步骤：销售“创建订单”，"
+        "然后仓库“检查库存”，然后判断“有货吗”。没货：销售“通知客户缺货”。有货：仓库"
+        "“拣货发货”，然后财务“开具发票”，然后销售“确认完成”。",
+        lanes={
+            "销售": ["创建订单", "通知客户缺货", "确认完成"],
+            "仓库": ["检查库存", "有货吗", "拣货发货"],
+            "财务": ["开具发票"],
+        },
+        edges=[
+            ["创建订单", "检查库存"],
+            ["检查库存", "有货吗"],
+            ["有货吗", "通知客户缺货"],
+            ["有货吗", "拣货发货"],
+            ["拣货发货", "开具发票"],
+            ["开具发票", "确认完成"],
+        ],
+    ),
+    # UML class diagram
+    typed("cls-short", "class", "a class diagram for a library system: books, members, loans"),
+    typed(
+        "cls-listed",
+        "class",
+        "Draw a UML class diagram. Classes: Shape (abstract; attributes x: int, "
+        "y: int; methods area(): float, draw()), Circle (attribute radius: "
+        "float), Rectangle (attributes width: float, height: float), Canvas "
+        "(attribute shapes: List<Shape>; methods add(s: Shape), render()). "
+        "Circle and Rectangle inherit from Shape. Canvas is composed of many "
+        "Shapes.",
+        nodes=["Shape", "Circle", "Rectangle", "Canvas"],
+        members={"Shape": "area", "Circle": "radius", "Rectangle": "width", "Canvas": "render"},
+        edges=[
+            ["Circle", "Shape", "inherit"],
+            ["Rectangle", "Shape", "inherit"],
+            ["Canvas", "Shape", "compose"],
+        ],
+    ),
+    typed(
+        "cls-zh",
+        "class",
+        "画一个电商订单模块的类图。类：Order（属性 id、status、total；方法 pay()、"
+        "cancel()），OrderItem（属性 sku、quantity、price），User（属性 id、name），"
+        "Payment（属性 amount、method）。Order 由多个 OrderItem 组合而成，User 关联"
+        "多个 Order，Order 关联一个 Payment。",
+        nodes=["Order", "OrderItem", "User", "Payment"],
+        members={"Order": "status", "OrderItem": "quantity", "User": "name", "Payment": "amount"},
+        edges=[
+            ["Order", "OrderItem", "compose"],
+            ["User", "Order"],
+            ["Order", "Payment"],
+        ],
+    ),
+    # ER diagram
+    typed("er-short", "er", "画一个博客系统的 ER 图"),
+    typed(
+        "er-listed",
+        "er",
+        "Draw an ER diagram for an online bookstore: Customer, Order, OrderItem, "
+        "Book, Author and Publisher, with their main attributes and the "
+        "relationships between them.",
+        nodes=["Customer", "Order", "OrderItem", "Book", "Author", "Publisher"],
+        edges=[
+            ["Customer", "Order"],
+            ["Order", "OrderItem"],
+            ["OrderItem", "Book"],
+            ["Book", "Publisher"],
+        ],
+    ),
+    typed(
+        "er-sql",
+        "er",
+        "根据这些表画 ER 图：\n\n"
+        "CREATE TABLE users(id INT PRIMARY KEY, name VARCHAR(50), email VARCHAR(100));\n"
+        "CREATE TABLE posts(id INT PRIMARY KEY, user_id INT REFERENCES users(id), "
+        "title VARCHAR(200), body TEXT);\n"
+        "CREATE TABLE comments(id INT PRIMARY KEY, post_id INT REFERENCES posts(id), "
+        "user_id INT REFERENCES users(id), content TEXT);",
+        nodes=["users", "posts", "comments"],
+        members={"users": "email", "posts": "title", "comments": "content"},
+        edges=[["posts", "users"], ["comments", "posts"], ["comments", "users"]],
+    ),
+    # UML use case diagram
+    typed("uc-short", "usecase", "画一个网上书店的用例图"),
+    typed(
+        "uc-listed",
+        "usecase",
+        "Draw a UML use case diagram for an ATM. Actors: Customer and Bank. "
+        "System boundary: ATM. Use cases: Withdraw cash, Check balance, "
+        "Transfer money, Authenticate. Customer is connected to Withdraw cash, "
+        "Check balance and Transfer money. Each of these three includes "
+        "Authenticate. Bank is connected to Authenticate.",
+        actors=["Customer", "Bank"],
+        nodes=["Withdraw cash", "Check balance", "Transfer money", "Authenticate"],
+        boundary="ATM",
+        edges=[
+            ["Customer", "Withdraw cash"],
+            ["Customer", "Check balance"],
+            ["Customer", "Transfer money"],
+            ["Withdraw cash", "Authenticate", "include"],
+            ["Check balance", "Authenticate", "include"],
+            ["Transfer money", "Authenticate", "include"],
+            ["Bank", "Authenticate"],
+        ],
+    ),
+    typed(
+        "uc-ja",
+        "usecase",
+        "図書館システムのユースケース図を描いてください。アクター：利用者、司書。"
+        "ユースケース：本を検索する、本を借りる、本を返す、蔵書を登録する。"
+        "利用者は「本を検索する」「本を借りる」「本を返す」に、司書は「蔵書を登録する」"
+        "に関連します。",
+        actors=["利用者", "司書"],
+        nodes=["本を検索する", "本を借りる", "本を返す", "蔵書を登録する"],
+        edges=[
+            ["利用者", "本を検索する"],
+            ["利用者", "本を借りる"],
+            ["利用者", "本を返す"],
+            ["司書", "蔵書を登録する"],
+        ],
+    ),
+    # UML state machine diagram
+    typed(
+        "st-short",
+        "state",
+        "state diagram for an order: created, paid, shipped, delivered, cancelled",
+        nodes=["Created", "Paid", "Shipped", "Delivered", "Cancelled"],
+    ),
+    typed(
+        "st-listed",
+        "state",
+        "Draw a UML state machine diagram for a document. The initial state "
+        "leads to Draft. Draft goes to Review on 'submit'. Review goes back to "
+        "Draft on 'request changes'. Review goes to Approved on 'approve'. "
+        "Approved goes to Published on 'publish'. Published goes to Archived on "
+        "'archive'. Archived leads to the final state.",
+        nodes=["Draft", "Review", "Approved", "Published", "Archived"],
+        edges=[
+            ["Draft", "Review", "submit"],
+            ["Review", "Draft", "request changes"],
+            ["Review", "Approved", "approve"],
+            ["Approved", "Published", "publish"],
+            ["Published", "Archived", "archive"],
+        ],
+        ends=True,
+    ),
+    typed(
+        "st-zh",
+        "state",
+        "画一个电梯的状态图：空闲、上行、下行、开门、关门，以及它们之间的转换",
+        nodes=["空闲", "上行", "下行", "开门", "关门"],
+    ),
+    # Mind map
+    typed("mm-short", "mindmap", "画一个关于学习 Python 的思维导图"),
+    typed(
+        "mm-listed",
+        "mindmap",
+        "Draw a mind map with the central topic 'Product launch'. Branches: "
+        + "; ".join(f"{b} ({', '.join(leaves)})" for b, leaves in MM_EN.items())
+        + ".",
+        **mind_map("Product launch", MM_EN),
+    ),
+    typed(
+        "mm-zh",
+        "mindmap",
+        "画一张思维导图，中心主题“健康生活”。分支："
+        + "；".join(f"{b}（{'、'.join(leaves)}）" for b, leaves in MM_ZH.items())
+        + "。",
+        **mind_map("健康生活", MM_ZH),
+    ),
 ]
 
 requests = [
@@ -314,6 +551,7 @@ requests = [
         "the relationships between them.",
     ),
 ]
+requests += OTHER_TYPES
 with open(sys.argv[1], "w", encoding="utf8") as out:
     json.dump({"requests": requests}, out, ensure_ascii=False, indent=4)
     out.write("\n")

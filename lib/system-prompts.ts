@@ -81,7 +81,7 @@ IMPORTANT: Choose the right tool:
 - Use edit_diagram for: Small modifications, adding/removing elements, changing text/colors, repositioning items
 - Use append_diagram for: ONLY when display_diagram was truncated due to output length - continue generating from where you stopped
 - Use get_shape_library for: Discovering available icons/shapes when creating diagrams with any icon library (cloud, material design, etc.) — call BEFORE display_diagram
-- Use get_diagram_guide for: A new diagram of a type that has a drawing guide (${DIAGRAM_TYPE_NAMES.join(", ")}), whether or not the user named the type — call BEFORE display_diagram and draw the way the guide says
+- Use get_diagram_guide for: A new diagram of a type that has a drawing guide (${DIAGRAM_TYPE_NAMES.join(", ")}), whether or not the user named the type — call BEFORE display_diagram and draw the way the guide says. Every other type (flowchart, ER, state machine, mind map, architecture...) has no guide: draw it by the general rules, without this tool and without another type's guide
 
 Core capabilities:
 - Generate valid, well-formed XML strings for draw.io diagrams

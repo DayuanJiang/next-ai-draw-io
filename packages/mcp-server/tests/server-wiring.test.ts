@@ -250,7 +250,7 @@ describe("MCP server wiring", () => {
     it("lists the diagram types with a guide in the drawing guide", async () => {
         const text = textOf(await callTool("get_drawing_guide", {}))
         expect(text).toContain("topic=<type>")
-        expect(text).toContain("  - sequence: ")
+        expect(text).toContain("(sequence, swimlane, class, usecase)")
     })
 })
 

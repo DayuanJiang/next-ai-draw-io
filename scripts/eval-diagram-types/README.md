@@ -41,15 +41,20 @@ every picture, one column per configuration.
   to oneself, activation bars)
 - `untyped`: no diagram type named, the model has to choose
 - `edit`: a second message that changes the diagram of the first
-- `control`: other diagram types, for which nothing may change
+- `control`: a flowchart, an architecture and an ER diagram, for which
+  nothing may change
+- `swimlane`, `class`, `er`, `usecase`, `state`, `mindmap`: three requests
+  per type, one short and two that list what has to be drawn
 
 The requests follow the kinds of requests the demo site gets, but none is a
 user's text.
 
 ## The scores
 
-All scores come from the geometry draw.io rendered and from the
-participants and messages a request lists, never from the app's own checks.
+All scores come from the geometry draw.io rendered and from what a request
+lists, never from the app's own checks.
+
+Sequence diagrams (`metrics.mjs`):
 
 - structure: at least two lifelines, and every message is a level line
   between two of them, on a row of its own, at least 30 px from the next
@@ -58,3 +63,23 @@ participants and messages a request lists, never from the app's own checks.
 - clean: correct, and no label lies on another label or on a participant's
   head, and no frame line lies on a message
 - demand: the special demand of the request is met
+
+The other types (`types.mjs`):
+
+- structure: what the type needs to be one (lanes with every step in a
+  lane, stick figures and ovals, a tree...), and no line with a loose end
+- correct: the structure, and every node and connection the request lists
+  is there, with what the type asks of it: a step in the lane of its role, a
+  hollow triangle at the parent of an inheritance, a use case inside the
+  system and an actor outside
+- clean: correct, and the layout check (`--check`) found nothing
+- solid: correct, and built so that it moves in one piece: no shape with
+  text lies on another shape without being its child
+
+## Adding a diagram type
+
+Measure first, with requests of the type and a scorer in `types.mjs`: a
+type the models already draw well needs no guide (ER, state and mind map
+diagrams did not, in November 2026). Then write the guide, draw its example
+in draw.io, and run the type's requests and the others again: the types
+without a guide must come out as before.

@@ -8,6 +8,7 @@
 // app that checks its drawings is right.
 import fs from "node:fs"
 import path from "node:path"
+import { scoreType } from "./types.mjs"
 
 const args = process.argv.slice(2)
 const flag = (name) => {
@@ -386,7 +387,15 @@ function scoreRun(dir, name, request) {
         umlLifelines: seq.umlLifelines,
         isSequence: seq.lifelines.length >= 2 && seq.messages.length >= 1,
     }
-    if (request.type !== "sequence") return run
+    if (request.type !== "sequence") {
+        // Another type with a scorer of its own, or a request without a type
+        const xmlFile = path.join(dir, `${name}.xml`)
+        const xml = fs.existsSync(xmlFile)
+            ? fs.readFileSync(xmlFile, "utf8")
+            : ""
+        const score = scoreType(cells, request, run.layoutProblems, xml)
+        return score ? { ...run, ...score } : run
+    }
     const expected = matchExpected(seq, request)
     Object.assign(run, {
         messages: seq.messages.length,
@@ -460,7 +469,8 @@ const count = (runs, test) => runs.filter(test).length
 const pad = (s, n) => String(s).padEnd(n)
 for (const group of [...new Set(requests.map((r) => r.group))]) {
     console.log(`\n== ${group} (${model})`)
-    const sequenceGroup = group !== "control" && group !== "untyped"
+    // The groups whose requests name a type are scored as that type
+    const sequenceGroup = requests.some((r) => r.group === group && r.type)
     console.log(
         pad("request", 18) +
             pad("config", 10) +
@@ -469,6 +479,7 @@ for (const group of [...new Set(requests.map((r) => r.group))]) {
                 ? pad("structure", 10) +
                   pad("correct", 9) +
                   pad("clean", 7) +
+                  pad("solid", 7) +
                   pad("demand", 8)
                 : pad("drew", 6) +
                   pad("seq-diagram", 12) +
@@ -494,6 +505,13 @@ for (const group of [...new Set(requests.map((r) => r.group))]) {
                   ) +
                   pad(
                       count(runs, (r) => r.clean),
+                      7,
+                  ) +
+                  // Only the types of types.mjs are scored for it
+                  pad(
+                      runs.some((r) => r.solid !== undefined)
+                          ? count(runs, (r) => r.solid)
+                          : "",
                       7,
                   ) +
                   pad(request.demand ? count(runs, (r) => r.demand) : "", 8)

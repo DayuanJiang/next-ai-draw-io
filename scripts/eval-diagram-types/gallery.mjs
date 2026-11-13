@@ -23,7 +23,7 @@ const esc = (s) =>
 function caption(run, request) {
     const words = []
     if (!run.drew) words.push("nothing drawn")
-    else if (request.type === "sequence") {
+    else if (request.type) {
         words.push(
             run.clean
                 ? "clean"
@@ -33,6 +33,7 @@ function caption(run, request) {
                     ? "structure only"
                     : "wrong structure",
         )
+        if (run.solid === false && run.correct) words.push("parts not joined")
         if (request.demand)
             words.push(run.demand ? "demand met" : "demand not met")
     } else {
@@ -54,7 +55,7 @@ for (const request of requests) {
         rows += `<td><h3>${esc(config)}</h3><div class="runs">${runs
             .map(
                 (run) =>
-                    `<figure><a href="${esc(config)}/${esc(run.name)}.png"><img loading="lazy" src="${esc(config)}/${esc(run.name)}.png"></a><figcaption class="${run.drew && (request.type !== "sequence" || run.clean) ? "" : "bad"}">${esc(caption(run, request))}</figcaption></figure>`,
+                    `<figure><a href="${esc(config)}/${esc(run.name)}.png"><img loading="lazy" src="${esc(config)}/${esc(run.name)}.png"></a><figcaption class="${run.drew && (!request.type || run.clean) ? "" : "bad"}">${esc(caption(run, request))}</figcaption></figure>`,
             )
             .join("")}</div></td>`
     }

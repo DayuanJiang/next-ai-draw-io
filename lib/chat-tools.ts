@@ -142,7 +142,8 @@ Call this tool to get shape names and usage syntax for a specific library.`,
     }),
     get_diagram_guide: tool({
         description: `Get the drawing guide for a diagram type: the shapes, styles and positions that draw it correctly in draw.io. Call it before display_diagram when the diagram to draw is one of these types, whether or not the user named the type:
-${DIAGRAM_TYPE_LIST}`,
+${DIAGRAM_TYPE_LIST}
+Every other type (flowchart, ER, state machine, mind map, architecture...) has no guide: do not call this tool for it, and do not borrow another type's guide.`,
         inputSchema: z.object({
             type: z.string().describe("Diagram type (e.g., 'sequence')"),
         }),
