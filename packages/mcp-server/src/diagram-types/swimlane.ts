@@ -60,7 +60,9 @@ Connectors
 - A decision's second branch leaves by its side: "edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" (exitX=0 for the left side). The branch's word (Yes, No) is the edge's value.
 - A line back to an earlier step leaves by a side and enters that step's side, so it runs between the lanes' steps and never through one.
 
-Now call ${draw}. Write no text before the call.`,
+The server then spaces the steps evenly on their rows and gives every connector a path around the steps: which lane and which row a step stands in is what counts.
+
+Now call ${draw} with type="swimlane". Write no text before the call.`,
 }
 
 const ROWS_EXAMPLE = `<mxStyle name="lane" value="swimlane;horizontal=0;startSize=30;"/>
@@ -108,5 +110,7 @@ Connectors
 - A decision's second branch leaves by its bottom or top: "edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0;entryY=0.5;". The branch's word (Yes, No) is the edge's value.
 - A line back to an earlier step leaves by the top or bottom and enters the step's top or bottom, so it runs between the rows of steps and never through one.
 
-Now call ${draw}. Write no text before the call.`,
+The server then spaces the steps evenly on their columns and gives every connector a path around the steps: which lane and which column a step stands in is what counts.
+
+Now call ${draw} with type="swimlane-horizontal". Write no text before the call.`,
 }

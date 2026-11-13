@@ -40,6 +40,7 @@ tool name: display_diagram
 description: Display a NEW diagram on draw.io. Use this when creating a diagram from scratch or when major structural changes are needed.
 parameters: {
   xml: string
+  type?: string  // Only when a guide of get_diagram_guide tells you to name the diagram's type
 }
 ---Tool2---
 tool name: edit_diagram

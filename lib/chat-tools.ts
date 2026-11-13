@@ -46,6 +46,13 @@ Notes:
 `,
         inputSchema: z.object({
             xml: z.string().describe("XML string to be displayed on draw.io"),
+            // A plain string: a name outside the list must not fail the call
+            type: z
+                .string()
+                .optional()
+                .describe(
+                    "The diagram's type, only when you draw by a guide of get_diagram_guide: the guide says which. The server then spaces the shapes and leads the lines of that type.",
+                ),
         }),
         outputSchema: z.string(),
     }),

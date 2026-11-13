@@ -86,6 +86,7 @@ Restart the client, then ask, for example, "Read this repo and draw its architec
 - **Draws from your project**: the agent reads your code and documents with its own tools. Existing `.drawio` and `.drawio.svg` files open with `load_diagram`.
 - **The web app's canvas**: the AI's changes are outlined for a few seconds (never in exports) and one Ctrl+Z takes them back. Select shapes and say "these" (`get_selection`). Your hand edits are read before the AI edits again.
 - **Real icons**: the web app's drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes, Cisco and more), so the AI uses real icon names.
+- **Sequence, swimlane and use case diagrams**: a drawing guide for each (`get_drawing_guide` with `topic`), and the server lays the drawing out: it spaces the shapes for their texts and leads every line around the shapes in its way.
 - **Self-check**: the AI can look at a screenshot of the rendered diagram and fix overlaps (`screenshot: true`, or `screenshot_diagram`).
 - **Versions**: the last 20 versions as cards next to the canvas; restore or compare one, or ask the AI to undo (`restore_version`).
 - **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin and a white background (`transparent: true` for none); an SVG keeps its light colors in a viewer's dark mode.

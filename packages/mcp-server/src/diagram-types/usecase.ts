@@ -52,5 +52,7 @@ Lines
 - An actor and a use case it takes part in: a straight line, style "uses;". Add no edgeStyle: a line with elbows runs around the system or through other use cases.
 - Include and extend: a straight dashed arrow, style "include;", with «include» or «extend» as its value. It runs from the use case that includes to the included one, and from the extending use case to the one it extends.
 
-Now call ${draw}. Write no text before the call.`,
+The server then spaces the actors and use cases evenly in their rows and columns, and leads a line around a shape it would cross.
+
+Now call ${draw} with type="usecase". Write no text before the call.`,
 }

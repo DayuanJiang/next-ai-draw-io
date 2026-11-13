@@ -55,5 +55,7 @@ Changing a sequence diagram with ${edit}
 - One more message at the end: add one edge with the next D, and update every participant with h 40 larger.
 - A message in the middle: also add 40 to exitDy and entryDy of every later message.
 
-Now call ${draw}. Write no text before the call.`,
+The server then makes room where the texts need more: participants further apart, a taller row for a text of several lines, a frame around its messages.
+
+Now call ${draw} with type="sequence". Write no text before the call.`,
 }

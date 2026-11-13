@@ -435,6 +435,14 @@ function commitDocument(
  * a stray point is removed), and the log never reaches the model. A repair
  * that is also among the write's notes (reviewCells) is told there, once.
  */
+// A plain string: a name outside the list must not fail the call
+const diagramTypeSchema = z
+    .string()
+    .optional()
+    .describe(
+        "The diagram's type, only when you draw by a guide of get_drawing_guide topic=<type>: the guide says which. The server then spaces the shapes and leads the lines of that type.",
+    )
+
 function fixesNote(fixes: string[], notes: string[]) {
     const told = fixes.filter((fix) => !notes.includes(fix))
     return told.length > 0
@@ -740,15 +748,18 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                 .describe(
                     "REQUIRED: the mxCell elements of one page, a bare <mxGraphModel>, or a full <mxfile> with one or more <diagram> pages.",
                 ),
+            type: diagramTypeSchema,
             screenshot: screenshotSchema,
         },
         annotations: { openWorldHint: false },
     },
-    async ({ xml: inputXml, screenshot }) => {
+    async ({ xml: inputXml, type, screenshot }) => {
         const session = activeSession()
         // The pictures get_diagram showed as references go back in
         const prepared = prepareNewDiagram(
             restoreImageData(inputXml, session.xml),
+            {},
+            type,
         )
         if (!prepared.ok) {
             log.error(prepared.error)
@@ -1972,10 +1983,11 @@ registerTool(
                 .describe(
                     "Optional starting content: the mxCell elements of the page, or a bare <mxGraphModel>. If omitted the page starts blank.",
                 ),
+            type: diagramTypeSchema,
         },
         annotations: { destructiveHint: false, openWorldHint: false },
     },
-    async ({ name, id, xml }) => {
+    async ({ name, id, xml, type }) => {
         const loaded = await loadMxfileForMutation()
         if (!loaded.ok) return fail(loaded.message)
 
@@ -1988,6 +2000,7 @@ registerTool(
             // The pictures get_diagram showed as references go back in
             const prepared = prepareNewModel(
                 restoreImageData(xml, currentSession?.xml),
+                type,
             )
             if (!prepared.ok) return fail(prepared.error)
             if (prepared.fixes.length > 0) {

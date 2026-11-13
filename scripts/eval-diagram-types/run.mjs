@@ -95,9 +95,10 @@ function summarize(exchanges) {
                 tool: c.tool,
                 inputError: c.inputError ?? false,
                 // What the model asked a lookup for; the size of a drawing
+                // and the type it named for it
                 input:
                     typeof c.input?.xml === "string"
-                        ? { xmlChars: c.input.xml.length }
+                        ? { xmlChars: c.input.xml.length, type: c.input.type }
                         : c.input,
             })),
         }

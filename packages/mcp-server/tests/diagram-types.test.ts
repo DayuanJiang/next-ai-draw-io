@@ -12,6 +12,7 @@ import {
     DIAGRAM_TYPES,
     getDiagramGuide,
 } from "../src/diagram-types/index.ts"
+import { layoutOfType } from "../src/diagram-types/layouts.ts"
 import { SEQUENCE_EXAMPLE } from "../src/diagram-types/sequence.ts"
 import { prepareNewDiagram } from "../src/new-diagram.ts"
 
@@ -57,8 +58,12 @@ describe("getDiagramGuide", () => {
             "create_new_diagram",
             "edit_diagram",
         )
-        expect(web.ok && web.text).toContain("Now call display_diagram.")
-        expect(mcp.ok && mcp.text).toContain("Now call create_new_diagram.")
+        expect(web.ok && web.text).toContain(
+            'Now call display_diagram with type="sequence".',
+        )
+        expect(mcp.ok && mcp.text).toContain(
+            'Now call create_new_diagram with type="sequence".',
+        )
         expect(mcp.ok && mcp.text).not.toContain("display_diagram")
     })
 
@@ -80,10 +85,13 @@ describe.each(DIAGRAM_TYPES)("the $name guide", (type) => {
 
     it("shows its example and ends by sending the model to the draw tool", () => {
         expect(guide).toContain(type.example)
+        // A type with a layout has the model name the type in the call,
+        // which is what runs the layout
+        const call = layoutOfType(type.name)
+            ? `Now call draw_tool with type="${type.name}".`
+            : "Now call draw_tool."
         expect(
-            guide
-                .trimEnd()
-                .endsWith("Now call draw_tool. Write no text before the call."),
+            guide.trimEnd().endsWith(`${call} Write no text before the call.`),
         ).toBe(true)
     })
 

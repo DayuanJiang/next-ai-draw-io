@@ -97,6 +97,15 @@ nine or ten classes its boxes came out on top of each other. The first
 swimlane guide knew only lanes as rows and drew rows for users who asked for
 vertical lanes.
 
+A guide gets the kind of diagram right and where its shapes stand. It does
+not get lines around shapes or texts clear of each other in a large
+diagram: that is the work of the type's layout
+(`packages/mcp-server/src/diagram-types/layouts.ts`), which runs on the
+server when the model names the type in its drawing call. On the real
+requests, drawings without a layout problem went from 28 of 54 to 53 of 54
+for swimlane and use case diagrams with their layouts. `run.mjs` records
+the type the model named, so a run shows whether the layout ran.
+
 A guide shows one example, since that is what the model copies. With a
 second example for lanes as rows in the swimlane guide, the model drew rows
 for half of the users who had not asked for them, so that direction is a

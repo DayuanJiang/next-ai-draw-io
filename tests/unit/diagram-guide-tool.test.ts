@@ -15,7 +15,7 @@ describe("the get_diagram_guide tool", () => {
     it("returns the guide of a type, written for the chat's tools", async () => {
         const text = await run("sequence")
         expect(text).toContain("shape=umlLifeline")
-        expect(text).toContain("Now call display_diagram.")
+        expect(text).toContain('Now call display_diagram with type="sequence".')
     })
 
     it("answers an unknown type with the types that have a guide", async () => {
