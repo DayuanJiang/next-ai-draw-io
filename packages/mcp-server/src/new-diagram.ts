@@ -269,7 +269,14 @@ export function prepareNewModel(input: string, type?: string): NewDiagram {
     const layout = layoutOfType(type) ?? repairLines
     roots.forEach((root, index) => {
         const page = roots.length > 1 ? `Page ${index + 1}: ` : ""
-        laid.push(...layout(root).map((change) => page + change))
+        try {
+            laid.push(...layout(root).map((change) => page + change))
+        } catch (error) {
+            // (the drawing is shown as the model wrote it: it reads every
+            // kind of drawing, and a failure here must not cost the user
+            // the diagram)
+            console.error("layout failed", error)
+        }
         const review = reviewCells(root)
         repairs.push(...review.repairs.map((repair) => page + repair))
         notes.push(...review.notes.map((note) => page + note))
