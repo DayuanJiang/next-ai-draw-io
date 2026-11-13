@@ -124,22 +124,46 @@ describe("the swimlane guide's example", () => {
         c.getAttribute("style")?.includes("swimlane"),
     )
 
-    it("stacks lanes of one width that touch each other", () => {
+    it("puts lanes of one height side by side, touching each other", () => {
         const boxes = lanes.map((l) => l.querySelector("mxGeometry"))
-        expect(new Set(boxes.map((g) => g?.getAttribute("width"))).size).toBe(1)
-        expect(boxes.map((g) => Number(g?.getAttribute("y")))).toEqual([
-            40, 160, 280,
+        expect(new Set(boxes.map((g) => g?.getAttribute("height"))).size).toBe(
+            1,
+        )
+        expect(new Set(boxes.map((g) => g?.getAttribute("y"))).size).toBe(1)
+        expect(boxes.map((g) => Number(g?.getAttribute("x")))).toEqual([
+            40, 260, 480,
         ])
     })
 
-    it("puts every step in a lane, and no two steps of a lane in one column", () => {
+    it("makes the lanes as tall as the rows need, as the guide says", () => {
+        const steps = cells.filter(
+            (c) => c.getAttribute("vertex") === "1" && !lanes.includes(c),
+        )
+        const rows = new Set(
+            steps.map((s) =>
+                Math.floor(
+                    (Number(s.querySelector("mxGeometry")?.getAttribute("y")) -
+                        40) /
+                        100,
+                ),
+            ),
+        ).size
+        expect(
+            Number(
+                lanes[0].querySelector("mxGeometry")?.getAttribute("height"),
+            ),
+        ).toBe(100 * rows + 40)
+    })
+
+    it("puts every step in a lane, and no two steps of a lane in one row", () => {
         const laneIds = new Set(lanes.map((l) => l.getAttribute("id")))
         const steps = cells.filter(
             (c) => c.getAttribute("vertex") === "1" && !lanes.includes(c),
         )
         const places = steps.map((s) => {
             expect(laneIds.has(s.getAttribute("parent"))).toBe(true)
-            return `${s.getAttribute("parent")}:${s.querySelector("mxGeometry")?.getAttribute("x")}`
+            const y = Number(s.querySelector("mxGeometry")?.getAttribute("y"))
+            return `${s.getAttribute("parent")}:${Math.floor((y - 40) / 100)}`
         })
         expect(new Set(places).size).toBe(places.length)
     })

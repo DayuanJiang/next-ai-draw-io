@@ -49,6 +49,13 @@ every picture, one column per configuration.
 The requests follow the kinds of requests the demo site gets, but none is a
 user's text.
 
+All three scripts take `--requests <file>` for a list of your own in the
+same format. Use it for what users really asked, taken from the demo's logs:
+those requests are longer and ask for more than the ones here (ten classes,
+lanes with the titles on top, eight participants). Keep such a file outside
+the repository, since it holds users' text. A request without `lanes` is
+scored by the lanes as they were drawn.
+
 ## The scores
 
 All scores come from the geometry draw.io rendered and from what a request
@@ -83,3 +90,9 @@ type the models already draw well needs no guide (ER, state and mind map
 diagrams did not, in November 2026). Then write the guide, draw its example
 in draw.io, and run the type's requests and the others again: the types
 without a guide must come out as before.
+
+Run real requests too, and look at the pictures. A guide for class diagrams
+scored well on the three requests here and was removed after real ones: with
+nine or ten classes its boxes came out on top of each other. The first
+swimlane guide knew only lanes as rows and drew rows for users who asked for
+vertical lanes.

@@ -17,9 +17,13 @@ const flag = (name) => {
 }
 const model = flag("model") ?? "luna"
 const jsonOut = flag("json")
+const requestsFile = flag("requests")
 const [outDir, ...configs] = args
 const { requests } = JSON.parse(
-    fs.readFileSync(new URL("./requests.json", import.meta.url), "utf8"),
+    fs.readFileSync(
+        requestsFile ?? new URL("./requests.json", import.meta.url),
+        "utf8",
+    ),
 )
 
 const norm = (s) =>

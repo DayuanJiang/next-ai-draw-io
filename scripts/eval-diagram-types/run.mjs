@@ -57,8 +57,13 @@ const MODEL_OPTION = {
     sonnet: "claude-sonnet-5-5",
 }
 
+// --requests names another list of the same form, kept outside the
+// repository (requests of real users, for example)
 const { requests } = JSON.parse(
-    fs.readFileSync(new URL("./requests.json", import.meta.url), "utf8"),
+    fs.readFileSync(
+        opt("requests") ?? new URL("./requests.json", import.meta.url),
+        "utf8",
+    ),
 )
 const dir = path.join(outDir, config)
 fs.mkdirSync(dir, { recursive: true })

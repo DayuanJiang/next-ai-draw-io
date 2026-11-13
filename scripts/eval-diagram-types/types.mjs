@@ -266,9 +266,41 @@ function matchListed(g, request, checkKind, find = g.find) {
     }
 }
 
+/**
+ * A swimlane diagram whose request lists no lanes (a real request): the
+ * lanes are the shapes that hold steps, and a step outside every lane is a
+ * stray. One text above the lanes is a title.
+ */
+function scoreLanesAsDrawn(g) {
+    const area = (v) => v.box.w * v.box.h
+    const texts = g.vertices.filter((v) => v.text)
+    // Steps: shapes with text that hold no other shape with text
+    const steps = texts.filter(
+        (v) => !texts.some((o) => o !== v && inside(centre(o.box), v.box)),
+    )
+    const laneOf = (step) =>
+        g.vertices
+            .filter(
+                (v) =>
+                    v !== step &&
+                    area(v) > 2 * area(step) &&
+                    inside(centre(step.box), v.box),
+            )
+            .sort((a, b) => area(a) - area(b))[0] ?? null
+    const lanes = new Set(steps.map(laneOf).filter(Boolean))
+    const strays = steps.filter((s) => !laneOf(s)).length
+    const structure = lanes.size >= 2 && strays <= 1 && g.loose === 0
+    return {
+        detail: { lanes: lanes.size, steps: steps.length, strays },
+        structure,
+        correct: structure,
+    }
+}
+
 const SCORERS = {
     /** Lanes that hold their steps */
     swimlane(g, request) {
+        if (!request.lanes) return scoreLanesAsDrawn(g)
         // A lane is the shape that carries its name, or, when the name is a
         // text of its own, the band it is written on
         const laneOf = (name) => {

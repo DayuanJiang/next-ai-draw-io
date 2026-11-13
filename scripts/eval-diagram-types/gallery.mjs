@@ -8,10 +8,17 @@
 import fs from "node:fs"
 import path from "node:path"
 
-const [outDir, summaryFile, ...configs] = process.argv.slice(2)
+const args = process.argv.slice(2)
+// --requests <file>: the list the runs were made with, when not this folder's
+const at = args.indexOf("--requests")
+const requestsFile = at >= 0 ? args.splice(at, 2)[1] : undefined
+const [outDir, summaryFile, ...configs] = args
 const summary = JSON.parse(fs.readFileSync(summaryFile, "utf8"))
 const { requests } = JSON.parse(
-    fs.readFileSync(new URL("./requests.json", import.meta.url), "utf8"),
+    fs.readFileSync(
+        requestsFile ?? new URL("./requests.json", import.meta.url),
+        "utf8",
+    ),
 )
 const esc = (s) =>
     String(s).replace(
