@@ -16,6 +16,31 @@ export async function newPage(browser) {
     return { context, page: await context.newPage() }
 }
 
+// The characters Windows-1252 has for the bytes 0x80 to 0x9f
+const CP1252 = new Map(
+    Array.from({ length: 32 }, (_, i) => [
+        new TextDecoder("windows-1252").decode(Uint8Array.of(0x80 + i)),
+        0x80 + i,
+    ]),
+)
+
+/**
+ * The browser hands an event stream over as Windows-1252 text (the stream
+ * names no charset). Read it as the UTF-8 it is; text that was read right
+ * comes back as it is.
+ */
+function asUtf8(text) {
+    const bytes = []
+    for (const ch of text) {
+        const code = ch.codePointAt(0)
+        const byte = code <= 0xff ? code : CP1252.get(ch)
+        if (byte === undefined) return text
+        bytes.push(byte)
+    }
+    const again = Buffer.from(bytes).toString("utf8")
+    return again.includes("\ufffd") ? text : again
+}
+
 /** Record every /api/chat request and the event stream of its answer */
 export function recordChat(page) {
     const exchanges = []
@@ -31,7 +56,7 @@ export function recordChat(page) {
             entry.status = r.status()
             r.body()
                 .then((b) => {
-                    entry.text = b.toString("utf8")
+                    entry.text = asUtf8(b.toString("utf8"))
                 })
                 .catch(() => {})
                 .finally(() => {
