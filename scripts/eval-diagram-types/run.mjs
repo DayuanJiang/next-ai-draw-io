@@ -165,6 +165,18 @@ async function one(browser, { request, name }) {
     // Answers still arriving have no end time; give the last one a moment
     await page.waitForTimeout(300)
     result.answers = summarize(exchanges)
+    // The first drawing as the model sent it, before the server laid it
+    // out or repaired it: the server's part can then be replayed on it
+    const sent = exchanges
+        .flatMap((e) => parseAnswer(e.text).calls)
+        .find(
+            (c) =>
+                c.tool === "display_diagram" &&
+                typeof c.input?.xml === "string",
+        )
+    if (sent) {
+        fs.writeFileSync(path.join(dir, `${name}.input.xml`), sent.input.xml)
+    }
     fs.writeFileSync(path.join(dir, `${name}.cells.json`), JSON.stringify(dump))
     fs.writeFileSync(
         path.join(dir, `${name}.json`),
