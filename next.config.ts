@@ -35,6 +35,22 @@ const nextConfig: NextConfig = {
             "./docs/tw/*.md",
         ],
     },
+    // The bundled draw.io is about 15 files that load one after another.
+    // Next serves public files with max-age=0: without this header each
+    // visit asks the server about every one of them again, seven round
+    // trips in a row before the canvas can start. Their paths carry no
+    // version, so a release with a newer draw.io reaches a returning
+    // browser only after this time: 4 hours keeps that short.
+    async headers() {
+        return [
+            {
+                source: "/drawio/:path*",
+                headers: [
+                    { key: "Cache-Control", value: "public, max-age=14400" },
+                ],
+            },
+        ]
+    },
     // The Chinese and Japanese About pages used to be separate routes. The
     // addresses without a language, which Google still has, go there in one
     // step instead of through the language redirect first.

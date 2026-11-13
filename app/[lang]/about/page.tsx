@@ -106,9 +106,17 @@ export default async function About({ params }: Props) {
 
             <div className="lp-grid border-b border-border">
                 <SiteHeader lang={lang} />
-                <section className="mx-auto max-w-7xl px-4 pt-6 pb-10 md:px-8 md:pt-4 md:pb-12">
+                {/* Outside <main>, on the grid it shares with the header:
+                    its headline names it, which makes it a landmark too */}
+                <section
+                    aria-labelledby="hero"
+                    className="mx-auto max-w-7xl px-4 pt-6 pb-10 md:px-8 md:pt-4 md:pb-12"
+                >
                     <div className="grid items-end gap-5 px-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12 md:px-0">
-                        <h1 className="text-[clamp(32px,3.6vw,48px)] leading-[1.08] font-semibold tracking-[-0.035em] [text-wrap:balance]">
+                        <h1
+                            id="hero"
+                            className="text-[clamp(32px,3.6vw,48px)] leading-[1.08] font-semibold tracking-[-0.035em] [text-wrap:balance]"
+                        >
                             {/* A Chinese headline breaks only after its comma */}
                             {t.h1.split(/(?<=，)/).map((part) => (
                                 <span key={part} className="inline-block">

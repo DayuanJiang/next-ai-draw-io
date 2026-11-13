@@ -33,12 +33,13 @@ mkdirSync(targetDir, { recursive: true })
 console.log("Copying standalone directory...")
 copyDereferenced(standaloneDir, targetDir)
 
-// Next.js copies the build machine's .env files into standalone; don't ship
-// them, they can hold the builder's API keys
+// Next.js copies the build machine's .env files and data/settings.json (what
+// the admin panel saved) into standalone; don't ship them, they can hold the
+// builder's API keys
 for (const entry of readdirSync(targetDir)) {
-    if (entry.startsWith(".env")) {
+    if (entry.startsWith(".env") || entry === "data") {
         console.warn(`Removing ${entry} so it is not packaged into the app`)
-        rmSync(join(targetDir, entry))
+        rmSync(join(targetDir, entry), { recursive: true })
     }
 }
 

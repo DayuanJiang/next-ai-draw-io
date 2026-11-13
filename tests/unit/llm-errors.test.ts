@@ -5,6 +5,7 @@ import {
     RetryError,
     simulateReadableStream,
     streamText,
+    TypeValidationError,
     tool,
 } from "ai"
 import { MockLanguageModelV3 } from "ai/test"
@@ -13,16 +14,24 @@ import { z } from "zod"
 import {
     classifyLLMError,
     isToolCallError,
+    logText,
     streamErrorText,
 } from "@/lib/llm-errors"
 
-const apiError = (statusCode: number, message: string, responseBody = "") =>
+// data: the body as the provider's error format, when it is in that format
+const apiError = (
+    statusCode: number,
+    message: string,
+    responseBody = "",
+    data?: unknown,
+) =>
     new APICallError({
         message,
         url: "https://api.example.com/v1/chat/completions",
         requestBodyValues: {},
         statusCode,
         responseBody,
+        data,
     })
 
 describe("classifyLLMError", () => {
@@ -31,12 +40,30 @@ describe("classifyLLMError", () => {
         expect(
             classifyLLMError(apiError(401, "Authentication Fails")).code,
         ).toBe("invalid_api_key")
-        expect(classifyLLMError(apiError(404, "Unknown")).code).toBe(
-            "model_not_found",
-        )
+        expect(
+            classifyLLMError(
+                apiError(404, "Unknown", "", { error: { message: "Unknown" } }),
+            ).code,
+        ).toBe("model_not_found")
         expect(classifyLLMError(apiError(503, "busy")).code).toBe(
             "provider_unavailable",
         )
+    })
+
+    it("points to the base URL for a 404 that is not the provider's error", () => {
+        // A base URL without its /v1: the web server's own 404, here
+        // FastAPI's
+        const notFound = apiError(404, "Not Found", '{"detail":"Not Found"}')
+        expect(classifyLLMError(notFound)).toEqual({
+            type: "provider",
+            code: "wrong_base_url",
+            message: "Not Found: Not Found",
+        })
+        // A plain 404 that names the model is about the model
+        expect(
+            classifyLLMError(apiError(404, "model 'acme-large' not found"))
+                .code,
+        ).toBe("model_not_found")
     })
 
     it("lets a specific text win over the status code", () => {
@@ -63,10 +90,50 @@ describe("classifyLLMError", () => {
         ).toBe("images_unsupported")
     })
 
+    it("says the image is the problem when the provider could not read it", () => {
+        // Bedrock, for a HEIC photo sent as JPEG. On the server's keys the
+        // user gets the code only, which the chat turns into its hint.
+        const error = apiError(
+            400,
+            "The model returned the following errors: image processing failed: cannot measure image dimensions: The image format could not be determined",
+        )
+        expect(JSON.parse(streamErrorText(error, true))).toEqual({
+            type: "provider",
+            code: "image_unreadable",
+            message: "The provider returned an error.",
+        })
+    })
+
     it("does not call a 403 an invalid key", () => {
         expect(classifyLLMError(apiError(403, "Forbidden")).code).toBe(
             "forbidden",
         )
+    })
+
+    it("names a wrong key that does not come as 401", () => {
+        // Google: 400, with the reason in the body
+        const google = apiError(
+            400,
+            "API key not valid. Please pass a valid API key.",
+            '{"error":{"code":400,"status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}',
+        )
+        // Bedrock: 403 for a wrong access key ID or secret access key
+        const awsKeyId = apiError(
+            403,
+            "The security token included in the request is invalid.",
+        )
+        const awsSecret = apiError(
+            403,
+            "The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method.",
+        )
+        for (const error of [google, awsKeyId, awsSecret]) {
+            expect(classifyLLMError(error).code).toBe("invalid_api_key")
+        }
+    })
+
+    it("points to the model id when Bedrock does not know it", () => {
+        const error = apiError(400, "The provided model identifier is invalid.")
+        expect(classifyLLMError(error).code).toBe("model_not_found")
     })
 
     it("uses the last attempt after retries", () => {
@@ -132,6 +199,34 @@ describe("classifyLLMError", () => {
             requestBodyValues: {},
         })
         expect(classifyLLMError(error).code).toBe("cannot_connect")
+    })
+
+    it("names a reply that is not a model API's", () => {
+        // A base URL that points at a website: 200 and a web page
+        expect(
+            classifyLLMError(
+                new Error("Response stream ended without a finish reason."),
+            ).code,
+        ).toBe("bad_response")
+        expect(
+            classifyLLMError(
+                new Error(
+                    'JSON parsing failed: Text: {"id":"x","choices":[{"delta":{"content":"half.\nError message: Unterminated string in JSON at position 58',
+                ),
+            ).code,
+        ).toBe("bad_response")
+        expect(
+            classifyLLMError(apiError(200, "Invalid JSON response")).code,
+        ).toBe("bad_response")
+        // A base URL that points at another API: 200 and JSON of its own
+        expect(
+            classifyLLMError(
+                TypeValidationError.wrap({
+                    value: { status: "ok", data: [] },
+                    cause: new Error("expected choices"),
+                }),
+            ).code,
+        ).toBe("bad_response")
     })
 
     it("reads an error object sent in the stream", () => {
@@ -273,6 +368,31 @@ describe("streamErrorText", () => {
             message: "Too many tokens, please wait before trying again.",
         }
         expect(JSON.parse(streamErrorText(throttled)).code).toBe("rate_limited")
+    })
+})
+
+describe("logText", () => {
+    // Some gateways answer a wrong key with the whole key in the text
+    const echoed = apiError(
+        401,
+        "Incorrect API key provided: my-own-key-12345. Check your key.",
+        '{"error":{"message":"Incorrect API key provided: my-own-key-12345"}}',
+    )
+
+    it("keeps a key the provider echoed back out of the server log", () => {
+        const text = logText(echoed)
+        expect(text).not.toContain("my-own-key-12345")
+        expect(text).toContain("Incorrect API key provided: [redacted]")
+        // The rest of the error is there as before
+        expect(text).toContain("statusCode: 401")
+        expect(classifyLLMError(echoed).message).toBe(
+            "Incorrect API key provided: [redacted] Check your key.",
+        )
+    })
+
+    it("leaves the key OpenAI masks itself", () => {
+        const masked = "Incorrect API key provided: sk-proj-********1234."
+        expect(logText(masked)).toBe(masked)
     })
 })
 

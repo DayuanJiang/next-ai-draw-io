@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { z } from "zod"
+import { getEnvFallback } from "@/lib/admin/settings"
 import { PROVIDERS, type ProviderName } from "@/lib/providers"
 
 export const ProviderNameSchema: z.ZodType<ProviderName> = z
@@ -67,17 +68,27 @@ function getConfigPath(): string {
  * Synthesize a config from a comma-separated AI_MODEL value (Priority 3 fallback).
  * Lets users expose multiple models without authoring AI_MODELS_CONFIG / ai-models.json.
  * Triggers only when AI_MODEL contains a comma AND AI_PROVIDER is set to a known provider.
+ * With unlisted (see loadRawServerModelsConfig), also when AI_MODEL is one
+ * model, and without AI_PROVIDER on detected, the one provider the server
+ * has a key for.
+ * Reads the environment's own values: a default set in the admin panel
+ * overlays AI_PROVIDER and AI_MODEL on process.env with its one model.
  */
-function configFromCommaSeparatedAiModel(): ServerModelsConfig | null {
-    const aiModel = process.env.AI_MODEL
-    if (!aiModel || !aiModel.includes(",")) return null
+function configFromAiModel(
+    unlisted = false,
+    detected: ProviderName | null = null,
+): ServerModelsConfig | null {
+    const aiModel = getEnvFallback("AI_MODEL")
+    if (!aiModel || (!unlisted && !aiModel.includes(","))) return null
 
-    const aiProvider = process.env.AI_PROVIDER
+    const aiProvider = getEnvFallback("AI_PROVIDER") ?? detected
     if (!aiProvider) {
-        console.warn(
-            "[server-model-config] AI_MODEL contains commas but AI_PROVIDER is not set; " +
-                "skipping multi-model fallback. Set AI_PROVIDER, or use AI_MODELS_CONFIG / ai-models.json.",
-        )
+        if (!unlisted) {
+            console.warn(
+                "[server-model-config] AI_MODEL contains commas but AI_PROVIDER is not set; " +
+                    "skipping multi-model fallback. Set AI_PROVIDER, or use AI_MODELS_CONFIG / ai-models.json.",
+            )
+        }
         return null
     }
     if (!Object.hasOwn(PROVIDERS, aiProvider)) {
@@ -129,7 +140,11 @@ export async function loadEnvServerModelsConfig(): Promise<ServerModelsConfig | 
     // Priority 2: ai-models.json file
     const configPath = getConfigPath()
     try {
-        const jsonStr = await fs.readFile(configPath, "utf8")
+        // turbopackIgnore: see getSettingsPath in lib/admin/settings.ts
+        const jsonStr = await fs.readFile(
+            /* turbopackIgnore: true */ configPath,
+            "utf8",
+        )
         const json = JSON.parse(jsonStr)
         return ServerModelsConfigSchema.parse(json)
     } catch (err: any) {
@@ -143,7 +158,7 @@ export async function loadEnvServerModelsConfig(): Promise<ServerModelsConfig | 
     }
 
     // Priority 3: AI_MODEL with comma-separated values + AI_PROVIDER
-    return configFromCommaSeparatedAiModel()
+    return configFromAiModel()
 }
 
 export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | null> {
@@ -157,15 +172,44 @@ export async function loadRawServerModelsConfig(): Promise<ServerModelsConfig | 
     const adminConfig = adminProvidersToConfig(loadAdminProviders())
 
     if (adminConfig.providers.length === 0) return envConfig
-    if (!envConfig) return adminConfig
+
+    // An AI_MODEL that made no list (one model, or several without
+    // AI_PROVIDER) is used by selecting nothing, which clients only do
+    // while the server lists no models. The panel's providers end that, so
+    // the environment's models join the list, the first as its default;
+    // without them they would leave the picker and every user would move
+    // to the panel's first model. A model that a panel provider of the
+    // same name already lists is left out (it would have the same id); the
+    // others stay, the default mark only with the first.
+    let env = envConfig
+    if (!env) {
+        // Dynamic import: lib/ai-providers imports lib/admin/providers.
+        // The provider by the environment's own keys, not the panel's
+        const { detectProvider } = await import("./ai-providers")
+        const unlisted = configFromAiModel(true, detectProvider(getEnvFallback))
+            ?.providers[0]
+        const models = unlisted?.models.filter(
+            (model) =>
+                !adminConfig.providers.some(
+                    (p) =>
+                        slugify(p.name) === slugify(unlisted.name) &&
+                        p.models.includes(model),
+                ),
+        )
+        if (unlisted && models?.length) {
+            const first = models[0] === unlisted.models[0]
+            env = { providers: [{ ...unlisted, models, default: first }] }
+        }
+    }
+    if (!env) return adminConfig
 
     // A panel default overrides an env default
     const adminHasDefault = adminConfig.providers.some((p) => p.default)
     const envProviders = adminHasDefault
-        ? envConfig.providers.map((p) =>
+        ? env.providers.map((p) =>
               p.default ? { ...p, default: undefined } : p,
           )
-        : envConfig.providers
+        : env.providers
     return { providers: [...envProviders, ...adminConfig.providers] }
 }
 
@@ -176,7 +220,9 @@ export async function loadFlattenedServerModels(): Promise<
     if (!cfg) return []
 
     const defaultProvider = process.env.AI_PROVIDER as ProviderName | undefined
-    const defaultModelId = process.env.AI_MODEL
+    // The first of several, as chat uses it when nothing is selected
+    const defaultModelId = process.env.AI_MODEL?.split(",")[0].trim()
+    const hasDefaultProvider = cfg.providers.some((p) => p.default === true)
 
     const flattened: FlattenedServerModel[] = []
     const seenIds = new Set<string>()
@@ -203,11 +249,14 @@ export async function loadFlattenedServerModels(): Promise<
             // Default model priority:
             // 1. From ai-models.json: first model of provider with default: true
             // 2. From env vars: AI_MODEL matches (legacy behavior)
-            const isDefault =
-                (p.default === true && modelId === p.models[0]) ||
-                (!!defaultModelId &&
-                    modelId === defaultModelId &&
-                    (!defaultProvider || defaultProvider === p.provider))
+            // Only one of the two: a panel default is also written to
+            // AI_PROVIDER and AI_MODEL, where it would mark an environment
+            // entry of the same provider and model as well, listed first.
+            const isDefault = hasDefaultProvider
+                ? p.default === true && modelId === p.models[0]
+                : !!defaultModelId &&
+                  modelId === defaultModelId &&
+                  (!defaultProvider || defaultProvider === p.provider)
 
             flattened.push({
                 id,

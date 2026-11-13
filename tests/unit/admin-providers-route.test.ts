@@ -4,6 +4,7 @@ import os from "os"
 import path from "path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { GET, PUT } from "@/app/api/admin/providers/route"
+import { loadAdminProviders } from "@/lib/admin/providers"
 import { _resetForTests } from "@/lib/admin/settings"
 
 let tmpDir: string
@@ -53,6 +54,125 @@ async function envHasDefaultModel(): Promise<boolean> {
     return (await res.json()).envHasDefaultModel
 }
 
+describe("saving an entry whose key is kept", () => {
+    const save = (entry: object) =>
+        PUT(
+            new Request("http://localhost/api/admin/providers", {
+                method: "PUT",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    providers: [
+                        {
+                            id: "p1",
+                            provider: "openai",
+                            models: ["gpt-panel"],
+                            ...entry,
+                        },
+                    ],
+                }),
+            }),
+        )
+    const official = "https://api.openai.com/v1"
+    const storedEntry = () => loadAdminProviders()[0]
+
+    it("refuses another base URL until the key is typed again", async () => {
+        const first = await save({
+            apiKey: "sk-stored-secret-0001",
+            baseUrl: official,
+        })
+        // What the panel sends back for an untouched key
+        const marker = (await first.json()).providers[0].apiKey
+        expect(marker).toEqual({ isSet: true, hint: "…0001" })
+
+        // The stored key would go to the new host with the next chat
+        const moved = await save({
+            apiKey: marker,
+            baseUrl: "https://elsewhere.example/v1",
+        })
+        expect(moved.status).toBe(400)
+        expect((await moved.json()).error).toBe(
+            'The base URL of "OpenAI" changed. Enter its key again.',
+        )
+        expect(storedEntry().baseUrl).toBe(official)
+        expect(process.env.ADMIN_OPENAI_BASE_URL).toBe(official)
+
+        // Other changes keep the key
+        const edited = await save({
+            apiKey: marker,
+            baseUrl: official,
+            models: ["gpt-panel", "gpt-more"],
+        })
+        expect(edited.status).toBe(200)
+        expect(storedEntry().apiKey).toBe("sk-stored-secret-0001")
+
+        const retyped = await save({
+            apiKey: "sk-typed-again-0002",
+            baseUrl: "https://elsewhere.example/v1",
+        })
+        expect(retyped.status).toBe(200)
+        expect(storedEntry()).toMatchObject({
+            apiKey: "sk-typed-again-0002",
+            baseUrl: "https://elsewhere.example/v1",
+        })
+    })
+
+    it("refuses two entries with one id, which could move a kept key to another base URL", async () => {
+        const first = await save({
+            name: "Real",
+            apiKey: "sk-stored-secret-0001",
+            baseUrl: official,
+        })
+        const marker = (await first.json()).providers[0].apiKey
+        // The check would compare the first entry's URL with the stored
+        // one, and the kept key would be the last entry's
+        const res = await PUT(
+            new Request("http://localhost/api/admin/providers", {
+                method: "PUT",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    providers: [
+                        {
+                            id: "p1",
+                            provider: "openai",
+                            name: "Elsewhere",
+                            apiKey: "sk-any",
+                            baseUrl: "https://elsewhere.example/v1",
+                            models: ["gpt-a"],
+                        },
+                        {
+                            id: "p1",
+                            provider: "openai",
+                            name: "Real",
+                            apiKey: marker,
+                            baseUrl: official,
+                            models: ["gpt-panel"],
+                        },
+                    ],
+                }),
+            }),
+        )
+        expect(res.status).toBe(400)
+        expect((await res.json()).error).toBe("Provider ids must be unique.")
+        expect(loadAdminProviders()).toHaveLength(1)
+    })
+
+    it("lets a Bedrock region change", async () => {
+        const first = await save({
+            provider: "bedrock",
+            awsAccessKeyId: "AKIAIOSFODNN7EXAMPLE",
+            awsSecretAccessKey: "secret-access-key-0003",
+            awsRegion: "us-east-1",
+        })
+        const [entry] = (await first.json()).providers
+        const res = await save({ ...entry, awsRegion: "eu-west-1" })
+        expect(res.status).toBe(200)
+        expect(storedEntry()).toMatchObject({
+            awsSecretAccessKey: "secret-access-key-0003",
+            awsRegion: "eu-west-1",
+        })
+    })
+})
+
 describe("envHasDefaultModel", () => {
     it("is true when .env sets AI_MODEL, even after a panel default", async () => {
         vi.stubEnv("AI_MODEL", "gpt-env")
@@ -65,5 +185,76 @@ describe("envHasDefaultModel", () => {
         await saveDefaultPanelProvider()
         expect(process.env.AI_MODEL).toBe("gpt-panel")
         expect(await envHasDefaultModel()).toBe(false)
+    })
+})
+
+describe("envProviders", () => {
+    const savePanelProvider = async (isDefault: boolean) => {
+        const res = await PUT(
+            new Request("http://localhost/api/admin/providers", {
+                method: "PUT",
+                headers: { ...headers, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    providers: [
+                        {
+                            id: "p1",
+                            provider: "anthropic",
+                            apiKey: "sk-test",
+                            models: ["claude-panel"],
+                            isDefault,
+                        },
+                    ],
+                }),
+            }),
+        )
+        return (await res.json()).envProviders
+    }
+
+    it("holds a lone AI_MODEL that users pick next to the panel's providers", async () => {
+        vi.stubEnv("AI_MODELS_CONFIG", "")
+        vi.stubEnv("AI_PROVIDER", "openai")
+        vi.stubEnv("AI_MODEL", "gpt-env")
+        const lone = {
+            name: "OpenAI",
+            provider: "openai",
+            models: ["gpt-env"],
+            loneModel: true,
+        }
+        // The users' list keeps it as the default beside the panel's model
+        expect(await savePanelProvider(false)).toEqual([
+            { ...lone, isDefault: true },
+        ])
+        // A panel default takes its star
+        expect(await savePanelProvider(true)).toEqual([
+            { ...lone, isDefault: false },
+        ])
+    })
+
+    it("holds the providers of AI_MODELS_CONFIG, which are no lone model", async () => {
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    {
+                        name: "Env List",
+                        provider: "bedrock",
+                        models: ["model-a", "model-b"],
+                        default: true,
+                    },
+                ],
+            }),
+        )
+        const listed = {
+            name: "Env List",
+            provider: "bedrock",
+            models: ["model-a", "model-b"],
+            loneModel: false,
+        }
+        expect(await savePanelProvider(false)).toEqual([
+            { ...listed, isDefault: true },
+        ])
+        expect(await savePanelProvider(true)).toEqual([
+            { ...listed, isDefault: false },
+        ])
     })
 })

@@ -10,7 +10,11 @@ import { pageNameOf } from "@/lib/diagram-pages"
 import { highlightChangedCells } from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
 import { cn } from "@/lib/utils"
-import { describeChangeSummary, describeTotals } from "@/lib/version-text"
+import {
+    describeChangeSummary,
+    describePagesChange,
+    describeTotals,
+} from "@/lib/version-text"
 import { useUiStore } from "@/stores/ui-store"
 
 /** Picture of a version (SVG data URL), or what stands in for it */
@@ -59,6 +63,8 @@ interface VersionCardProps extends React.ComponentProps<"div"> {
     afterSummary?: React.ReactNode
     /** The canvas was changed by hand since this version: the card says so */
     editedSince?: boolean
+    /** Pages the change added (negative: removed), told with what changed */
+    pagesAdded?: number
     /** Panel below the card (the chat shows the AI's XML there) */
     children?: React.ReactNode
 }
@@ -72,18 +78,23 @@ export function SummaryLink({
     children: React.ReactNode
 }) {
     // A text link, so the card's only button is the action (undo or
-    // restore); it wraps as one unit with its separator
+    // restore); it wraps as one unit with its separator. The space before
+    // the unit is outside it, so a line can end there and a narrow panel
+    // does not break inside the summary's last word (Japanese 追加)
     return (
-        <span className="whitespace-nowrap">
-            <span aria-hidden> · </span>
-            <button
-                type="button"
-                onClick={onClick}
-                className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
-            >
-                {children}
-            </button>
-        </span>
+        <>
+            {" "}
+            <span className="whitespace-nowrap">
+                <span aria-hidden>· </span>
+                <button
+                    type="button"
+                    onClick={onClick}
+                    className="underline decoration-foreground/30 underline-offset-2 hover:text-foreground hover:decoration-foreground"
+                >
+                    {children}
+                </button>
+            </span>
+        </>
     )
 }
 
@@ -98,6 +109,7 @@ export function VersionCard({
     label,
     afterSummary,
     editedSince,
+    pagesAdded = 0,
     children,
     className,
     ...rest
@@ -112,6 +124,11 @@ export function VersionCard({
     const summary = version.fromScratch
         ? describeTotals(version.summary, t)
         : describeChangeSummary(version.summary, t)
+    // Pages added or removed come first, and alone when no shape changed
+    // (a new blank page is a visible change). A page drawn from scratch
+    // is told by its totals
+    const pages = version.fromScratch ? "" : describePagesChange(pagesAdded, t)
+    const cellsChanged = Object.values(version.summary).some((n) => n > 0)
     // In a document with several pages, the page the change was made on
     const pageName = useMemo(
         () => pageNameOf(version.xml, version.pageId),
@@ -149,12 +166,18 @@ export function VersionCard({
     )
     const summaryLine = (
         <div className="text-xs text-muted-foreground">
-            {pageName && (
-                <span className="font-medium text-foreground/80">
-                    {pageName}:{" "}
-                </span>
+            {pages}
+            {pages && cellsChanged && t.listSeparator}
+            {(!pages || cellsChanged) && (
+                <>
+                    {pageName && (
+                        <span className="font-medium text-foreground/80">
+                            {pageName}:{" "}
+                        </span>
+                    )}
+                    {summary}
+                </>
             )}
-            {summary}
             {canShowChanges && (
                 <SummaryLink
                     onClick={() =>
@@ -228,7 +251,7 @@ export function VersionCard({
     return (
         <div
             className={cn(
-                "overflow-hidden rounded-xl border border-border bg-card",
+                "@container overflow-hidden rounded-xl border border-border bg-card",
                 isOnCanvas && "border-foreground/15",
                 className,
             )}
@@ -250,11 +273,15 @@ export function VersionCard({
                     {t.compare}
                 </span>
             </button>
-            {/* Title row with the action; the summary runs under both */}
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-2.5">
+            {/* Title row with the action; the summary runs under both. In
+                a narrow card (the MCP shell's panel) the title would be
+                cut off: it gets the row, and the action goes beside the
+                summary, which starts under the number, as on the older
+                cards */}
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 px-3 py-2.5 [&>button]:col-start-3 [&>button]:row-start-2 @xs:[&>button]:row-start-1">
                 {badge}
                 <div
-                    className="truncate text-[13px] font-medium text-foreground"
+                    className="col-span-2 truncate text-[13px] font-medium text-foreground @xs:col-span-1"
                     title={title}
                 >
                     {title}
@@ -279,7 +306,7 @@ export function VersionCard({
                 ) : (
                     restoreButton
                 )}
-                <div className="col-span-2 col-start-2 mt-0.5">
+                <div className="col-span-2 row-start-2 mt-0.5 @xs:col-start-2">
                     {summaryLine}
                 </div>
             </div>

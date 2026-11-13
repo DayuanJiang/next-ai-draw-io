@@ -13,16 +13,29 @@ const MAX_HISTORY = 20
  * Who made an entry's diagram: an edit in the browser ("user"), a tab's
  * copy kept when the server recovered the session ("recover"), a restored
  * copy of an older entry ("restore"), a file opened with load_diagram
- * ("load"), a page added with add_page ("add_page"). The AI's other writes
- * and entries loaded from an older saved file carry none.
+ * ("load"), a page added with add_page ("add_page") or renamed with
+ * rename_page ("rename_page"). The AI's other writes and entries loaded
+ * from an older saved file carry none.
  */
-export type HistorySource = "user" | "recover" | "restore" | "load" | "add_page"
+export type HistorySource =
+    | "user"
+    | "recover"
+    | "restore"
+    | "load"
+    | "add_page"
+    | "rename_page"
 
 export interface HistoryEntry {
     id: number // Stable across shifts of the circular buffer
     xml: string
     svg: string
     source?: HistorySource
+    // The state version that a server write (the AI's, a restore) made
+    // with this entry: what a hand edit based on an older version lost to
+    version?: number
+    // The entry a hand edit was made on, when a server write came in
+    // between: the edit lost to that write and is kept after it
+    basedOn?: number
 }
 
 let nextEntryId = 0
@@ -33,6 +46,7 @@ export function addHistory(
     xml: string,
     svg = "",
     source?: HistorySource,
+    more: Pick<HistoryEntry, "version" | "basedOn"> = {},
 ): number {
     let history = historyStore.get(sessionId)
     if (!history) {
@@ -54,6 +68,7 @@ export function addHistory(
         xml,
         svg,
         ...(source && { source }),
+        ...more,
     })
 
     // Circular buffer
@@ -79,6 +94,7 @@ export function getHistoryEntry(
 
 export function clearHistory(sessionId: string): void {
     historyStore.delete(sessionId)
+    canvasVersions.delete(sessionId)
 }
 
 /**
@@ -116,7 +132,12 @@ export function isInHistory(sessionId: string, xml: string): boolean {
  * rule of otherVersions), or null when the canvas is in none of them
  */
 export function currentEntryId(sessionId: string, xml: string): number | null {
-    const version = versionOf(xml)
+    let canvas = canvasVersions.get(sessionId)
+    if (canvas?.xml !== xml) {
+        canvas = { xml, version: versionOf(xml) }
+        canvasVersions.set(sessionId, canvas)
+    }
+    const { version } = canvas
     const history = getHistory(sessionId)
     for (let i = history.length - 1; i >= 0; i--) {
         if (sameVersion(version, entryVersion(history[i]))) {
@@ -165,6 +186,12 @@ function versionOf(xml: string): Version {
     }
 }
 
+// Each session's canvas as currentEntryId last saw it. Every open preview
+// tab asks which entry the canvas shows every 2 seconds, and fingerprinting
+// parses the whole diagram twice (0.1 s for one with a few MB of pictures),
+// so an unchanged canvas is not fingerprinted again.
+const canvasVersions = new Map<string, { xml: string; version: Version }>()
+
 // An entry's XML never changes: its fingerprints are computed once
 const entryVersions = new WeakMap<HistoryEntry, Version>()
 function entryVersion(entry: HistoryEntry): Version {
@@ -183,8 +210,9 @@ function sameVersion(a: Version, b: Version): boolean {
 }
 
 /**
- * Give the last entry the image the browser took of shownXml, the diagram
- * it just loaded, when that entry is this diagram
+ * Give the newest entry of shownXml, the diagram the browser just loaded,
+ * the image it took of it. That entry is the last one, or the one before a
+ * hand edit that lost the race with this write (kept after it)
  */
 export function updateLastHistorySvg(
     sessionId: string,
@@ -192,10 +220,9 @@ export function updateLastHistorySvg(
     shownXml: string,
 ): boolean {
     const history = historyStore.get(sessionId)
-    if (!history || history.length === 0) return false
-    const last = history[history.length - 1]
-    if (!last.svg && last.xml === shownXml) {
-        last.svg = svg
+    const entry = history?.filter((e) => e.xml === shownXml).at(-1)
+    if (entry && !entry.svg) {
+        entry.svg = svg
         return true
     }
     return false

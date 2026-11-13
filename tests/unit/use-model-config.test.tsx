@@ -126,6 +126,24 @@ describe("useModelConfig server model selection", () => {
         expect(result.current.models.map((m) => m.id)).toContain("m1")
     })
 
+    it("skips a saved provider without a list of models", async () => {
+        // The page crashed on every load ("models is not iterable"), so
+        // the settings could not be opened to repair it
+        storeConfig({
+            ...USER_CONFIG,
+            providers: [
+                ...USER_CONFIG.providers,
+                { id: "p9", provider: "openai", apiKey: "k", models: null },
+            ],
+            selectedModelId: "m1",
+        } as any)
+        const { result } = await renderLoaded()
+        expect(result.current.config.providers.map((p) => p.id)).toEqual(["p1"])
+        expect(result.current.models.map((m) => m.id)).toContain("m1")
+        // Sending reads the stored config too
+        expect(getSelectedAIConfig().aiModel).toBe("gpt-4o")
+    })
+
     it("keeps an unknown provider and its key in storage", async () => {
         // The version that saved it may be opened again (an older desktop
         // build, another tab): the provider must still be there

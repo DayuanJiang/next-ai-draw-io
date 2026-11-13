@@ -13,7 +13,7 @@
 
 
 
-## Shapes (54)
+## Shapes (53)
 
 - `auxiliary_contact_contactor_1_32a`
 - `auxiliary_contact_contactor_32_125a`
@@ -45,7 +45,6 @@
 - `motor_starter_32_125a`
 - `motorized_switch_3p`
 - `motorized_switch_4p`
-- `mxgraph.cabinets`
 - `overcurrent_relay_125_400a`
 - `overcurrent_relay_1_32a`
 - `overcurrent_relay_32_125a`

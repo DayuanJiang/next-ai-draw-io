@@ -51,8 +51,16 @@ export default async function GalleryPage({ params }: Props) {
         <div className="site min-h-screen bg-canvas text-foreground">
             <div className="lp-grid border-b border-border">
                 <SiteHeader lang={lang} current="gallery" />
-                <section className="mx-auto max-w-7xl px-5 pt-6 pb-10 md:px-8 md:pt-8 md:pb-12">
-                    <h1 className="max-w-[24em] text-[clamp(30px,3vw,40px)] leading-[1.12] font-semibold tracking-[-0.03em] [text-wrap:balance]">
+                {/* Outside <main>, on the grid it shares with the header:
+                    its headline names it, which makes it a landmark too */}
+                <section
+                    aria-labelledby="hero"
+                    className="mx-auto max-w-7xl px-5 pt-6 pb-10 md:px-8 md:pt-8 md:pb-12"
+                >
+                    <h1
+                        id="hero"
+                        className="max-w-[24em] text-[clamp(30px,3vw,40px)] leading-[1.12] font-semibold tracking-[-0.03em] [text-wrap:balance]"
+                    >
                         {t.h1}
                     </h1>
                     <p className="mt-4 max-w-[46em] text-[15.5px] leading-relaxed text-muted-foreground">

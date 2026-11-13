@@ -40,17 +40,21 @@ test.describe("Crossing the mobile breakpoint", () => {
         await expect(page.getByText("Once upon")).toBeVisible({
             timeout: 10000,
         })
+        // The message itself (the chat's title says the same once it is sent)
+        const message = page
+            .getByRole("paragraph")
+            .filter({ hasText: "Tell me a story" })
 
         // Phones show the canvas or the chat, one at a time
         await page.setViewportSize({ width: 600, height: 900 })
         await page.getByRole("button", { name: "Chat", exact: true }).click()
-        await expect(page.getByText("Tell me a story")).toBeVisible()
+        await expect(message).toBeVisible()
 
         await page.setViewportSize({ width: 1280, height: 800 })
         await expect(page.getByText("Once upon a time.")).toBeVisible({
             timeout: 10000,
         })
-        await expect(page.getByText("Tell me a story")).toBeVisible()
+        await expect(message).toBeVisible()
     })
 
     test("reaches a chat hidden on desktop", async ({ page }) => {
@@ -115,8 +119,11 @@ test.describe("Answers", () => {
             page.getByText("Here is your diagram with a test box."),
         ).toBeVisible({ timeout: 15000 })
 
-        // The user's message has one too: the answer's is the last
-        await page.getByRole("button", { name: "Copy response" }).last().click()
+        // The user's message has its own, named "Copy message"
+        await expect(
+            page.getByRole("button", { name: "Copy message" }),
+        ).toHaveCount(1)
+        await page.getByRole("button", { name: "Copy response" }).click()
         // The button shows a check mark for a moment
         await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible(
             { timeout: 3000 },
@@ -164,7 +171,8 @@ test("a model drawing silently shows the time so far", async ({ page }) => {
     // Not while something new is still arriving
     const clock = page.getByTestId("silent-work")
     await expect(clock).toBeHidden()
-    await expect(clock).toBeVisible({ timeout: 8000 })
+    // Shows after two to three seconds of nothing new
+    await expect(clock).toBeVisible({ timeout: 4000 })
     await expect(clock).toHaveText(/^Drawing… \d+ s$/)
     // Gone once the drawing arrives
     await expect(clock).toBeHidden({ timeout: 10000 })

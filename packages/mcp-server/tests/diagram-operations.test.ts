@@ -33,12 +33,42 @@ describe("wrapped cells", () => {
         expect(result).toContain('id="a"')
     })
 
-    it("warns when deleting a cell that does not exist", () => {
-        const { errors } = applyDiagramOperations(DOC, [
+    it("skips the delete of a cell that is not there, with a note", () => {
+        // A cell that went with its container in an earlier call must not
+        // make the whole batch fail
+        const { result, errors, notes } = applyDiagramOperations(DOC, [
             { operation: "delete", cell_id: "missing" },
+            { operation: "delete", cell_id: "child" },
+        ])
+        expect(errors).toEqual([])
+        expect(notes).toEqual([
+            "delete missing: no cell with this id on the page (already deleted?), skipped.",
+        ])
+        expect(result).not.toContain('id="child"')
+    })
+
+    it("names the cells a delete took along", () => {
+        const { notes } = applyDiagramOperations(DOC, [
+            { operation: "delete", cell_id: "a" },
+            // Listed by the model too: already gone, no second note
+            { operation: "delete", cell_id: "child" },
+        ])
+        expect(notes).toEqual([
+            "delete a also removed its children and connected edges: child, e1.",
+        ])
+    })
+
+    it("refuses an update that would turn a shape into no shape", () => {
+        const { result, errors } = applyDiagramOperations(DOC, [
+            {
+                operation: "update",
+                cell_id: "b",
+                new_xml: '<mxCell id="b" value="Renamed"/>',
+            },
         ])
         expect(errors).toHaveLength(1)
-        expect(errors[0]).toMatchObject({ type: "delete", cellId: "missing" })
+        expect(errors[0].message).toContain("the cell would vanish")
+        expect(result).toContain('<mxCell id="b" value="B" vertex="1"')
     })
 
     it("updates a UserObject cell", () => {
@@ -190,5 +220,95 @@ describe("cut-off new_xml", () => {
         expect(errors).toHaveLength(1)
         expect(result).toContain('value="B3"')
         expect(result).not.toContain('id="n"')
+    })
+})
+
+describe("a box added around shapes that are already there", () => {
+    const shape = (id: string, x: number, y: number, parent = "1") =>
+        `<mxCell id="${id}" value="${id}" vertex="1" parent="${parent}"><mxGeometry x="${x}" y="${y}" width="120" height="60" as="geometry"/></mxCell>`
+    const EDGE = `<mxCell id="e1" edge="1" parent="1" source="in1" target="in2"><mxGeometry relative="1" as="geometry"/></mxCell>`
+    const PAGE = `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${shape("out", 600, 100)}${EDGE}${shape("in1", 100, 100)}${shape("in2", 300, 100)}</root></mxGraphModel></diagram></mxfile>`
+    const frame = (parent: string) =>
+        `<mxCell id="frame" value="Group" style="fillColor=none;dashed=1;" vertex="1" parent="${parent}"><mxGeometry x="60" y="60" width="420" height="160" as="geometry"/></mxCell>`
+    const order = (xml: string) =>
+        Array.from(xml.matchAll(/<mxCell id="([^"]+)"/g), (m) => m[1])
+
+    it("goes behind the shapes it covers and their edges, so a click still reaches them", () => {
+        const { result, errors, notes } = applyDiagramOperations(PAGE, [
+            { operation: "add", cell_id: "frame", new_xml: frame("1") },
+        ])
+        expect(errors).toEqual([])
+        // draw.io draws in this order, the last cell on top: the frame
+        // comes before the edge between the two shapes inside it
+        expect(order(result)).toEqual([
+            "0",
+            "1",
+            "out",
+            "frame",
+            "e1",
+            "in1",
+            "in2",
+        ])
+        expect(notes).toEqual([
+            "frame is drawn behind the shapes it covers (in1, in2), so they stay visible and can be selected.",
+        ])
+    })
+
+    it("goes behind a shape that a later operation of the same call moves into it", () => {
+        const { result, errors, notes } = applyDiagramOperations(PAGE, [
+            { operation: "add", cell_id: "frame", new_xml: frame("1") },
+            // The first cell of the page, outside the frame until now
+            {
+                operation: "update",
+                cell_id: "out",
+                new_xml: shape("out", 100, 160),
+            },
+        ])
+        expect(errors).toEqual([])
+        expect(order(result)).toEqual([
+            "0",
+            "1",
+            "frame",
+            "out",
+            "e1",
+            "in1",
+            "in2",
+        ])
+        expect(notes).toEqual([
+            "frame is drawn behind the shapes it covers (out, in1, in2), so they stay visible and can be selected.",
+        ])
+    })
+
+    it("stays where it is, without a note, when the same call adds its shapes after it", () => {
+        const { result, notes } = applyDiagramOperations(PAGE, [
+            {
+                operation: "add",
+                cell_id: "frame",
+                new_xml: frame("1").replace('y="60"', 'y="400"'),
+            },
+            { operation: "add", cell_id: "n", new_xml: shape("n", 100, 440) },
+        ])
+        expect(order(result).slice(-2)).toEqual(["frame", "n"])
+        expect(notes).toEqual([])
+    })
+
+    it("stays in front, at the end, when it covers no shape", () => {
+        const { result, notes } = applyDiagramOperations(PAGE, [
+            // Overlaps in1 without covering it
+            { operation: "add", cell_id: "n", new_xml: shape("n", 150, 120) },
+            // As large as in2, at its place
+            { operation: "add", cell_id: "m", new_xml: shape("m", 300, 100) },
+        ])
+        expect(order(result).slice(-2)).toEqual(["n", "m"])
+        expect(notes).toEqual([])
+    })
+
+    it("only looks at the shapes of its own parent", () => {
+        // A child's position counts from its container's corner
+        const { result, notes } = applyDiagramOperations(PAGE, [
+            { operation: "add", cell_id: "frame", new_xml: frame("out") },
+        ])
+        expect(order(result).at(-1)).toBe("frame")
+        expect(notes).toEqual([])
     })
 })

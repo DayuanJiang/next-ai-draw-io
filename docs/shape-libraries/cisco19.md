@@ -13,7 +13,7 @@
 
 
 
-## Shapes (233)
+## Shapes (232)
 
 - `3g_4g_indicator`
 - `6500_vss`
@@ -134,7 +134,6 @@
 - `monitor`
 - `monitoring`
 - `multipoint_meeting_server`
-- `mxgraph.cisco19`
 - `nac_appliance`
 - `nam_virtual_service_blade`
 - `net_mgmt_appliance`

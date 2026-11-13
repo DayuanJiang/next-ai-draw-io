@@ -132,9 +132,10 @@ test("the model picker scrolls with the mouse wheel", async ({ page }) => {
 })
 
 test("shows a hint when the provider rejects the key", async ({ page }) => {
+    // As the server answers: a provider's refusal comes with 200 and its
+    // kind (a 401 is the server's own, for the access code)
     await page.route("**/api/provider-models", (route) =>
         route.fulfill({
-            status: 401,
             json: { code: "invalid_api_key", error: "Incorrect API key" },
         }),
     )
@@ -150,7 +151,6 @@ test("shows a hint when the provider rejects the key", async ({ page }) => {
 test("a fetch error stays with its provider", async ({ page }) => {
     await page.route("**/api/provider-models", (route) =>
         route.fulfill({
-            status: 401,
             json: { code: "invalid_api_key", error: "Incorrect API key" },
         }),
     )

@@ -6,6 +6,7 @@ import {
     RetryError,
     ToolCallRepairError,
 } from "ai"
+import { inspect } from "util"
 
 /**
  * What went wrong with a model call, for a hint the user can act on. The
@@ -15,15 +16,21 @@ type LLMErrorCode =
     | "invalid_api_key"
     | "forbidden"
     | "model_not_found"
+    // Nothing at the address answers as a model API
+    | "wrong_base_url"
     | "insufficient_quota"
     | "rate_limited"
     | "context_too_long"
     | "images_unsupported"
+    // The model reads images, but not this one
+    | "image_unreadable"
     | "tools_unsupported"
     | "output_truncated"
     | "provider_unavailable"
     | "cannot_connect"
     | "timeout"
+    // A reply that is not a model API's: a web page, broken JSON
+    | "bad_response"
     // A 403 on the server's own key, e.g. a daily spend cap blocked it
     | "server_key_forbidden"
     | "unknown"
@@ -43,6 +50,13 @@ const SPECIFIC_TEXTS: Array<[RegExp, LLMErrorCode]> = [
         "context_too_long",
     ],
     [
+        // Bedrock, for a picture that is damaged or in a format it cannot
+        // read: "image processing failed: cannot measure image dimensions:
+        // The image format could not be determined"
+        /image processing failed|image format could not be determined/i,
+        "image_unreadable",
+    ],
+    [
         // OpenRouter: "No endpoints found that support image input"
         /image content block|image_url|does not support image|image input is not supported|support image input/i,
         "images_unsupported",
@@ -53,8 +67,18 @@ const SPECIFIC_TEXTS: Array<[RegExp, LLMErrorCode]> = [
     ],
     // Bedrock, when the output limit cut the tool call's JSON short
     [/toolUse\.input is invalid/i, "output_truncated"],
-    // Bedrock, for a model id without the inference profile prefix
-    [/on-demand throughput isn.t supported/i, "model_not_found"],
+    // Bedrock, for a model id without the inference profile prefix (first)
+    // or one it does not know, both as a plain 400
+    [
+        /on-demand throughput isn.t supported|model identifier is invalid/i,
+        "model_not_found",
+    ],
+    // A wrong key that does not come as 401: Google answers 400, AWS 403
+    // for a wrong access key ID (first) or secret access key
+    [
+        /API key not valid|API_KEY_INVALID|security token included in the request is invalid|request signature we calculated does not match/i,
+        "invalid_api_key",
+    ],
     [
         /insufficient[_ ]quota|insufficient balance|exceeded your current quota|credit balance is too low|余额不足/i,
         "insufficient_quota",
@@ -89,18 +113,40 @@ const GENERAL_TEXTS: Array<[RegExp, LLMErrorCode]> = [
         /Cannot connect to API|ECONNREFUSED|ENOTFOUND|ECONNRESET|ETIMEDOUT|fetch failed/i,
         "cannot_connect",
     ],
+    [
+        // The SDK's words for a 200 it cannot read, e.g. a base URL that
+        // points at a website, or at an API that answers with other JSON
+        /Response stream ended without a finish reason|JSON parsing failed|Invalid JSON response|Type validation failed/i,
+        "bad_response",
+    ],
 ]
 
 /** Secrets a provider may echo back: API keys, Bearer tokens, key=value */
 function redact(text: string): string {
-    return text
-        .replace(/\b(sk|pk|rk|ak)-[A-Za-z0-9_-]{8,}/g, "$1-[redacted]")
-        .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
-        .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[redacted]")
-        .replace(
-            /\b(api[_-]?key|access[_-]?key|secret|token|password|signature)(["']?\s*[:=]\s*["']?)[^\s"',&}]+/gi,
-            "$1$2[redacted]",
-        )
+    return (
+        text
+            .replace(/\b(sk|pk|rk|ak)-[A-Za-z0-9_-]{8,}/g, "$1-[redacted]")
+            .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
+            .replace(/\bAKIA[0-9A-Z]{16}\b/g, "[redacted]")
+            .replace(
+                /\b(api[_-]?key|access[_-]?key|secret|token|password|signature)(["']?\s*[:=]\s*["']?)[^\s"',&}]+/gi,
+                "$1$2[redacted]",
+            )
+            // "Incorrect API key provided: <key>": some gateways echo the
+            // whole key. OpenAI masks it with asterisks, which may stay.
+            .replace(
+                /(API key provided:\s*)[^\s*"']+(?=[\s"']|$)/gi,
+                "$1[redacted]",
+            )
+    )
+}
+
+/**
+ * An error as text for the server log, without the secrets a provider may
+ * echo back: on a user's own key that is the user's key
+ */
+export function logText(error: unknown): string {
+    return redact(typeof error === "string" ? error : inspect(error))
 }
 
 function problemDetail(body: string): string | undefined {
@@ -132,7 +178,7 @@ export function streamErrorText(error: unknown, hideDetails = false): string {
     if (isToolCallError(error)) return (error as Error).message
     const classified = classifyLLMError(error)
     if (hideDetails) {
-        console.error("[chat] Provider error:", error)
+        console.error("[chat] Provider error:", logText(error))
         if (classified.code === "forbidden") {
             // The hint says all the user can do; there is no message to add
             classified.code = "server_key_forbidden"
@@ -184,10 +230,20 @@ export function classifyLLMError(error: unknown): LLMError {
 
     const find = (rules: Array<[RegExp, LLMErrorCode]>) =>
         rules.find(([pattern]) => pattern.test(text))?.[1]
+    // A 404 that is not in the provider's error format (no data) and names
+    // no model comes from the address, most often a base URL without its
+    // /v1. By the status alone it would be "model not found", which sends
+    // the user to check a model ID that is right.
+    const wrongAddress =
+        APICallError.isInstance(e) &&
+        e.statusCode === 404 &&
+        e.data === undefined &&
+        !/model/i.test(text)
     const code =
         (e instanceof Error && e.name === "TimeoutError" && "timeout") ||
         (LoadAPIKeyError.isInstance(e) && "invalid_api_key") ||
         find(SPECIFIC_TEXTS) ||
+        (wrongAddress && "wrong_base_url") ||
         (status && STATUS_CODES[status]) ||
         (status && status >= 500 && "provider_unavailable") ||
         find(GENERAL_TEXTS) ||

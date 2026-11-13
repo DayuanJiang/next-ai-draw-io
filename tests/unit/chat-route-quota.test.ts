@@ -1,12 +1,22 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-// Quota on, and every check answers that the daily limit is used up
-const quota = vi.hoisted(() => ({ checks: 0 }))
-vi.mock("@/lib/dynamo-quota-manager", () => ({
-    isQuotaEnabled: () => true,
-    checkAndIncrementRequest: async () => {
+// Quota on, and every check answers that the daily limit is used up, unless
+// a test allows its request
+const quota = vi.hoisted(() => ({
+    checks: 0,
+    // Each check: its limits, and the follow-up requests a counted request
+    // allows ("follow-up" for the check of a follow-up request itself)
+    calls: [] as Array<{ limits: unknown; followUps: unknown }>,
+    allowed: false,
+    // The tokens recorded for each step
+    recorded: [] as number[],
+}))
+vi.mock("@/lib/dynamo-quota-manager", () => {
+    const check = (limits: unknown, followUps: unknown) => {
         quota.checks++
+        quota.calls.push({ limits, followUps })
+        if (quota.allowed) return { allowed: true }
         return {
             allowed: false,
             error: "Daily limit reached",
@@ -14,9 +24,22 @@ vi.mock("@/lib/dynamo-quota-manager", () => ({
             used: 10,
             limit: 10,
         }
-    },
-    recordTokenUsage: async () => {},
-}))
+    }
+    return {
+        isQuotaEnabled: () => true,
+        checkAndIncrementRequest: async (
+            _user: string,
+            limits: unknown,
+            _increment?: number,
+            followUps?: number,
+        ) => check(limits, followUps),
+        checkFollowUpRequest: async (_user: string, limits: unknown) =>
+            check(limits, "follow-up"),
+        recordTokenUsage: async (_user: string, tokens: number) => {
+            quota.recorded.push(tokens)
+        },
+    }
+})
 
 // No DNS in tests: only loopback addresses are private
 vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
@@ -32,6 +55,9 @@ beforeEach(() => {
     vi.stubEnv("AI_MODEL", "gpt-5.5")
     vi.stubEnv("OPENAI_API_KEY", "server-key")
     quota.checks = 0
+    quota.calls = []
+    quota.allowed = false
+    quota.recorded = []
     // No request may reach a provider
     vi.stubGlobal(
         "fetch",
@@ -45,7 +71,13 @@ afterEach(() => {
     vi.unstubAllGlobals()
 })
 
-const send = (headers: Record<string, string>) =>
+const FIRST_MESSAGE: Record<string, unknown> = {
+    id: "u1",
+    role: "user",
+    parts: [{ type: "text", text: "Draw two boxes" }],
+}
+
+const send = (headers: Record<string, string>, messages = [FIRST_MESSAGE]) =>
     chat(
         new Request("http://localhost/api/chat", {
             method: "POST",
@@ -54,20 +86,37 @@ const send = (headers: Record<string, string>) =>
                 "x-forwarded-for": "203.0.113.7",
                 ...headers,
             },
-            body: JSON.stringify({
-                messages: [
-                    {
-                        id: "u1",
-                        role: "user",
-                        parts: [{ type: "text", text: "Draw two boxes" }],
-                    },
-                ],
-                xml: "",
-            }),
+            body: JSON.stringify({ messages, xml: "" }),
         }),
     )
 
 describe("chat quota", () => {
+    it("allows a user message five follow-up requests, and checks a request that ends with the assistant's message as one", async () => {
+        const limits = { requests: 10, tokens: 200000, tpm: 20000 }
+        await send({ "x-ai-provider": "openai" })
+        // What the browser sends by itself after a diagram was cut off
+        await send({ "x-ai-provider": "openai" }, [
+            FIRST_MESSAGE,
+            {
+                id: "a1",
+                role: "assistant",
+                parts: [
+                    {
+                        type: "tool-display_diagram",
+                        toolCallId: "call-1",
+                        state: "output-error",
+                        input: { xml: "<mxCell" },
+                        errorText: "The output was cut off",
+                    },
+                ],
+            },
+        ])
+        expect(quota.calls).toEqual([
+            { limits, followUps: 5 },
+            { limits, followUps: "follow-up" },
+        ])
+    })
+
     it("counts a request whose key header the provider never reads", async () => {
         // OpenAI ignores the AWS key, so this runs on the server's key
         const res = await send({
@@ -191,6 +240,58 @@ describe("chat quota", () => {
         })
         expect(res.status).not.toBe(429)
         expect(quota.checks).toBe(0)
+    })
+})
+
+describe("the tokens a step counts", () => {
+    it("counts input read from the prompt cache at a tenth", async () => {
+        quota.allowed = true
+        // The second turn of a real chat with GPT-6 Luna: 7,078 input
+        // tokens, 6,094 of them read from the cache, and 212 output
+        const events = [
+            {
+                id: "c1",
+                choices: [
+                    {
+                        index: 0,
+                        delta: { role: "assistant", content: "Done." },
+                        finish_reason: null,
+                    },
+                ],
+            },
+            {
+                id: "c1",
+                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+                usage: {
+                    prompt_tokens: 7078,
+                    completion_tokens: 212,
+                    prompt_tokens_details: { cached_tokens: 6094 },
+                },
+            },
+        ]
+        const body = `${events
+            .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+            .join("")}data: [DONE]\n\n`
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(
+                async () =>
+                    new Response(body, {
+                        headers: { "content-type": "text/event-stream" },
+                    }),
+            ),
+        )
+        // The server's own network: counted
+        const res = await send({
+            "x-ai-provider": "glm",
+            "x-ai-base-url": "http://127.0.0.1:9000/v1",
+            "x-ai-api-key": "dummy",
+            "x-ai-model": "glm-5",
+        })
+        await res.text()
+        // In full it was 7,290. Now 984 uncached input, 212 output and
+        // 609 for the 6,094 cache reads
+        expect(quota.recorded).toEqual([1805])
     })
 })
 

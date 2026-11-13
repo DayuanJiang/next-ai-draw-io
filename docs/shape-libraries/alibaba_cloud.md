@@ -13,7 +13,7 @@
 
 
 
-## Shapes (311)
+## Shapes (310)
 
 - `abap_business_application_platform`
 - `acms_application_configuration_manangement`
@@ -223,7 +223,6 @@
 - `multi-cloud_finops`
 - `multi-mode_database_lindorm`
 - `multimediaai`
-- `mxgraph.alibaba_cloud`
 - `mysql`
 - `nas_network_attached_storage`
 - `nat_gateway`

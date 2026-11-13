@@ -5,7 +5,7 @@ Next AI Draw.io を自分でホストする場合は、環境変数で AI プロ
 ## はじめる
 
 1. `env.example` を `.env.local` にコピーします。
-2. 選んだプロバイダーの API キーを設定します。
+2. 選んだプロバイダーの API キーを設定します。テンプレートには `AI_PROVIDER=bedrock` の行があります。ほかのプロバイダーを使う場合は、この行をそのプロバイダーの名前に書き換えるか、行を削除してサーバーにキーから自動検出させます。
 3. `AI_MODEL` に使いたいモデルを設定します。
 4. `npm run dev` を実行します。
 
@@ -297,7 +297,10 @@ API キーは [Vercel AI Gateway のダッシュボード](https://vercel.com/ai
 
 ### Amazon Bedrock
 
+Bedrock は AWS の認証情報でサインインします。検出できる API キーがないので、サーバーはこのプロバイダーを自動では選べません。`AI_PROVIDER` を設定してください。
+
 ```bash
+AI_PROVIDER=bedrock
 AWS_REGION=us-west-2
 AWS_ACCESS_KEY_ID=your_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_access_key
@@ -347,7 +350,7 @@ AI_MODEL=your-deployment-name
 
 ```bash
 AZURE_REASONING_EFFORT=low      # 任意: low, medium, high
-AZURE_REASONING_SUMMARY=detailed  # 任意: none, brief, detailed
+AZURE_REASONING_SUMMARY=detailed  # 任意: auto, concise, detailed
 ```
 
 ### EdgeOne Pages（Tencent Cloud）
@@ -399,7 +402,7 @@ CUSTOM_BASE_URL=http://127.0.0.1:8000/v1
 AI_MODEL=your_model_id
 ```
 
-## サーバーがプロバイダーを選ぶしくみ
+## サーバーがプロバイダーを選ぶ仕組み
 
 1 つのプロバイダーの API キーだけを設定した場合は、サーバーがそのプロバイダーを自動的に検出して使います。`AI_PROVIDER` を設定する必要はありません。
 

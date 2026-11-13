@@ -22,7 +22,13 @@ export type ReasoningProps = {
     getThinkingMessage: (isStreaming: boolean, duration?: number) => ReactNode
     /** The seconds measured before (saved with the message) */
     initialDuration?: number
+    /**
+     * When the thinking began (ms), where that was before this row came on
+     * screen; without it the seconds count from the row's arrival
+     */
+    startedAt?: number
     onDuration?: (seconds: number) => void
+    /** The thinking's text; some providers send none */
     children: string
 }
 
@@ -35,13 +41,18 @@ export function Reasoning({
     defaultOpen = true,
     getThinkingMessage,
     initialDuration,
+    startedAt,
     onDuration,
     children,
 }: ReasoningProps) {
     const [isOpen, setIsOpen] = useState(defaultOpen)
     const [duration, setDuration] = useState(initialDuration)
     const [hasAutoClosed, setHasAutoClosed] = useState(false)
-    const [startTime, setStartTime] = useState<number | null>(null)
+    // Set from the first render of a row that streams, so its seconds go
+    // on from those of the wait before it
+    const [startTime, setStartTime] = useState<number | null>(() =>
+        isStreaming ? startedAt || Date.now() : null,
+    )
     const [now, setNow] = useState(() => Date.now())
     const onDurationRef = useRef(onDuration)
     onDurationRef.current = onDuration
@@ -50,7 +61,7 @@ export function Reasoning({
     useEffect(() => {
         if (isStreaming) {
             if (startTime === null) {
-                setStartTime(Date.now())
+                setStartTime(startedAt || Date.now())
             }
         } else if (startTime !== null) {
             const seconds = Math.ceil((Date.now() - startTime) / MS_IN_S)
@@ -58,7 +69,7 @@ export function Reasoning({
             setStartTime(null)
             onDurationRef.current?.(seconds)
         }
-    }, [isStreaming, startTime])
+    }, [isStreaming, startTime, startedAt])
 
     // A running count of the seconds while it streams
     useEffect(() => {
@@ -84,6 +95,27 @@ export function Reasoning({
         }
     }, [isStreaming, isOpen, defaultOpen, hasAutoClosed])
 
+    const label = getThinkingMessage(
+        isStreaming,
+        isStreaming ? elapsed : duration,
+    )
+
+    // Thinking that comes without its text (Amazon Bedrock sends Claude's
+    // and GPT's that way) has nothing to open: the label alone, no arrow
+    if (!children) {
+        return (
+            <div
+                className={cn(
+                    "not-prose mb-4 flex items-center gap-2 text-muted-foreground text-sm",
+                    className,
+                )}
+            >
+                <BrainIcon className="size-4" />
+                {label}
+            </div>
+        )
+    }
+
     return (
         <Collapsible
             className={cn("not-prose mb-4", className)}
@@ -92,10 +124,7 @@ export function Reasoning({
         >
             <CollapsibleTrigger className="flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground">
                 <BrainIcon className="size-4" />
-                {getThinkingMessage(
-                    isStreaming,
-                    isStreaming ? elapsed : duration,
-                )}
+                {label}
                 <ChevronDownIcon
                     className={cn(
                         "size-4 transition-transform",

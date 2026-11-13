@@ -3,20 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { onRequest } from "@/edge-functions/api/edgeai/chat/completions"
 
 // EdgeOne's global AI object, answering with an empty stream
+const chatCompletions = vi.fn(async (_options: any) => new ReadableStream())
 beforeEach(() => {
-    vi.stubGlobal("AI", {
-        chatCompletions: async () => new ReadableStream(),
-    })
+    chatCompletions.mockClear()
+    vi.stubGlobal("AI", { chatCompletions })
 })
 afterEach(() => {
     vi.unstubAllGlobals()
 })
 
-function request(headers: Record<string, string>): Request {
+function request(
+    headers: Record<string, string>,
+    content: unknown = "hi",
+): Request {
     return new Request("http://localhost/api/edgeai/chat/completions", {
         method: "POST",
         headers,
-        body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] }),
+        body: JSON.stringify({ messages: [{ role: "user", content }] }),
     })
 }
 
@@ -73,5 +76,21 @@ describe("EdgeOne chat completions function", () => {
     it("lets requests through when env is unavailable", async () => {
         const res = await onRequest({ request: request(json) })
         expectStream(res)
+    })
+
+    it("joins a user message sent as a list of text parts", async () => {
+        // The chat adds the canvas note as a second text part, and the AI
+        // SDK then sends the content as a list
+        const res = await onRequest({
+            request: request(json, [
+                { type: "text", text: "draw a cat" },
+                { type: "text", text: "\n\n[Canvas: empty.]" },
+            ]),
+            env: {},
+        })
+        expectStream(res)
+        expect(chatCompletions.mock.calls[0][0].messages).toEqual([
+            { role: "user", content: "draw a cat\n\n[Canvas: empty.]" },
+        ])
     })
 })

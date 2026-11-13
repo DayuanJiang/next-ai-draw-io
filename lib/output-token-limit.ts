@@ -14,7 +14,7 @@ type WrappedModel = ReturnType<typeof wrapLanguageModel>
 export const DEFAULT_MAX_OUTPUT_TOKENS = 64000
 
 /** Ceiling for the user-supplied override, to catch typos like an extra zero. */
-const MAX_OUTPUT_TOKENS_LIMIT = 200000
+export const MAX_OUTPUT_TOKENS_LIMIT = 200000
 
 /**
  * Below this a diagram cannot come out whole, so a retry would just produce

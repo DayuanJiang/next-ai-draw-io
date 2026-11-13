@@ -1,6 +1,5 @@
 import type { ChatAddToolOutputFunction } from "ai"
 import type { RefObject } from "react"
-import type { DiagramOperation } from "@/components/chat/types"
 import type {
     ValidationState,
     ValidationStatus,
@@ -13,7 +12,11 @@ import type { ValidationResult } from "@/lib/diagram-validator"
 import { formatValidationFeedback } from "@/lib/diagram-validator"
 import { isMxCellXmlComplete } from "@/lib/utils"
 import { foldCells } from "@/packages/mcp-server/src/compact-cells.ts"
-import { editDiagram } from "@/packages/mcp-server/src/edit-diagram.ts"
+import { notesText } from "@/packages/mcp-server/src/diagram-operations.ts"
+import {
+    type EditOperation,
+    editDiagram,
+} from "@/packages/mcp-server/src/edit-diagram.ts"
 import { restoreImageData } from "@/packages/mcp-server/src/embedded-images.ts"
 import { prepareNewDiagram } from "@/packages/mcp-server/src/new-diagram.ts"
 import { hasCells } from "@/packages/mcp-server/src/pages.ts"
@@ -63,7 +66,7 @@ interface UseDiagramToolHandlersParams {
         meta?: { toolCallId?: string; pageId?: string | null },
     ) => string | null
     onFetchChart: () => Promise<string>
-    captureValidationPng?: () => Promise<string | null>
+    captureValidationPng?: (pageId?: string | null) => Promise<string | null>
     validateDiagram?: ValidateDiagramFn
     enableVlmValidation?: boolean
     sessionId?: string
@@ -305,7 +308,7 @@ ${finalXml}
                     // This is a best-effort heuristic and may need adjustment for complex diagrams or slower devices.
                     await new Promise((resolve) => setTimeout(resolve, 100))
 
-                    capturedPngData = await captureValidationPng()
+                    capturedPngData = await captureValidationPng(aiPageId())
                     // Stopped while the screenshot was taken: no check. The
                     // chat waits for this handler, so it must end now.
                     if (stopped?.()) {
@@ -432,7 +435,7 @@ ${finalXml}
         originalXml: string | undefined,
     ) => {
         const { operations } = toolCall.input as {
-            operations: DiagramOperation[]
+            operations: EditOperation[]
         }
 
         let currentXml = ""
@@ -467,6 +470,11 @@ ${finalXml}
                     ? outcome.errors[0]
                     : `No changes were made because ${outcome.errors.length} operation(s) failed:\n${outcome.errors.map((e) => `- ${e}`).join("\n")}`
                 restoreOriginal()
+                // An edit of a cell the user deleted by hand ends here
+                // ("Cell not found"). The sentence on such cells keeps
+                // the retry from drawing the cell again: GPT-6 Luna did
+                // in 10 replays of 10, and with this sentence and the
+                // one in the canvas note (lib/chat-helpers.ts) in 3 of 30.
                 addToolOutput({
                     tool: "edit_diagram",
                     toolCallId: toolCall.toolCallId,
@@ -478,7 +486,7 @@ Current diagram XML:
 ${shownToModel(currentXml)}
 \`\`\`
 
-Please check the cell IDs and retry.`,
+A cell of an earlier canvas that is missing from it was removed by the user: do not add it back unless the user asks. Please check the cell IDs and retry.`,
                 })
                 return
             }
@@ -489,10 +497,12 @@ Please check the cell IDs and retry.`,
                 outcome.fixes.length === 0,
                 currentXml,
             )
+            // With what the model should know about them: a delete that
+            // found no such cell and was skipped, cells a delete took along
             addToolOutput({
                 tool: "edit_diagram",
                 toolCallId: toolCall.toolCallId,
-                output: `Successfully applied ${outcome.applied} operation(s) to the diagram.`,
+                output: `Successfully applied ${outcome.applied} operation(s) to the diagram.${notesText(outcome.notes)}`,
             })
         } catch (error) {
             console.error("[edit_diagram] Failed:", error)

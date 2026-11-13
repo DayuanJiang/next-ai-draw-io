@@ -29,6 +29,7 @@ import {
     deleteTemplate,
     duplicateTemplate,
     exportTemplates,
+    generateDefaultTitle,
     getAllTemplates,
     importTemplates,
     incrementRunCount,
@@ -69,6 +70,25 @@ export function TemplatePanel({
         type: "success" | "error"
         text: string
     } | null>(null)
+    const messageTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+    // Shows the result of an export or import; a success goes away by
+    // itself. One timer hides the message on screen: a new message cancels
+    // the timer of the message before it
+    const showMessage = (
+        type: "success" | "error",
+        text: string,
+        hideAfterMs?: number,
+    ) => {
+        clearTimeout(messageTimerRef.current)
+        setImportMessage({ type, text })
+        if (hideAfterMs) {
+            messageTimerRef.current = setTimeout(
+                () => setImportMessage(null),
+                hideAfterMs,
+            )
+        }
+    }
 
     const loadTemplates = useCallback(async () => {
         const result = await getAllTemplates()
@@ -162,10 +182,7 @@ export function TemplatePanel({
     // Export templates to JSON file
     const handleExport = () => {
         if (templates.length === 0) {
-            setImportMessage({
-                type: "error",
-                text: dict.templates.exportEmpty,
-            })
+            showMessage("error", dict.templates.exportEmpty)
             return
         }
 
@@ -182,41 +199,39 @@ export function TemplatePanel({
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
 
-        setImportMessage({
-            type: "success",
-            text: dict.templates.exportSuccess.replace(
+        showMessage(
+            "success",
+            dict.templates.exportSuccess.replace(
                 "{count}",
                 String(templates.length),
             ),
-        })
-        setTimeout(() => setImportMessage(null), 3000)
+            3000,
+        )
     }
 
     // Import templates from JSON file
     const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]
         if (!file) {
-            setImportMessage({
-                type: "error",
-                text: dict.templates.importNoFile,
-            })
+            showMessage("error", dict.templates.importNoFile)
             return
         }
 
         try {
-            const text = await file.text()
-            const data = JSON.parse(text)
+            // A file that is not JSON fails the check below, like any
+            // other file this app did not export
+            const data = await file
+                .text()
+                .then(JSON.parse)
+                .catch(() => null)
 
             // Validate import data
             const validation = validateImportData(data)
             if (!validation.valid) {
-                setImportMessage({
-                    type: "error",
-                    text: dict.templates.importFailed.replace(
-                        "{error}",
-                        validation.error || "Invalid data",
-                    ),
-                })
+                // The reason is English, for developers: it goes to the
+                // console, the user reads a sentence in their language
+                console.error("Failed to import templates:", validation.error)
+                showMessage("error", dict.templates.importInvalid)
                 return
             }
 
@@ -226,22 +241,22 @@ export function TemplatePanel({
             // Reload template list
             await loadTemplates()
 
-            setImportMessage({
-                type: "success",
-                text: dict.templates.importSuccess
+            showMessage(
+                "success",
+                dict.templates.importSuccess
                     .replace("{imported}", String(result.imported))
                     .replace("{skipped}", String(result.skipped)),
-            })
-            setTimeout(() => setImportMessage(null), 5000)
+                5000,
+            )
         } catch (error) {
             console.error("Failed to import templates:", error)
-            setImportMessage({
-                type: "error",
-                text: dict.templates.importFailed.replace(
+            showMessage(
+                "error",
+                dict.templates.importFailed.replace(
                     "{error}",
                     error instanceof Error ? error.message : "Unknown error",
                 ),
-            })
+            )
         } finally {
             // Reset file input
             if (fileInputRef.current) {
@@ -333,8 +348,10 @@ export function TemplatePanel({
                     />
                 </div>
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-2">
+                {/* Action buttons. Export and Import have one word here and
+                    their full name as the tooltip: with the full names the
+                    English row does not fit and each button wraps */}
+                <div className="flex items-center gap-2 whitespace-nowrap">
                     <button
                         type="button"
                         onClick={() => setCreateDialogOpen(true)}
@@ -352,7 +369,7 @@ export function TemplatePanel({
                         title={dict.templates.exportTemplates}
                     >
                         <Download className="w-3.5 h-3.5" />
-                        {dict.templates.exportTemplates}
+                        {dict.templates.exportButton}
                     </button>
                     <button
                         type="button"
@@ -361,7 +378,7 @@ export function TemplatePanel({
                         title={dict.templates.importTemplates}
                     >
                         <Upload className="w-3.5 h-3.5" />
-                        {dict.templates.importTemplates}
+                        {dict.templates.importButton}
                     </button>
                     {importInput}
                 </div>
@@ -427,20 +444,36 @@ export function TemplatePanel({
                                                 <Bookmark className="w-3 h-3 text-primary fill-primary shrink-0" />
                                             )}
                                         </div>
-                                        {template.description && (
+                                        {/* Without a description, the start of
+                                            the prompt says what a title the
+                                            user typed stands for. A default
+                                            title already is that start */}
+                                        {(template.description ||
+                                            template.title !==
+                                                generateDefaultTitle(
+                                                    template.prompt,
+                                                )) && (
                                             <div className="text-xs text-muted-foreground truncate">
-                                                {template.description}
+                                                {template.description ||
+                                                    template.prompt}
                                             </div>
                                         )}
                                     </div>
-                                    {/* Actions and stats */}
-                                    <div className="relative shrink-0">
-                                        <div className="text-[11px] text-muted-foreground whitespace-nowrap group-hover:invisible">
+                                    {/* Actions and stats: the actions take the
+                                        place of the stats on hover and with
+                                        the keyboard's focus in the row, and
+                                        the title ends before whichever of
+                                        the two shows. A touch screen has no
+                                        hover: there the actions always show.
+                                        The negative margin keeps the row's
+                                        height with the taller actions */}
+                                    <div className="shrink-0">
+                                        <div className="text-[11px] text-muted-foreground whitespace-nowrap group-hover:hidden group-focus-within:hidden [@media(hover:none)]:hidden">
                                             {template.runCount > 0
                                                 ? `${dict.templates.usedCount.replace("{count}", String(template.runCount))} · ${template.lastUsedAt ? formatRelativeTime(template.lastUsedAt, params.lang, dict.sessionHistory.justNow) : dict.templates.neverUsed}`
                                                 : dict.templates.neverUsed}
                                         </div>
-                                        <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                        <div className="-my-1 hidden items-center gap-0.5 group-hover:flex group-focus-within:flex [@media(hover:none)]:flex">
                                             <button
                                                 type="button"
                                                 onClick={(e) => {

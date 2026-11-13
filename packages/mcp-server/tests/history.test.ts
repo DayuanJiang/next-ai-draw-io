@@ -2,7 +2,8 @@
  * Tests for the diagram history: the versions restore_version can go to.
  */
 
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+import { contentFingerprint } from "../src/edit-gate.ts"
 import {
     addHistory,
     clearHistory,
@@ -12,6 +13,16 @@ import {
     isInHistory,
     otherVersions,
 } from "../src/history.ts"
+
+// The real fingerprint, with its calls counted
+vi.mock("../src/edit-gate.ts", async (importOriginal) => {
+    const original =
+        await importOriginal<typeof import("../src/edit-gate.ts")>()
+    return {
+        ...original,
+        contentFingerprint: vi.fn(original.contentFingerprint),
+    }
+})
 
 const page = (cellId: string) =>
     `<mxfile><diagram id="p" name="P"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${cellId}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
@@ -80,6 +91,27 @@ describe("otherVersions", () => {
         // and one step back is the version before the model's write
         fill(id, [A, withOffset('<mxPoint x="0" y="-18" as="offset"/>')])
         const canvas = withOffset('<mxPoint y="-18" as="offset"/>')
+        expect(otherVersions(id, canvas).map((e) => e.xml)).toEqual([A])
+        expect(isInHistory(id, canvas)).toBe(true)
+    })
+
+    it("counts draw.io's copy without written-out defaults and long numbers as the same version", () => {
+        const id = "history-defaults"
+        const box = (attrs: string, geometry: string) =>
+            B.replace(
+                "</root>",
+                `<mxCell id="k" value="K" vertex="1" ${attrs}parent="1"><mxGeometry ${geometry} as="geometry"/></mxCell></root>`,
+            )
+        // The model wrote the defaults; the canvas holds draw.io's copy, and
+        // one step back is the version before the model's write
+        fill(id, [
+            A,
+            box(
+                'connectable="1" collapsed="0" ',
+                'x="40.0" y="40.50" width="120.0" height="60" relative="0"',
+            ),
+        ])
+        const canvas = box("", 'x="40" y="40.5" width="120" height="60"')
         expect(otherVersions(id, canvas).map((e) => e.xml)).toEqual([A])
         expect(isInHistory(id, canvas)).toBe(true)
     })
@@ -219,6 +251,29 @@ describe("currentEntryId and firstCopyIds", () => {
         expect(currentEntryId(id, withBackground)).toBe(a.id)
         expect(otherVersions(id, withBackground).map((e) => e.xml)).toEqual([B])
         expect(isInHistory(id, withBackground)).toBe(true)
+    })
+
+    it("fingerprint an unchanged canvas once, however often the preview tabs ask", () => {
+        // Two sessions with an open tab each, asking in turn every 2 seconds
+        const id = "history-poll"
+        const other = "history-poll-other"
+        fill(id, [A, B])
+        fill(other, [A, C])
+        const [a, b] = getHistory(id)
+        const c = getHistory(other)[1]
+        expect(currentEntryId(id, B_COPY)).toBe(b.id)
+        expect(currentEntryId(other, C)).toBe(c.id)
+        vi.mocked(contentFingerprint).mockClear()
+        for (let poll = 0; poll < 3; poll++) {
+            expect(currentEntryId(id, B_COPY)).toBe(b.id)
+            expect(currentEntryId(other, C)).toBe(c.id)
+        }
+        expect(contentFingerprint).not.toHaveBeenCalled()
+        // A canvas that changed is read again, also back to an earlier one
+        expect(currentEntryId(id, A)).toBe(a.id)
+        expect(currentEntryId(id, page("manual"))).toBeNull()
+        expect(currentEntryId(id, B_COPY)).toBe(b.id)
+        expect(currentEntryId(other, C)).toBe(c.id)
     })
 
     it("return nothing for an empty history", () => {

@@ -8,23 +8,36 @@ import {
 } from "@/lib/template-storage"
 
 describe("generateDefaultTitle", () => {
-    it("returns the prompt as-is when 20 chars or fewer", () => {
+    it("returns the prompt as-is when 60 chars or fewer", () => {
         expect(generateDefaultTitle("Hello")).toBe("Hello")
-        expect(generateDefaultTitle("A".repeat(20))).toBe("A".repeat(20))
+        expect(generateDefaultTitle("A".repeat(60))).toBe("A".repeat(60))
     })
 
-    it("truncates to 20 chars with ellipsis for longer prompts", () => {
+    it("truncates to 60 chars with ellipsis for longer prompts", () => {
         const result = generateDefaultTitle(
-            "This is a very long prompt that should be truncated",
+            "This is a very long prompt, longer than sixty characters, that should be truncated",
         )
-        expect(result).toBe("This is a very long...")
-        expect(result.length).toBeGreaterThan(20)
+        expect(result).toBe(
+            "This is a very long prompt, longer than sixty characters, th...",
+        )
+    })
+
+    it("tells apart prompts that begin with the same words", () => {
+        expect(
+            generateDefaultTitle(
+                "Draw an AWS architecture for a web shop with a CDN",
+            ),
+        ).not.toBe(
+            generateDefaultTitle(
+                "Draw an AWS architecture for a data lake with Glue",
+            ),
+        )
     })
 
     it("trims whitespace before truncating", () => {
         expect(generateDefaultTitle("   hello   ")).toBe("hello")
-        expect(generateDefaultTitle("   " + "x".repeat(25) + "   ")).toBe(
-            "xxxxxxxxxxxxxxxxxxxx...",
+        expect(generateDefaultTitle("   " + "x".repeat(65) + "   ")).toBe(
+            `${"x".repeat(60)}...`,
         )
     })
 })
@@ -152,6 +165,12 @@ describe("searchTemplates", () => {
         const result = searchTemplates(templates, "entity")
         expect(result).toHaveLength(1)
         expect(result[0].id).toBe("2")
+    })
+
+    it("searches by the prompt's text", () => {
+        const result = searchTemplates(templates, "topology")
+        expect(result).toHaveLength(1)
+        expect(result[0].id).toBe("3")
     })
 
     it("is case-insensitive", () => {

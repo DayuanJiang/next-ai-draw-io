@@ -7,9 +7,11 @@ type WrappedModel = ReturnType<typeof wrapLanguageModel>
  * Claude 4.7 and later answer a non-default temperature, top_p or top_k,
  * and the extended thinking budget (thinking type "enabled"), with a 400.
  * TEMPERATURE and the *_THINKING_BUDGET_TOKENS settings send exactly these.
+ * The GPT models on Bedrock refuse a temperature in their own words: "This
+ * model doesn't support the temperature field."
  */
 const DEPRECATED_PARAM =
-    /`?(?:temperature|top_p|top_k)`? is deprecated for this model|"?thinking\.type\.enabled"? is not supported/i
+    /`?(?:temperature|top_p|top_k)`? is deprecated for this model|"?thinking\.type\.enabled"? is not supported|doesn.t support the (?:temperature|top_?p|top_?k) field/i
 
 interface CallParams {
     temperature?: number

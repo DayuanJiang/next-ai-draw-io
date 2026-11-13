@@ -6,7 +6,7 @@
         },
         "app/api/**/route.ts": {
             "memory": 256,
-            "maxDuration": 10
+            "maxDuration": 30
         }
     },
     "redirects": [

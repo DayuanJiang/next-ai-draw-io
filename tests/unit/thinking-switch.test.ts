@@ -16,8 +16,12 @@ vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
 }))
 
 import { POST as chat } from "@/app/api/chat/route"
-import { applyThinkingSwitch } from "@/lib/ai-providers"
-import { thinkingSwitchOf } from "@/lib/thinking-capabilities"
+import {
+    applyThinkingSwitch,
+    getAIModel,
+    serverThinkingDefaults,
+} from "@/lib/ai-providers"
+import { thinkingSwitchOf, thinksByDefault } from "@/lib/thinking-capabilities"
 
 afterEach(() => {
     vi.unstubAllGlobals()
@@ -230,6 +234,91 @@ describe("applyThinkingSwitch", () => {
     })
 })
 
+describe("thinksByDefault", () => {
+    it.each([
+        ["bedrock", "global.anthropic.claude-haiku-5-5"],
+        ["bedrock", "global.anthropic.claude-sonnet-5-5"],
+        ["anthropic", "claude-opus-5"],
+        ["anthropic", "claude-fable-5-1"],
+    ] as const)("%s %s: yes", (provider, modelId) => {
+        expect(thinksByDefault(provider, modelId)).toBe(true)
+    })
+
+    it.each([
+        ["anthropic", "claude-opus-4-6"],
+        ["bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"],
+        ["bedrock", "global.openai.gpt-6-luna"],
+        ["openrouter", "anthropic/claude-sonnet-5"],
+    ] as const)("%s %s: no", (provider, modelId) => {
+        expect(thinksByDefault(provider, modelId)).toBe(false)
+    })
+})
+
+describe("serverThinkingDefaults", () => {
+    const VISIBLE = { type: "adaptive", display: "summarized" }
+    const HAIKU = "global.anthropic.claude-haiku-5-5"
+
+    it("asks a Claude model that thinks by default to show it, at medium effort", () => {
+        const beta = {
+            anthropicBeta: ["fine-grained-tool-streaming-2025-05-14"],
+        }
+        expect(
+            serverThinkingDefaults({ bedrock: beta }, "bedrock", HAIKU),
+        ).toEqual({
+            bedrock: {
+                ...beta,
+                reasoningConfig: { ...VISIBLE, maxReasoningEffort: "medium" },
+            },
+        })
+        expect(
+            serverThinkingDefaults(undefined, "anthropic", "claude-sonnet-5-5"),
+        ).toEqual({ anthropic: { thinking: VISIBLE, effort: "medium" } })
+    })
+
+    it("takes the effort from BEDROCK_REASONING_EFFORT, and no budget", () => {
+        vi.stubEnv("BEDROCK_REASONING_EFFORT", "low")
+        const budget = { type: "enabled", budgetTokens: 4000 }
+        expect(
+            serverThinkingDefaults(
+                { bedrock: { reasoningConfig: budget } },
+                "bedrock",
+                HAIKU,
+            ),
+        ).toEqual({
+            bedrock: {
+                reasoningConfig: { ...VISIBLE, maxReasoningEffort: "low" },
+            },
+        })
+    })
+
+    it("leaves other models as they are", () => {
+        const env = {
+            bedrock: {
+                reasoningConfig: { type: "enabled", budgetTokens: 4000 },
+            },
+        }
+        const sonnet45 = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        expect(serverThinkingDefaults(env, "bedrock", sonnet45)).toBe(env)
+        expect(
+            serverThinkingDefaults(undefined, "openai", "gpt-5.5"),
+        ).toBeUndefined()
+    })
+})
+
+describe("BEDROCK_REASONING_EFFORT", () => {
+    it("reaches the GPT models on Bedrock", () => {
+        const luna = {
+            provider: "bedrock",
+            modelId: "global.openai.gpt-6-luna",
+        }
+        expect(getAIModel(luna).providerOptions).toBeUndefined()
+        vi.stubEnv("BEDROCK_REASONING_EFFORT", "low")
+        expect(getAIModel(luna).providerOptions).toEqual({
+            bedrock: { reasoningConfig: { maxReasoningEffort: "low" } },
+        })
+    })
+})
+
 describe("the chat route", () => {
     const user: ChatUIMessage = {
         id: "u1",
@@ -280,6 +369,36 @@ describe("the chat route", () => {
         expect(body.model).toBe("deepseek-v4-flash")
         expect(body.thinking).toBeUndefined()
     })
+
+    it("shows the thinking of a Claude model on the server's key, at medium effort", async () => {
+        // Left alone it thinks with the text left out: minutes of nothing
+        vi.stubEnv("AI_PROVIDER", "anthropic")
+        vi.stubEnv("AI_MODEL", "claude-haiku-5-5")
+        vi.stubEnv("ANTHROPIC_API_KEY", "server-key")
+        const body = await sentBody({})
+        expect(body.model).toBe("claude-haiku-5-5")
+        expect(body.thinking).toEqual({
+            type: "adaptive",
+            display: "summarized",
+        })
+        expect(body.output_config).toEqual({ effort: "medium" })
+    })
+
+    // On its own, as set for a model that takes no budget, and next to one
+    it.each([undefined, "1024"])(
+        "leaves a Claude model's thinking off when the server turned it off (budget %s)",
+        async (budget) => {
+            vi.stubEnv("AI_PROVIDER", "anthropic")
+            vi.stubEnv("AI_MODEL", "claude-sonnet-5")
+            vi.stubEnv("ANTHROPIC_API_KEY", "server-key")
+            vi.stubEnv("ANTHROPIC_THINKING_TYPE", "disabled")
+            vi.stubEnv("ANTHROPIC_THINKING_BUDGET_TOKENS", budget)
+            const body = await sentBody({})
+            expect(body.model).toBe("claude-sonnet-5")
+            expect(body.thinking).toEqual({ type: "disabled" })
+            expect(body.output_config).toBeUndefined()
+        },
+    )
 
     it("ignores it on an endpoint of the server's network", async () => {
         const body = await sentBody({

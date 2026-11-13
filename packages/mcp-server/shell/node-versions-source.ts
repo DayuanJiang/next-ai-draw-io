@@ -8,6 +8,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import {
     type ChangeSummary,
     diffDiagrams,
+    EMPTY_SUMMARY,
     isSameDocument,
 } from "@/lib/diagram-diff"
 import { formatMessage } from "@/lib/i18n/utils"
@@ -28,8 +29,10 @@ export interface NodeVersion extends VersionItem {
     /** The version this one replaced, when it has a card (undo goes there) */
     beforeId: string | null
     /** Who made it: "user", "recover", "restore", "load" (a file opened),
-     * "add_page"; null for the AI */
+     * "add_page", "rename_page"; null for the AI */
     source: string | null
+    /** Pages it added to the document before it (negative: removed) */
+    pagesAdded: number
 }
 
 // The blank page a tab shows before any drawing: the server keeps it in
@@ -49,11 +52,27 @@ function pageIds(xml: string): (string | undefined)[] {
     return ids.length > 0 ? ids : [undefined]
 }
 
-/** The page a change was made on: the first page with a change, else none */
+/** The names of a document's pages by their ids */
+function pageNames(xml: string): Map<string | null, string | null> {
+    const doc = new DOMParser().parseFromString(xml, "text/xml")
+    return new Map(
+        Array.from(doc.querySelectorAll("diagram")).map((page) => [
+            page.getAttribute("id"),
+            page.getAttribute("name"),
+        ]),
+    )
+}
+
+/** The page a change was made on: the first page with a change, else the
+ * page that got another name (a rename changes no cell), else none */
 function changedPage(beforeXml: string, afterXml: string): string | undefined {
     for (const id of pageIds(afterXml)) {
         const { summary } = diffDiagrams(beforeXml, afterXml, id)
         if (Object.values(summary).some((n) => n > 0)) return id
+    }
+    const before = pageNames(beforeXml)
+    for (const [id, name] of pageNames(afterXml)) {
+        if (id && before.has(id) && before.get(id) !== name) return id
     }
     return undefined
 }
@@ -65,6 +84,8 @@ interface Change {
     summary: ChangeSummary
     fromScratch: boolean
     touchedIds: string[]
+    /** Pages added (negative: removed) */
+    pages: number
 }
 
 /**
@@ -156,21 +177,59 @@ export function buildVersions(
             number = cache.next++
             cache.numbers.set(contentKey, number)
         }
+        // The entry the change was made on: the one before it, or the one
+        // the server names for a hand edit that lost to a write and is kept
+        // after it (counted from that write, the edit would also show the
+        // write's changes, undone)
+        const madeOn =
+            (first.basedOn !== undefined &&
+                list.entries.find((e) => e.id === first.basedOn)) ||
+            previous
         let change = cache.changes.get(contentKey)
         if (!change) {
-            const beforeXml = previous?.xml ?? ""
+            const beforeXml = madeOn?.xml ?? ""
             const pageId = changedPage(beforeXml, first.xml)
-            const { summary, fromScratch, touchedIds } = diffDiagrams(
+            const pages = beforeXml
+                ? pageIds(first.xml).length - pageIds(beforeXml).length
+                : 0
+            // Pages came or went and no page's cells changed (changedPage
+            // looks at every page that has an id): no page is compared.
+            // Without an id diffDiagrams takes each document's first page,
+            // which are two different pages once the first one is deleted
+            const onlyPages =
+                pageId === undefined &&
+                pages !== 0 &&
+                pageIds(first.xml).every(Boolean)
+            const { summary, fromScratch, touchedIds } = onlyPages
+                ? { summary: EMPTY_SUMMARY, fromScratch: false, touchedIds: [] }
+                : diffDiagrams(beforeXml, first.xml, pageId)
+            change = {
                 beforeXml,
-                first.xml,
                 pageId,
-            )
-            change = { beforeXml, pageId, summary, fromScratch, touchedIds }
+                summary,
+                fromScratch,
+                touchedIds,
+                pages,
+            }
             cache.changes.set(contentKey, change)
         }
-        const svg = [...copies]
+        const ownSvg = [...copies]
             .reverse()
             .find((c) => c.svg && isSameDocument(c.xml, newest.xml))?.svg
+        // A version that changed no shape (a page renamed) looks like the
+        // one it was made on. The tab takes a version's picture when it
+        // shows it, so one that the next write replaced within the same
+        // poll has none: it shows that version's picture
+        const looksAsBefore =
+            !change.fromScratch &&
+            change.pages === 0 &&
+            Object.values(change.summary).every((n) => n === 0)
+        const svg =
+            ownSvg ||
+            (looksAsBefore && madeOn
+                ? versions.find((v) => v.id === String(keys.get(madeOn.id)))
+                      ?.svg
+                : "")
         const beforeKey = previous ? keys.get(previous.id) : undefined
         versions.push({
             id: String(key),
@@ -188,6 +247,7 @@ export function buildVersions(
             touchedIds: change.touchedIds,
             svg: svg || "",
             source: first.source,
+            pagesAdded: change.pages,
         })
     }
     // The newest version on the canvas waits for its picture
@@ -300,9 +360,20 @@ export function useNodeVersions(sync: McpSync | null): NodeVersionsSource {
         ? versions.find((v) => v.id === latest.beforeId)
         : undefined
     const canUndo = !!latest && !!previous && onCanvasId === latest.id
+    // A hand edit that lost to a server write (the AI wrote while the user
+    // was editing, or the session came back from its file) is kept as the
+    // newest entry, after that write, though it never replaced it: nothing
+    // was undone. After an undo of a hand edit the canvas shows an entry
+    // newer than the edit's first copy: a restore's copy, from the card's
+    // undo or, once the edit was restored, from Ctrl+Z in the editor
+    const lostToWrite =
+        (latest?.source === "user" || latest?.source === "recover") &&
+        (list?.currentId ?? 0) < Number(latest.id)
     // The newest change is undone when the canvas is at the version before
     const undoneId =
-        latest && previous && onCanvasId === previous.id ? latest.id : null
+        latest && previous && onCanvasId === previous.id && !lostToWrite
+            ? latest.id
+            : null
 
     return {
         versions,

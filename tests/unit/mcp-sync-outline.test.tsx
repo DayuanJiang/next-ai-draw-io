@@ -36,8 +36,11 @@ vi.mock("@/contexts/diagram-context", () => ({
 }))
 vi.mock("@/hooks/use-dictionary", () => ({ useDictionary: () => en }))
 vi.mock("@/lib/drawio/editor-bridge", () => ({
+    finishTyping: () => false,
     highlightChangedCells: mocks.highlightChangedCells,
+    isMidGesture: () => false,
     readSelectionDetails: () => null,
+    selectCells: vi.fn(),
 }))
 vi.mock("@/packages/mcp-server/shell/mcp-sync-core", () => ({
     createMcpSync: (options: { canvas: SyncCanvas }) => {

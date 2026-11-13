@@ -91,4 +91,16 @@ describe("POST /api/log-feedback", () => {
         expect(trace.status).toBe(400)
         expect(batch).not.toHaveBeenCalled()
     })
+
+    it("fails when Langfuse rejects the score", async () => {
+        // Answered with 207 and no exception: the vote must not stay shown
+        batch.mockResolvedValueOnce({
+            successes: [],
+            errors: [{ id: "e1", status: 400, message: "invalid" }],
+        })
+        const res = await logFeedback(
+            post({ feedback: "good", traceId: TRACE }),
+        )
+        expect(res.status).toBe(500)
+    })
 })

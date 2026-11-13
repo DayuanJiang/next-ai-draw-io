@@ -4,6 +4,7 @@ import {
     InvalidToolInputError,
     isTextUIPart,
     pruneMessages,
+    type StreamTextTransform,
     safeValidateUIMessages,
     stepCountIs,
     streamText,
@@ -16,6 +17,7 @@ import {
     edgeOneEndpoint,
     getAIModel,
     getServerProvider,
+    serverThinkingDefaults,
     supportsPromptCaching,
     usesServerCredentials,
     usesServerEndpoint,
@@ -26,6 +28,7 @@ import {
     fixToolInputJson,
     formatSelectionContext,
     parseStringifiedArrays,
+    quotaTokens,
     validateFileParts,
     withoutOldAttachments,
 } from "@/lib/chat-helpers"
@@ -35,6 +38,7 @@ import { withDeprecatedParamsFallback } from "@/lib/deprecated-params"
 import { diagramOf } from "@/lib/diagram-context"
 import {
     checkAndIncrementRequest,
+    checkFollowUpRequest,
     isQuotaEnabled,
     recordTokenUsage,
 } from "@/lib/dynamo-quota-manager"
@@ -46,7 +50,7 @@ import {
     setTraceOutput,
     wrapWithObserve,
 } from "@/lib/langfuse"
-import { classifyLLMError, streamErrorText } from "@/lib/llm-errors"
+import { classifyLLMError, logText, streamErrorText } from "@/lib/llm-errors"
 import { estimateCost } from "@/lib/model-catalog"
 import {
     resolveMaxOutputTokens,
@@ -56,6 +60,7 @@ import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import {
     type FlattenedServerModel,
     findServerModelById,
+    loadFlattenedServerModels,
 } from "@/lib/server-model-config"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { withHeartbeat } from "@/lib/stream-heartbeat"
@@ -75,6 +80,11 @@ const modelStreamResponses = new WeakSet<Response>()
 // Each request is kept as long as its answer streams.
 const requestOfResponse = new WeakMap<Response, Request>()
 
+// The most requests the browser sends by itself after a user message: 3
+// retries of a rejected tool call and 2 continuations of a cut-off drawing
+// (MAX_AUTO_RETRY_COUNT and MAX_CONTINUATION_RETRY_COUNT in chat-engine.tsx)
+const FOLLOW_UPS_PER_TURN = 5
+
 // Inner handler function
 const DEBUG_LLM_PAYLOAD = process.env.DEBUG_LLM_PAYLOAD === "true"
 
@@ -92,6 +102,34 @@ const describeMessages = (msgs: any[]) =>
                     : ""),
         ),
     }))
+
+// A gateway that speaks Anthropic's format can stream thinking deltas without
+// opening a thinking block first (seen with a GPT model behind one), and the
+// SDK passes them on as they are. Left so, every answer fails: the SDK's own
+// bookkeeping adds a "reasoning part 0 not found" error to the stream, and
+// the browser's stream reader stops at a reasoning-delta whose part never
+// started. The part is opened here, before either sees the delta, and closed
+// with its step, where both forget the parts that were open.
+const openMissingReasoning: StreamTextTransform<typeof chatTools> = () => {
+    const open = new Set<string>()
+    return new TransformStream({
+        transform(part, controller) {
+            if (part.type === "reasoning-start") open.add(part.id)
+            if (part.type === "reasoning-end") open.delete(part.id)
+            if (part.type === "reasoning-delta" && !open.has(part.id)) {
+                open.add(part.id)
+                controller.enqueue({ type: "reasoning-start", id: part.id })
+            }
+            if (part.type === "finish-step") {
+                for (const id of open) {
+                    controller.enqueue({ type: "reasoning-end", id })
+                }
+                open.clear()
+            }
+            controller.enqueue(part)
+        },
+    })
+}
 
 async function handleChatRequest(req: Request): Promise<Response> {
     const startedAt = Date.now()
@@ -162,7 +200,21 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // Read client AI provider overrides from headers
     const provider = req.headers.get("x-ai-provider")
     let baseUrl = req.headers.get("x-ai-base-url")
-    const selectedModelId = req.headers.get("x-selected-model-id")
+    let selectedModelId = req.headers.get("x-selected-model-id")
+    // A request that names no model runs on AI_MODEL. A server without one
+    // runs it on the default of its model list, the model a page selects
+    // once it has the list: a first message can be sent before that. A
+    // request that names its model in x-ai-model alone (a script) keeps it.
+    if (
+        !selectedModelId &&
+        !provider &&
+        !req.headers.get("x-ai-model") &&
+        !process.env.AI_MODEL
+    ) {
+        const models = await loadFlattenedServerModels()
+        selectedModelId =
+            (models.find((m) => m.isDefault) ?? models[0])?.id ?? null
+    }
 
     // Check if this is a server model with custom env var names
     let serverModelConfig: {
@@ -183,6 +235,17 @@ async function handleChatRequest(req: Request): Promise<Response> {
                 // Use actual provider from config (client header may have incorrect value due to ID format change)
                 provider: serverModel.provider,
             }
+        } else {
+            // Removed or renamed on the server after the page loaded. Going
+            // on would take the provider from the header, which for a model
+            // of the admin panel is its name's slug ("Invalid provider: ...").
+            return Response.json(
+                {
+                    error: "This model is no longer available on this server.",
+                    code: "server_model_gone",
+                },
+                { status: 400 },
+            )
         }
     }
 
@@ -259,18 +322,43 @@ async function handleChatRequest(req: Request): Promise<Response> {
         provider: resolvedProvider,
     } = getAIModel(clientOverrides)
 
-    // On the server's own keys, only run models the server offers: a server
-    // model picked by id (its model name is fixed above) or one in AI_MODEL
-    // on AI_PROVIDER. With their own key, users can run any model.
+    // What runs on the server's keys, or on the server's own endpoints:
+    // EdgeOne, its keyless Ollama, and anything at a private address (the
+    // server's network, which ignores a dummy key header). Bedrock and
+    // EdgeOne never use the base URL header. In the desktop app every
+    // endpoint is the user's.
     const onServerCredentials = usesServerCredentials(
         resolvedProvider,
         clientOverrides,
     )
+    const clientBaseUrl = normalizeBaseUrl(
+        req.headers.get("x-ai-base-url") ?? "",
+    )
+    const onServerEndpoint = await usesServerEndpoint(
+        resolvedProvider,
+        clientBaseUrl,
+        clientOverrides.apiKey,
+    )
+
+    // On the server's own keys, only run models the server offers: a server
+    // model picked by id (its model name is fixed above) or one in AI_MODEL
+    // on AI_PROVIDER. With their own key, users can run any model. The
+    // server's keyless Ollama runs any installed model, which a home
+    // server's users rely on, unless private URLs are blocked: it is an
+    // internal address, reached without the request naming it.
     const envModels =
         process.env.AI_MODEL?.split(",").map((m) => m.trim()) || []
     const offeredInEnv =
         envModels.includes(modelId) && resolvedProvider === getServerProvider()
-    if (onServerCredentials && !serverModel && !offeredInEnv) {
+    const onBlockedOllama =
+        onServerEndpoint &&
+        !allowPrivateUrls() &&
+        PROVIDERS[resolvedProvider].credential === "optionalKey"
+    if (
+        (onServerCredentials || onBlockedOllama) &&
+        !serverModel &&
+        !offeredInEnv
+    ) {
         return Response.json(
             {
                 error: `Model "${modelId}" is not available on this server. Add your own API key in Settings to use it.`,
@@ -281,28 +369,31 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
     // === SERVER-SIDE QUOTA CHECK START ===
     // Quota is opt-in (DYNAMODB_QUOTA_TABLE) and counts what runs on the
-    // server's keys, or on the server's own endpoints: EdgeOne, its keyless
-    // Ollama, and anything at a private address (the server's network,
-    // which ignores a dummy key header). Bedrock and EdgeOne never use the
-    // base URL header. In the desktop app every endpoint is the user's.
-    const clientBaseUrl = normalizeBaseUrl(
-        req.headers.get("x-ai-base-url") ?? "",
-    )
-    const onServerEndpoint = await usesServerEndpoint(
-        resolvedProvider,
-        clientBaseUrl,
-        clientOverrides.apiKey,
-    )
+    // server's keys or on the server's own endpoints
     const countsQuota =
         isQuotaEnabled() &&
         (onServerCredentials || onServerEndpoint) &&
         userId !== "anonymous"
     if (countsQuota) {
-        const quotaCheck = await checkAndIncrementRequest(userId, {
+        const limits = {
             requests: Number(process.env.DAILY_REQUEST_LIMIT) || 10,
             tokens: Number(process.env.DAILY_TOKEN_LIMIT) || 200000,
             tpm: Number(process.env.TPM_LIMIT) || 20000,
-        })
+        }
+        // A turn's later requests (the retry after a tool error, the rest
+        // of a diagram that was cut off) end with the assistant's message
+        // and belong to the message the user already sent. The messages
+        // are the browser's word, so the quota allows each user message a
+        // fixed number of them.
+        const quotaCheck =
+            lastMessage?.role === "assistant"
+                ? await checkFollowUpRequest(userId, limits)
+                : await checkAndIncrementRequest(
+                      userId,
+                      limits,
+                      1,
+                      FOLLOW_UPS_PER_TURN,
+                  )
         if (!quotaCheck.allowed) {
             return Response.json(
                 {
@@ -337,14 +428,16 @@ async function handleChatRequest(req: Request): Promise<Response> {
     // server's settings decide what it pays for
     const thinking = req.headers.get("x-ai-thinking-enabled")
     const options =
-        thinking && !onServerCredentials && !onServerEndpoint
-            ? applyThinkingSwitch(
-                  providerOptions,
-                  resolvedProvider,
-                  modelId,
-                  thinking === "true",
-              )
-            : providerOptions
+        onServerCredentials || onServerEndpoint
+            ? serverThinkingDefaults(providerOptions, resolvedProvider, modelId)
+            : thinking
+              ? applyThinkingSwitch(
+                    providerOptions,
+                    resolvedProvider,
+                    modelId,
+                    thinking === "true",
+                )
+              : providerOptions
 
     // Check if model supports prompt caching
     const shouldCache = supportsPromptCaching(modelId)
@@ -358,10 +451,10 @@ async function handleChatRequest(req: Request): Promise<Response> {
         ? `${systemMessage}\n\n## Custom Instructions\n${customSystemMessage}`
         : systemMessage
 
-    // Note: we used to pre-emptively reject images for models we guessed were
-    // text-only (by name matching). That heuristic misfired on newer models
-    // (see issue #874), so we now let the request through and surface the real
-    // provider error if the model genuinely can't accept images.
+    // Images are not refused by the model's name: guessing which models are
+    // text-only misfires on newer models (see issue #874). The request goes
+    // through, and a model that cannot take images answers with the
+    // provider's own error.
 
     // Each user message ends with a note on the canvas when it was sent
     // (lib/diagram-context.ts): the canvas itself when the model's own calls
@@ -481,6 +574,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         // 4096, enough for a small diagram, so larger ones were cut off mid-attribute.
         maxOutputTokens,
         stopWhen: stepCountIs(5),
+        experimental_transform: openMissingReasoning,
         // Repair truncated tool calls when maxOutputTokens is reached mid-JSON
         experimental_repairToolCall: async ({ toolCall, error }) => {
             // DEBUG: Log what we're trying to repair
@@ -537,7 +631,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
                     ? requestCost + stepCost
                     : undefined
             if (countsQuota) {
-                await recordTokenUsage(userId, usage.totalTokens ?? 0)
+                await recordTokenUsage(userId, quotaTokens(usage))
             }
         },
         onFinish: ({ text }) => {
@@ -546,7 +640,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
         },
         // onFinish is skipped when the stream fails or is aborted, so end the trace here
         onError: ({ error }) => {
-            console.error(error) // what AI SDK does without an onError
+            console.error(logText(error)) // what AI SDK does without an onError
             endTrace()
         },
         onAbort: () => endTrace(),
@@ -588,7 +682,7 @@ async function handleChatRequest(req: Request): Promise<Response> {
 
 // Errors before the stream starts, as JSON the chat panel reads
 function handleError(error: unknown): Response {
-    console.error("Error in chat route:", error)
+    console.error("Error in chat route:", logText(error))
 
     const isDev = process.env.NODE_ENV === "development"
     const classified = classifyLLMError(error)

@@ -16,6 +16,7 @@ import {
     X,
 } from "lucide-react"
 import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { toast } from "sonner"
 import { useChatEngine } from "@/components/chat/chat-engine"
 import {
     ProviderCredentialsFields,
@@ -56,7 +57,7 @@ import type { UseModelConfigReturn } from "@/hooks/use-model-config"
 import { getApiEndpoint } from "@/lib/base-path"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { ListedModel } from "@/lib/provider-models"
-import { hasCredentials } from "@/lib/provider-setup"
+import { hasCredentials, isValidBaseUrl } from "@/lib/provider-setup"
 import { PROVIDERS, publicDefaultUrl } from "@/lib/providers"
 import { STORAGE_KEYS } from "@/lib/storage"
 import { supportsThinkingToggle } from "@/lib/thinking-capabilities"
@@ -399,6 +400,15 @@ export function ModelConfigDialog({
                   },
         )
 
+    // This server refused the access code: say so, as after a chat message,
+    // and show the General tab, where the code is entered. The settings
+    // stay as they are when this view is gone by then (another tab picked,
+    // or the settings closed)
+    const showAccessCodeField = () => {
+        toast.error(dict.errors.invalidAccessCode)
+        if (!closedRef.current) useUiStore.getState().setSettingsTab("general")
+    }
+
     /**
      * Fetch the shown provider's model list. A click opens the picker with
      * the result and shows what went wrong; the automatic fetch after
@@ -434,6 +444,13 @@ export function ModelConfigDialog({
                 },
             )
             const data = await response.json().catch(() => ({}))
+            // This server refused the access code (its only 401) and asked
+            // the provider nothing, so the list did not fail. A click shows
+            // where the code goes, as a Test does
+            if (response.status === 401) {
+                if (!auto) showAccessCodeField()
+                return
+            }
             if (credentialsOf(providerId) !== askedWith) return
             // The picker and the error belong to the provider shown
             const stillShown = selectedProviderIdRef.current === providerId
@@ -699,6 +716,9 @@ export function ModelConfigDialog({
         let errorCount = 0
         let idChanged = false
         let rejected = false
+        // This server refused the access code (its only 401; a provider's
+        // refusal comes as a result): no model was tested
+        let accessDenied = false
         const askedWith = credentialsOf(selectedProviderId)
         const run = (latestTestRun.get(selectedProviderId) ?? 0) + 1
         latestTestRun.set(selectedProviderId, run)
@@ -750,6 +770,7 @@ export function ModelConfigDialog({
                         },
                     )
                     const data = await response.json().catch(() => ({}))
+                    if (response.status === 401) accessDenied = true
                     code = data.valid ? undefined : data.code
                     update = data.valid
                         ? {
@@ -781,8 +802,13 @@ export function ModelConfigDialog({
                 if (run !== latestTestRun.get(selectedProviderId)) return
                 // Credentials changed during the test: drop the result. A
                 // change in another tab left the spinner on, so clear it
-                // (model ids are unique, whatever provider is shown).
-                if (credentialsOf(selectedProviderId) !== askedWith) {
+                // (model ids are unique, whatever provider is shown). An
+                // access code refused says nothing about the model either:
+                // its last result stays.
+                if (
+                    accessDenied ||
+                    credentialsOf(selectedProviderId) !== askedWith
+                ) {
                     setValidatingModelIds((prev) => {
                         const next = new Set(prev)
                         next.delete(model.id)
@@ -817,6 +843,11 @@ export function ModelConfigDialog({
             }),
         )
         if (run !== latestTestRun.get(selectedProviderId)) return
+        if (accessDenied) {
+            setValidationStatus("idle")
+            showAccessCodeField()
+            return
+        }
         if (credentialsOf(selectedProviderId) !== askedWith) {
             // The status line is about the provider shown now
             if (selectedProviderIdRef.current === selectedProviderId) {
@@ -1122,11 +1153,13 @@ export function ModelConfigDialog({
         const def = PROVIDERS[provider.provider]
         // A key-only provider without a default URL (Azure) needs its URL too
         const testBlocker = !credentialsDone
-            ? def.credential === "aws"
-                ? t.needAws
-                : def.credential === "apiKey" && !def.defaultBaseUrl
-                  ? t.needUrl
-                  : t.needKey
+            ? provider.baseUrl && !isValidBaseUrl(provider.baseUrl)
+                ? t.baseUrlInvalid
+                : def.credential === "aws"
+                  ? t.needAws
+                  : def.credential === "apiKey" && !def.defaultBaseUrl
+                    ? t.needUrl
+                    : t.needKey
             : models.length === 0
               ? t.needModel
               : ""
@@ -1149,6 +1182,36 @@ export function ModelConfigDialog({
                 : models.length === 1
                   ? formatMessage(t.testOne, { model: models[0].modelId })
                   : formatMessage(t.testAll, { count: models.length })
+        // The chat keeps the model it had: the step from a model that works
+        // to using it. The main button once every model works; beside the
+        // test button when only some do (one failed model, e.g. an
+        // embedding model, must not hide it).
+        const inChatButton = (primary: boolean) =>
+            firstWorking && (
+                <Button
+                    ref={primary ? useButtonRef : undefined}
+                    variant={primary ? "default" : "outline"}
+                    className={cn(
+                        "h-9 max-w-full rounded-lg px-4",
+                        !primary && "bg-background",
+                    )}
+                    disabled={chatLocked}
+                    aria-describedby={resultId}
+                    title={formatMessage(t.useInChat, {
+                        model: firstWorking.modelId,
+                    })}
+                    onClick={() => {
+                        modelConfig.setSelectedModelId(firstWorking.id)
+                        useUiStore.getState().setSettingsOpen(false)
+                    }}
+                >
+                    <span className="truncate">
+                        {formatMessage(t.useInChat, {
+                            model: firstWorking.modelId,
+                        })}
+                    </span>
+                </Button>
+            )
 
         return (
             <div className="flex min-h-0 flex-1 flex-col">
@@ -1478,37 +1541,7 @@ export function ModelConfigDialog({
                                         </span>
                                     </p>
                                     <div className="flex flex-wrap gap-2">
-                                        {firstWorking && (
-                                            <Button
-                                                ref={useButtonRef}
-                                                className="h-9 max-w-full rounded-lg px-4"
-                                                disabled={chatLocked}
-                                                aria-describedby={resultId}
-                                                title={formatMessage(
-                                                    t.useInChat,
-                                                    {
-                                                        model: firstWorking.modelId,
-                                                    },
-                                                )}
-                                                onClick={() => {
-                                                    modelConfig.setSelectedModelId(
-                                                        firstWorking.id,
-                                                    )
-                                                    useUiStore
-                                                        .getState()
-                                                        .setSettingsOpen(false)
-                                                }}
-                                            >
-                                                <span className="truncate">
-                                                    {formatMessage(
-                                                        t.useInChat,
-                                                        {
-                                                            model: firstWorking.modelId,
-                                                        },
-                                                    )}
-                                                </span>
-                                            </Button>
-                                        )}
+                                        {inChatButton(true)}
                                         <Button
                                             ref={backButtonRef}
                                             variant="outline"
@@ -1554,6 +1587,7 @@ export function ModelConfigDialog({
                                                 {validationError}
                                             </p>
                                         )}
+                                        {testFailed && inChatButton(false)}
                                     </div>
                                     {testBlocker && (
                                         <p className="text-xs text-muted-foreground">

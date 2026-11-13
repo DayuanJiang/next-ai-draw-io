@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest"
 import { editDiagram, targetPageXml } from "../src/edit-diagram.ts"
+import { prepareNewDiagram } from "../src/new-diagram.ts"
 import { validateMxCellStructure } from "../src/xml-validation.ts"
 
 const cell = (id: string, extra = "") =>
@@ -99,7 +100,11 @@ describe("editDiagram", () => {
             DOC,
             [
                 { operation: "add", cell_id: "c", new_xml: cell("c") },
-                { operation: "delete", cell_id: "missing" },
+                {
+                    operation: "update",
+                    cell_id: "missing",
+                    new_xml: cell("missing"),
+                },
             ],
             {},
         )
@@ -107,8 +112,153 @@ describe("editDiagram", () => {
         if (out.ok) return
         expect(out.pageError).toBe(false)
         expect(out.errors).toEqual([
-            'delete missing: Cell with id="missing" not found',
+            'update missing: Cell with id="missing" not found',
         ])
+    })
+
+    it("refuses an update of a shape written with vertex but without its place", () => {
+        // Expanded, it would get the default place: x 0, y 0, 120 by 60
+        const renamed =
+            '<mxCell id="a" value="Renamed" style="rounded=1;" vertex="1" parent="1"/>'
+        const out = editDiagram(
+            DOC,
+            [{ operation: "update", cell_id: "a", new_xml: renamed }],
+            {},
+        )
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.errors).toEqual([
+            "update a: new_xml has no position or size (x, y, w, h), so the cell would move to the page's corner. update replaces the whole cell: send its value, style and position too",
+        ])
+        // With its geometry, or in the compact form, it is an update
+        for (const placed of [
+            renamed.replace(
+                "/>",
+                '><mxGeometry x="40" y="40" width="80" height="40" as="geometry"/></mxCell>',
+            ),
+            '<mxCell id="a" value="Renamed" x="40" y="40" w="80" h="40"/>',
+            // (some models quote XML attributes with single quotes)
+            "<mxCell id='a' value='Renamed' style='rounded=1;' vertex='1' parent='1'><mxGeometry x='40' y='40' width='80' height='40' as='geometry'/></mxCell>",
+        ]) {
+            expect(
+                editDiagram(
+                    DOC,
+                    [{ operation: "update", cell_id: "a", new_xml: placed }],
+                    {},
+                ),
+            ).toMatchObject({ ok: true })
+        }
+        // A new cell may come without one
+        expect(
+            editDiagram(
+                DOC,
+                [
+                    {
+                        operation: "add",
+                        cell_id: "n",
+                        new_xml: renamed.replace('id="a"', 'id="n"'),
+                    },
+                ],
+                {},
+            ),
+        ).toMatchObject({ ok: true })
+    })
+
+    it("reads the id from new_xml when an add or update has no cell_id", () => {
+        // As on the demo site: the last add of a long list came without it,
+        // and the whole call was rejected
+        const out = editDiagram(
+            DOC,
+            [
+                { operation: "add", cell_id: "c", new_xml: cell("c") },
+                {
+                    operation: "add",
+                    new_xml: '<mxCell id="e1" source="a" target="c"/>',
+                },
+                {
+                    operation: "update",
+                    cell_id: "",
+                    new_xml:
+                        '<mxCell id="b" value="Renamed" x="0" y="0" w="80" h="40"/>',
+                },
+                {
+                    operation: "add",
+                    new_xml:
+                        '<object id="d" label="Data" owner="Ops"><mxCell x="0" y="100" w="80" h="40"/></object>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.applied).toBe(4)
+        expect(out.xml).toContain(
+            '<mxCell id="e1" edge="1" parent="1" source="a" target="c"',
+        )
+        expect(out.xml).toContain('<mxCell id="b" value="Renamed"')
+        expect(out.xml).toContain('<object id="d" label="Data" owner="Ops">')
+    })
+
+    it("rejects an operation when neither cell_id nor new_xml gives an id", () => {
+        const out = editDiagram(
+            DOC,
+            [
+                { operation: "add", cell_id: "c", new_xml: cell("c") },
+                { operation: "delete" },
+                {
+                    operation: "add",
+                    new_xml:
+                        '<mxCell value="No id" x="0" y="0" w="80" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(false)
+        if (out.ok) return
+        expect(out.errors).toEqual([
+            "delete (operation 2 of 3): cell_id is missing",
+            "add (operation 3 of 3): cell_id is missing and the cell in new_xml has no id",
+        ])
+    })
+
+    it("applies the rest when a delete names a cell that is already gone", () => {
+        const out = editDiagram(
+            DOC,
+            [
+                { operation: "delete", cell_id: "gone" },
+                { operation: "add", cell_id: "c", new_xml: cell("c") },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('id="c"')
+        expect(out.notes).toEqual([
+            "delete gone: no cell with this id on the page (already deleted?), skipped.",
+        ])
+    })
+
+    it("takes a code fence or a CDATA section off new_xml", () => {
+        const out = editDiagram(
+            DOC,
+            [
+                {
+                    operation: "add",
+                    cell_id: "c",
+                    new_xml: `\`\`\`xml\n${cell("c")}\n\`\`\``,
+                },
+                {
+                    operation: "add",
+                    cell_id: "d",
+                    new_xml: `<![CDATA[${cell("d")}]]>`,
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('<mxCell id="c" value="c" vertex="1"')
+        expect(out.xml).toContain('<mxCell id="d" value="d" vertex="1"')
     })
 
     it("rejects new_xml that is still invalid after auto-fix", () => {
@@ -216,5 +366,434 @@ world" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>` +
         if (!out.ok) return
         expect(out.xml).toContain(`value="Hello world"`)
         expect(out.xml).toContain(`value="Line 1&#xa;Line 2"`)
+    })
+})
+
+describe("what an edit tells the model about the cells it wrote", () => {
+    const LANE = `<mxCell id="lane1" value="Lane" style="swimlane;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="200" height="200" as="geometry"/></mxCell>`
+    const doc = `<mxfile>${page("p1", cell("a") + LANE)}</mxfile>`
+    const add = (id: string, attrs: string) => ({
+        operation: "add" as const,
+        cell_id: id,
+        new_xml: `<mxCell id="${id}" ${attrs}/>`,
+    })
+
+    it("draws an edge without the end that names no cell, and a shape with a missing parent on the page", () => {
+        const out = editDiagram(
+            doc,
+            [
+                add(
+                    "x",
+                    'value="X" parent="lane_1" x="20" y="60" w="160" h="40"',
+                ),
+                add("e", 'source="a" target="ghost"'),
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        // What draw.io would do on load, done here and said
+        expect(out.xml).toContain(
+            '<mxCell id="x" value="X" vertex="1" parent="1" style="whiteSpace=wrap;html=1;">',
+        )
+        expect(out.xml).toContain(
+            '<mxCell id="e" edge="1" parent="1" source="a" style="html=1;">',
+        )
+        expect(out.notes).toEqual([
+            'Drawn without the end that names no cell on this page: e (target "ghost"). Update these edges once the cells exist.',
+            'Put on the page itself, as the parent is no cell on this page: x (parent "lane_1").',
+        ])
+        // The web app sends the canvas again after a repair
+        expect(out.fixes).toEqual(out.notes)
+    })
+
+    it("says nothing when the edge comes before its end in the same call", () => {
+        const out = editDiagram(
+            doc,
+            [
+                add("e", 'source="a" target="late"'),
+                add("late", 'value="Late" x="300" y="0" w="80" h="40"'),
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('source="a" target="late"')
+        expect(out.notes).toEqual([])
+        expect(out.fixes).toEqual([])
+    })
+
+    it("leaves references it did not write alone", () => {
+        // A loaded file's edge to nowhere is not this edit's business
+        const loaded = `<mxfile>${page("p1", `${cell("a")}<mxCell id="old" edge="1" parent="1" source="a" target="nowhere"><mxGeometry relative="1" as="geometry"/></mxCell>`)}</mxfile>`
+        const out = editDiagram(
+            loaded,
+            [add("b", 'value="B" x="0" y="100" w="80" h="40"')],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('target="nowhere"')
+        expect(out.notes).toEqual([])
+    })
+
+    it("names children that reach outside their container", () => {
+        const out = editDiagram(
+            doc,
+            [
+                // Page coordinates instead of the lane's own
+                add(
+                    "far",
+                    'value="Far" parent="lane1" x="300" y="300" w="120" h="40"',
+                ),
+                add(
+                    "in",
+                    'value="In" parent="lane1" x="20" y="60" w="160" h="40"',
+                ),
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.notes).toHaveLength(1)
+        expect(out.notes[0]).toMatch(/^Outside their container: far\. /)
+        // An icon set on the container's border is meant to reach outside
+        expect(out.notes[0]).toMatch(
+            /If that is not intended, move these cells or make the container larger\.$/,
+        )
+        expect(out.fixes).toEqual([])
+    })
+
+    it("names labels with a literal \\n", () => {
+        const out = editDiagram(
+            doc,
+            [
+                add(
+                    "two",
+                    'value="Line one\\nLine two" x="0" y="100" w="120" h="40"',
+                ),
+                add(
+                    "br",
+                    'value="Line one&lt;br&gt;Line two" x="0" y="200" w="120" h="40"',
+                ),
+                // Windows paths hold \n by their nature
+                add(
+                    "drive",
+                    'value="C:\\new_files\\nightly" x="0" y="300" w="120" h="40"',
+                ),
+                add(
+                    "share",
+                    'value="\\\\nas01\\backup" x="0" y="400" w="120" h="40"',
+                ),
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.notes).toEqual([
+            "The label holds a literal \\n, shown as those two characters: two. For a line break write &lt;br&gt;.",
+        ])
+    })
+
+    it("names references to pictures the diagram does not have", () => {
+        const out = editDiagram(
+            doc,
+            [
+                add(
+                    "pic",
+                    'style="shape=image;image=data:image/png,embedded-image-nosuchone1;" x="0" y="200" w="40" h="40"',
+                ),
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.notes).toHaveLength(1)
+        expect(out.notes[0]).toContain("No picture for the reference in: pic.")
+    })
+})
+
+describe("a page whose root cells are not called 0 and 1", () => {
+    // draw.io's own templates name them like this (Basic flowchart)
+    const P = "WIyWlLk6GJQsqaUBKTNV"
+    const file = `<mxfile host="app.diagrams.net"><diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1"><mxGraphModel dx="1223" dy="871" grid="1" gridSize="10"><root><mxCell id="${P}-0"/><mxCell id="${P}-1" parent="${P}-0"/><mxCell id="${P}-3" value="Lamp doesn't work" style="rounded=1;whiteSpace=wrap;html=1;" parent="${P}-1" vertex="1"><mxGeometry x="160" y="80" width="120" height="40" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`
+
+    it("puts a compact cell without a parent on the page's layer, with no note", () => {
+        const out = editDiagram(
+            file,
+            [
+                {
+                    operation: "add",
+                    cell_id: "n1",
+                    new_xml:
+                        '<mxCell id="n1" value="Added" x="340" y="80" w="120" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out).toMatchObject({ ok: true, fixes: [], notes: [] })
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="n1" value="Added" vertex="1" parent="${P}-1"`,
+        )
+        // What the edit did not touch is as the file had it, byte for byte
+        expect(out.xml.startsWith(file.slice(0, file.indexOf("</root>")))).toBe(
+            true,
+        )
+    })
+
+    it("puts a cell whose parent is missing on that layer too", () => {
+        const out = editDiagram(
+            file,
+            [
+                {
+                    operation: "add",
+                    cell_id: "n2",
+                    new_xml:
+                        '<mxCell id="n2" value="Lost" parent="group9" x="0" y="0" w="80" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="n2" value="Lost" vertex="1" parent="${P}-1"`,
+        )
+    })
+
+    it("puts both on a layer with custom data, whose id is on the <object> around it", () => {
+        const layered = `<mxfile><diagram id="p1" name="p1"><mxGraphModel><root><mxCell id="0"/><object id="L" label="Layer" owner="ops"><mxCell parent="0"/></object>${cell("a").replace('parent="1"', 'parent="L"')}</root></mxGraphModel></diagram></mxfile>`
+        const out = editDiagram(
+            layered,
+            [
+                {
+                    operation: "add",
+                    cell_id: "n1",
+                    new_xml:
+                        '<mxCell id="n1" value="Added" x="340" y="80" w="120" h="40"/>',
+                },
+                {
+                    operation: "add",
+                    cell_id: "n2",
+                    new_xml:
+                        '<mxCell id="n2" value="Lost" parent="group9" x="0" y="0" w="80" h="40"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<mxCell id="n1" value="Added" vertex="1" parent="L"',
+        )
+        expect(out.xml).toContain(
+            '<mxCell id="n2" value="Lost" vertex="1" parent="L"',
+        )
+    })
+})
+
+describe("named styles in the calls after the drawing", () => {
+    const BOX = "rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;"
+    const drawn = prepareNewDiagram(
+        `<mxStyle name="svcbox" value="${BOX}"/><mxCell id="2" value="A" style="svcbox;" x="40" y="40" w="120" h="60"/>`,
+    )
+    const xml = drawn.ok ? drawn.xml : ""
+
+    it("expands a name the drawing defined in an add and an update", () => {
+        const out = editDiagram(
+            xml,
+            [
+                {
+                    operation: "add",
+                    cell_id: "5",
+                    new_xml:
+                        '<mxCell id="5" value="C" style="svcbox;" x="440" y="40" w="120" h="60"/>',
+                },
+                {
+                    operation: "update",
+                    cell_id: "2",
+                    new_xml:
+                        '<mxCell id="2" value="A2" style="svcbox;fontStyle=1;" x="40" y="40" w="120" h="60"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="5" value="C" style="${BOX}whiteSpace=wrap;html=1;"`,
+        )
+        expect(out.xml).toContain(
+            `<mxCell id="2" value="A2" style="${BOX}fontStyle=1;whiteSpace=wrap;html=1;"`,
+        )
+        expect(out.xml).not.toContain("svcbox")
+    })
+
+    it("expands it in a later drawing too, until that defines the name anew", () => {
+        const cellOf = (xml: string) =>
+            prepareNewDiagram(
+                `${xml}<mxCell id="2" value="B" style="svcbox;" x="40" y="40" w="120" h="60"/>`,
+            )
+        expect(cellOf("")).toMatchObject({ ok: true })
+        const again = cellOf("")
+        if (again.ok) expect(again.xml).toContain(`style="${BOX}whiteSpace`)
+        const redefined = cellOf('<mxStyle name="svcbox" value="dashed=1;"/>')
+        if (redefined.ok) {
+            expect(redefined.xml).toContain('style="dashed=1;whiteSpace')
+        }
+        const after = cellOf("")
+        if (after.ok) expect(after.xml).toContain('style="dashed=1;whiteSpace')
+    })
+
+    it("keeps a definition named like one of draw.io's styles to its drawing", () => {
+        // "group" restyled here would also restyle the groups of a file
+        // loaded later
+        const own = prepareNewDiagram(
+            '<mxStyle name="group" value="dashed=1;"/><mxCell id="2" value="G" style="group;" x="0" y="0" w="200" h="100"/>',
+        )
+        expect(own.ok).toBe(true)
+        if (own.ok) expect(own.xml).toContain('style="dashed=1;whiteSpace')
+        const out = editDiagram(
+            xml,
+            [
+                {
+                    operation: "add",
+                    cell_id: "7",
+                    new_xml:
+                        '<mxCell id="7" style="group;" x="0" y="300" w="200" h="100"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (out.ok) expect(out.xml).toContain('style="group;whiteSpace')
+    })
+
+    it("leaves a name nobody defined, and draw.io's own names, as written", () => {
+        const out = editDiagram(
+            xml,
+            [
+                {
+                    operation: "add",
+                    cell_id: "6",
+                    new_xml:
+                        '<mxCell id="6" value="D" style="ellipse;neverdefined;" x="0" y="200" w="80" h="80"/>',
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            'style="ellipse;neverdefined;whiteSpace=wrap;html=1;"',
+        )
+    })
+})
+
+describe("a cell without html=1, from a file another tool wrote", () => {
+    // Plain text: "<String>" is text, and the label is not wrapped
+    const LABEL = "List&lt;String&gt; items&#xa;second line"
+    const doc = `<mxfile>${page("p1", `<mxCell id="t" value="${LABEL}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="40" as="geometry"/></mxCell>`)}</mxfile>`
+    const update = (value: string) =>
+        editDiagram(
+            doc,
+            [
+                {
+                    operation: "update",
+                    cell_id: "t",
+                    new_xml: `<mxCell id="t" value="${value}" style="rounded=1;" x="100" y="0" w="80" h="40"/>`,
+                },
+            ],
+            {},
+        )
+
+    it("keeps its label plain when an update only moves it", () => {
+        const out = update(LABEL)
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="t" value="${LABEL}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100"`,
+        )
+    })
+
+    it("keeps its label plain when the update writes it in single quotes, a double quote as it is", () => {
+        const stored = "List&lt;String&gt; &quot;name&quot;"
+        const out = editDiagram(
+            doc.replace(LABEL, stored),
+            [
+                {
+                    operation: "update",
+                    cell_id: "t",
+                    new_xml: `<mxCell id='t' value='List&lt;String&gt; "name"' style='rounded=1;' x='100' y='0' w='80' h='40'/>`,
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            `<mxCell id="t" value="${stored}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="100"`,
+        )
+    })
+
+    it("gets the defaults when the update writes a new label", () => {
+        const out = update("New&lt;br&gt;label")
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            'value="New&lt;br&gt;label" style="rounded=1;whiteSpace=wrap;html=1;"',
+        )
+    })
+
+    it("keeps its label plain inside an <object> wrapper too", () => {
+        // A cell with a link: the id and the label are on the wrapper
+        const wrapped = (label: string, x: number) =>
+            `<object id="w" label="${label}" link="https://example.com"><mxCell style="rounded=1;" vertex="1" parent="1"><mxGeometry x="${x}" y="0" width="80" height="40" as="geometry"/></mxCell></object>`
+        const file = `<mxfile>${page("p1", wrapped(LABEL, 0))}</mxfile>`
+        const moved = editDiagram(
+            file,
+            [
+                {
+                    operation: "update",
+                    cell_id: "w",
+                    new_xml: wrapped(LABEL, 100),
+                },
+            ],
+            {},
+        )
+        expect(moved.ok).toBe(true)
+        if (moved.ok) expect(moved.xml).toContain(wrapped(LABEL, 100))
+        const relabelled = editDiagram(
+            file,
+            [{ operation: "update", cell_id: "w", new_xml: wrapped("New", 0) }],
+            {},
+        )
+        expect(relabelled.ok).toBe(true)
+        if (relabelled.ok) {
+            expect(relabelled.xml).toContain(
+                '<mxCell style="rounded=1;whiteSpace=wrap;html=1;" vertex="1"',
+            )
+        }
+    })
+
+    it("still writes an embedded picture the way draw.io does", () => {
+        // A picture without html=1 and with an empty label, which the
+        // model moves with the usual ";base64" in the address
+        const picture = (address: string, x: number) =>
+            `<mxCell id="img" value="" style="shape=image;image=${address}iVBORw0KGgo=;" vertex="1" parent="1"><mxGeometry x="${x}" y="0" width="40" height="40" as="geometry"/></mxCell>`
+        const out = editDiagram(
+            `<mxfile>${page("p1", picture("data:image/png,", 0))}</mxfile>`,
+            [
+                {
+                    operation: "update",
+                    cell_id: "img",
+                    new_xml: picture("data:image/png;base64,", 100),
+                },
+            ],
+            {},
+        )
+        expect(out.ok).toBe(true)
+        if (out.ok) expect(out.xml).toContain(picture("data:image/png,", 100))
     })
 })

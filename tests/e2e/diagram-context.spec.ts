@@ -160,7 +160,7 @@ test("a picture is kept as its short reference in the message", async ({
     expect(diagramOfLast(sent[1])).toEqual({ unchanged: true })
 
     // After a reload the canvas goes with the message, its picture as the
-    // reference the model sees; the request still carries the canvas in full
+    // reference the model sees; the request has no other copy of the canvas
     await expect
         .poll(() => new URL(p.url()).searchParams.get("session"))
         .toBeTruthy()
@@ -177,7 +177,7 @@ test("a picture is kept as its short reference in the message", async ({
     expect(kept.xml).toContain('id="pic"')
     expect(kept.xml).toContain("data:image/png,embedded-image-")
     expect(kept.xml).not.toContain(image)
-    expect(sent[2].xml).toContain(image)
+    expect(sent[2].xml).toBeUndefined()
 })
 
 test("an edit that adds a shape into a container leaves the canvas out", async ({

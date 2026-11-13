@@ -25,7 +25,15 @@ declare const AI: {
 const messageItemSchema = z
     .object({
         role: z.enum(["user", "assistant", "system", "tool", "function"]),
-        content: z.string().nullable().optional(),
+        // A string, or the list of parts the AI SDK sends for a user message
+        // with more than one part
+        content: z
+            .union([
+                z.string(),
+                z.array(z.object({ type: z.string() }).passthrough()),
+            ])
+            .nullable()
+            .optional(),
     })
     .passthrough()
 
@@ -171,12 +179,29 @@ export async function onRequest({ request, env }: any) {
             `[EdgeOne] Model: ${selectedModel}, Tools: ${tools?.length || 0}`,
         )
 
+        // AI.chatCompletions takes a message's content as one string. The
+        // chat sends the newest user message as a list of text parts (what
+        // the user typed, then the note on the canvas), so join them. A list
+        // with another kind of part (an image) is passed on as it is, and
+        // the model's own error reaches the user.
+        const textMessages = messages.map((message) =>
+            Array.isArray(message.content) &&
+            message.content.every((part) => part.type === "text")
+                ? {
+                      ...message,
+                      content: message.content
+                          .map((part) => part.text)
+                          .join(""),
+                  }
+                : message,
+        )
+
         try {
             // Build AI.chatCompletions options for streaming
             const aiOptions: any = {
                 ...extraParams,
                 model: selectedModel,
-                messages,
+                messages: textMessages,
                 stream: true,
             }
 

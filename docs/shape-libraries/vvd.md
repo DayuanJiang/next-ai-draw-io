@@ -13,7 +13,7 @@
 
 
 
-## Shapes (95)
+## Shapes (94)
 
 - `administrator`
 - `app`
@@ -50,7 +50,6 @@
 - `memory`
 - `monitor`
 - `mouse`
-- `mxgraph.vvd`
 - `networking`
 - `networks`
 - `nfvo`

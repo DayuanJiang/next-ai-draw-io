@@ -54,7 +54,7 @@ export function NotFoundPage() {
     }, [t.title])
     return (
         <div className="site lp-grid flex min-h-screen items-center justify-center bg-canvas px-6 text-foreground md:px-8">
-            <div className="max-w-md text-center">
+            <main className="max-w-md text-center">
                 <Link
                     href={`/${lang}/about`}
                     className="inline-flex items-center gap-2.5"
@@ -76,6 +76,8 @@ export function NotFoundPage() {
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                     <Link
                         href={`/${lang}`}
+                        // The editor is large: load it only when asked
+                        prefetch={false}
                         className="rounded-lg bg-foreground px-4.5 py-2.5 text-[14.5px] font-medium text-background"
                     >
                         {t.editor}
@@ -93,7 +95,7 @@ export function NotFoundPage() {
                         {t.home}
                     </Link>
                 </div>
-            </div>
+            </main>
         </div>
     )
 }

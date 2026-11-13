@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { prefersTransparentPng, SaveDialog } from "@/components/save-dialog"
+import {
+    prefersTransparentBackground,
+    SaveDialog,
+} from "@/components/save-dialog"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
 import en from "@/lib/i18n/dictionaries/en.json"
@@ -71,6 +74,42 @@ describe("the export dialog", () => {
             screen.getByRole("button", { name: en.workspace.export }),
         )
         expect(onSave).toHaveBeenCalledWith("diagram", "png")
-        expect(prefersTransparentPng()).toBe(true)
+        expect(prefersTransparentBackground()).toBe(true)
+    })
+
+    it("offers the transparent background for every picture format", () => {
+        open()
+        const checkbox = () =>
+            screen.queryByRole("checkbox", {
+                name: en.save.transparentBackground,
+            })
+        // The draw.io file is no picture
+        expect(checkbox()).toBeNull()
+        for (const format of ["png", "svg", "xmlsvg"] as const) {
+            fireEvent.click(
+                formatTile(new RegExp(`^${en.save.formats[format]}`)),
+            )
+            expect(checkbox()).not.toBeNull()
+        }
+    })
+
+    it("adds the extension once to a name typed with it", () => {
+        const onSave = open()
+        const name = screen.getByRole("textbox", { name: en.save.filename })
+        const exportButton = screen.getByRole("button", {
+            name: en.workspace.export,
+        })
+        // The field shows ".drawio" after the name; the save adds it
+        fireEvent.change(name, { target: { value: "my-diagram.DrawIO" } })
+        fireEvent.click(exportButton)
+        expect(onSave).toHaveBeenLastCalledWith("my-diagram", "drawio")
+        // Another format's extension is part of the name
+        fireEvent.click(formatTile(new RegExp(en.save.formats.png)))
+        fireEvent.change(name, { target: { value: "my-diagram.drawio" } })
+        fireEvent.click(exportButton)
+        expect(onSave).toHaveBeenLastCalledWith("my-diagram.drawio", "png")
+        fireEvent.change(name, { target: { value: "shot.png" } })
+        fireEvent.click(exportButton)
+        expect(onSave).toHaveBeenLastCalledWith("shot", "png")
     })
 })

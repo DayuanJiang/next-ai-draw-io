@@ -1,5 +1,5 @@
 import pako from "pako"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
     cellLabels,
     diffDiagrams,
@@ -130,6 +130,34 @@ describe("diffDiagrams", () => {
             touchedIds: ["r"],
             fromScratch: true,
         })
+    })
+
+    it("does not count the root and the layers of a file whose root is not called 0", () => {
+        // A file made in draw.io from a template: the root cells carry the
+        // file's own ids
+        const own = (cells: string) =>
+            `<mxfile><diagram name="Page-1" id="p1"><mxGraphModel><root><mxCell id="W-0"/><mxCell id="W-1" parent="W-0"/>${cells}</root></mxGraphModel></diagram></mxfile>`
+        const shape = (id: string, layer: string) =>
+            `<mxCell id="${id}" value="${id}" vertex="1" parent="${layer}"><mxGeometry width="80" height="40" as="geometry"/></mxCell>`
+        const drafts = (style: string) =>
+            `<mxCell id="L2" value="Drafts" style="${style}" parent="W-0"/>`
+        const opened = own(drafts("locked=1;") + shape("a", "W-1"))
+        expect(diffDiagrams("", opened).summary).toEqual({
+            ...EMPTY_SUMMARY,
+            shapesAdded: 1,
+        })
+        // A new layer with one shape on it
+        const withLayer = own(
+            `${drafts("locked=1;")}${shape("a", "W-1")}<mxCell id="L3" value="Costs" parent="W-0"/>${shape("b", "L3")}`,
+        )
+        expect(diffDiagrams(opened, withLayer)).toEqual({
+            summary: { ...EMPTY_SUMMARY, shapesAdded: 1 },
+            touchedIds: ["b"],
+            fromScratch: false,
+        })
+        // A layer unlocked: no shape changed
+        const unlocked = own(drafts("") + shape("a", "W-1"))
+        expect(diffDiagrams(opened, unlocked).summary).toEqual(EMPTY_SUMMARY)
     })
 
     it("ignores empty style entries, as draw.io does", () => {
@@ -372,6 +400,106 @@ describe("isSameDocument", () => {
         expect(isSameDocument(wrapped("1", "40.0"), wrapped("1", "40"))).toBe(
             true,
         )
+    })
+
+    it("ignores the order a geometry's parts are written in", () => {
+        const line = (geometry: string) =>
+            file(
+                pageOf(
+                    "One",
+                    `<mxCell id="e" value="Yes" edge="1" parent="1"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell>`,
+                ),
+            )
+        const points = (...xs: number[]) =>
+            `<Array as="points">${xs.map((x) => `<mxPoint x="${x}" y="70"/>`).join("")}</Array>`
+        const offset = '<mxPoint x="0" y="-10" as="offset"/>'
+        const source = '<mxPoint x="40" y="40" as="sourcePoint"/>'
+        const target = '<mxPoint x="400" y="40" as="targetPoint"/>'
+        // As a model writes them, and sorted by name as draw.io saves them
+        expect(
+            isSameDocument(
+                line(points(250) + offset),
+                line('<mxPoint y="-10" as="offset"/>' + points(250)),
+            ),
+        ).toBe(true)
+        expect(
+            isSameDocument(
+                line(source + target + points(250)),
+                line(points(250) + source + target),
+            ),
+        ).toBe(true)
+        expect(
+            isSameDocument(line(target + source), line(source + target)),
+        ).toBe(true)
+        // The points of a line are in the order the line passes them
+        expect(
+            isSameDocument(line(points(250, 300)), line(points(300, 250))),
+        ).toBe(false)
+    })
+
+    it("keeps the last of a geometry's parts with one name, as draw.io does", () => {
+        const line = (geometry: string) =>
+            file(
+                pageOf(
+                    "One",
+                    `<mxCell id="14" value="1 : N" edge="1" parent="1"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell>`,
+                ),
+            )
+        const waypoint = (y: number) =>
+            `<mxPoint x="765" y="${y}" as="waypoint"/>`
+        // A connector as GPT-6 Luna wrote it, and as draw.io saved it
+        const written = line(waypoint(450) + waypoint(125))
+        const saved = line(waypoint(125))
+        expect(isSameDocument(written, saved)).toBe(true)
+        expect(diffDiagrams(written, saved).summary).toEqual(EMPTY_SUMMARY)
+        // The point draw.io keeps counts
+        expect(isSameDocument(written, line(waypoint(450)))).toBe(false)
+        // A later point that leaves a coordinate out keeps the earlier
+        // point's: draw.io reads it into that point
+        const end = (attrs: string) => `<mxPoint ${attrs} as="sourcePoint"/>`
+        const partly = line(end('x="100" y="100"') + end('x="200"'))
+        const partlySaved = line(end('x="200" y="100"'))
+        expect(isSameDocument(partly, partlySaved)).toBe(true)
+        expect(diffDiagrams(partly, partlySaved).summary).toEqual(EMPTY_SUMMARY)
+        expect(isSameDocument(partly, line(end('x="200"')))).toBe(false)
+    })
+
+    it("takes a collapsed size's left-out position as 0, as draw.io writes it", () => {
+        const container = (bounds: string) =>
+            file(
+                pageOf(
+                    "One",
+                    `<mxCell id="c" vertex="1" parent="1"><mxGeometry x="40" y="40" width="200" height="120" as="geometry">${bounds}</mxGeometry></mxCell>`,
+                ),
+            )
+        expect(
+            isSameDocument(
+                container(
+                    '<mxRectangle x="0" y="0" width="200" height="30" as="alternateBounds"/>',
+                ),
+                container(
+                    '<mxRectangle width="200" height="30" as="alternateBounds"/>',
+                ),
+            ),
+        ).toBe(true)
+    })
+
+    it("parses each document once, however often it is compared", () => {
+        // A chat's versions, compared with the canvas after each hand edit
+        const versions = Array.from({ length: 20 }, (_, i) =>
+            file(pageOf("One", box("a", `version ${i}`))),
+        )
+        const parse = vi.spyOn(DOMParser.prototype, "parseFromString")
+        const compare = (canvas: string) =>
+            versions.map((version) => isSameDocument(version, canvas))
+        const first = compare(file(pageOf("One", box("a", "edit 1"))))
+        expect(parse).toHaveBeenCalledTimes(21)
+        // The next edit: only the canvas is new
+        compare(file(pageOf("One", box("a", "edit 2"))))
+        expect(parse).toHaveBeenCalledTimes(22)
+        expect(compare(file(pageOf("One", box("a", "edit 1"))))).toEqual(first)
+        expect(compare(versions[3])[3]).toBe(true)
+        parse.mockRestore()
     })
 
     it("reads numeric page settings as numbers", () => {

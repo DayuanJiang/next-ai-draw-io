@@ -2,19 +2,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // What the admin Test hands to testModelConnection
-const sent = vi.hoisted(() => ({ body: null as any, trusted: null as any }))
+const sent = vi.hoisted(() => ({
+    body: null as any,
+    trusted: null as any,
+    serverCredentials: null as any,
+}))
 vi.mock("@/lib/test-model-connection", () => ({
-    testModelConnection: async (_req: Request, body: any, trusted: boolean) => {
-        sent.body = body
-        sent.trusted = trusted
+    testModelConnection: async (
+        _req: Request,
+        body: any,
+        trusted: boolean,
+        serverCredentials: boolean,
+    ) => {
+        Object.assign(sent, { body, trusted, serverCredentials })
         return Response.json({ valid: true })
     },
 }))
 vi.mock("@/lib/admin/auth", () => ({ checkAdminAuth: () => null }))
 // The environment's own values, under the panel's settings
 const envFallback = vi.hoisted(() => ({ values: {} as Record<string, string> }))
+// The settings file: no saved admin providers unless a test saves one
+const saved = vi.hoisted(() => ({ values: {} as Record<string, string> }))
 vi.mock("@/lib/admin/settings", () => ({
-    loadSettings: () => ({}),
+    loadSettings: () => saved.values,
     getEnvFallback: (key: string) => envFallback.values[key] ?? null,
 }))
 
@@ -29,6 +39,8 @@ const ENV = [
 ]
 beforeEach(() => {
     envFallback.values = {}
+    saved.values = {}
+    sent.body = null
     for (const k of ENV) vi.stubEnv(k, undefined)
 })
 
@@ -101,5 +113,73 @@ describe("admin Test of an entry without a URL", () => {
         envFallback.values.OLLAMA_BASE_URL = "http://gpu:11434/api"
         await test({ provider: "ollama", apiKey: "k" })
         expect(sent.body.baseUrl).toBe("http://gpu:11434/api")
+    })
+})
+
+describe("admin Test of an entry without credentials of its own", () => {
+    it("may run on the server's, as chat on the entry does", async () => {
+        // The environment's key of that provider
+        envFallback.values.OPENAI_API_KEY = "sk-env"
+        await test({ provider: "openai" })
+        expect(sent.serverCredentials).toBe(true)
+        // Bedrock has no key variable: the server's IAM role
+        await test({ provider: "bedrock", awsRegion: "us-east-2" })
+        expect(sent.serverCredentials).toBe(true)
+    })
+
+    it("needs a key when the server has none for that provider", async () => {
+        await test({ provider: "openai" })
+        expect(sent.serverCredentials).toBe(false)
+    })
+
+    it("needs its own key at a URL of its own", async () => {
+        // The server's key must not go to a URL that was just typed
+        envFallback.values.OPENAI_API_KEY = "sk-env"
+        await test({ provider: "openai", baseUrl: "https://other.example/v1" })
+        expect(sent.serverCredentials).toBe(false)
+        // The entry's URL is the deployment's own, as the server's is
+        expect(sent.trusted).toBe(true)
+    })
+})
+
+describe("admin Test of a saved entry whose key is kept", () => {
+    // What the panel sends for a key that was not typed again
+    const marker = { isSet: true, hint: "…0001" }
+    beforeEach(() => {
+        saved.values = {
+            ADMIN_PROVIDERS: JSON.stringify([
+                {
+                    id: "p1",
+                    provider: "openai",
+                    apiKey: "sk-stored-secret-0001",
+                    baseUrl: "https://api.openai.com/v1",
+                    models: ["m"],
+                },
+            ]),
+        }
+    })
+
+    it("tests the stored key at the saved base URL", async () => {
+        await test({
+            provider: "openai",
+            apiKey: marker,
+            baseUrl: "https://api.openai.com/v1",
+        })
+        expect(sent.body.apiKey).toBe("sk-stored-secret-0001")
+    })
+
+    it("asks for the key again at another base URL, and says why", async () => {
+        const res = await test({
+            provider: "openai",
+            apiKey: marker,
+            baseUrl: "https://elsewhere.example/v1",
+        })
+        expect(res.status).toBe(400)
+        expect(await res.json()).toEqual({
+            valid: false,
+            error: 'The base URL of "OpenAI" changed. Enter its key again.',
+        })
+        // The stored key went nowhere
+        expect(sent.body).toBeNull()
     })
 })

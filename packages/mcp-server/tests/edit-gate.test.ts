@@ -151,6 +151,41 @@ describe("contentFingerprint", () => {
         ).not.toBe(contentFingerprint(XML_A.replace('value="Hello" ', "")))
     })
 
+    it("treats long numbers and written-out defaults like draw.io's copy without them", () => {
+        // As a model may write the box of XML_A, and as draw.io saves it
+        const written = XML_A.replace(
+            'vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60"',
+            'vertex="1" edge="0" connectable="1" visible="1" collapsed="0" parent="1"><mxGeometry x="40.0" y="40.00" width="120.0" height="60" relative="0"',
+        )
+        expect(written).not.toBe(XML_A)
+        expect(contentFingerprint(written)).toBe(contentFingerprint(XML_A))
+        expect(checkEditGate(written, XML_A_RESERIALIZED)).toEqual({ ok: true })
+        expect(describeChanges(written, XML_A_RESERIALIZED)).toBe("")
+        expect(countChanges(written, XML_A_RESERIALIZED)).toBe("")
+        // Any other value of these attributes is a change
+        for (const [from, to] of [
+            ['x="40"', 'x="40.5"'],
+            ['vertex="1"', 'vertex="1" connectable="0"'],
+            ['vertex="1"', 'vertex="1" visible="0"'],
+            ['vertex="1"', 'vertex="1" collapsed="1"'],
+            ['height="60"', 'height="60" relative="1"'],
+        ]) {
+            expect(contentFingerprint(XML_A.replace(from, to)), to).not.toBe(
+                contentFingerprint(XML_A),
+            )
+        }
+        // Only on the elements draw.io reads them from: a wrapper's own
+        // "x" or "visible" is the user's data, kept as written
+        const wrapped = (data: string) =>
+            XML_A.replace(
+                /<mxCell id="box1".*<\/mxCell>/,
+                `<object id="box1" label="Hello" ${data}><mxCell vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></object>`,
+            )
+        expect(contentFingerprint(wrapped('x="40.0" visible="1"'))).not.toBe(
+            contentFingerprint(wrapped('x="40"')),
+        )
+    })
+
     it("reads draw.io's order of the cells, each container followed by its children, as the same diagram", () => {
         const page = (cells: string) =>
             `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram></mxfile>`
@@ -186,6 +221,63 @@ describe("contentFingerprint", () => {
                 wrapped("b", "g2"),
         )
         expect(contentFingerprint(swapped)).not.toBe(contentFingerprint(drawio))
+    })
+
+    it("reads the parts of a geometry in any order, as draw.io sorts them when it saves", () => {
+        const edge = (geometry: string, x = 0) =>
+            `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="A" vertex="1" parent="1"><mxGeometry x="${x}" width="80" height="40" as="geometry"/></mxCell><mxCell id="e1" value="calls" edge="1" parent="1" source="a"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell></root></mxGraphModel></diagram></mxfile>`
+        const points = (first: number, second: number) =>
+            `<Array as="points"><mxPoint x="${first}" y="200"/><mxPoint x="${second}" y="200"/></Array>`
+        const offset = '<mxPoint x="0" y="-10" as="offset"/>'
+        const ends =
+            '<mxPoint x="100" y="70" as="sourcePoint"/><mxPoint x="300" y="70" as="targetPoint"/>'
+        // As a model wrote them, and as draw.io saves them
+        const written = edge(points(200, 300) + offset)
+        const saved = edge(offset + points(200, 300))
+        expect(contentFingerprint(written)).toBe(contentFingerprint(saved))
+        expect(contentFingerprint(edge(ends + points(200, 300)))).toBe(
+            contentFingerprint(edge(points(200, 300) + ends)),
+        )
+        expect(describeChanges(written, saved)).toBe("")
+        // The user moved box a: the edge is not named with it
+        expect(
+            describeChanges(written, edge(offset + points(200, 300), 300)),
+        ).toBe(
+            'Since you last saw it, the user changed the diagram: modified a ("A").',
+        )
+        // The waypoints of a line keep their order
+        expect(contentFingerprint(edge(points(300, 200) + offset))).not.toBe(
+            contentFingerprint(written),
+        )
+    })
+
+    it("keeps the last of a geometry's parts with one name, as draw.io does", () => {
+        const edge = (geometry: string) =>
+            `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="14" value="1 : N" edge="1" parent="1"><mxGeometry relative="1" as="geometry">${geometry}</mxGeometry></mxCell></root></mxGraphModel></diagram></mxfile>`
+        const waypoint = (y: number) =>
+            `<mxPoint x="765" y="${y}" as="waypoint"/>`
+        // A connector as GPT-6 Luna wrote it, and as draw.io saved it
+        const written = edge(waypoint(450) + waypoint(125))
+        const saved = edge(waypoint(125))
+        expect(checkEditGate(written, saved)).toEqual({ ok: true })
+        expect(describeChanges(written, saved)).toBe("")
+        expect(countChanges(written, saved)).toBe("")
+        // The point draw.io keeps counts
+        expect(checkEditGate(written, edge(waypoint(450)))).toEqual({
+            ok: false,
+            reason: "stale",
+        })
+        // A later point that leaves a coordinate out keeps the earlier
+        // point's: draw.io reads it into that point
+        const end = (attrs: string) => `<mxPoint ${attrs} as="sourcePoint"/>`
+        const partly = edge(end('x="100" y="100"') + end('x="200"'))
+        expect(checkEditGate(partly, edge(end('x="200" y="100"')))).toEqual({
+            ok: true,
+        })
+        expect(checkEditGate(partly, edge(end('x="200"')))).toEqual({
+            ok: false,
+            reason: "stale",
+        })
     })
 
     it("falls back to the raw string for unparseable input", () => {
@@ -268,7 +360,7 @@ describe("describeChanges", () => {
     it("reports a renamed page", () => {
         const renamed = XML_A.replace('name="Page-1"', 'name="Renamed"')
         expect(describeChanges(XML_A, renamed)).toBe(
-            'Since you last saw it, the user changed the diagram. Page 1 renamed to "Renamed".',
+            'Since you last saw it, the user changed the diagram. Page index=0 renamed to "Renamed".',
         )
     })
 
@@ -335,10 +427,46 @@ describe("describeChanges", () => {
 
     it("reports added and removed pages", () => {
         expect(describeChanges(XML_A, XML_A_TWO_PAGES)).toBe(
-            "Since you last saw it, the user changed the diagram: page 2 added.",
+            'Since you last saw it, the user changed the diagram: page index=1 ("Page-2") added.',
         )
         expect(describeChanges(XML_A_TWO_PAGES, XML_A)).toBe(
-            "Since you last saw it, the user changed the diagram: page 2 removed.",
+            'Since you last saw it, the user changed the diagram: page "Page-2" removed.',
+        )
+    })
+
+    it("reports a deleted first page as that, with the other pages unchanged", () => {
+        // The pages keep their ids, so they are paired by id; by index
+        // every page read as "cells replaced, renamed"
+        const first = `<diagram id="p0" name="R&amp;D"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="Front" vertex="1" parent="1"/></root></mxGraphModel></diagram>`
+        const three = XML_A_TWO_PAGES.replace("<diagram", `${first}<diagram`)
+        expect(describeChanges(three, XML_A_TWO_PAGES)).toBe(
+            'Since you last saw it, the user changed the diagram: page "R&D" removed.',
+        )
+        // And a page added in front, with a change on a later page
+        const moved = three.replace('x="40" y="40"', 'x="300" y="200"')
+        expect(describeChanges(XML_A_TWO_PAGES, moved)).toBe(
+            'Since you last saw it, the user changed the diagram: page index=0 ("R&D") added; page index=1 modified box1 ("Hello").',
+        )
+    })
+
+    it("pairs the pages by id when their number stays the same", () => {
+        const page = (id: string, name: string, label: string) =>
+            `<diagram id="${id}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="${label}" vertex="1" parent="1"/></root></mxGraphModel></diagram>`
+        const a = page("p1", "A", "On A")
+        const b = page("p2", "B", "On B")
+        const seen = `<mxfile>${a}${b}</mxfile>`
+        // The user deleted page A and added a page C
+        expect(
+            describeChanges(
+                seen,
+                `<mxfile>${b}${page("p3", "C", "On C")}</mxfile>`,
+            ),
+        ).toBe(
+            'Since you last saw it, the user changed the diagram: page index=1 ("C") added; page "A" removed.',
+        )
+        // The user dragged tab B in front of tab A
+        expect(describeChanges(seen, `<mxfile>${b}${a}</mxfile>`)).toBe(
+            "Since you last saw it, the user changed the diagram: the order of the pages changed.",
         )
     })
 
@@ -348,7 +476,7 @@ describe("describeChanges", () => {
             'x="300" y="200"',
         )
         expect(describeChanges(XML_A_TWO_PAGES, movedOnPage1)).toContain(
-            'page 1 modified box1 ("Hello")',
+            'page index=0 modified box1 ("Hello")',
         )
     })
 
@@ -359,6 +487,32 @@ describe("describeChanges", () => {
         )
         expect(describeChanges(XML_A_PLUS_BOX2, reordered)).toBe(
             "Since you last saw it, the user changed the diagram: the order of the cells changed.",
+        )
+    })
+
+    it("says which end an edge lost when the user deleted the shape there", () => {
+        // Delete in draw.io removes the shape and keeps its edge, with a
+        // point where the shape was
+        const edge = (ends: string, point = "") =>
+            `<mxCell id="e1" value="requests" edge="1" parent="1" ${ends}><mxGeometry relative="1" as="geometry">${point}</mxGeometry></mxCell>`
+        const seen = XML_A_PLUS_BOX2.replace(
+            "</root>",
+            `${edge('source="box2" target="box1"')}</root>`,
+        )
+        const deleted = XML_A.replace(
+            "</root>",
+            `${edge('target="box1"', '<mxPoint x="460" y="230" as="sourcePoint"/>')}</root>`,
+        )
+        expect(describeChanges(seen, deleted)).toBe(
+            'Since you last saw it, the user changed the diagram: modified e1 ("requests") [lost its source box2: that end is loose]; removed box2 ("World").',
+        )
+        // An end moved to another shape is an ordinary change
+        const turned = seen.replace(
+            'source="box2" target="box1"',
+            'source="box1" target="box2"',
+        )
+        expect(describeChanges(seen, turned)).toBe(
+            'Since you last saw it, the user changed the diagram: modified e1 ("requests").',
         )
     })
 })

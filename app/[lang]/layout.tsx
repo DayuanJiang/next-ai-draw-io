@@ -6,12 +6,18 @@ import Script from "next/script"
 import { LocaleProvider } from "@/components/canvas/locale-context"
 import { ProblemReports } from "@/components/problem-report"
 import { AppToaster } from "@/components/workspace/app-toaster"
-import { DiagramProvider } from "@/contexts/diagram-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Locale } from "@/lib/i18n/config"
 import { i18n } from "@/lib/i18n/config"
 import { getDictionary, hasLocale } from "@/lib/i18n/dictionaries"
-import { localeAlternates, OG_IMAGE, OG_LOCALE, SITE_URL } from "@/lib/seo"
+import {
+    APP_DESCRIPTION,
+    KEYWORDS,
+    localeAlternates,
+    OG_IMAGE,
+    OG_LOCALE,
+    SITE_URL,
+} from "@/lib/seo"
 import { THEME_INIT_SCRIPT } from "@/stores/settings-store"
 
 import "../globals.css"
@@ -31,11 +37,19 @@ const jetbrainsMono = JetBrains_Mono({
     weight: ["400", "500"],
 })
 
+// A browser's page translator (Chrome, Edge, Yandex) replaces the page's text
+// nodes with <font> elements. React still holds the old nodes: when it later
+// removes one, or inserts before one, the browser throws ("Failed to execute
+// 'insertBefore' on 'Node'") and the crash screen replaces the whole page.
+// With this, a call with a node that is no longer a child of the parent does
+// nothing, so the page stays up; at worst a translated text stays as it was.
+// draw.io's frame has its own window and keeps the browser's functions.
+const TRANSLATOR_GUARD_SCRIPT = `(function(){var p=Node.prototype,r=p.removeChild,i=p.insertBefore;p.removeChild=function(c){return c.parentNode===this?r.apply(this,arguments):c};p.insertBefore=function(n,b){return !b||b.parentNode===this?i.apply(this,arguments):n}})()`
+
+// Phones can zoom the site's pages; the editor's page has its own viewport
 export const viewport: Viewport = {
     width: "device-width",
     initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
 }
 
 // Generate static params for all locales
@@ -70,17 +84,7 @@ export async function generateMetadata({
     return {
         title: titles[lang],
         description: descriptions[lang],
-        keywords: [
-            "AI diagram generator",
-            "AWS architecture",
-            "flowchart creator",
-            "draw.io",
-            "AI drawing tool",
-            "technical diagrams",
-            "diagram automation",
-            "free diagram generator",
-            "online diagram maker",
-        ],
+        keywords: KEYWORDS[lang],
         authors: [{ name: "Next AI Draw.io" }],
         creator: "Next AI Draw.io",
         publisher: "Next AI Draw.io",
@@ -95,7 +99,7 @@ export async function generateMetadata({
             images: [
                 {
                     ...OG_IMAGE,
-                    alt: "Next AI Draw.io - AI-powered diagram creation tool",
+                    alt: titles[lang],
                 },
             ],
         },
@@ -142,8 +146,7 @@ export default async function RootLayout({
         name: "Next AI Draw.io",
         applicationCategory: "DesignApplication",
         operatingSystem: "Web, Windows, macOS, Linux",
-        description:
-            "Draw and edit draw.io diagrams by chatting with an AI: AWS, Azure and GCP architecture diagrams, flowcharts and other technical diagrams on a real draw.io canvas. Every AI change is a version you can compare or restore, and it works with many AI providers. Also available as a desktop app and an MCP server for AI agents.",
+        description: APP_DESCRIPTION[validLang],
         url: SITE_URL,
         sameAs: [
             "https://github.com/DayuanJiang/next-ai-draw-io",
@@ -164,6 +167,10 @@ export default async function RootLayout({
                 <Script id="theme-init" strategy="beforeInteractive">
                     {THEME_INIT_SCRIPT}
                 </Script>
+                {/* Before React, so its first DOM update already uses it */}
+                <Script id="translator-guard" strategy="beforeInteractive">
+                    {TRANSLATOR_GUARD_SCRIPT}
+                </Script>
                 <script
                     type="application/ld+json"
                     dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -174,7 +181,7 @@ export default async function RootLayout({
             >
                 <DictionaryProvider dictionary={dictionary}>
                     <LocaleProvider locale={validLang}>
-                        <DiagramProvider>{children}</DiagramProvider>
+                        {children}
                     </LocaleProvider>
                     {/* Inside: toasts such as the quota one read the dictionary */}
                     <AppToaster />

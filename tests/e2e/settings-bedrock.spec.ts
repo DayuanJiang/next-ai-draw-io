@@ -339,3 +339,32 @@ test("removing access keys kept behind an API key keeps the test results", async
     ).toBe(true)
     await expect(dialog.locator("#bedrock-api-key")).toBeFocused()
 })
+
+test("regions outside the largest ones can be chosen", async ({ page }) => {
+    // An account limited to Canada by its organization's policy
+    await openApp(page, {
+        config: {
+            version: 1,
+            providers: [
+                {
+                    id: "b1",
+                    provider: "bedrock",
+                    apiKey: "bedrock-key",
+                    models: [{ id: "m1", modelId: "amazon.nova-lite-v1:0" }],
+                },
+            ],
+        },
+    })
+    await openSettings(page)
+    const dialog = settingsDialog(page)
+    await dialog.getByTestId("provider-row-b1").click()
+    await expect(dialog.getByTestId("step-1-todo")).toBeVisible()
+    await dialog.locator("#aws-region").click()
+    await page
+        .getByRole("option", { name: "ca-central-1 (Canada Central)" })
+        .click()
+    await expect(dialog.getByTestId("step-1-done")).toBeVisible()
+    expect((await savedModelConfigs(page)).providers[0].awsRegion).toBe(
+        "ca-central-1",
+    )
+})

@@ -7,7 +7,7 @@ import {
     Library,
     PenTool,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Shimmer } from "@/components/ai-elements/shimmer"
 import {
     SummaryLink,
@@ -101,6 +101,17 @@ function VersionCard({
     const { copied, copy } = useCopy()
     const isEdit = part.type === "tool-edit_diagram"
     const editedSince = useVersionsStore((s) => s.editedSinceId === version.id)
+    // The newest card is at the end of the chat: its panel would open
+    // below what is visible
+    const panelRef = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        if (showCode) {
+            panelRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "nearest",
+            })
+        }
+    }, [showCode])
 
     return (
         <VersionCardView
@@ -116,7 +127,11 @@ function VersionCard({
             }
         >
             {showCode && (
-                <div className="relative border-t border-border bg-surface-1 px-3 py-2.5">
+                // pr-11: room for the copy button beside the first lines
+                <div
+                    ref={panelRef}
+                    className="relative border-t border-border bg-surface-1 px-3 py-2.5 pr-11"
+                >
                     <button
                         type="button"
                         onClick={() => copy(toolText(part))}

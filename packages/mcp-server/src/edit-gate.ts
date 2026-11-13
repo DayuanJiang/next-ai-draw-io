@@ -1,8 +1,8 @@
 /**
  * Workflow gate for edit_diagram.
  *
- * Instead of a wall-clock timeout (the old 30s rule rejected slow-but-correct
- * clients, see #885), we compare content: `lastSeenXml` is the state-store
+ * The gate compares content, not time (a wall-clock limit rejects clients
+ * that are slow but correct, see #885): `lastSeenXml` is the state-store
  * XML the model last saw (get_diagram) or wrote itself (create_new_diagram /
  * edit_diagram / page CRUD). The store only changes on server writes or
  * browser pushes (user autosave, sync exports), so if the live store still
@@ -18,6 +18,7 @@
  * (tags + sorted attributes + text). Byte equality is kept as a fast path.
  */
 import {
+    attr,
     findPageElement,
     isMxGraphModel,
     normalizeToMxfile,
@@ -30,16 +31,37 @@ export type EditGateResult =
     | { ok: true }
     | { ok: false; reason: "no-context" | "stale" }
 
-// draw.io leaves out a point's or geometry's coordinates and sizes that are
-// 0 when it writes a diagram, so x="0" and no x are the same diagram
-const ZERO_DEFAULT_TAGS = new Set(["mxPoint", "mxGeometry", "mxRectangle"])
-const ZERO_DEFAULT_ATTRS = new Set(["x", "y", "width", "height"])
+// draw.io reads a position or size as a number and writes it back in its
+// shortest form ("40.0" comes back as "40"), and it leaves out every value
+// that is the default: a coordinate or size of 0 and the flags below. A
+// model may write them, and it is the same diagram.
+const GEOMETRY_TAGS = new Set(["mxPoint", "mxGeometry", "mxRectangle"])
+const NUMBER_ATTRS = new Set(["x", "y", "width", "height"])
+const DEFAULT_VALUES: Record<string, Record<string, string>> = {
+    mxCell: {
+        vertex: "0",
+        edge: "0",
+        connectable: "1",
+        visible: "1",
+        collapsed: "0",
+    },
+    mxGeometry: { relative: "0" },
+}
 
-const isLeftOutZero = (el: Element, attr: Attr) =>
-    ZERO_DEFAULT_TAGS.has(el.tagName) &&
-    ZERO_DEFAULT_ATTRS.has(attr.name) &&
-    attr.value.trim() !== "" &&
-    Number(attr.value) === 0
+/** An attribute's value as draw.io saves it; null when it leaves it out */
+function savedValue(el: Element, attr: Attr): string | null {
+    let value = attr.value
+    if (
+        GEOMETRY_TAGS.has(el.tagName) &&
+        NUMBER_ATTRS.has(attr.name) &&
+        value.trim() !== ""
+    ) {
+        const n = Number(value)
+        if (n === 0) return null
+        if (Number.isFinite(n)) value = String(n)
+    }
+    return DEFAULT_VALUES[el.tagName]?.[attr.name] === value ? null : value
+}
 
 /**
  * The cells of a page in the order draw.io writes them: each cell followed by
@@ -62,7 +84,11 @@ function cellsInDrawioOrder(root: Element): Element[] {
     for (const cell of cells) {
         const parent = parentOf(cell)
         if (parent && parent !== idOf(cell) && ids.has(parent)) {
-            children.set(parent, [...(children.get(parent) ?? []), cell])
+            // Appended in place: copying the list for every cell takes
+            // seconds on a layer with tens of thousands of cells
+            const siblings = children.get(parent)
+            if (siblings) siblings.push(cell)
+            else children.set(parent, [cell])
         } else {
             tops.push(cell)
         }
@@ -82,31 +108,62 @@ function cellsInDrawioOrder(root: Element): Element[] {
 }
 
 /**
+ * The parts of a geometry (offset, points, end points) as draw.io keeps
+ * them: one per name. It reads each part into the field its "as" names,
+ * also a name it does not know (a model writes several points
+ * as="waypoint"). The later of two parts with one name is read into the
+ * earlier one: it counts, with the attributes (a point's coordinates) only
+ * the earlier one has. Those are copied onto the later element here, so
+ * this is for a document that was parsed to be compared. The web app's two
+ * comparisons use it too (lib/diagram-diff.ts, lib/diagram-context.ts).
+ */
+export function geometryParts(geometry: Element): Element[] {
+    const byName = new Map<string | null, Element>()
+    for (const part of Array.from(geometry.children)) {
+        const name = part.getAttribute("as")
+        for (const a of Array.from(byName.get(name)?.attributes ?? [])) {
+            if (!part.hasAttribute(a.name)) part.setAttribute(a.name, a.value)
+        }
+        byName.set(name, part)
+    }
+    return [...byName.values()]
+}
+
+/**
  * Canonical serialisation of an element subtree: tag + attributes sorted by
- * name + child elements in order (a page's cells in draw.io's order) +
- * non-whitespace text. Whitespace-only text nodes (pretty-printing) and
- * coordinates of 0 are dropped.
+ * name + child elements in order (a page's cells in draw.io's order, the
+ * parts of a geometry sorted, one per name) + non-whitespace text.
+ * Whitespace-only text nodes (pretty-printing) and the values draw.io
+ * leaves out are dropped.
  */
 function canonicalizeElement(el: Element): string {
     const attrs = Array.from(el.attributes)
-        .filter((a) => !isLeftOutZero(el, a))
-        .map((a) => `${a.name}=${JSON.stringify(a.value)}`)
+        .flatMap((a) => {
+            const value = savedValue(el, a)
+            return value === null ? [] : [`${a.name}=${JSON.stringify(value)}`]
+        })
         .sort()
         .join(" ")
-    let children = ""
+    const children: string[] = []
     const nodes =
         el.tagName === "root"
             ? cellsInDrawioOrder(el)
-            : Array.from(el.childNodes)
+            : el.tagName === "mxGeometry"
+              ? geometryParts(el)
+              : Array.from(el.childNodes)
     for (const child of nodes) {
         if (child.nodeType === 1) {
-            children += canonicalizeElement(child as Element)
+            children.push(canonicalizeElement(child as Element))
         } else if (child.nodeType === 3 || child.nodeType === 4) {
             const text = (child.textContent ?? "").trim()
-            if (text) children += JSON.stringify(text)
+            if (text) children.push(JSON.stringify(text))
         }
     }
-    return `<${el.tagName} ${attrs}>${children}</${el.tagName}>`
+    // draw.io saves a geometry's parts (offset, points, end points) sorted
+    // by name, a model writes them in any order; the points of a line are
+    // inside their Array and keep their order (as in lib/diagram-diff.ts)
+    if (el.tagName === "mxGeometry") children.sort()
+    return `<${el.tagName} ${attrs}>${children.join("")}</${el.tagName}>`
 }
 
 /**
@@ -248,8 +305,7 @@ function cellFlag(cell: Element, name: string): string | null {
 /**
  * What changed from one version to the next, counted by kind, for
  * restore_version's list: "added 2 shapes, changed 1 connector". Pages are
- * paired by index and cells by id, as in describeChanges. "" when no shape
- * or connector changed.
+ * paired by index and cells by id. "" when no shape or connector changed.
  */
 export function countChanges(beforeXml: string, afterXml: string): string {
     const parse = (xml: string) => {
@@ -309,13 +365,36 @@ export function countChanges(beforeXml: string, afterXml: string): string {
 }
 
 /**
+ * ` [lost its source mobile: that end is loose]` for an edge whose end the
+ * change left unconnected. Delete in draw.io removes a shape and keeps its
+ * edges, each with a loose end where the shape was. "modified" alone reads
+ * as a move or a new label; this tells the model that the edge needs
+ * another shape at that end, or to be deleted.
+ */
+function looseEnds(old: Element, cell: Element): string {
+    const lost = ["source", "target"].flatMap((end) => {
+        const was = cellFlag(old, end)
+        return was && !cellFlag(cell, end) ? [`${end} ${was}`] : []
+    })
+    return lost.length > 0
+        ? ` [lost its ${lost.join(" and its ")}: that end is loose]`
+        : ""
+}
+
+/**
  * One paragraph naming what the user changed between the XML the model last
  * saw and the live store, for stale rejections and get_diagram. Pages are
- * paired by index (draw.io regenerates diagram ids on re-serialisation) and
- * cells by id. Returns "" when there is nothing to compare or the two sides
- * have the same content.
+ * paired by id, or by index when the two sides share no id (draw.io
+ * regenerated the diagram ids), and cells by id. Returns "" when there is
+ * nothing to compare or the two sides have the same content. `intro` opens
+ * the paragraph: another one for a hand edit that lost to a write of the
+ * model's, told against the diagram it was made on (http-server.ts).
  */
-export function describeChanges(lastSeenXml: string, liveXml: string): string {
+export function describeChanges(
+    lastSeenXml: string,
+    liveXml: string,
+    intro = "Since you last saw it, the user changed the diagram",
+): string {
     if (!lastSeenXml || lastSeenXml === liveXml) return ""
     const parse = (xml: string) => {
         const normalized = normalizeToMxfile(xml)
@@ -336,13 +415,21 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
     const pagesBefore = Array.from(before.querySelectorAll("diagram"))
     const pagesLive = Array.from(live.querySelectorAll("diagram"))
     const pageCount = Math.max(pagesBefore.length, pagesLive.length)
+    // After the user added, deleted or moved a page, pairing by index sets
+    // a page against its neighbour and reports all its cells as replaced.
+    // The pages are paired by id when the two sides share one (draw.io
+    // kept the ids), and by index when they share none (it made new ones).
+    const idOf = (page: Element) => attr(page, "id")
+    const sameId = (pages: Element[], page: Element) =>
+        pages.find((p) => idOf(p) === idOf(page))
+    const byId = pagesBefore.some((p) => idOf(p) && sameId(pagesLive, p))
     const clauses: string[] = []
     const renames: string[] = []
-    for (let i = 0; i < pageCount; i++) {
-        const pageBefore = pagesBefore[i]
-        const pageLive = pagesLive[i]
-        if (!pageBefore || !pageLive) {
-            clauses.push(`page ${i + 1} ${pageLive ? "added" : "removed"}`)
+    // Pages are named by index=N, counted from 0 as page_index is
+    for (const [i, pageLive] of pagesLive.entries()) {
+        const pageBefore = byId ? sameId(pagesBefore, pageLive) : pagesBefore[i]
+        if (!pageBefore) {
+            clauses.push(`page index=${i} ("${attr(pageLive, "name")}") added`)
             continue
         }
         const cellsBefore = pageCells(pageBefore)
@@ -354,29 +441,44 @@ export function describeChanges(lastSeenXml: string, liveXml: string): string {
             const old = cellsBefore.get(id)
             if (!old) added.push(describeCell(id, cell))
             else if (canonicalizeElement(old) !== canonicalizeElement(cell))
-                modified.push(describeCell(id, cell))
+                modified.push(describeCell(id, cell) + looseEnds(old, cell))
         }
         for (const [id, cell] of cellsBefore) {
             if (!cellsLive.has(id)) removed.push(describeCell(id, cell))
         }
         // Name the page only when the document has several
-        const where = pageCount > 1 ? `page ${i + 1} ` : ""
+        const where = pageCount > 1 ? `page index=${i} ` : ""
         if (modified.length)
             clauses.push(`${where}modified ${listCells(modified)}`)
         if (added.length) clauses.push(`${where}added ${listCells(added)}`)
         if (removed.length)
             clauses.push(`${where}removed ${listCells(removed)}`)
         if (includeNames) {
-            const name = pageLive.getAttribute("name") ?? ""
-            if (name !== (pageBefore.getAttribute("name") ?? ""))
-                renames.push(`Page ${i + 1} renamed to "${name}".`)
+            const name = attr(pageLive, "name")
+            if (name !== attr(pageBefore, "name"))
+                renames.push(`Page index=${i} renamed to "${name}".`)
         }
     }
+    // The pages the document no longer has, by name: their index is gone
+    for (const [i, pageBefore] of pagesBefore.entries()) {
+        const kept = byId ? sameId(pagesLive, pageBefore) : pagesLive[i]
+        if (!kept) clauses.push(`page "${attr(pageBefore, "name")}" removed`)
+    }
+    // The pages both sides have, in another order: the user moved a tab
+    const shared = (pages: Element[], others: Element[]) =>
+        pages
+            .filter((p) => sameId(others, p))
+            .map(idOf)
+            .join("\n")
+    if (
+        byId &&
+        shared(pagesBefore, pagesLive) !== shared(pagesLive, pagesBefore)
+    )
+        clauses.push("the order of the pages changed")
     // The fingerprint also covers the cell order (z-order) and anything in
     // <root> that is not a cell
     if (!clauses.length && !renames.length)
         clauses.push("the order of the cells changed")
-    const intro = "Since you last saw it, the user changed the diagram"
     const body = clauses.length
         ? `${intro}: ${clauses.join("; ")}.`
         : `${intro}.`

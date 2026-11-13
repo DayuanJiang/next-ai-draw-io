@@ -26,6 +26,17 @@ export function VersionStrip({
         if (el) el.scrollTo({ left: el.scrollWidth, behavior: "smooth" })
     }, [versions.length])
 
+    // A restore or an undo puts an older version on the canvas: its
+    // thumbnail comes into view, clear of the fade at the left edge (the
+    // container's scroll padding: the fade's 40 px and the outline)
+    useEffect(() => {
+        scrollRef.current?.querySelector("[aria-current]")?.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+            inline: "nearest",
+        })
+    }, [onCanvasId])
+
     if (versions.length < minVersions) return null
 
     return (
@@ -46,7 +57,7 @@ export function VersionStrip({
                           }
                         : undefined
                 }
-                className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto p-1 scrollbar-thin"
+                className="flex min-w-0 flex-1 scroll-pr-1 scroll-pl-12 gap-1.5 overflow-x-auto p-1 scrollbar-thin"
             >
                 {versions.map((version) => {
                     const isCurrent = version.id === onCanvasId
@@ -63,6 +74,7 @@ export function VersionStrip({
                             type="button"
                             onClick={() => openCompare(version.id)}
                             title={`v${version.number}${note}`}
+                            aria-current={isCurrent || undefined}
                             className={cn(
                                 "sheet-light relative flex h-12 w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-white transition-colors hover:border-foreground/30",
                                 // An outline with a gap reads on the white

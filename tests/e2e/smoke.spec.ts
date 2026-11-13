@@ -26,4 +26,13 @@ test.describe("Smoke Tests", () => {
 
         expect(errors).toEqual([])
     })
+
+    test("the browser may keep the bundled draw.io", async ({ request }) => {
+        // With Next's max-age=0 every visit asked the server about each of
+        // draw.io's files again before the canvas could start
+        const response = await request.get("/drawio/js/app.min.js")
+        expect(response.headers()["cache-control"]).toBe(
+            "public, max-age=14400",
+        )
+    })
 })

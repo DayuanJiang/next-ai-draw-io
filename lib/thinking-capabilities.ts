@@ -75,6 +75,21 @@ export function thinkingSwitchOf(
     }
 }
 
+/**
+ * Whether the model thinks when the request says nothing about thinking:
+ * Claude 5 and later (Opus 5, Sonnet 5, Haiku 5.5, the 5.5 models, Fable).
+ * They then leave the thinking's text out of the answer.
+ */
+export function thinksByDefault(
+    provider: ProviderName,
+    modelId: string,
+): boolean {
+    return (
+        (provider === "anthropic" || provider === "bedrock") &&
+        /claude-(?:opus|sonnet|haiku|fable)-[5-9]/.test(modelId.toLowerCase())
+    )
+}
+
 export function supportsThinkingToggle(
     provider: ProviderName,
     modelId: string,

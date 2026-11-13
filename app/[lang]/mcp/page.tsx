@@ -194,9 +194,17 @@ export default async function Mcp({ params }: Props) {
             />
             <div className="lp-grid border-b border-border">
                 <SiteHeader lang={lang} current="mcp" />
-                <section className="mx-auto grid max-w-7xl items-center gap-9 px-5 pt-6 pb-12 md:px-8 md:pt-8 md:pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-12">
+                {/* Outside <main>, on the grid it shares with the header:
+                    its headline names it, which makes it a landmark too */}
+                <section
+                    aria-labelledby="hero"
+                    className="mx-auto grid max-w-7xl items-center gap-9 px-5 pt-6 pb-12 md:px-8 md:pt-8 md:pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-12"
+                >
                     <div>
-                        <h1 className="text-[clamp(32px,3.2vw,44px)] leading-[1.1] font-semibold tracking-[-0.03em] [text-wrap:balance]">
+                        <h1
+                            id="hero"
+                            className="text-[clamp(32px,3.2vw,44px)] leading-[1.1] font-semibold tracking-[-0.03em] [text-wrap:balance]"
+                        >
                             {t.h1}
                         </h1>
                         <p className="mt-5 max-w-[36em] text-[15.5px] leading-relaxed text-muted-foreground">

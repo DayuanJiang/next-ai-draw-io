@@ -3,8 +3,11 @@ import {
     AdminProviderSchema,
     loadAdminProviders,
     mergeSecrets,
+    movedSecretError,
 } from "@/lib/admin/providers"
-import { globalBaseUrl } from "@/lib/ai-providers"
+import { getEnvFallback } from "@/lib/admin/settings"
+import { envVarsOf, globalBaseUrl } from "@/lib/ai-providers"
+import { PROVIDERS } from "@/lib/providers"
 import { testModelConnection } from "@/lib/test-model-connection"
 
 export const runtime = "nodejs"
@@ -36,36 +39,50 @@ export async function POST(req: Request) {
     // SECURITY: a stored secret is only resolved from an {isSet} marker if
     // the endpoint it would be sent to (provider + baseUrl) still matches
     // the stored entry. Otherwise a tampered baseUrl could exfiltrate the
-    // stored key to an arbitrary host. Mismatches must re-supply plaintext.
+    // stored key to an arbitrary host. Mismatches must re-supply plaintext,
+    // and are told so: "API key is required" would not say why.
     const stored = loadAdminProviders().find((p) => p.id === parsed.data.id)
-    const sameEndpoint =
-        stored &&
-        stored.provider === parsed.data.provider &&
-        (stored.baseUrl ?? "") === (parsed.data.baseUrl ?? "") &&
-        (stored.awsRegion ?? "") === (parsed.data.awsRegion ?? "")
-    const [resolved] = mergeSecrets(
-        [parsed.data],
-        sameEndpoint && stored ? [stored] : [],
-    )
+    const error = movedSecretError(parsed.data, stored)
+    if (error) return Response.json({ valid: false, error }, { status: 400 })
+    const [resolved] = mergeSecrets([parsed.data], stored ? [stored] : [])
 
     // Without a URL of its own, chat sends the entry's key to the server's
-    // <P>_BASE_URL: test that endpoint, not another one. It is the server's
-    // own, which chat uses without the checks for a URL a user typed.
+    // <P>_BASE_URL: test that endpoint, not another one. Either URL is the
+    // deployment's own (the entry's becomes the server's when saved), which
+    // chat uses without the checks for a URL a user typed.
     // The admin's own request supplies the EdgeOne endpoint, cookies and
     // access code, as a chat request would.
     const serverUrl = globalBaseUrl(resolved.provider)
+    // Without credentials of its own either, chat runs the entry on the
+    // server's: the environment's key of that provider (for Anthropic also
+    // its token, ANTHROPIC_AUTH_TOKEN), or for Bedrock the server's IAM
+    // role. The Test does the same when the server has that key. With a URL
+    // of its own the entry needs its own key, so that the server's key
+    // never goes to a URL that was just typed.
+    const { altKeyEnv, credential } = PROVIDERS[resolved.provider]
+    const keyVar = envVarsOf(resolved.provider).apiKey
+    const serverKey = (keyVar && getEnvFallback(keyVar)) || undefined
+    const serverCredentials =
+        !resolved.baseUrl &&
+        (!keyVar || !!serverKey || !!(altKeyEnv && getEnvFallback(altKeyEnv)))
+    // Ollama and Vertex AI use only a key that comes with the request once
+    // the request names a URL (resolveEndpoint), and the server's URL is
+    // named below: the server's key goes with it, as chat sends it there
+    const serverKeyOf = (kind: typeof credential) =>
+        serverCredentials && credential === kind ? serverKey : undefined
     return testModelConnection(
         req,
         {
             provider: resolved.provider,
-            apiKey: resolved.apiKey,
+            apiKey: resolved.apiKey || serverKeyOf("optionalKey"),
             baseUrl: resolved.baseUrl || serverUrl,
             modelId: body.modelId,
             awsAccessKeyId: resolved.awsAccessKeyId,
             awsSecretAccessKey: resolved.awsSecretAccessKey,
             awsRegion: resolved.awsRegion,
-            vertexApiKey: resolved.vertexApiKey,
+            vertexApiKey: resolved.vertexApiKey || serverKeyOf("vertexKey"),
         },
-        !resolved.baseUrl && !!serverUrl,
+        true,
+        serverCredentials,
     )
 }

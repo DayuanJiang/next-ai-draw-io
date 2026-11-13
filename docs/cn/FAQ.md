@@ -4,9 +4,9 @@
 
 ## 导出 PDF 后没有反应
 
-应用自己的“导出”对话框可以保存 draw.io 文件、PNG 图片、SVG 图片或可编辑的 SVG。PDF 要从 draw.io 自己的菜单导出：点击画布左上角的 ☰，选择 **导出为**，再选择 **PDF**。接下来您会看到什么，取决于应用用的是哪一个 draw.io。
+应用自己的“导出”对话框可以保存 draw.io 文件、PNG 图片、SVG 图片或可编辑的 SVG。PDF 要从 draw.io 自己的菜单导出：点击画布右上角的三点按钮（⋯），选择 **导出为**，再选择 **PDF**。接下来您会看到什么，取决于应用用的是哪一个 draw.io。
 
-**应用自带的 draw.io。** 网页版、Docker 镜像和桌面应用都用它，除非构建应用时设置了 `NEXT_PUBLIC_DRAWIO_BASE_URL`。这份 draw.io 通过打印来生成 PDF。它会打开 PDF 对话框，点击其中的 **打印**，会打开浏览器或系统的打印对话框。请在打印对话框里选择保存为 PDF，例如 Chrome 的 **另存为 PDF**，或 Windows 的 **Microsoft Print to PDF**。
+**应用自带的 draw.io。** 网页版、Docker 镜像和桌面应用都用它，除非构建应用时设置了 `NEXT_PUBLIC_DRAWIO_BASE_URL`。它会打开 PDF 对话框。在桌面应用里，点击其中的 **导出**，应用会询问保存位置并生成 PDF 文件。在网页版和 Docker 镜像里，这份 draw.io 通过打印来生成 PDF：点击 **导出** 会打开浏览器的打印对话框。请在打印对话框里选择保存为 PDF，例如 Chrome 的 **另存为 PDF**，或 Windows 的 **Microsoft Print to PDF**。
 
 **外部的 draw.io**，也就是用 `NEXT_PUBLIC_DRAWIO_BASE_URL` 设置的 draw.io，例如 `https://embed.diagrams.net`。页面会跳转到 `convert.diagrams.net/node/export`，然后就没有反应了。这种 draw.io 会把图表发给 `convert.diagrams.net` 上的转换服务来生成 PDF，而在应用里，这个下载会失败。请改用 draw.io 菜单里的 **打印**，然后在打印对话框里保存为 PDF。您也可以去掉 `NEXT_PUBLIC_DRAWIO_BASE_URL` 重新构建应用，让它使用自带的 draw.io。
 

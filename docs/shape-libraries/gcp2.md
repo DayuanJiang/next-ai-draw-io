@@ -13,7 +13,7 @@
 
 
 
-## Shapes (298)
+## Shapes (297)
 
 - `a7_power`
 - `admin_connected`
@@ -232,7 +232,6 @@
 - `modifiers_storage`
 - `monitor`
 - `monitor_2`
-- `mxgraph.gcp2`
 - `nat`
 - `network`
 - `network_load_balancer`

@@ -186,6 +186,22 @@ describe("POST /api/provider-models", () => {
         expect(res.status).toBe(400)
     })
 
+    it("lists the server's own Ollama only while private URLs are allowed", async () => {
+        vi.stubEnv("OLLAMA_BASE_URL", undefined)
+        const { fn, calls } = answer({ models: [{ name: "llama3.2" }] })
+        vi.stubGlobal("fetch", fn)
+        // An internal address that the request does not name
+        vi.stubEnv("ALLOW_PRIVATE_URLS", "false")
+        const blocked = await post({ provider: "ollama" })
+        expect(await blocked.json()).toEqual({ models: null })
+        expect(calls).toHaveLength(0)
+        // A home server's users list the models installed on it
+        vi.stubEnv("ALLOW_PRIVATE_URLS", undefined)
+        const listed = await post({ provider: "ollama" })
+        expect((await listed.json()).models).toMatchObject([{ id: "llama3.2" }])
+        expect(calls[0].url).toBe("http://127.0.0.1:11434/api/tags")
+    })
+
     it("refuses a key or URL that is not text", async () => {
         const fetchMock = vi.fn()
         vi.stubGlobal("fetch", fetchMock)
@@ -203,6 +219,34 @@ describe("POST /api/provider-models", () => {
         vi.stubGlobal("fetch", answer({}, 401).fn)
         const res = await post({ provider: "deepseek", apiKey: "k" })
         expect(await res.json()).toMatchObject({ code: "invalid_api_key" })
+    })
+
+    it("names a wrong Google key, which comes as 400", async () => {
+        const body = {
+            error: {
+                code: 400,
+                message: "API key not valid. Please pass a valid API key.",
+                details: [{ reason: "API_KEY_INVALID" }],
+            },
+        }
+        vi.stubGlobal("fetch", answer(body, 400).fn)
+        const res = await post({ provider: "google", apiKey: "wrong" })
+        expect(await res.json()).toMatchObject({ code: "invalid_api_key" })
+    })
+
+    it("points at the base URL when the address has no model list", async () => {
+        // A base URL without its /v1: vLLM and LM Studio answer so
+        vi.stubGlobal("fetch", answer({ detail: "Not Found" }, 404).fn)
+        const res = await post({
+            provider: "custom",
+            apiKey: "k",
+            baseUrl: "https://llm.example",
+        })
+        const data = await res.json()
+        expect(data.error).toMatch(/^No model list at this address \(404\)/)
+        // The page shows its own text for the code, in its language. No
+        // model ID was sent, so not the hint to check one
+        expect(data.code).toBe("wrong_base_url")
     })
 
     // The base URL is the caller's, and private addresses are allowed by

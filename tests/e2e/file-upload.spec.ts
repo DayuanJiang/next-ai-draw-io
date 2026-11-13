@@ -87,7 +87,12 @@ test.describe("File Upload", () => {
         await openApp(page)
 
         const fileInput = getAttachmentInput(page)
-        const largeBuffer = Buffer.alloc(3 * 1024 * 1024, "x")
+        // Begins as a PNG does; the rest is no picture, so it cannot be
+        // scaled down to fit
+        const largeBuffer = Buffer.concat([
+            ONE_PIXEL_PNG.subarray(0, 8),
+            Buffer.alloc(3 * 1024 * 1024, "x"),
+        ])
 
         await fileInput.setInputFiles({
             name: "large-image.png",
@@ -114,6 +119,61 @@ test.describe("File Upload", () => {
             page.getByText('"pasted.png" is empty (0 bytes)', { exact: false }),
         ).toBeVisible({ timeout: 5000 })
         await expect(page.getByAltText("pasted.png")).toHaveCount(0)
+    })
+
+    test("turns away a file that is not the image its name says", async ({
+        page,
+    }) => {
+        // A HEIC photo named .jpg failed the whole request at the provider
+        // ("The image format could not be determined")
+        await openApp(page)
+        await getAttachmentInput(page).setInputFiles({
+            name: "IMG_2041.jpg",
+            mimeType: "image/jpeg",
+            buffer: Buffer.concat([
+                Buffer.from([0, 0, 0, 0x18]),
+                Buffer.from("ftypheic"),
+                Buffer.alloc(200, 7),
+            ]),
+        })
+        await expect(
+            page.getByText(
+                '"IMG_2041.jpg" is named as an image, but its content is in another format.',
+                { exact: false },
+            ),
+        ).toBeVisible({ timeout: 5000 })
+        await expect(page.getByAltText("IMG_2041.jpg")).toHaveCount(0)
+    })
+
+    test("sends a PNG named .jpg as a PNG", async ({ page }) => {
+        // Claude refuses a picture sent as another format than it is
+        let capturedRequest: any = null
+        await page.route("**/api/chat", async (route) => {
+            capturedRequest = route.request()
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse("A single pixel."),
+            })
+        })
+        await openApp(page)
+        await getAttachmentInput(page).setInputFiles({
+            name: "screenshot.jpg",
+            mimeType: "image/jpeg",
+            buffer: ONE_PIXEL_PNG,
+        })
+        await expect(page.getByAltText("screenshot.jpg")).toBeVisible({
+            timeout: 3000,
+        })
+        await sendMessage(page, "What is in this picture?")
+        await expect(page.getByText("A single pixel.")).toBeVisible({
+            timeout: 15000,
+        })
+
+        const last = capturedRequest.postDataJSON().messages.at(-1)
+        const file = last.parts.find((p: any) => p.type === "file")
+        expect(file?.mediaType).toBe("image/png")
+        expect(file?.url).toMatch(/^data:image\/png;base64,/)
     })
 
     test("sends an image with its own turn only", async ({ page }) => {
@@ -148,6 +208,11 @@ test.describe("File Upload", () => {
         expect(users).toHaveLength(2)
         expect(files(users[0])).toHaveLength(0)
         expect(files(users[1])).toHaveLength(1)
+        // A note takes the first image's place, so the model can tell the
+        // user to attach it again
+        expect(JSON.stringify(users[0].parts)).toContain(
+            "[Image]\\n[This attachment is no longer in context.",
+        )
         // The chat itself keeps both images
         await expect(page.getByAltText("Attached image")).toHaveCount(2)
     })
@@ -159,8 +224,9 @@ test.describe("File Upload", () => {
 
         const dataTransfer = await page.evaluateHandle(() => {
             const dt = new DataTransfer()
-            const file = new File(["test content"], "dropped-image.png", {
-                type: "image/png",
+            // Begins as a GIF does: a file that is no picture is turned away
+            const file = new File(["GIF89a"], "dropped-image.gif", {
+                type: "image/gif",
             })
             dt.items.add(file)
             return dt
@@ -170,7 +236,7 @@ test.describe("File Upload", () => {
         await chatForm.dispatchEvent("drop", { dataTransfer })
 
         // The dropped file shows as a preview
-        await expect(page.getByAltText("dropped-image.png")).toBeVisible({
+        await expect(page.getByAltText("dropped-image.gif")).toBeVisible({
             timeout: 3000,
         })
     })

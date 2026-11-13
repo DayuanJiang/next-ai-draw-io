@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs"
-import { BrowserWindow, dialog, type WebContents } from "electron"
+import { app, BrowserWindow, dialog, type WebContents } from "electron"
+import { getMenuTranslations, getPreferredLocale } from "./menu-i18n"
 
 /**
  * draw.io makes a PDF by printing a preview window it opens. A browser's
@@ -44,6 +45,14 @@ export async function savePreviewAsPdf(
         if (canceled || !filePath) return false
         await fs.writeFile(filePath, pdf)
         return true
+    } catch (error) {
+        // The page's fallback for a rejected save is to print the preview,
+        // which is closed below and so prints nothing: without this box a
+        // file that cannot be written (locked by a PDF reader, read-only
+        // folder) ends in no PDF and no message
+        const t = getMenuTranslations(getPreferredLocale(app.getLocale()))
+        dialog.showErrorBox(t.pdfSaveFailed, (error as Error).message)
+        return false
     } finally {
         if (!preview.isDestroyed()) preview.close()
     }

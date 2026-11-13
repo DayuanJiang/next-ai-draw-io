@@ -4,9 +4,9 @@
 
 ## 匯出 PDF 後沒有反應
 
-應用程式自己的「匯出」對話方塊可以儲存 draw.io 檔案、PNG 圖片、SVG 圖片或可編輯的 SVG。PDF 要從 draw.io 自己的選單匯出：點選畫布左上角的 ☰，選擇 **匯出為**，再選擇 **PDF**。接下來您會看到什麼，取決於應用程式用的是哪一個 draw.io。
+應用程式自己的「匯出」對話方塊可以儲存 draw.io 檔案、PNG 圖片、SVG 圖片或可編輯的 SVG。PDF 要從 draw.io 自己的選單匯出：點選畫布右上角的三點按鈕（⋯），選擇 **匯出為**，再選擇 **PDF**。接下來您會看到什麼，取決於應用程式用的是哪一個 draw.io。
 
-**應用程式內建的 draw.io。** 網頁版、Docker 映像和桌面版應用程式都用它，除非建置應用程式時設定了 `NEXT_PUBLIC_DRAWIO_BASE_URL`。這份 draw.io 透過列印來產生 PDF。它會開啟 PDF 對話方塊，點選其中的 **列印**，會開啟瀏覽器或系統的列印對話方塊。請在列印對話方塊裡選擇儲存為 PDF，例如 Chrome 的 **另存為 PDF**，或 Windows 的 **Microsoft Print to PDF**。
+**應用程式內建的 draw.io。** 網頁版、Docker 映像和桌面版應用程式都用它，除非建置應用程式時設定了 `NEXT_PUBLIC_DRAWIO_BASE_URL`。它會開啟 PDF 對話方塊。在桌面版應用程式裡，點選其中的 **匯出**，應用程式會詢問儲存位置並產生 PDF 檔案。在網頁版和 Docker 映像裡，這份 draw.io 透過列印來產生 PDF：點選 **匯出** 會開啟瀏覽器的列印對話方塊。請在列印對話方塊裡選擇儲存為 PDF，例如 Chrome 的 **另存為 PDF**，或 Windows 的 **Microsoft Print to PDF**。
 
 **外部的 draw.io**，也就是用 `NEXT_PUBLIC_DRAWIO_BASE_URL` 設定的 draw.io，例如 `https://embed.diagrams.net`。頁面會轉到 `convert.diagrams.net/node/export`，然後就沒有反應了。這種 draw.io 會把圖表傳送到 `convert.diagrams.net` 上的轉換服務來產生 PDF，而在應用程式裡，這個下載會失敗。請改用 draw.io 選單裡的 **列印**，然後在列印對話方塊裡儲存為 PDF。您也可以移除 `NEXT_PUBLIC_DRAWIO_BASE_URL` 重新建置應用程式，讓它使用內建的 draw.io。
 

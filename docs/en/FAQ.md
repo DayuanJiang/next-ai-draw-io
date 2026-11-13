@@ -4,9 +4,9 @@ This page covers problems people often run into with Next AI Draw.io. For each o
 
 ## Exporting a PDF does nothing
 
-The app's Export dialog saves a draw.io file, a PNG image, an SVG image or an editable SVG. A PDF comes from draw.io's own menu (☰ at the top left of the canvas): choose **Export as**, then **PDF**. What you see next depends on which draw.io the app uses.
+The app's Export dialog saves a draw.io file, a PNG image, an SVG image or an editable SVG. A PDF comes from draw.io's own menu (the three-dot button ⋯ at the top right of the canvas): choose **Export as**, then **PDF**. What you see next depends on which draw.io the app uses.
 
-**The draw.io that comes with the app.** The web app, the Docker image and the desktop app use it, unless the app was built with `NEXT_PUBLIC_DRAWIO_BASE_URL`. This copy of draw.io makes a PDF by printing. It opens its PDF dialog, and **Print** in that dialog opens the print dialog of your browser or system. There, choose to save as a PDF, for example **Save as PDF** in Chrome or **Microsoft Print to PDF** on Windows.
+**The draw.io that comes with the app.** The web app, the Docker image and the desktop app use it, unless the app was built with `NEXT_PUBLIC_DRAWIO_BASE_URL`. It opens its PDF dialog. In the desktop app, **Export** in that dialog asks where to save the file and writes the PDF. In the web app and the Docker image, this copy of draw.io makes a PDF by printing: **Export** opens the print dialog of your browser. There, choose to save as a PDF, for example **Save as PDF** in Chrome or **Microsoft Print to PDF** on Windows.
 
 **An external draw.io**, set with `NEXT_PUBLIC_DRAWIO_BASE_URL`, such as `https://embed.diagrams.net`. The page goes to `convert.diagrams.net/node/export`, and then nothing happens. This draw.io sends the diagram to its conversion service at `convert.diagrams.net` to make the PDF, and that download fails inside the app. Choose **Print** in draw.io's menu instead, then save as a PDF in the print dialog. You can also rebuild the app without `NEXT_PUBLIC_DRAWIO_BASE_URL`, so it uses the draw.io that comes with it.
 

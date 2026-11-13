@@ -181,6 +181,63 @@ describe("the streaming preview of display_diagram", () => {
         const loaded = mocks.loadDiagram.mock.calls[0][0]
         expect(loaded).toContain('value="R &amp; D &lt;b&gt;team&lt;/b&gt;"')
     })
+
+    it("leaves out the previews that would follow a slow one too closely", () => {
+        mocks.loadDiagram.mockClear()
+        // A clock the test moves; drawing a preview takes 200 ms
+        let now = 10_000
+        const clock = vi.spyOn(performance, "now").mockImplementation(() => now)
+        mocks.loadDiagram.mockImplementation(() => {
+            now += 200
+            return null
+        })
+        const streaming = (cells: number) =>
+            [
+                {
+                    id: "m1",
+                    role: "assistant",
+                    parts: [
+                        {
+                            type: "tool-display_diagram",
+                            toolCallId: "draw-3",
+                            state: "input-streaming",
+                            input: {
+                                xml: Array.from({ length: cells }, (_, i) =>
+                                    box(`cell${i}`),
+                                ).join(""),
+                            },
+                        },
+                    ],
+                },
+            ] as any
+        try {
+            const { rerender } = renderHook(
+                ({ messages }) =>
+                    useDiagramStreaming({
+                        messages,
+                        processedToolCallsRef: { current: new Set() },
+                        editDiagramOriginalXmlRef: { current: new Map() },
+                        loadedMessageIdsRef: { current: new Set() },
+                    }),
+                { initialProps: { messages: streaming(1) } },
+            )
+            expect(mocks.loadDiagram).toHaveBeenCalledTimes(1)
+            // The next update 150 ms later: the page would do nothing else
+            now += 150
+            rerender({ messages: streaming(2) })
+            expect(mocks.loadDiagram).toHaveBeenCalledTimes(1)
+            // Four times the 200 ms later: drawn, with every cell so far
+            now += 650
+            rerender({ messages: streaming(3) })
+            expect(mocks.loadDiagram).toHaveBeenCalledTimes(2)
+            const loaded = mocks.loadDiagram.mock.calls[1][0]
+            expect(loaded).toContain('id="cell1"')
+            expect(loaded).toContain('id="cell2"')
+        } finally {
+            clock.mockRestore()
+            mocks.loadDiagram.mockImplementation(() => null)
+        }
+    })
 })
 
 describe("the streaming preview of edit_diagram", () => {

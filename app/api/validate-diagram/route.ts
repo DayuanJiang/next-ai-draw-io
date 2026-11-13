@@ -14,10 +14,7 @@ import {
 import { getTelemetryConfig } from "@/lib/langfuse"
 import { getUserIdFromRequest } from "@/lib/user-id"
 import { VALIDATION_SYSTEM_PROMPT } from "@/lib/validation-prompts"
-import {
-    type ValidationResult,
-    ValidationResultSchema,
-} from "@/lib/validation-schema"
+import { ValidationResultSchema } from "@/lib/validation-schema"
 
 export const maxDuration = 30
 
@@ -29,12 +26,13 @@ interface ValidateDiagramRequest {
     sessionId?: string
 }
 
-// Default valid result for disabled/error cases
-const DEFAULT_VALID_RESULT: ValidationResult = {
-    valid: true,
-    issues: [],
-    suggestions: [],
-}
+// A check that did not run is an error, never "valid": the chat shows the
+// result on the diagram's card, and "valid" there must mean a model looked
+// at the screenshot. The diagram is drawn before the check, so the user
+// loses nothing. The card shows its own text for the code, in the page's
+// language (dict.validation); `error` is for other callers and the logs.
+const notChecked = (code: string, error: string) =>
+    Response.json({ error, code }, { status: 503 })
 
 export async function POST(req: Request): Promise<Response> {
     const crossSite = rejectCrossSite(req)
@@ -47,7 +45,10 @@ export async function POST(req: Request): Promise<Response> {
         // Check if VLM validation is enabled (default: true)
         const enableValidation = process.env.ENABLE_VLM_VALIDATION !== "false"
         if (!enableValidation) {
-            return Response.json(DEFAULT_VALID_RESULT)
+            return notChecked(
+                "checksDisabled",
+                "Screenshot checks are turned off on this server.",
+            )
         }
 
         const body: ValidateDiagramRequest = await req.json()
@@ -113,8 +114,10 @@ export async function POST(req: Request): Promise<Response> {
                 "[validate-diagram] Validation model not available:",
                 error,
             )
-            // Return valid if no vision model is configured
-            return Response.json(DEFAULT_VALID_RESULT)
+            return notChecked(
+                "noCheckModel",
+                "This server has no model for screenshot checks (VALIDATION_MODEL or AI_MODEL).",
+            )
         }
 
         // Parse timeout with validation (minimum 1000ms, default 10000ms)
@@ -169,7 +172,11 @@ export async function POST(req: Request): Promise<Response> {
             error instanceof Error ? error.message : String(error)
         console.error("[validate-diagram] Error:", errorMessage)
 
-        // On error, return valid to not block the user
-        return Response.json(DEFAULT_VALID_RESULT)
+        // The model's own words stay in the log: on the server's key they
+        // can name its account
+        return notChecked(
+            "checkFailed",
+            "The model could not check the screenshot.",
+        )
     }
 }

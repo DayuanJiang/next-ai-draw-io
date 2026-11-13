@@ -73,7 +73,7 @@ export function formatXML(xml: string, indent: string = "  "): string {
     // Split on tags
     const tags = xml.split(/(?=<)|(?<=>)/g).filter(Boolean)
 
-    tags.forEach((node) => {
+    tags.forEach((node, index) => {
         if (node.match(/^<\/\w/)) {
             // Closing tag - decrease indent
             pad = Math.max(0, pad - 1)
@@ -82,7 +82,7 @@ export function formatXML(xml: string, indent: string = "  "): string {
             // Opening tag
             formatted += indent.repeat(pad) + node
             // Only add newline if next item is a tag
-            const nextIndex = tags.indexOf(node) + 1
+            const nextIndex = index + 1
             if (nextIndex < tags.length && tags[nextIndex].startsWith("<")) {
                 formatted += "\n"
                 pad++

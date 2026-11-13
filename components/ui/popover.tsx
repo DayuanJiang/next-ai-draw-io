@@ -6,9 +6,35 @@ import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { cn } from "@/lib/utils"
 
 function Popover({
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
-  return <PopoverPrimitive.Root data-slot="popover" {...props} />
+  // A click on the canvas goes to draw.io's iframe and never reaches this
+  // page, so Radix does not see it as a click outside. The window loses
+  // focus to the iframe then: close the popover on that. A switch to
+  // another window or tab leaves the focus where it is in this page, and
+  // the popover open with what was typed in it
+  React.useEffect(() => {
+    if (!open || !onOpenChange) return
+    const close = () =>
+      // A tick later: Firefox gives the frame the focus after this event
+      setTimeout(() => {
+        if (document.activeElement instanceof HTMLIFrameElement) {
+          onOpenChange(false)
+        }
+      })
+    window.addEventListener("blur", close)
+    return () => window.removeEventListener("blur", close)
+  }, [open, onOpenChange])
+  return (
+    <PopoverPrimitive.Root
+      data-slot="popover"
+      open={open}
+      onOpenChange={onOpenChange}
+      {...props}
+    />
+  )
 }
 
 function PopoverTrigger({
@@ -21,6 +47,7 @@ function PopoverContent({
   className,
   align = "center",
   sideOffset = 4,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
@@ -34,6 +61,15 @@ function PopoverContent({
           className
         )}
         {...props}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          // Closed by a click on the canvas (see Popover): the focus stays
+          // in the frame, where the keys go to the shape just clicked.
+          // Radix would give it back to the popover's button
+          if (document.activeElement instanceof HTMLIFrameElement) {
+            event.preventDefault()
+          }
+        }}
       />
     </PopoverPrimitive.Portal>
   )

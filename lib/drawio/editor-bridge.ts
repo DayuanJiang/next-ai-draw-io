@@ -476,12 +476,31 @@ export function canReplaceDiagram(xml: string): boolean {
     )
 }
 
+// The preview streams onto a page that was empty, or whose whole diagram
+// was in view: the growing drawing is kept in view, until the user moves
+// the view themselves. A user who looks at a part of the diagram keeps
+// that view.
+let followPreview = false
+
+// The preview fitted the view: the diagram a revert brings back is fitted
+// too (at the preview's zoom and place it would be small, or out of view)
+let previewFitted = false
+
 /** Show a streaming preview without touching the undo history */
 export function previewDiagram(xml: string) {
-    if (previewBase === null) previewBase = currentFileXml() ?? ""
+    if (previewBase === null) {
+        previewBase = currentFileXml() ?? ""
+        followPreview = isEmptyModel() || shapesInView()
+        previewFitted = false
+    }
     const wasEmpty = isEmptyModel()
     withoutUndo(() => replace(xml))
-    if (wasEmpty) fitDiagram()
+    // The first shapes on an empty page come to the middle; the drawing is
+    // fitted again each time it grows past the edge of the window
+    if (wasEmpty || (followPreview && !shapesInView())) {
+        fitDiagram()
+        previewFitted = true
+    }
 }
 
 /**
@@ -523,12 +542,17 @@ function changePageId(page: any, id: string) {
 /**
  * Apply the final AI result (or a restored version) as a single undo step,
  * page name and id included: the page gets the document's id, as a full
- * load would give it (links to the page use it). The view is fitted only
- * when the canvas was empty, so a restore keeps the user's zoom.
+ * load would give it (links to the page use it). The view is fitted when
+ * the canvas was empty, and when the whole diagram was in view and the
+ * result reaches out of the window; a user who looks at a part of the
+ * diagram keeps their view and zoom.
  */
 export function commitDiagram(xml: string) {
     const wasEmpty =
         isEmptyModel() || (previewBase !== null && !hasShapes(previewBase))
+    // As the preview before it; a change without one, as a preview would
+    const follow =
+        previewBase !== null ? followPreview : !wasEmpty && shapesInView()
     const base = previewBase ? pageModelOf(previewBase) : null
     previewBase = null
     // Undo goes back to the diagram before streaming started. draw.io's
@@ -561,13 +585,27 @@ export function commitDiagram(xml: string) {
     } finally {
         model?.endUpdate()
     }
-    if (wasEmpty) fitDiagram()
+    // A result without shapes has nothing to fit (the preview of a change
+    // that deletes everything empties the canvas before it is applied)
+    if (!isEmptyModel() && (wasEmpty || (follow && !shapesInView()))) {
+        fitDiagram()
+    }
 }
 
 /** Throw away the preview and go back to the given diagram */
 export function revertPreview(targetXml: string) {
+    const followed = previewBase !== null && followPreview
     previewBase = null
     withoutUndo(() => replace(targetXml))
+    // An empty page again (the drawing was stopped or failed): back to
+    // 100% in the middle, where the preview's fits took the view from
+    if (isEmptyModel()) {
+        graph()?.zoomTo(1)
+        centerEmptyPage()
+    } else if (followed && previewFitted) {
+        // The preview's fits zoomed or scrolled the view for its drawing
+        fitDiagram()
+    }
 }
 
 /** Forget the preview base (new user turn) without changing the canvas */
@@ -599,6 +637,7 @@ function zoomChanged() {
     if (fitting) return
     lastAutoFitAt = 0
     lastOpenedAt = 0
+    followPreview = false
 }
 
 /** Fit again if the last automatic fit just happened (layout still moving) */
@@ -641,16 +680,24 @@ function placeOpenedDiagram() {
     } finally {
         fitting = false
     }
+    if (!shapesInView()) fitDiagram()
+}
+
+/** Every shape is inside the visible part of the canvas */
+function shapesInView(): boolean {
+    // (an empty page's bounds are a point at its corner, in view or not)
+    if (isEmptyModel()) return true
+    const g = graph()
     const b = g.getGraphBounds()
     const c = g.container
     const left = b.x - c.scrollLeft
     const top = b.y - c.scrollTop
-    const inView =
+    return (
         left >= 0 &&
         top >= 0 &&
         left + b.width <= c.clientWidth &&
         top + b.height <= c.clientHeight
-    if (!inView) fitDiagram()
+    )
 }
 
 /** Fit the shapes (not the whole page) into the canvas, at most at 100% */
@@ -932,6 +979,38 @@ export function readSelectionDetails(): SelectionAnswer | null {
     }
 }
 
+/**
+ * Selects the cells with these ids that the page on the canvas has: what
+ * the user had selected before a write replaced the page's cells
+ */
+export function selectCells(ids: string[]) {
+    const g = graph()
+    if (!g) return
+    const cells = ids.map((id) => g.model.getCell(id)).filter(Boolean)
+    if (cells.length > 0) g.setSelectionCells(cells)
+}
+
+/**
+ * The user is in the middle of something a new document would end: typing
+ * a label, or holding the mouse button down on the canvas (a drag, a
+ * rubber band)
+ */
+export function isMidGesture(): boolean {
+    const g = graph()
+    return !!g && (g.isEditing() || !!g.isMouseDown)
+}
+
+/**
+ * Takes the label being typed as it is, as a click beside it does; false
+ * when none is being typed
+ */
+export function finishTyping(): boolean {
+    const g = graph()
+    if (!g?.isEditing()) return false
+    g.stopEditing(false)
+    return true
+}
+
 function readSelectionRect() {
     const g = graph()
     if (!g || g.isSelectionEmpty()) return null
@@ -959,11 +1038,24 @@ function syncSelectionRect() {
 function syncAll() {
     if (!ui) return
     const g = graph()
+    // Every change to the diagram comes here (each frame of a streaming
+    // preview too), mostly with the selection as it was: the store keeps
+    // its array then, so the chat does not render again for it
+    const before = useCanvasStore.getState().selection
+    const now = readSelection()
+    const same =
+        now.length === before.length &&
+        now.every(
+            (cell, i) =>
+                cell.id === before[i].id &&
+                cell.label === before[i].label &&
+                cell.isEdge === before[i].isEdge,
+        )
     useCanvasStore.getState().set({
         currentPageId: ui.currentPage?.getId
             ? String(ui.currentPage.getId())
             : null,
-        selection: readSelection(),
+        selection: same ? before : now,
         selectionRect: readSelectionRect(),
         isFreehand: !!g?.freehand?.isDrawing?.(),
         isFormatOpen: isFormatPanelOpen(),
@@ -1076,9 +1168,21 @@ function installListeners(): () => void {
     const container = g.container as HTMLElement | undefined
     container?.addEventListener("scroll", syncSelectionRect, { passive: true })
     container?.addEventListener("pointerdown", clearHighlights, true)
+    // A press or the wheel on the canvas: the user looks around, so a
+    // streaming preview stops moving the view
+    const stopFollowing = () => {
+        followPreview = false
+    }
+    container?.addEventListener("pointerdown", stopFollowing, true)
+    container?.addEventListener("wheel", stopFollowing, {
+        capture: true,
+        passive: true,
+    })
     cleanups.push(() => {
         container?.removeEventListener("scroll", syncSelectionRect)
         container?.removeEventListener("pointerdown", clearHighlights, true)
+        container?.removeEventListener("pointerdown", stopFollowing, true)
+        container?.removeEventListener("wheel", stopFollowing, true)
     })
 
     return () => {

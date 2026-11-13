@@ -87,6 +87,7 @@
         "tailwind-merge": "^3.0.2",
         "tailwindcss-animate": "^1.0.7",
         "turndown": "^7.2.0",
+        "undici": "^7.30.1",
         "unpdf": "^1.4.0",
         "zod": "^4.1.12",
         "zustand": "^5.0.15"
@@ -104,7 +105,7 @@
     },
     "devDependencies": {
         "@biomejs/biome": "2.6.6",
-        "@opennextjs/cloudflare": "^1.17.1",
+        "@opennextjs/cloudflare": "^1.20.16",
         "@playwright/test": "^1.57.0",
         "@tailwindcss/postcss": "^4",
         "@tailwindcss/typography": "^0.5.19",

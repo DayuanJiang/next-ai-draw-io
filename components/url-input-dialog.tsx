@@ -1,7 +1,7 @@
 "use client"
 
 import { Link, Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -17,7 +17,8 @@ import { useDictionary } from "@/hooks/use-dictionary"
 interface UrlInputDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onSubmit: (url: string) => void
+    /** Resolves with the reason when the page could not be read */
+    onSubmit: (url: string) => Promise<string | undefined>
     isExtracting: boolean
 }
 
@@ -31,22 +32,45 @@ export function UrlInputDialog({
     const [url, setUrl] = useState("")
     const [error, setError] = useState("")
 
-    const handleSubmit = () => {
+    // Each opening starts empty: the link read last time is in the chat
+    useEffect(() => {
+        if (open) {
+            setUrl("")
+            setError("")
+        }
+    }, [open])
+
+    const handleSubmit = async () => {
         setError("")
 
-        if (!url.trim()) {
+        const typed = url.trim()
+        if (!typed) {
             setError(dict.url.enterUrl)
             return
         }
+        // A link typed without its scheme ("example.com/article") is an
+        // https one
+        const link = /^[a-z][a-z\d+.-]*:\/\//i.test(typed)
+            ? typed
+            : `https://${typed}`
 
+        // Text with spaces is no address, though Chrome's URL takes it as
+        // a host name
+        let valid = !/\s/.test(link)
         try {
-            new URL(url)
+            new URL(link)
         } catch {
+            valid = false
+        }
+        if (!valid) {
             setError(dict.url.invalidFormat)
             return
         }
 
-        onSubmit(url.trim())
+        // The reason stays under the address until it is edited: the link
+        // is still there to correct
+        const reason = await onSubmit(link)
+        if (reason) setError(reason)
     }
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

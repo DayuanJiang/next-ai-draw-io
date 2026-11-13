@@ -86,9 +86,13 @@ const MIME = {
     ".ico": "image/x-icon",
 }
 
-// The page that embeds the editor, with the preview page's iframe query
+// The page that embeds the editor, with the preview page's iframe query.
+// The dark theme starts in dark mode, as the preview starts it with
+// DRAWIO_UI=dark, DRAWIO_DARK=1 or a dark system: an editor that starts
+// dark asks for images of its own (the white logo on the page tabs), which
+// a switch to dark mode later (the darkMode action) does not request.
 const parentPage = (ui) => `<!doctype html><html><body style="margin:0">
-<iframe id="f" style="width:1280px;height:860px;border:0" src="/drawio/index.html?embed=1&proto=json&configure=1&spin=1&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0&themes=1&dark=0&ui=${ui}"></iframe>
+<iframe id="f" style="width:1280px;height:860px;border:0" src="/drawio/index.html?embed=1&proto=json&configure=1&spin=1&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0&themes=1&dark=${ui === "dark" ? 1 : 0}&ui=${ui}"></iframe>
 <script>
 const f = document.getElementById('f')
 window.exports = 0

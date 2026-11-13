@@ -45,6 +45,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import type { FlattenedModel, ProviderName } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
+import { useUiStore } from "@/stores/ui-store"
 
 interface ModelSelectorProps {
     models: FlattenedModel[]
@@ -202,13 +203,22 @@ export function ModelSelector({
     )
 
     // Leaving for the settings: closing, the picker must not give the focus
-    // back to its button, behind the settings dialog
+    // back to its button, behind the settings dialog. The button gets it as
+    // the settings close: the footer's button, which had it as they opened,
+    // went with the picker
     const toSettingsRef = useRef(false)
     const goToSettings = (openSettings: () => void) => {
         toSettingsRef.current = true
         setOpen(false)
         openSettings()
     }
+    const buttonRef = useRef<HTMLButtonElement>(null)
+    const settingsOpen = useUiStore((s) => s.settingsOpen)
+    useEffect(() => {
+        if (settingsOpen || !toSettingsRef.current) return
+        toSettingsRef.current = false
+        buttonRef.current?.focus()
+    }, [settingsOpen])
     const footerButton =
         "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
 
@@ -281,42 +291,26 @@ export function ModelSelector({
         /\bdemo\b/i.test(m.providerLabel),
     )
 
-    const wrapperRef = useRef<HTMLDivElement | null>(null)
-    const [showLabel, setShowLabel] = useState(true)
-
-    // Threshold (px) under which we hide the label (tweak as needed)
-    const HIDE_THRESHOLD = 240
-    const SHOW_THRESHOLD = 260
+    // The model's name takes the room there is and is cut short where there
+    // is less. With room for under three letters (a narrow panel while the
+    // send key hint shows) it would be a sliver of a letter: it is hidden
+    // then, keeping its box, so the measure does not change with it. A name
+    // that fits whole shows, however short ("o3" is 12 px wide).
+    const nameRef = useRef<HTMLSpanElement>(null)
+    const [nameSqueezed, setNameSqueezed] = useState(false)
     useEffect(() => {
-        const el = wrapperRef.current
-        if (!el) return
-
-        const target = el.parentElement ?? el
-
-        const ro = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                const width = entry.contentRect.width
-                setShowLabel((prev) => {
-                    // if currently showing and width dropped below hide threshold -> hide
-                    if (prev && width <= HIDE_THRESHOLD) return false
-                    // if currently hidden and width rose above show threshold -> show
-                    if (!prev && width >= SHOW_THRESHOLD) return true
-                    // otherwise keep previous state (hysteresis)
-                    return prev
-                })
-            }
-        })
-
-        ro.observe(target)
-
-        const initialWidth = target.getBoundingClientRect().width
-        setShowLabel(initialWidth >= SHOW_THRESHOLD)
-
-        return () => ro.disconnect()
+        const observer = new ResizeObserver(([{ target, contentRect }]) =>
+            setNameSqueezed(
+                target.scrollWidth > target.clientWidth &&
+                    contentRect.width < 24,
+            ),
+        )
+        observer.observe(nameRef.current as HTMLSpanElement)
+        return () => observer.disconnect()
     }, [])
 
     return (
-        <div ref={wrapperRef} className="min-w-0 max-w-44">
+        <div className="min-w-0 max-w-44">
             <Dialog
                 open={open}
                 onOpenChange={(next) => {
@@ -330,12 +324,12 @@ export function ModelSelector({
                     <TooltipTrigger asChild>
                         <DialogTrigger asChild>
                             <Button
+                                ref={buttonRef}
                                 variant="ghost"
                                 size="sm"
                                 disabled={disabled}
                                 className={cn(
                                     "h-8 min-w-0 max-w-full shrink overflow-hidden gap-1.5 px-2 font-normal text-muted-foreground transition-[padding,background-color] duration-150 ease-in-out hover:bg-accent hover:text-foreground",
-                                    !showLabel && "px-1.5 justify-center",
                                     selectedFailed &&
                                         "text-destructive hover:text-destructive",
                                 )}
@@ -353,23 +347,17 @@ export function ModelSelector({
                                 ) : (
                                     <Bot className="h-4 w-4 flex-shrink-0" />
                                 )}
-                                {/* show/hide visible label based on measured width */}
-                                {showLabel ? (
-                                    <span className="min-w-0 truncate text-xs">
-                                        {selectedModel
-                                            ? shortModelName(
-                                                  selectedModel.modelId,
-                                              )
-                                            : dict.modelConfig.serverDefault}
-                                    </span>
-                                ) : (
-                                    // Keep an sr-only label for screen readers when hidden
-                                    <span className="sr-only">
-                                        {selectedModel
-                                            ? selectedModel.modelId
-                                            : dict.modelConfig.serverDefault}
-                                    </span>
-                                )}
+                                <span
+                                    ref={nameRef}
+                                    className={cn(
+                                        "min-w-0 truncate text-xs",
+                                        nameSqueezed && "invisible",
+                                    )}
+                                >
+                                    {selectedModel
+                                        ? shortModelName(selectedModel.modelId)
+                                        : dict.modelConfig.serverDefault}
+                                </span>
                                 <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                             </Button>
                         </DialogTrigger>
@@ -382,9 +370,7 @@ export function ModelSelector({
                 <DialogContent
                     className="p-0"
                     onCloseAutoFocus={(e) => {
-                        if (!toSettingsRef.current) return
-                        toSettingsRef.current = false
-                        e.preventDefault()
+                        if (toSettingsRef.current) e.preventDefault()
                     }}
                 >
                     <DialogTitle className="sr-only">

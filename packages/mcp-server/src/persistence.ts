@@ -47,6 +47,7 @@ const SOURCES: readonly string[] = [
     "restore",
     "load",
     "add_page",
+    "rename_page",
 ]
 const isSource = (v: unknown): v is HistorySource =>
     typeof v === "string" && SOURCES.includes(v)

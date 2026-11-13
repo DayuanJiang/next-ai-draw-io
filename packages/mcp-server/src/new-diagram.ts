@@ -2,7 +2,12 @@
  * A whole new diagram written by the model, for the create_new_diagram tool
  * and the web app's display_diagram tool.
  */
-import { expandCompactCells } from "./compact-cells.ts"
+import {
+    defaultLayerOf,
+    expandCompactCells,
+    rootAndLayersOf,
+} from "./compact-cells.ts"
+import { reviewCells } from "./diagram-operations.ts"
 import {
     generatePageId,
     hasCells,
@@ -15,14 +20,26 @@ import {
     addDefaultStyles,
     applyStyleClasses,
     readStyleClasses,
+    rememberStyleClasses,
     type StyleClasses,
 } from "./style-classes.ts"
 import { readAttributes } from "./xml-attributes.ts"
 import { getXmlSyntaxError } from "./xml-syntax.ts"
-import { repairQuoteBeforeSlash, validateAndFixXml } from "./xml-validation.ts"
+import {
+    closeSlashlessCells,
+    repairNumberQuotes,
+    stripWrapping,
+    validateAndFixXml,
+} from "./xml-validation.ts"
 
 export type NewDiagram =
-    | { ok: true; xml: string; fixes: string[] }
+    | {
+          ok: true
+          xml: string
+          fixes: string[]
+          /** What the model should know about the drawing (reviewCells) */
+          notes: string[]
+      }
     | { ok: false; error: string }
 
 /**
@@ -70,9 +87,13 @@ export function reservedIdError(input: string): string | null {
  */
 export function isMxCellXmlComplete(xml: string): boolean {
     // Named style definitions before the cells are not cells: output cut off
-    // right after them is incomplete. A compact cell whose last quote is
-    // missing is complete; prepareNewDiagram repairs it.
-    const trimmed = repairQuoteBeforeSlash(readStyleClasses(xml).xml).trim()
+    // right after them is incomplete. A compact cell whose last quote or
+    // slash is missing is complete; prepareNewDiagram repairs it. A code
+    // fence, a CDATA section or a sentence around complete cells is no cut
+    // either.
+    const trimmed = closeSlashlessCells(
+        repairNumberQuotes(readStyleClasses(stripWrapping(xml)).xml),
+    ).trim()
     if (!trimmed) return false
 
     // Find position of last complete mxCell ending (either /> or </mxCell>)
@@ -149,33 +170,80 @@ function takeStyleDefinitions(input: string): {
 }
 
 /**
+ * A page written in full (<mxGraphModel> or <mxfile>) without a root cell or
+ * without a layer gets them here. Bare cells must be sent without them, and
+ * a model carries that habit over to a full page; draw.io would take a shape
+ * for the root and show a blank page. A page that has both keeps them as
+ * they are, whatever their ids (rootAndLayersOf).
+ */
+function addMissingRootCells(xml: string): string {
+    return xml.replace(
+        /<root\s*>([\s\S]*?)<\/root>/g,
+        (page, cells: string) => {
+            if (!/<mxCell\b/.test(cells)) return page
+            const { root, rootEnd, layers } = rootAndLayersOf(cells)
+            if (rootEnd !== undefined && layers.length > 0) return page
+            const rootCell = rootEnd === undefined ? '<mxCell id="0"/>' : ""
+            // (a layer the model did write keeps its place)
+            const layer =
+                layers.length > 0 ? "" : `<mxCell id="1" parent="${root}"/>`
+            // Right after the root cell, or first on the page
+            const at = rootEnd ?? 0
+            return `<root>${cells.slice(0, at)}${rootCell}${layer}${cells.slice(at)}</root>`
+        },
+    )
+}
+
+/**
  * The model of one page from the XML the model wrote (also the starting
- * content of add_page). The named style definitions are taken out first
- * (style-classes.ts). Bare cells then get the wrapper and root cells, since
- * the strict parser rejects several top-level elements. Then the XML is
- * validated and auto-fixed while it is still a bare model, where duplicate
- * ids are renamed. Compact cells (compact-cells.ts) are expanded, the names
+ * content of add_page). What a model may put around the XML is taken off
+ * (stripWrapping), then the named style definitions (style-classes.ts).
+ * Bare cells then get the wrapper and root cells, since the strict parser
+ * rejects several top-level elements. Then the XML is validated and
+ * auto-fixed while it is still a bare model, where duplicate ids are
+ * renamed. Compact cells (compact-cells.ts) are expanded, the names
  * expanded and the default styles added on the fixed XML, so repaired cells
  * get them too.
  */
 export function prepareNewModel(input: string): NewDiagram {
+    const stripped = stripWrapping(input)
+    if (!stripped) {
+        return {
+            ok: false,
+            error: "The xml is empty. Send the mxCell elements of the page.",
+        }
+    }
     const {
         classes,
-        xml: cells,
+        xml: defined,
         error: styleError,
-    } = takeStyleDefinitions(input)
+    } = takeStyleDefinitions(stripped)
     if (styleError) return { ok: false, error: styleError }
+    // Kept also when the cells are rejected: the retry may come in parts,
+    // with the names used in edit_diagram
+    const known = rememberStyleClasses(classes)
+    // First: the checks below and the validator then see these cells closed
+    const cells = closeSlashlessCells(defined)
+    const closed =
+        cells === defined
+            ? []
+            : ["Closed compact cells written without the slash"]
     const reserved = reservedIdError(cells)
     if (reserved) return { ok: false, error: reserved }
     const truncated = truncatedCellError(cells)
     if (truncated) return { ok: false, error: truncated }
-    let xml = wrapCellsInModel(cells)
+    let xml = addMissingRootCells(wrapCellsInModel(cells))
     const { valid, error, fixed, fixes } = validateAndFixXml(xml)
     if (fixed) xml = fixed
     if (!valid) {
         return { ok: false, error: `XML validation failed - ${error}` }
     }
-    xml = addDefaultStyles(applyStyleClasses(expandCompactCells(xml), classes))
+    // Page by page: a compact cell without a parent goes on the layer of
+    // its own page
+    xml = xml.replace(/<root\s*>[\s\S]*?<\/root>/g, (page) =>
+        expandCompactCells(page, defaultLayerOf(page)),
+    )
+    xml = addDefaultStyles(applyStyleClasses(xml, known))
     // The rewrites copy attribute values as written; a check that they
     // produced well-formed XML, in case one of them ever does not
     const rewriteError = getXmlSyntaxError(xml)
@@ -185,7 +253,24 @@ export function prepareNewModel(input: string): NewDiagram {
             error: `XML validation failed after expanding the cells - ${rewriteError}`,
         }
     }
-    return { ok: true, xml, fixes }
+    // Every page's cells, as they now stand (several pages name theirs)
+    const doc = new DOMParser().parseFromString(xml, "text/xml")
+    const roots = Array.from(doc.querySelectorAll("root"))
+    const repairs: string[] = []
+    const notes: string[] = []
+    roots.forEach((root, index) => {
+        const page = roots.length > 1 ? `Page ${index + 1}: ` : ""
+        const review = reviewCells(root)
+        repairs.push(...review.repairs.map((repair) => page + repair))
+        notes.push(...review.notes.map((note) => page + note))
+    })
+    if (repairs.length > 0) xml = new XMLSerializer().serializeToString(doc)
+    return {
+        ok: true,
+        xml,
+        fixes: [...closed, ...fixes, ...repairs],
+        notes: [...repairs, ...notes],
+    }
 }
 
 /** prepareNewModel, and the model turned into an <mxfile> */
@@ -202,19 +287,25 @@ export function prepareNewDiagram(
             error: "XML must be the mxCell elements of one page, a <mxGraphModel>, or an <mxfile> with one or more <diagram> children.",
         }
     }
-    // A <diagram> the model sent without an id gets one here. draw.io would
-    // otherwise make its own, which the server never sees, and get_selection
-    // would then name a page edit_diagram cannot find
+    // A <diagram> sent without an id or a name gets them here (one of
+    // draw.io's own templates has no name). draw.io would otherwise make its
+    // own, which the server never sees: get_selection would name a page
+    // edit_diagram cannot find, and the name would come back from the
+    // browser looking like a rename by the user
     const doc = parseMxfile(normalized)
     if (doc) {
         let added = false
-        doc.querySelectorAll("diagram").forEach((d) => {
+        doc.querySelectorAll("diagram").forEach((d, index) => {
             if (!d.getAttribute("id")) {
                 d.setAttribute("id", generatePageId())
+                added = true
+            }
+            if (!d.getAttribute("name")) {
+                d.setAttribute("name", `Page-${index + 1}`)
                 added = true
             }
         })
         if (added) normalized = serializeMxfile(doc)
     }
-    return { ok: true, xml: normalized, fixes: model.fixes }
+    return { ...model, xml: normalized }
 }

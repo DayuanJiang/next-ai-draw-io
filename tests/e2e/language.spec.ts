@@ -68,6 +68,61 @@ test.describe("Language Switching", () => {
         })
     })
 
+    test("importing a file that is not a saved prompts export says so in the page's language", async ({
+        page,
+    }) => {
+        await openApp(page, { path: "/zh" })
+        await page.getByRole("button", { name: "常用提示词" }).click()
+        const dialog = page.getByRole("dialog")
+        const input = dialog.locator('input[type="file"][accept*="json"]')
+        // Another app's JSON, then a file that is not JSON at all
+        for (const body of ['{"name":"something else"}', "not json"]) {
+            await input.setInputFiles({
+                name: "other.json",
+                mimeType: "application/json",
+                buffer: Buffer.from(body),
+            })
+            await expect(
+                dialog.getByText("这不是本应用导出的提示词文件。"),
+            ).toBeVisible()
+            await expect(dialog.getByText(/schemaVersion|JSON/)).toHaveCount(0)
+            // The next file shows the message again
+            await page.keyboard.press("Escape")
+            await page.getByRole("button", { name: "常用提示词" }).click()
+        }
+    })
+
+    test("the canvas stays on the page the user was on", async ({ page }) => {
+        const diagramPage = (id: string, label: string) =>
+            `<diagram id="${id}" name="${id}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="${id}-box" value="${label}" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel></diagram>`
+        await page.route("**/api/chat", (route) =>
+            route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createMockSSEResponse(
+                    `<mxfile>${diagramPage("First", "Box A")}${diagramPage("Second", "Box B")}</mxfile>`,
+                    "Drew two pages.",
+                ),
+            }),
+        )
+        await openApp(page)
+        await sendMessage(page, "Draw two pages")
+        await waitForComplete(page)
+        const canvas = page.frameLocator("iframe")
+        await canvas
+            .locator(".geTabContainer")
+            .getByText("Second", { exact: true })
+            .click()
+        await expect(canvas.getByText("Box B")).toBeVisible()
+
+        // draw.io starts again in the new language
+        await pickLanguage(page, "日本語")
+        await expect(getSendButton(page, "送信")).toBeVisible({
+            timeout: 10000,
+        })
+        await expect(canvas.getByText("Box B")).toBeVisible({ timeout: 15000 })
+    })
+
     test("a stale offer to switch without saving does nothing once a message is being sent", async ({
         page,
     }) => {

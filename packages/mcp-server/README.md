@@ -88,7 +88,7 @@ Restart the client, then ask, for example, "Read this repo and draw its architec
 - **Real icons**: the web app's drawing rules and shape libraries (AWS, Azure, GCP, Kubernetes, Cisco and more), so the AI uses real icon names.
 - **Self-check**: the AI can look at a screenshot of the rendered diagram and fix overlaps (`screenshot: true`, or `screenshot_diagram`).
 - **Versions**: the last 20 versions as cards next to the canvas; restore or compare one, or ask the AI to undo (`restore_version`).
-- **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin, and PNGs a white background (`transparent: true` for none).
+- **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin and a white background (`transparent: true` for none); an SVG keeps its light colors in a viewer's dark mode.
 - **Offline**: the draw.io editor ships inside the package.
 
 ## Choosing a draw.io MCP server
@@ -140,7 +140,7 @@ Environment variables, set in the client's `env` for the server:
 | `DRAWIO_LANG` | unset | Fix the editor and preview language: `en`, `zh`, `zh-tw`, `ja`, `de` and so on |
 | `DRAWIO_UI` | unset | Fix the draw.io theme: `kennedy`, `atlas`, `dark`, `min`, `sketch` or `simple` |
 | `DRAWIO_DARK` | `auto` | `1` starts dark, `0` starts light, `auto` follows the system |
-| `BROWSER` | unset | `none` does not open the preview by itself; `start_session` still returns the URL |
+| `BROWSER` | unset | `none` does not open the preview by itself; `start_session` still returns the URL, and the AI gives it to you. Linux without a display (SSH, a container) works the same way |
 | `DRAWIO_ALLOW_EMBED` | unset | `true` lets pages on this machine (`localhost`, `127.0.0.1`) show the preview in a frame, such as DeepSeek Harness's sidebar browser |
 | `DRAWIO_PREVIEW_URL` | unset | Explicit trusted preview origin behind a private HTTPS reverse proxy (see below) |
 | `DRAWIO_PREVIEW_UI` | `shell` | `classic` opens the previous preview page, without outlines, Ctrl+Z or `get_selection` |
@@ -181,7 +181,7 @@ Then set `DRAWIO_BASE_URL=http://localhost:8080`. The preview cannot reach into 
 
 - **Blank preview in VS Code Simple Browser or Cursor's browser**: the page refuses to be embedded in other pages. Open the URL in a regular browser.
 - **Screenshot or PNG/SVG export times out**: the preview tab renders them, and browsers slow down background tabs. Bring the tab to the front and try again.
-- **"No active session"**: the AI has to call `start_session` first.
+- **"No active session"**: the AI has to call `start_session` first; after a restart it continues the earlier diagram with that session's id.
 - **The preview does not update**: open the URL that `start_session` returned; its `?mcp=` part connects the page to the session.
 
 ## How it works

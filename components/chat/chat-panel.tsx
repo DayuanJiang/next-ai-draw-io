@@ -154,7 +154,9 @@ export function ChatPanel({
                                 )}
                                 data-testid="session-title"
                             >
-                                <LayoutGrid />
+                                {/* Only the title gives way in a narrow
+                                    header */}
+                                <LayoutGrid className="shrink-0" />
                                 <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">
                                     {title}
                                 </span>

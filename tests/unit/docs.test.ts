@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import {
     DOCS_NAV,
@@ -8,6 +9,7 @@ import {
     plain,
     resolveDocLink,
 } from "@/lib/docs"
+import { PROVIDER_NAMES, PROVIDERS } from "@/lib/providers"
 
 describe("resolveDocLink", () => {
     it("turns a link to another docs file into its page", () => {
@@ -99,5 +101,89 @@ describe("docs files", () => {
             expect(loadDoc("ja", file).locale).toBe("ja")
             expect(loadDoc("zh-Hant", file).locale).toBe("zh-Hant")
         }
+    })
+
+    // A link to a section of another page: "./claude-code.md#settings"
+    it("links to the same sections in every language, by ids those pages have", () => {
+        const sectionLinks = (folder: string, file: string) =>
+            [
+                ...readFileSync(`docs/${folder}/${file}.md`, "utf8").matchAll(
+                    /\]\(\.\/([\w-]+)\.md#([^)]+)\)/g,
+                ),
+            ].map(([, page, id]) => ({ page, id }))
+        for (const file of DOCS_NAV.flatMap((group) => group.files)) {
+            const english = sectionLinks("en", file).map((link) => link.page)
+            for (const [folder, lang] of [
+                ["cn", "zh"],
+                ["ja", "ja"],
+                ["tw", "zh-Hant"],
+            ] as const) {
+                const links = sectionLinks(folder, file)
+                expect(
+                    links.map((link) => link.page),
+                    `${folder}/${file}`,
+                ).toEqual(english)
+                for (const { page, id } of links) {
+                    expect(
+                        loadDoc(lang, page).headings.map((h) => h.id),
+                        `${folder}/${file}`,
+                    ).toContain(id)
+                }
+            }
+        }
+    })
+})
+
+describe("the AI providers page", () => {
+    const pages = ["en", "cn", "ja", "tw"].map((folder) =>
+        readFileSync(`docs/${folder}/ai-providers.md`, "utf8"),
+    )
+
+    // env.example ships with AI_PROVIDER=bedrock, which wins over the key the
+    // reader sets for another provider
+    it("tells the reader of the first steps about the template's AI_PROVIDER line", () => {
+        expect(readFileSync("env.example", "utf8")).toMatch(
+            /^AI_PROVIDER=bedrock$/m,
+        )
+        for (const page of pages) {
+            const steps = page.split(/^## /m)[1]
+            expect(steps).toContain("AI_PROVIDER=bedrock")
+        }
+    })
+
+    // The server detects a provider from its API key; these have none
+    it("sets AI_PROVIDER in the example of every provider without an API key", () => {
+        const keyless = PROVIDER_NAMES.filter(
+            (name) =>
+                !["apiKey", "vertexKey"].includes(PROVIDERS[name].credential),
+        )
+        expect(keyless).toContain("bedrock")
+        for (const page of pages) {
+            for (const name of keyless) {
+                expect(page).toMatch(new RegExp(`^AI_PROVIDER=${name}$`, "m"))
+            }
+        }
+    })
+})
+
+describe("the READMEs", () => {
+    // "Add a new provider" asks for the count in the three READMEs to be
+    // updated; each gives it three times
+    it("give the number of providers the app has, wherever they give one", () => {
+        const counts = [
+            "README.md",
+            "docs/cn/README_CN.md",
+            "docs/ja/README_JA.md",
+        ].flatMap((file) =>
+            [
+                ...readFileSync(file, "utf8").matchAll(
+                    /(\d+) (?:(?:model )?providers|家|の?(?:モデル)?プロバイダー)/g,
+                ),
+            ].map(([, count]) => `${file}: ${count}`),
+        )
+        expect(counts).toHaveLength(9)
+        expect(
+            counts.filter((c) => !c.endsWith(`: ${PROVIDER_NAMES.length}`)),
+        ).toEqual([])
     })
 })

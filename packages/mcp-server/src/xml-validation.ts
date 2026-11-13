@@ -61,6 +61,15 @@ function parseXmlTags(xml: string): ParsedTag[] {
         const tagStart = xml.indexOf("<", i)
         if (tagStart === -1) break
 
+        // A comment is no tag, and an apostrophe in it opens no quoted
+        // value: read as one, it would hide every tag up to the next quote
+        if (xml.startsWith("<!--", tagStart)) {
+            const commentEnd = xml.indexOf("-->", tagStart)
+            if (commentEnd === -1) break
+            i = commentEnd + 3
+            continue
+        }
+
         // Find matching > by tracking quotes
         let tagEnd = tagStart + 1
         let inQuote = false
@@ -144,6 +153,44 @@ function replaceInOpeningTags(
     return out + xml.slice(last)
 }
 
+/**
+ * The id attribute of every opening tag, with where it ends in the XML. The
+ * attributes are read whole (readAttributes), which leaves out id='1'
+ * written in a label and data attributes named Id or rack-id.
+ */
+function findIds(
+    xml: string,
+): Array<{ tagName: string; id: string; end: number }> {
+    const found: Array<{ tagName: string; id: string; end: number }> = []
+    for (const { tag, tagName, isClosing, startIndex } of parseXmlTags(xml)) {
+        if (isClosing) continue
+        const attr = readAttributes(tag).find((a) => a.name === "id")
+        if (attr) {
+            found.push({ tagName, id: attr.value, end: startIndex + attr.end })
+        }
+    }
+    return found
+}
+
+/**
+ * Rewrite id values; fn returns the new id, or undefined to keep the id.
+ * Only the value changes: the attribute's text ends with it and its quote.
+ */
+function rewriteIds(
+    xml: string,
+    fn: (tagName: string, id: string) => string | undefined,
+): string {
+    let out = ""
+    let last = 0
+    for (const { tagName, id, end } of findIds(xml)) {
+        const next = fn(tagName, id)
+        if (next === undefined) continue
+        out += xml.slice(last, end - 1 - id.length) + next
+        last = end - 1
+    }
+    return out + xml.slice(last)
+}
+
 // ============================================================================
 // Validation Helper Functions
 // ============================================================================
@@ -175,13 +222,14 @@ function checkDuplicateAttributes(xml: string): string | null {
  * scope the cell-ID uniqueness check per <diagram>, and additionally check
  * that the <diagram> ids themselves are unique.
  *
- * The legacy regex-based check is kept as a fallback for non-mxfile inputs.
+ * Other inputs (a bare <mxGraphModel>) are one page: every id attribute in
+ * the text is counted.
  */
 function checkDuplicateIds(xml: string): string | null {
-    // The DOM-aware path only matters for <mxfile> wrappers; for legacy
-    // bare <mxGraphModel> inputs (the overwhelming majority of historic
-    // traffic), the cheap regex fallback at the bottom is enough. A quick
-    // string check avoids paying the DOMParser cost on every call.
+    // The DOM-aware path only matters for <mxfile> wrappers; for bare
+    // <mxGraphModel> inputs (the overwhelming majority of historic
+    // traffic), the cheap count at the bottom is enough. A quick string
+    // check avoids paying the DOMParser cost on every call.
     const mightBeMxFile = /<mxfile[\s>]/i.test(xml)
 
     // Try DOM-aware, page-scoped check first when the input looks mxfile-ish.
@@ -235,13 +283,10 @@ function checkDuplicateIds(xml: string): string | null {
         }
     }
 
-    // Legacy regex-based check for bare <mxGraphModel> inputs.
-    const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
+    // Bare <mxGraphModel> inputs: every id attribute in the text
     const ids = new Map<string, number>()
-    let idMatch
-    while ((idMatch = idPattern.exec(xml)) !== null) {
-        const id = idMatch[1]
-        ids.set(id, (ids.get(id) || 0) + 1)
+    for (const { id } of findIds(xml)) {
+        if (id) ids.set(id, (ids.get(id) || 0) + 1)
     }
     const duplicateIds = Array.from(ids.entries())
         .filter(([, count]) => count > 1)
@@ -369,7 +414,7 @@ export function validateMxCellStructure(
         if (!doc.querySelector("parsererror")) {
             const text = findTextBetweenTags(doc.documentElement)
             if (text) {
-                return `Invalid XML: Found text "${text}" between tags. Labels belong in the value attribute; remove any other text between tags.`
+                return `Invalid XML: Found text "${text}" between tags. Labels belong in the value attribute, with a " or < inside them written as &quot; or &lt;; remove any other text between tags.`
             }
         }
     } catch (error) {
@@ -392,7 +437,7 @@ export function validateMxCellStructure(
     }
 
     // 3. Check for empty id attributes on mxCell
-    if (/<mxCell[^>]*\sid\s*=\s*["']\s*["'][^>]*>/g.test(xml)) {
+    if (findIds(xml).some((a) => a.tagName === "mxCell" && !a.id.trim())) {
         return "Invalid XML: Found mxCell element(s) with empty id attribute"
     }
 
@@ -434,21 +479,78 @@ export function validateMxCellStructure(
  * @returns Object with fixed XML and list of fixes applied
  */
 /**
- * A compact cell's last attribute is a number, and the model sometimes
- * drops its closing quote: h="112/>. Only a cell whose earlier attributes
- * are all properly quoted is touched, so a label that happens to contain
- * such text is left alone.
+ * The model sometimes drops the closing quote of a number attribute:
+ * h="112/> at the end of a compact cell, w="78 h="38" between two
+ * attributes, <mxPoint x="150" y="244/> on a waypoint. The value then runs
+ * on into the tags that follow and the whole drawing is rejected. The quote
+ * is added only where the tag's attributes up to that number are properly
+ * quoted, so a label that happens to contain such text is left alone.
  */
-export function repairQuoteBeforeSlash(xml: string): string {
+export function repairNumberQuotes(xml: string): string {
+    // A tag's quoted attributes, then a number left open before the next
+    // attribute or the end of the tag
+    const openNumber =
+        /(<(?:mxCell|mxGeometry|mxPoint)\b(?:\s+[\w:.-]+="[^"]*")*?\s+(?:x|y|w|h|width|height)="-?\d+(?:\.\d+)?)(?=\s+[\w:.-]+="|\s*\/>)/g
+    // Each pass closes the first open number of every tag, and a tag may
+    // have two: w="24 h="25/>
+    let before: string
+    let after = xml
+    do {
+        before = after
+        after = before.replace(openNumber, '$1"')
+    } while (after !== before)
+    return after
+}
+
+/**
+ * A compact cell written without the slash: <mxCell ... h="60"> followed by
+ * the next cell, a definition, the end of the page or the end of the XML.
+ * Only cells that carry a size or a connection, so an open container stays
+ * open, and not an edge="1" cell at the very end of the XML: an edge in the
+ * long form ends its opening tag with ">" before its mxGeometry, where
+ * output that was cut off may stop.
+ */
+export function closeSlashlessCells(xml: string): string {
     return xml.replace(
-        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)(\s+(?:x|y|w|h|width|height)="-?\d+(?:\.\d+)?)\s*\/>/g,
-        '<mxCell$1$2"/>',
+        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)\s*>(?=\s*(?:<mxCell\b|<mxStyle\b|<\/root>|$))/g,
+        (tag, attrText: string, offset: number) =>
+            /\s(?:x|y|w|h|width|height|source|target)="/.test(attrText) &&
+            !(
+                /\sedge="1"/.test(attrText) &&
+                xml.slice(offset + tag.length).trim() === ""
+            )
+                ? `<mxCell${attrText}/>`
+                : tag,
     )
+}
+
+/**
+ * What a model sometimes puts around its XML: a Markdown code fence, a
+ * CDATA section, a sentence after the last tag. Left in place, they make
+ * complete XML look like output cut off inside a cell.
+ */
+export function stripWrapping(xml: string): string {
+    return xml
+        .trim()
+        .replace(/^```[\w-]*\s*/, "")
+        .replace(/^<!\[CDATA\[\s*/, "")
+        .replace(/>(?:\s*\]\]>)?[^<>]*$/, ">")
 }
 
 export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     let fixed = xml
     const fixes: string[] = []
+
+    // Before every other step: the control characters XML 1.0 does not
+    // allow, which are all below the space except tab, line feed and
+    // carriage return. A model now and then ends a style value with one,
+    // and the parser then rejects the cell.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the characters to remove
+    const allowed = fixed.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+    if (allowed !== fixed) {
+        fixed = allowed
+        fixes.push("Removed control characters that XML does not allow")
+    }
 
     // 0. Fix JSON-escaped XML
     if (/=\\"/.test(fixed)) {
@@ -477,6 +579,16 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     if (xmlStart > 0 && !/^<[a-zA-Z]/.test(fixed.trim())) {
         fixed = fixed.substring(xmlStart)
         fixes.push("Removed text before XML root")
+    }
+
+    // 2b. Missing closing quote of a number attribute (h="112/>), see
+    // repairNumberQuotes. Before the steps below, which read attributes by
+    // their quotes: one missing quote makes them pair every later quote
+    // wrongly and escape the tags that follow as if they were a label.
+    const quoted = repairNumberQuotes(fixed)
+    if (quoted !== fixed) {
+        fixed = quoted
+        fixes.push("Added the missing closing quote of number attributes")
     }
 
     // 3. Fix duplicate attributes
@@ -532,24 +644,8 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         fixes.push("Fixed malformed attribute quotes")
     }
 
-    // 6b. Missing closing quote on the last attribute of a compact cell
-    // (h="112/>), see repairQuoteBeforeSlash
-    const quoted = repairQuoteBeforeSlash(fixed)
-    if (quoted !== fixed) {
-        fixed = quoted
-        fixes.push("Added a missing closing quote before />")
-    }
-
-    // 6c. A compact cell written without the slash: <mxCell ... h="60">
-    // followed by the next cell, a definition or the end. Only cells that
-    // carry a size or a connection, so an open container stays open.
-    const slashless =
-        /<mxCell\b((?:\s+[\w:.-]+="[^"]*")*)\s*>(?=\s*(?:<mxCell\b|<mxStyle\b|$))/g
-    const closed = fixed.replace(slashless, (tag, attrText: string) =>
-        /\s(?:x|y|w|h|width|height|source|target)="/.test(attrText)
-            ? `<mxCell${attrText}/>`
-            : tag,
-    )
+    // 6c. A compact cell written without the slash, see closeSlashlessCells
+    const closed = closeSlashlessCells(fixed)
     if (closed !== fixed) {
         fixed = closed
         fixes.push("Closed compact cells written without the slash")
@@ -671,29 +767,59 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
         )
     }
 
-    // 16b. Remove orphan <mxPoint>s (no "as" attribute, not inside
-    // <Array as="points">), which draw.io refuses to load
+    // 17. Fix unclosed tags. What a cell left open (its <mxGeometry>, the
+    // <Array> of its waypoints) is closed right before the </mxGeometry> or
+    // </mxCell> that follows: closed at the end of the document, as the
+    // other open tags are below, that one cell would fail the whole
+    // drawing. (A cell without its own </mxCell> is left to the end of the
+    // document and steps 20 and 21.)
+    const tagStack: string[] = []
+    const parsedTags = parseXmlTags(fixed)
+    const closedInCell: { at: number; names: string[] }[] = []
+
+    for (const {
+        tagName,
+        isClosing,
+        isSelfClosing,
+        startIndex,
+    } of parsedTags) {
+        if (isClosing) {
+            const lastIdx = tagStack.lastIndexOf(tagName)
+            if (lastIdx === -1) continue
+            if (
+                (tagName === "mxCell" || tagName === "mxGeometry") &&
+                lastIdx < tagStack.length - 1
+            ) {
+                const stillOpen = tagStack.splice(lastIdx).slice(1).reverse()
+                closedInCell.push({ at: startIndex, names: stillOpen })
+            } else {
+                tagStack.splice(lastIdx, 1)
+            }
+        } else if (!isSelfClosing) {
+            tagStack.push(tagName)
+        }
+    }
+    // From the end, so earlier positions stay valid
+    for (const { at, names } of closedInCell.reverse()) {
+        const closingTags = names.map((name) => `</${name}>`).join("")
+        fixed = fixed.slice(0, at) + closingTags + fixed.slice(at)
+    }
+    if (closedInCell.length > 0) {
+        fixes.push(
+            `Closed unclosed tag(s) inside their cell: ${closedInCell.flatMap(({ names }) => names).join(", ")}`,
+        )
+    }
+
+    // 17b. Remove orphan <mxPoint>s (no "as" attribute, not inside
+    // <Array as="points">), which draw.io refuses to load. After the cells'
+    // open tags are closed: the waypoints of an <Array> that lacked its
+    // closing tag are no orphans
     const orphanPoints = findOrphanMxPoints(fixed)
     if (orphanPoints.length > 0) {
         for (const { start, end } of orphanPoints.reverse()) {
             fixed = fixed.slice(0, start) + fixed.slice(end)
         }
         fixes.push(`Removed ${orphanPoints.length} orphan <mxPoint>(s)`)
-    }
-
-    // 17. Fix unclosed tags
-    const tagStack: string[] = []
-    const parsedTags = parseXmlTags(fixed)
-
-    for (const { tagName, isClosing, isSelfClosing } of parsedTags) {
-        if (isClosing) {
-            const lastIdx = tagStack.lastIndexOf(tagName)
-            if (lastIdx !== -1) {
-                tagStack.splice(lastIdx, 1)
-            }
-        } else if (!isSelfClosing) {
-            tagStack.push(tagName)
-        }
     }
 
     if (tagStack.length > 0) {
@@ -912,51 +1038,33 @@ export function autoFixXml(xml: string): { fixed: string; fixes: string[] } {
     // checkDuplicateIds() and a true duplicate produces a hard error rather
     // than a silent rename.
     if (!/<mxfile[\s>]/i.test(fixed)) {
+        // The first cell keeps the id; each later one gets a suffix
         const seenIds = new Map<string, number>()
-        const duplicateIds: string[] = []
-
-        const idPattern = /\bid\s*=\s*["']([^"']+)["']/gi
-        let idMatch
-        while ((idMatch = idPattern.exec(fixed)) !== null) {
-            const id = idMatch[1]
-            seenIds.set(id, (seenIds.get(id) || 0) + 1)
-        }
-
-        for (const [id, count] of seenIds) {
-            if (count > 1) duplicateIds.push(id)
-        }
-
-        if (duplicateIds.length > 0) {
-            const idCounters = new Map<string, number>()
-            // Rebuild from the captured parts so only the value changes (an id
-            // like "d" or "i" also occurs in the attribute name itself)
-            fixed = fixed.replace(
-                /(\bid\s*=\s*["'])([^"']+)(["'])/gi,
-                (match, before, id, after) => {
-                    if (!duplicateIds.includes(id)) return match
-
-                    const count = idCounters.get(id) || 0
-                    idCounters.set(id, count + 1)
-
-                    if (count === 0) return match
-
-                    return `${before}${id}_dup${count}${after}`
-                },
+        const renamed: string[] = []
+        fixed = rewriteIds(fixed, (_tagName, id) => {
+            if (!id) return undefined
+            const count = seenIds.get(id) || 0
+            seenIds.set(id, count + 1)
+            if (count === 0) return undefined
+            renamed.push(`${id} to ${id}_dup${count}`)
+            return `${id}_dup${count}`
+        })
+        if (renamed.length > 0) {
+            // With the new ids: the MCP server tells the model, which would
+            // otherwise edit the first cell when it means the second
+            fixes.push(
+                `Renamed duplicate ids (the first cell keeps its id; edges still name it): ${renamed.join(", ")}`,
             )
-            fixes.push(`Renamed ${duplicateIds.length} duplicate ID(s)`)
         }
     }
 
     // 23. Fix empty id attributes
     let emptyIdCount = 0
-    fixed = fixed.replace(
-        /<mxCell([^>]*)\sid\s*=\s*["']\s*["']([^>]*)>/g,
-        (_match, before, after) => {
-            emptyIdCount++
-            const newId = `cell_${Date.now()}_${emptyIdCount}`
-            return `<mxCell${before} id="${newId}"${after}>`
-        },
-    )
+    fixed = rewriteIds(fixed, (tagName, id) => {
+        if (tagName !== "mxCell" || id.trim()) return undefined
+        emptyIdCount++
+        return `cell_${Date.now()}_${emptyIdCount}`
+    })
     if (emptyIdCount > 0) {
         fixes.push(`Generated ${emptyIdCount} missing ID(s)`)
     }

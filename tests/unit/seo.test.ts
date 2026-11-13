@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { localeAlternates } from "@/lib/seo"
+import { i18n } from "@/lib/i18n/config"
+import { APP_DESCRIPTION, KEYWORDS, localeAlternates } from "@/lib/seo"
 
 describe("localeAlternates", () => {
     it("points x-default at the English page, not the redirecting bare URL", () => {
@@ -13,5 +14,20 @@ describe("localeAlternates", () => {
         expect(localeAlternates("ja", "").languages).toMatchObject({
             "x-default": "/en",
         })
+    })
+})
+
+describe("the keywords and the description every page carries", () => {
+    it("are written in each language, not copied from English", () => {
+        for (const locale of i18n.locales.filter((l) => l !== "en")) {
+            expect(KEYWORDS[locale]).toHaveLength(KEYWORDS.en.length)
+            // The product name is the same everywhere
+            expect(
+                KEYWORDS[locale].filter(
+                    (word) => word !== "draw.io" && KEYWORDS.en.includes(word),
+                ),
+            ).toEqual([])
+            expect(APP_DESCRIPTION[locale]).toMatch(/[\u3040-\u9fff]/)
+        }
     })
 })

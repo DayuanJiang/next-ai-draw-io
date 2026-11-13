@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { useLocale } from "@/components/canvas/locale-context"
 import {
     Tooltip,
@@ -18,9 +19,15 @@ function formatUsd(usd: number): string {
 
 /**
  * An answer's input and output tokens and its time, in the row of buttons
- * under it; pointing at it shows the details and the estimated cost
+ * under it; pointing at it shows the details and the estimated cost.
+ * Memoized: the list renders again on each streamed chunk, and making the
+ * number formats of every earlier answer each time is slow in a long chat.
  */
-export function ReplyUsageNote({ usage }: { usage: ReplyUsage }) {
+export const ReplyUsageNote = memo(function ReplyUsageNote({
+    usage,
+}: {
+    usage: ReplyUsage
+}) {
     const t = useDictionary().chat
     const locale = useLocale()
     const exact = new Intl.NumberFormat(locale)
@@ -44,7 +51,9 @@ export function ReplyUsageNote({ usage }: { usage: ReplyUsage }) {
     ].filter((row) => !row.part || row.tokens > 0)
 
     return (
-        <Tooltip>
+        // The pointer can move on to the details, to read them with a screen
+        // magnifier or select a number
+        <Tooltip disableHoverableContent={false}>
             <TooltipTrigger asChild>
                 <span
                     // Focusable, so the keyboard reaches the details too
@@ -114,4 +123,4 @@ export function ReplyUsageNote({ usage }: { usage: ReplyUsage }) {
             </TooltipContent>
         </Tooltip>
     )
-}
+})

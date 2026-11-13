@@ -10,7 +10,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
-import { expect, type Page, test } from "@playwright/test"
+import { expect, type FrameLocator, type Page, test } from "@playwright/test"
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "../..")
 
@@ -73,6 +73,8 @@ test("start_session opens the shell, which loads the bundled draw.io", async ({
     })
     const frame = page.frameLocator("iframe[title='draw.io']")
     await expect(frame.locator(".geDiagramContainer")).toBeVisible()
+    // The canvas is the page's main landmark, for screen readers
+    await expect(page.getByRole("main").locator("iframe")).toHaveCount(1)
 
     // The shell's own texts and state: the first poll connects it
     await expect(page.getByTestId("shell-status")).toHaveText(
@@ -186,6 +188,90 @@ test("a change made in the editor is pushed, and get_diagram returns it", async 
         .toBe(true)
 })
 
+test("a page tool on top of a hand edit leaves that edit to be told with the next edit", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    const onePage = (id: string, name: string, cells: string) =>
+        `<diagram id="${id}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+    await toolText("create_new_diagram", {
+        xml: `<mxfile>${onePage("pg1", "Flow", box("2", "Drawn by AI", 40))}${onePage("pg2", "Data", box("2", "Table", 40))}</mxfile>`,
+    })
+    await expect(frame.getByText("Drawn by AI")).toBeVisible({
+        timeout: 10_000,
+    })
+    await addByHand(frame, "hand-1", "Added by hand")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="hand-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    // The model has not seen the shape when it renames the other page
+    expect(
+        await toolText("rename_page", { page_index: 1, new_name: "Entities" }),
+    ).toContain('renamed to "Entities"')
+    const edit = {
+        page_index: 0,
+        operations: [
+            { operation: "add", cell_id: "9", new_xml: box("9", "Next", 240) },
+        ],
+    }
+    // Refused once, with the user's change and the page as it is now
+    const refused = await toolText("edit_diagram", edit)
+    expect(refused).toContain(
+        'Since you last saw it, the user changed the diagram: page index=0 added hand-1 ("Added by hand").',
+    )
+    expect(refused).toContain("Build your operations on this XML and retry.")
+    expect(await toolText("edit_diagram", edit)).toContain(
+        "Applied 1 operation(s)",
+    )
+    // A page added on top of the next hand edit: get_diagram tells it
+    await expect(frame.getByText("Next")).toBeVisible({ timeout: 10_000 })
+    await addByHand(frame, "hand-2", "Second by hand")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="hand-2"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await toolText("add_page", { name: "Notes" })
+    expect(await toolText("get_diagram")).toContain(
+        'Note: Since you last saw it, the user changed the diagram: page index=0 added hand-2 ("Second by hand").',
+    )
+    // Hand edits on two pages: the refused edit of one of them shows the
+    // whole document, so that the retry is not refused for the other page
+    const tabs = frame.locator(".geTabContainer")
+    for (const [tab, id] of [
+        ["Flow", "hand-3"],
+        ["Entities", "hand-4"],
+    ]) {
+        await tabs.getByText(tab, { exact: true }).click()
+        await expect(tabs.locator(".geActivePage")).toHaveText(tab)
+        await addByHand(frame, id, `${id} label`)
+        await expect
+            .poll(async () => (await serverXml(page)).includes(`id="${id}"`), {
+                timeout: 10_000,
+            })
+            .toBe(true)
+    }
+    const twoPages = {
+        page_index: 0,
+        operations: [
+            {
+                operation: "add",
+                cell_id: "10",
+                new_xml: box("10", "Last", 440),
+            },
+        ],
+    }
+    const both = await toolText("edit_diagram", twoPages)
+    expect(both).toContain("Current XML of the whole document")
+    expect(both).toContain('page index=1 added hand-4 ("hand-4 label")')
+    expect(both).toContain('name="Entities"')
+    expect(await toolText("edit_diagram", twoPages)).toContain(
+        "Applied 1 operation(s)",
+    )
+})
+
 test("exporting another page shows it for a moment, then the user's page comes back", async ({
     page,
 }) => {
@@ -222,6 +308,63 @@ test("exporting another page shows it for a moment, then the user's page comes b
     const xml = await toolText("get_diagram")
     expect(xml).toContain('value="First page"')
     expect(xml).toContain('name="Second"')
+    // Without a selector the result names the page that was on screen
+    const onScreen = await toolText("export_diagram", {
+        path: join(dataDir, "on-screen.png"),
+    })
+    expect(onScreen).toContain(
+        'showing page "Page-1", the one on screen; the diagram has 2 pages, pass page_index to export another',
+    )
+})
+
+test("a .drawio.svg path with format svg still gets a file load_diagram can open", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Editable", 40) })
+    await expect(frame.getByText("Editable")).toBeVisible({ timeout: 10_000 })
+    const file = join(dataDir, "editable.drawio.svg")
+    const text = await toolText("export_diagram", { path: file, format: "svg" })
+    expect(text).toContain("Format: drawio.svg")
+    expect(text).toContain("Embedded diagram: Pages (1)")
+    // A plain SVG under this name was refused: "no embedded diagram"
+    expect(await toolText("load_diagram", { path: file })).toContain(
+        `Diagram loaded from ${file}`,
+    )
+})
+
+test("an exported SVG keeps its light colors and gets a white background, the page's own color, or none", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    const exportSvg = async (name: string, args = {}) => {
+        const file = join(dataDir, name)
+        const text = await toolText("export_diagram", { path: file, ...args })
+        expect(text).toContain("exported successfully")
+        // The <svg> element's own style
+        return readFileSync(file, "utf8").match(/<svg\b[^>]*>/)?.[0] ?? ""
+    }
+    await toolText("create_new_diagram", { xml: box("2", "On white", 40) })
+    await expect(frame.getByText("On white")).toBeVisible({ timeout: 10_000 })
+    // draw.io's default follows the viewer's dark mode ("color-scheme:
+    // light dark", no background): dark shapes on a white web page
+    for (const name of ["plain.svg", "plain.drawio.svg"]) {
+        const svg = await exportSvg(name)
+        expect(svg).toContain("background: #ffffff;")
+        expect(svg).toContain("color-scheme: light;")
+    }
+    const clear = await exportSvg("clear.svg", { transparent: true })
+    expect(clear).toContain("background: transparent;")
+    expect(clear).toContain("color-scheme: light;")
+    // A page with a background color of its own keeps it
+    await toolText("create_new_diagram", {
+        xml: `<mxGraphModel background="#1f2a44"><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="On navy" style="fontColor=#ffffff;fillColor=none;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="120" height="60" as="geometry"/></mxCell></root></mxGraphModel>`,
+    })
+    await expect(frame.getByText("On navy")).toBeVisible({ timeout: 10_000 })
+    expect(await exportSvg("navy.svg")).toContain("background: #1f2a44;")
+    expect(
+        await exportSvg("navy-clear.drawio.svg", { transparent: true }),
+    ).toContain("background: transparent;")
 })
 
 test("a screenshot of another page leaves the page on screen alone", async ({
@@ -272,6 +415,18 @@ test("a screenshot of another page leaves the page on screen alone", async ({
     expect(await toolText("get_selection")).toContain('page "Page-1"')
     // Another picture than the page on screen
     expect(await png({})).not.toBe(back)
+    // The text beside the picture says what to do when the client passes
+    // the model no picture
+    const text = await toolText("screenshot_diagram", { page_name: "Backside" })
+    expect(text).toContain(
+        'Screenshot of page name="Backside". If no image came with this result,',
+    )
+    expect(text).toContain("do not take more screenshots")
+    // And when the next one is worth its time: a model that got a picture
+    // asks for one with every small edit otherwise
+    expect(text).toContain(
+        "From now on pass screenshot: true only with a change that adds or moves several shapes",
+    )
 })
 
 test("get_selection reports the cells selected in the editor", async ({
@@ -347,11 +502,13 @@ test("the download button saves the diagram as a file", async ({ page }) => {
     expect(file.suggestedFilename()).toMatch(
         /^diagram-\d{4}-\d{2}-\d{2}\.drawio$/,
     )
-    // draw.io's own export of the document (compressed pages, as the web
-    // app saves them; load_diagram opens them)
+    // draw.io's own export of the document, its pages as plain XML (as
+    // export_diagram writes them): a diff or another tool can read it
     const saved = readFileSync(await file.path(), "utf8")
     expect(saved).toMatch(/^<mxfile\b/)
     expect(saved).toContain('name="Page-1"')
+    expect(saved).toContain("<mxGraphModel")
+    expect(saved).toContain('value="Keep me"')
 })
 
 test("the download waits for a page export's projection, and saves every page", async ({
@@ -411,6 +568,447 @@ test("the download waits for a page export's projection, and saves every page", 
     expect(await exported).toContain("exported successfully")
 })
 
+test("a box the AI adds around shapes goes behind them: a click still selects the shape", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Framed one", 100)}\n${box("3", "Framed two", 300)}`,
+    })
+    await expect(frame.getByText("Framed one")).toBeVisible({ timeout: 10_000 })
+    const added = await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "grp",
+                new_xml:
+                    '<mxCell id="grp" value="Around both" style="fillColor=none;dashed=1;verticalAlign=top;" x="60" y="0" w="420" h="140"/>',
+            },
+        ],
+    })
+    expect(added).toContain(
+        "grp is drawn behind the shapes it covers (2, 3), so they stay visible and can be selected.",
+    )
+    await expect(frame.getByText("Around both")).toBeVisible({
+        timeout: 10_000,
+    })
+    const selected = () =>
+        frame.locator("body").evaluate(
+            (body) =>
+                new Promise<string[]>((resolve) => {
+                    const w = body.ownerDocument.defaultView as any
+                    w.Draw.loadPlugin((ui: any) =>
+                        resolve(
+                            ui.editor.graph
+                                .getSelectionCells()
+                                .map((cell: any) => cell.id),
+                        ),
+                    )
+                }),
+        )
+    // A box in front of them takes the click: draw.io selects the topmost
+    // cell, and the inside of a box is clickable also without a fill
+    await frame.getByText("Framed one").click()
+    expect(await selected()).toEqual(["2"])
+    await frame.getByText("Around both").click()
+    expect(await selected()).toEqual(["grp"])
+})
+
+/** A shape added in the editor, as the user would draw one */
+const addByHand = (frame: FrameLocator, id: string, label: string) =>
+    frame.locator("body").evaluate(
+        (body, cell) => {
+            const w = body.ownerDocument.defaultView as any
+            w.Draw.loadPlugin((ui: any) => {
+                const graph = ui.editor.graph
+                graph.getModel().beginUpdate()
+                try {
+                    graph.insertVertex(
+                        graph.getDefaultParent(),
+                        cell.id,
+                        cell.label,
+                        40,
+                        200,
+                        120,
+                        60,
+                        "rounded=1;",
+                    )
+                } finally {
+                    graph.getModel().endUpdate()
+                }
+            })
+        },
+        { id, label },
+    )
+
+/** The server's document, read as the page polls it: get_diagram would ask
+ * the tab for its canvas first */
+const serverXml = (page: Page) =>
+    page.evaluate(async () => {
+        const config = (window as any).__MCP_CONFIG__
+        const r = await fetch(`/api/state?sessionId=${config.sessionId}`, {
+            headers: { "X-Drawio-Token": config.token },
+        })
+        return String((await r.json()).xml)
+    })
+
+test("a hand edit whose save failed is sent again once the server answers", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Retry me", 40) })
+    await expect(frame.getByText("Retry me")).toBeVisible({ timeout: 10_000 })
+    // The connection drops for the edit's POST only, as a tunnel or a proxy
+    // in front of a remote preview does; the polls get through
+    let dropped = 0
+    await page.route("**/api/state", async (route) => {
+        const request = route.request()
+        if (
+            request.method() === "POST" &&
+            dropped === 0 &&
+            (request.postData() ?? "").includes('"source":"edit"')
+        ) {
+            dropped++
+            await route.abort("connectionfailed")
+            return
+        }
+        await route.continue()
+    })
+    await addByHand(frame, "retry-1", "Sent again")
+    await expect(frame.getByText("Sent again")).toBeVisible()
+    await expect.poll(() => dropped).toBe(1)
+    // The next poll gets through, and the edit follows it
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="retry-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    // The notice about the unreachable server is gone again
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    await expect(page.getByText(/only in this tab/)).toHaveCount(0)
+})
+
+test("a hand edit whose save fails twice is kept as a version when the AI wrote in between", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Left alone", 40)}\n${box("3", "For the AI", 240)}`,
+    })
+    await expect(frame.getByText("For the AI")).toBeVisible({ timeout: 10_000 })
+    // The edit's POST fails twice, as on a connection that comes and goes.
+    // The polls wait until the AI has written, so the poll that sends the
+    // edit again also brings the AI's write
+    let dropped = 0
+    let release = () => {}
+    const aiWrote = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    await page.route("**/api/state**", async (route) => {
+        const request = route.request()
+        if (
+            request.method() === "POST" &&
+            dropped < 2 &&
+            (request.postData() ?? "").includes("Lost twice")
+        ) {
+            dropped++
+            await route.abort("connectionfailed")
+            return
+        }
+        if (request.method() === "GET") await aiWrote
+        await route.continue()
+    })
+    await addByHand(frame, "twice-1", "Lost twice")
+    await expect.poll(() => dropped).toBe(1)
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "update",
+                cell_id: "3",
+                new_xml: box("3", "AI was here", 240),
+            },
+        ],
+    })
+    release()
+    await expect(frame.getByText("AI was here")).toBeVisible({
+        timeout: 10_000,
+    })
+    await expect.poll(() => dropped, { timeout: 10_000 }).toBe(2)
+    // The AI's write replaced the edit on the canvas. Sent a third time,
+    // it reaches the server, which keeps it as a version; the page says so
+    await expect(frame.getByText("Lost twice")).toHaveCount(0)
+    await expect(
+        page.getByText(/Your last change was saved in the Versions panel/),
+    ).toBeVisible({ timeout: 10_000 })
+    const kept = await page.evaluate(async () => {
+        const config = (window as any).__MCP_CONFIG__
+        const r = await fetch(`/api/history?sessionId=${config.sessionId}`, {
+            headers: { "X-Drawio-Token": config.token },
+        })
+        const entries: { xml: string }[] = (await r.json()).entries
+        return entries.some((e) => e.xml.includes("Lost twice"))
+    })
+    expect(kept).toBe(true)
+    // Its card counts from the diagram the edit was made on: counted from
+    // the AI's write, that write's change would show too, as undone
+    const card = page.getByTestId("version-card").last()
+    await expect(card).toContainText("Changed by hand")
+    await expect(card).toContainText("Added 1 shape")
+    await expect(card).not.toContainText("changed 1 shape")
+    // The model is told with its next tool result, whichever tool, once
+    expect(await toolText("list_pages")).toContain(
+        'Note: While you were writing, the user changed the diagram by hand: added twice-1 ("Lost twice"). That edit is not in the diagram',
+    )
+    expect(await toolText("list_pages")).not.toContain("While you were writing")
+})
+
+test("the notice stays while the polls get through and the edit's saves keep failing", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Polls only", 40) })
+    await expect(frame.getByText("Polls only")).toBeVisible({ timeout: 10_000 })
+    // A proxy in front of a remote preview that lets GET through and
+    // fails POST: every poll is answered, no save arrives
+    let failing = true
+    let dropped = 0
+    await page.route("**/api/state", async (route) => {
+        const request = route.request()
+        if (
+            failing &&
+            request.method() === "POST" &&
+            (request.postData() ?? "").includes('"source":"edit"')
+        ) {
+            dropped++
+            await route.abort("connectionfailed")
+            return
+        }
+        await route.continue()
+    })
+    await addByHand(frame, "polls-1", "Saved later")
+    const notice = page.getByText(/only in this tab/)
+    const status = page.getByTestId("shell-status")
+    await expect(notice).toBeVisible()
+    // Three polls later the edit was sent again three times, in vain
+    await expect.poll(() => dropped, { timeout: 15_000 }).toBeGreaterThan(3)
+    await expect(notice).toBeVisible()
+    await expect(status).toHaveAttribute("data-status", "offline")
+    // The saves arrive again: the edit is saved and the notice goes
+    failing = false
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="polls-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await expect(status).toHaveAttribute("data-status", "connected")
+    await expect(notice).toHaveCount(0)
+})
+
+test("the notice stays and the browser asks before the page is left while an edit is not saved", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Stay or go", 40) })
+    await expect(frame.getByText("Stay or go")).toBeVisible({ timeout: 10_000 })
+    // The server cannot be reached any more (the MCP client was closed)
+    await page.route("**/api/**", (route) => route.abort("connectionrefused"))
+    // Chrome asks only on a page the user has clicked on
+    await page.getByText("Next AI Draw.io").click()
+    await addByHand(frame, "unsent-1", "Not saved yet")
+    const notice = page.getByText(/only in this tab/)
+    await expect(notice).toBeVisible()
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "offline",
+    )
+    const asked = page.waitForEvent("dialog")
+    await page.evaluate(() => {
+        setTimeout(() => location.reload(), 0)
+    })
+    const dialog = await asked
+    expect(dialog.type()).toBe("beforeunload")
+    await dialog.dismiss()
+    // The user stayed: the edit is on the canvas, and the notice is still
+    // up after the 8 s other notices get
+    await page.waitForTimeout(8500)
+    await expect(frame.getByText("Not saved yet")).toBeVisible()
+    await expect(notice).toBeVisible()
+    // The server answers again: the edit is saved and the notice goes
+    await page.unroute("**/api/**")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="unsent-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await expect(notice).toHaveCount(0)
+})
+
+test("the browser asks before the page is left while the diagram is too large to save", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", { xml: box("2", "Small so far", 40) })
+    await expect(frame.getByText("Small so far")).toBeVisible({
+        timeout: 10_000,
+    })
+    // Chrome asks only on a page the user has clicked on
+    await page.getByText("Next AI Draw.io").click()
+    // The user pastes a picture of 11 MB: over the server's 10 MiB
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => {
+            const graph = ui.editor.graph
+            graph.getModel().beginUpdate()
+            try {
+                graph.insertVertex(
+                    graph.getDefaultParent(),
+                    "big-1",
+                    "Big picture",
+                    40,
+                    200,
+                    120,
+                    120,
+                    `shape=image;image=data:image/png,${"A".repeat(11 * 1024 * 1024)}`,
+                )
+            } finally {
+                graph.getModel().endUpdate()
+            }
+        })
+    })
+    await expect(page.getByText(/too large to save/)).toBeVisible({
+        timeout: 20_000,
+    })
+    const asked = page.waitForEvent("dialog", { timeout: 5000 })
+    await page.evaluate(() => {
+        setTimeout(() => location.reload(), 0)
+    })
+    expect((await asked).type()).toBe("beforeunload")
+    await (await asked).dismiss()
+    // The user stayed: the picture is still on the canvas
+    await expect(frame.getByText("Big picture")).toBeVisible()
+})
+
+test("a picture from a host that does not answer leaves the canvas usable after a write and after a hand edit", async ({
+    page,
+}) => {
+    // Never answered and never failed: a slow or filtered host. draw.io
+    // downloads pictures from this host itself when it exports
+    await page.route("https://raw.githubusercontent.com/**", () => {})
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Beside the logo", 40)}\n<mxCell id="3" value="Logo" style="shape=image;image=https://raw.githubusercontent.com/acme/icons/main/logo.png;" x="240" y="40" w="80" h="80"/>`,
+    })
+    const shape = frame.getByText("Beside the logo")
+    await expect(shape).toBeVisible({ timeout: 10_000 })
+    // The picture for the write's version card is being made (asked for
+    // 500 ms after the load): the canvas takes a click
+    await page.waitForTimeout(1500)
+    await shape.click()
+    expect(await toolText("get_selection")).toContain(
+        'id="2" shape "Beside the logo"',
+    )
+    // A hand edit is saved with its picture, or without one after 2 s:
+    // the canvas takes a click then too
+    await addByHand(frame, "by-hand-1", "Added by hand")
+    await expect
+        .poll(async () => (await serverXml(page)).includes('id="by-hand-1"'), {
+            timeout: 10_000,
+        })
+        .toBe(true)
+    await frame.getByText("Added by hand").click()
+    expect(await toolText("get_selection")).toContain('id="by-hand-1"')
+})
+
+test("the cells the user selected stay selected when the AI changes the page", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Mine one", 40)}\n${box("3", "Mine two", 240)}\n${box("4", "Not mine", 440)}`,
+    })
+    await expect(frame.getByText("Mine two")).toBeVisible({ timeout: 10_000 })
+    await frame.locator("body").evaluate((body) => {
+        const w = body.ownerDocument.defaultView as any
+        w.Draw.loadPlugin((ui: any) => {
+            const graph = ui.editor.graph
+            graph.setSelectionCells([
+                graph.model.getCell("2"),
+                graph.model.getCell("3"),
+            ])
+        })
+    })
+    expect(await toolText("get_selection")).toContain("2 cells selected")
+    // "Make these green": the write replaces the page's cells in place
+    await toolText("edit_diagram", {
+        operations: ["2", "3"].map((id) => ({
+            operation: "update",
+            cell_id: id,
+            new_xml: `<mxCell id="${id}" value="Green ${id}" style="rounded=1;fillColor=#d5e8d4;" x="${id === "2" ? 40 : 240}" y="40" w="120" h="60"/>`,
+        })),
+    })
+    await expect(frame.getByText("Green 3")).toBeVisible({ timeout: 10_000 })
+    // What the AI changed is still outlined, and the user's selection is
+    // the same two cells: "now make them bigger" finds them
+    await expect(frame.locator('[stroke="#a86b00"]')).toHaveCount(2)
+    const selection = await toolText("get_selection")
+    expect(selection).toContain('2 cells selected on page "Page-1"')
+    expect(selection).toContain('id="2" shape "Green 2"')
+    expect(selection).toContain('id="3" shape "Green 3"')
+})
+
+test("an AI write waits while the user types a label, and the label is kept in History", async ({
+    page,
+}) => {
+    const frame = await openShell(page)
+    await toolText("create_new_diagram", {
+        xml: `${box("2", "Type here", 40)}\n${box("3", "AI target", 240)}`,
+    })
+    await expect(frame.getByText("Type here")).toBeVisible({ timeout: 10_000 })
+    await frame.getByText("Type here", { exact: true }).dblclick()
+    await page.keyboard.press("ControlOrMeta+a")
+    await page.keyboard.type("Half typed")
+    const labelEditor = frame.locator(".mxCellEditor")
+    await expect(labelEditor).toHaveCount(1)
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "update",
+                cell_id: "3",
+                new_xml: box("3", "AI wrote", 240),
+            },
+        ],
+    })
+    // The next poll brings the write: it is not loaded over the label
+    // being typed
+    await page.waitForTimeout(2600)
+    await expect(labelEditor).toHaveCount(1)
+    await expect(frame.getByText("AI wrote")).toHaveCount(0)
+    await page.keyboard.type(" label")
+    await frame
+        .locator(".geDiagramContainer")
+        .click({ position: { x: 400, y: 400 } })
+    // The finished label lost against the write: the page says so, the
+    // write is on the canvas and the label is in History
+    await expect(
+        page.getByText(/Your last change was saved in the Versions panel/),
+    ).toBeVisible({ timeout: 10_000 })
+    await expect(frame.getByText("AI wrote")).toBeVisible({ timeout: 10_000 })
+    const kept = await page.evaluate(async () => {
+        const config = (window as any).__MCP_CONFIG__
+        const r = await fetch(`/api/history?sessionId=${config.sessionId}`, {
+            headers: { "X-Drawio-Token": config.token },
+        })
+        const entries: { xml: string }[] = (await r.json()).entries
+        return entries.some((e) => e.xml.includes("Half typed label"))
+    })
+    expect(kept).toBe(true)
+    // No key went to the editor as a shortcut: the two layers, two shapes
+    expect((await serverXml(page)).match(/<mxCell /g)).toHaveLength(4)
+})
+
 // --- Version cards from the server's History (shell/node-versions-source.ts) ---
 
 test("the version cards follow the server's History; undo, redo and restore go through it", async ({
@@ -463,6 +1061,13 @@ test("the version cards follow the server's History; undo, redo and restore go t
     await expect(latestCard.getByTestId("version-undo")).toHaveText(
         /Undo change/,
     )
+    // In the narrow panel the title has its row to itself: not cut short
+    // beside the button
+    expect(
+        await latestCard
+            .getByTitle("Changed the diagram")
+            .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true)
 
     // Undo: the server restores the version before; the card says so
     await latestCard.getByTestId("version-undo").click()
@@ -546,6 +1151,104 @@ test("the version cards follow the server's History; undo, redo and restore go t
     )
     await expect(frame.getByText("By hand")).toBeVisible({ timeout: 10_000 })
     await expect(cards).toHaveCount(4)
+
+    // A page rename changes no shape: its card says what it was
+    await toolText("rename_page", { page_index: 0, new_name: "Overview" })
+    await expect(cards).toHaveCount(5, { timeout: 10_000 })
+    await expect(latestCard).toContainText("Renamed a page")
+    await expect(latestCard).not.toContainText("Changed the diagram")
+})
+
+/**
+ * What the page translator of Chrome, Edge and Yandex Browser does: every
+ * text node is replaced by <font><font>its translation</font></font>, and so
+ * is text that appears later. React still holds the nodes that were replaced.
+ * (As in the web app's tests/e2e/page-translator.spec.ts.)
+ */
+function startTranslator() {
+    const translate = () => {
+        const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+        )
+        const nodes: Node[] = []
+        while (walker.nextNode()) nodes.push(walker.currentNode)
+        for (const node of nodes) {
+            const parent = node.parentElement
+            if (!node.nodeValue?.trim() || !parent) continue
+            if (parent.closest("font, script, style, textarea, svg")) continue
+            const outer = document.createElement("font")
+            const inner = document.createElement("font")
+            inner.textContent = node.nodeValue
+            outer.appendChild(inner)
+            parent.replaceChild(outer, node)
+        }
+    }
+    translate()
+    let timer: ReturnType<typeof setTimeout>
+    new MutationObserver(() => {
+        clearTimeout(timer)
+        timer = setTimeout(translate, 30)
+    }).observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+    })
+}
+
+test("the preview stays up when the browser translates the page", async ({
+    page,
+}) => {
+    const errors: string[] = []
+    page.on("pageerror", (error) => errors.push(error.message))
+    // A session of its own: the tools write to the one started last
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+    const latestCard = page.getByTestId("version-card").last()
+    await toolText("create_new_diagram", { xml: box("t1", "Lingua A", 40) })
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "t2",
+                new_xml: box("t2", "Lingua B", 240),
+            },
+        ],
+    })
+    await expect(frame.getByText("Lingua B")).toBeVisible({ timeout: 10_000 })
+    await expect(latestCard.getByTestId("version-undo")).toHaveText(
+        /Undo change/,
+    )
+    await page.evaluate(startTranslator)
+    await expect(
+        latestCard.getByTestId("version-undo").locator("font font"),
+    ).toHaveText("Undo change")
+
+    // Undo puts the redo icon before the button's text, which the
+    // translator has replaced: the browser refuses that insertBefore, and
+    // an error in React's update would leave a blank page. The page's
+    // early script (shell/index.html) makes the call do nothing
+    await latestCard.getByTestId("version-undo").click()
+    await expect(frame.getByText("Lingua B")).toHaveCount(0, {
+        timeout: 10_000,
+    })
+    await expect(page.getByTestId("shell-status")).toBeVisible()
+    await expect(page.getByTestId("version-card")).not.toHaveCount(0)
+
+    // And the cards still work: redo brings the shape back
+    await latestCard.getByTestId("version-undo").click()
+    await expect(frame.getByText("Lingua B")).toBeVisible({ timeout: 10_000 })
+    expect(errors).toEqual([])
 })
 
 test("an edit with coordinates of 0 is not taken for a hand edit, and one undo takes it back", async ({
@@ -606,6 +1309,62 @@ test("an edit with coordinates of 0 is not taken for a hand edit, and one undo t
     await expect(frame.getByText("Zero B")).toBeVisible()
 })
 
+test("an edit with written-out defaults and long numbers is not taken for a hand edit, and one undo takes it back", async ({
+    page,
+}) => {
+    // A session of its own, so History holds only this test's versions
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+
+    await toolText("create_new_diagram", {
+        xml: [box("k1", "Kiwi A", 40), box("k2", "Kiwi B", 240)].join("\n"),
+    })
+    await expect(frame.getByText("Kiwi B")).toBeVisible({ timeout: 10_000 })
+    // draw.io writes this cell back without the flags and relative="0",
+    // and its numbers as 440, 40.5 and 120
+    await toolText("edit_diagram", {
+        operations: [
+            {
+                operation: "add",
+                cell_id: "k3",
+                new_xml: `<mxCell id="k3" value="Kiwi C" vertex="1" connectable="1" collapsed="0" visible="1" parent="1"><mxGeometry x="440.0" y="40.50" width="120.0" height="60" relative="0" as="geometry"/></mxCell>`,
+            },
+        ],
+    })
+    await expect(frame.getByText("Kiwi C")).toBeVisible({ timeout: 10_000 })
+    // draw.io's copy of the canvas reached the server, and is no hand edit
+    let read = ""
+    await expect
+        .poll(
+            async () => {
+                read = await toolText("get_diagram")
+                return read.includes("40.50")
+            },
+            { timeout: 10_000 },
+        )
+        .toBe(false)
+    expect(read).not.toContain("the user changed the diagram")
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+
+    expect(await toolText("restore_version", { steps_back: 1 })).toContain(
+        "Restored the version 1 step(s) back",
+    )
+    await expect(frame.getByText("Kiwi C")).toHaveCount(0, {
+        timeout: 10_000,
+    })
+    await expect(frame.getByText("Kiwi B")).toBeVisible()
+})
+
 test("draw.io's order of the cells is not taken for a hand edit, and one undo takes the drawing back", async ({
     page,
 }) => {
@@ -663,6 +1422,62 @@ test("draw.io's order of the cells is not taken for a hand edit, and one undo ta
     await expect(frame.getByText("Order first")).toBeVisible()
 })
 
+test("an edge to a missing cell and a page without root cells are not taken for a hand edit", async ({
+    page,
+}) => {
+    // A session of its own, so History holds only this test's versions
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+
+    // draw.io drops a target that names no cell; the server did so already
+    // and said it, so draw.io's copy is no change
+    const drawn = await toolText("create_new_diagram", {
+        xml: [
+            box("d1", "Dangling A", 40),
+            box("d2", "Dangling B", 240),
+            '<mxCell id="d3" source="d1" target="nowhere"/>',
+        ].join("\n"),
+    })
+    expect(drawn).toContain('d3 (target "nowhere")')
+    await expect(frame.getByText("Dangling B")).toBeVisible({ timeout: 10_000 })
+    // An export sends draw.io's copy of the canvas to the server
+    await toolText("export_diagram", { path: join(dataDir, "dangling.drawio") })
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+    expect(await toolText("get_diagram")).not.toContain("the user changed")
+    expect(
+        await toolText("edit_diagram", {
+            operations: [
+                {
+                    operation: "update",
+                    cell_id: "d2",
+                    new_xml: box("d2", "Dangling B2", 240),
+                },
+            ],
+        }),
+    ).toContain("Diagram edited successfully")
+
+    // A page the model wrote in full without the root cells shows its shape
+    await toolText("create_new_diagram", {
+        xml: `<mxGraphModel><root>${box("r1", "No root cells", 40)}</root></mxGraphModel>`,
+    })
+    await expect(frame.getByText("No root cells")).toBeVisible({
+        timeout: 10_000,
+    })
+    await toolText("export_diagram", { path: join(dataDir, "roots.drawio") })
+    await expect(page.getByTestId("version-edited-since")).toHaveCount(0)
+    expect(await toolText("get_diagram")).not.toContain("the user changed")
+})
+
 test("the theme toggle switches the page and draw.io, and is remembered", async ({
     page,
 }) => {
@@ -689,4 +1504,143 @@ test("the theme toggle switches the page and draw.io, and is remembered", async 
     await expect(html).toHaveClass(/dark/)
     await page.getByTestId("theme-toggle").click()
     await expect(html).not.toHaveClass(/dark/)
+})
+
+// --- draw.io inside the shell (lib/drawio/drawio-config.ts DRAWIO_CSS) ---
+
+test("the editor stays in place when draw.io brings a page's tab into view", async ({
+    page,
+}) => {
+    // A session of its own: the tools write to the one started last
+    const started = await toolText("start_session")
+    const url = started.match(/Browser URL: (\S+)/)?.[1]
+    if (!url) throw new Error(`start_session gave no URL:\n${started}`)
+    await page.goto(url)
+    await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+        timeout: 60_000,
+    })
+    await expect(page.getByTestId("shell-status")).toHaveAttribute(
+        "data-status",
+        "connected",
+    )
+    const frame = page.frameLocator("iframe[title='draw.io']")
+    await toolText("create_new_diagram", { xml: box("2", "Tab first", 40) })
+    await expect(frame.getByText("Tab first")).toBeVisible({ timeout: 10_000 })
+    // More tabs than the tab bar shows at once
+    for (let i = 1; i <= 8; i++) {
+        await toolText("add_page", { name: `Service ${i} overview` })
+    }
+    await expect(
+        frame
+            .locator(".geTabContainer")
+            .getByText("Service 8 overview", { exact: true }),
+    ).toBeAttached({ timeout: 10_000 })
+    // draw.io scrolls the selected page's tab into view. Its classic
+    // theme's menubar is 32 px wider than the window, and the whole editor
+    // went left with the tab (the File menu cut off)
+    const scrolled = await frame.locator("body").evaluate(
+        (body) =>
+            new Promise<number[]>((resolve) => {
+                const doc = body.ownerDocument
+                const w = doc.defaultView as any
+                w.Draw.loadPlugin((ui: any) => {
+                    ui.selectPage(ui.pages[ui.pages.length - 1])
+                    setTimeout(
+                        () =>
+                            resolve([
+                                doc.documentElement.scrollLeft,
+                                body.scrollLeft,
+                            ]),
+                        500,
+                    )
+                })
+            }),
+    )
+    expect(scrolled).toEqual([0, 0])
+    await expect(frame.locator(".geTabContainer .geActivePage")).toHaveText(
+        "Service 8 overview",
+    )
+})
+
+test("draw.io starts in the browser's language, as the shell's own texts do", async ({
+    browser,
+}) => {
+    const context = await browser.newContext({ locale: "ja-JP" })
+    try {
+        const page = await context.newPage()
+        await page.goto(shellUrl)
+        await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+            timeout: 60_000,
+        })
+        await expect(page.getByTestId("shell-status")).toHaveText(
+            "MCP サーバーに接続しました",
+        )
+        // Without DRAWIO_LANG draw.io takes the language of its own
+        // settings, which the shell fills in (shareLocaleWithDrawio): the
+        // menus were English around the Japanese page
+        const menubar = page
+            .frameLocator("iframe[title='draw.io']")
+            .locator(".geMenubar")
+        await expect(menubar.getByText("ファイル")).toBeVisible()
+        await expect(menubar.getByText("File")).toHaveCount(0)
+    } finally {
+        await context.close()
+    }
+})
+
+test("the sketch theme shows no empty box at the top right of the canvas", async ({
+    page,
+}) => {
+    // DRAWIO_UI fixes the theme for the whole process: a server of its own
+    const dir = mkdtempSync(join(tmpdir(), "mcp-shell-sketch-"))
+    const sketch = new Client({ name: "shell-e2e-sketch", version: "0.0.1" })
+    try {
+        await sketch.connect(
+            new StdioClientTransport({
+                command: process.execPath,
+                args: [
+                    process.env.MCP_SERVER_ENTRY ?? join(pkg, "dist/index.js"),
+                ],
+                env: {
+                    ...process.env,
+                    DRAWIO_DATA_DIR: dir,
+                    // Another range than the other server's
+                    PORT: String(6500 + Math.floor(Math.random() * 400)),
+                    BROWSER: "none",
+                    DRAWIO_UI: "sketch",
+                },
+                stderr: "pipe",
+            }),
+        )
+        const started = await sketch.callTool({
+            name: "start_session",
+            arguments: {},
+        })
+        const url = (started.content as { type: string; text?: string }[])
+            .map((c) => c.text ?? "")
+            .join("\n")
+            .match(/Browser URL: (\S+)/)?.[1]
+        if (!url) throw new Error("start_session gave no URL")
+        await page.goto(url)
+        await expect(page.getByTestId("canvas-loading")).toHaveCount(0, {
+            timeout: 60_000,
+        })
+        const frame = page.frameLocator("iframe[title='draw.io']")
+        await expect(frame.locator("body")).toHaveClass(/geSketch/)
+        // The box of the status text and of the save and exit buttons,
+        // which the embed parameters leave out
+        const statusBox = frame.locator(
+            ".geToolbarContainer:has(> .geButtonContainer)",
+        )
+        await expect(statusBox).toHaveCount(1)
+        await expect(statusBox).toBeHidden()
+        // It is back when draw.io has something to say there
+        await statusBox.locator(".geStatus").evaluate((el) => {
+            el.textContent = "All changes saved"
+        })
+        await expect(statusBox).toBeVisible()
+    } finally {
+        await sketch.close()
+        rmSync(dir, { recursive: true, force: true })
+    }
 })

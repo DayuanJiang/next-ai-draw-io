@@ -16,6 +16,10 @@ files:
   - from: .
     filter:
       - package.json
+  # electron-builder adds every package in "dependencies" by itself. The main
+  # process is one esbuild bundle and the Next server runs from
+  # resources/standalone with its own node_modules, so nothing loads them.
+  - "!node_modules"
 
 asarUnpack:
   - "**/*.node"

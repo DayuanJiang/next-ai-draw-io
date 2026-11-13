@@ -13,7 +13,7 @@
 
 
 
-## Shapes (51)
+## Shapes (50)
 
 - `about_us`
 - `audio`
@@ -39,7 +39,6 @@
 - `login`
 - `mail`
 - `map`
-- `mxgraph.sitemap`
 - `news`
 - `page`
 - `payment`

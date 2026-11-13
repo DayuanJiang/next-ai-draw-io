@@ -17,10 +17,11 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { formatMessage } from "@/lib/i18n/utils"
 import { POPULAR_PROVIDERS, providerStatus } from "@/lib/provider-setup"
 import { PROVIDERS } from "@/lib/providers"
-import type {
-    FlattenedModel,
-    ProviderConfig,
-    ProviderName,
+import {
+    type FlattenedModel,
+    type ProviderConfig,
+    type ProviderName,
+    providerLabel,
 } from "@/lib/types/model-config"
 import { cn } from "@/lib/utils"
 
@@ -223,10 +224,10 @@ export function ProvidersList({
                                             <span className="min-w-0 flex-1">
                                                 <span className="flex items-center gap-2 text-[13px] font-medium">
                                                     <span className="truncate">
-                                                        {p.name ||
-                                                            PROVIDERS[
-                                                                p.provider
-                                                            ].label}
+                                                        {providerLabel(
+                                                            p,
+                                                            providers,
+                                                        )}
                                                     </span>
                                                     {userProviderInUse?.id ===
                                                         p.id && <InUse />}

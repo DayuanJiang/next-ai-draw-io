@@ -16,9 +16,10 @@ import type {
 } from "@/components/canvas/drawio-frame"
 import {
     type ExportFormat,
-    prefersTransparentPng,
+    prefersTransparentBackground,
 } from "@/components/save-dialog"
 import { getApiEndpoint } from "@/lib/base-path"
+import { pageModelXml } from "@/lib/diagram-pages"
 import { withPageDefaults } from "@/lib/drawio/drawio-config"
 import {
     canReplaceDiagram,
@@ -110,10 +111,12 @@ interface DiagramContextType {
         format: ExportFormat,
         sessionId?: string,
         successMessage?: string,
+        failureMessage?: string,
     ) => Promise<void>
     getThumbnailSvg: () => Promise<string | null>
     getVersionSvg: () => Promise<string | null>
-    captureValidationPng: () => Promise<string | null>
+    /** pageId: the page to take the picture of, when it may not be on screen */
+    captureValidationPng: (pageId?: string | null) => Promise<string | null>
     /** One export with its own result; null when draw.io does not answer
      * in time (the MCP shell answers the server's export requests with it) */
     requestExport: (
@@ -170,6 +173,8 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     const turnBaseRef = useRef<string | null>(null)
     // Full loads sent that draw.io has not reported done yet
     const pendingLoadsRef = useRef(0)
+    // Version pictures waiting for draw.io's first load (getVersionSvg)
+    const firstLoadWaitersRef = useRef<(() => void)[]>([])
     const commitHandlerRef = useRef<((commit: DiagramCommit) => void) | null>(
         null,
     )
@@ -177,6 +182,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // The page to show again once a full load is done: draw.io shows the
     // first page of a loaded document
     const pageAfterLoadRef = useRef<string | null>(null)
+    // The page the user was on when draw.io started again (a language
+    // change): the new editor reports the page of its empty document first
+    const pageBeforeRestartRef = useRef<string | null>(null)
     // The last full load sent opens a diagram (a saved chat, a file): fit
     // it into view once it is done (draw.io keeps the scroll position)
     const fitAfterLoadRef = useRef(false)
@@ -225,10 +233,15 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         pendingLoadsRef.current = 0
         // Restore diagram after remount (e.g., theme/UI change), or a file
         // opened while draw.io loaded (its page settings count too)
-        if (chartXMLRef.current) fullLoad(chartXMLRef.current, undefined, true)
+        if (chartXMLRef.current) {
+            fullLoad(chartXMLRef.current, pageBeforeRestartRef.current, true)
+        }
+        // After that load is sent: draw.io runs its requests in order
+        for (const resume of firstLoadWaitersRef.current.splice(0)) resume()
     }
 
     const resetDrawioReady = () => {
+        pageBeforeRestartRef.current = useCanvasStore.getState().currentPageId
         hasCalledOnLoadRef.current = false
         pendingLoadsRef.current = 0
         setIsDrawioReady(false)
@@ -243,10 +256,15 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
 
     // Export with a tag in `message` (draw.io echoes it back in the export
     // event) and wait for that result. Resolves to null on timeout, which is
-    // expected occasionally.
+    // expected occasionally. `options` are the request's other parameters.
     // (Reads refs only, so it keeps one identity)
     const requestTaggedExport = useCallback(
-        (tag: ExportTag, format: "xmlsvg" | "svg" | "png", timeoutMs: number) =>
+        (
+            tag: ExportTag,
+            format: "xmlsvg" | "png",
+            timeoutMs: number,
+            options: Record<string, unknown> = {},
+        ) =>
             new Promise<ExportResult | null>((resolve) => {
                 const id = `${tag}-${++exportSeqRef.current}`
                 const finish = (value: ExportResult | null) => {
@@ -256,7 +274,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                 }
                 const timer = setTimeout(() => finish(null), timeoutMs)
                 exportResolversRef.current[id] = finish
-                drawioRef.current?.exportDiagram({ format, message: id })
+                drawioRef.current?.exportDiagram({
+                    format,
+                    message: id,
+                    ...options,
+                })
             }),
         [],
     )
@@ -278,20 +300,43 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         return null
     }, [requestTaggedExport])
 
-    // Plain SVG (no embedded diagram data) for version cards
+    // The picture on a version card. Asked for as xmlsvg: for a plain svg
+    // draw.io locks the canvas until the diagram's pictures are downloaded,
+    // up to 25 seconds when their host does not answer. theme "auto" is
+    // what the plain svg has: the picture follows light and dark mode.
     const getVersionSvg = async (): Promise<string | null> => {
+        // draw.io is still starting: it takes no request yet (one sent now
+        // is lost). The picture of a version drawn meanwhile is taken after
+        // draw.io's first load, which puts that drawing on the canvas.
+        if (!hasCalledOnLoadRef.current) {
+            await new Promise<void>((resolve) => {
+                firstLoadWaitersRef.current.push(resolve)
+            })
+        }
         if (!drawioRef.current) return null
-        const result = await requestTaggedExport("version", "svg", 4000)
+        const result = await requestTaggedExport("version", "xmlsvg", 4000, {
+            theme: "auto",
+        })
         return result?.data?.startsWith("data:image/svg") ? result.data : null
     }
 
     // Capture current diagram as PNG for VLM validation
-    const captureValidationPng = async (): Promise<string | null> => {
+    const captureValidationPng = async (
+        pageId?: string | null,
+    ): Promise<string | null> => {
         if (!drawioRef.current) return null
         // Don't export if diagram is empty
         if (!isRealDiagram(chartXMLRef.current)) return null
 
-        const result = await requestTaggedExport("validation", "png", 5000)
+        // Of the page the AI drew on, which the user may have left since;
+        // without its id, of the page on screen (draw.io renders the first
+        // page otherwise)
+        const result = await requestTaggedExport(
+            "validation",
+            "png",
+            5000,
+            pageId ? { pageId } : { currentPage: true },
+        )
         // PNG data should be a base64 data URL
         return result?.data?.startsWith("data:image/png") ? result.data : null
     }
@@ -303,7 +348,23 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
     // edit_diagram/display_diagram. Autosave keeps chartXML up to date with
     // the full uncompressed multi-page document (#879).
     const fetchDiagramXml = async (): Promise<string> => {
-        const result = await requestTaggedExport("fetch", "xmlsvg", 10000)
+        // draw.io is still starting: it takes no request yet (one sent now
+        // is lost), and nobody can have changed the canvas, so the page is
+        // the one in the document held here. What the AI draws meanwhile
+        // goes on the canvas with draw.io's first load (onDrawioLoad).
+        if (!hasCalledOnLoadRef.current) {
+            const held = pageModelXml(
+                chartXMLRef.current || BLANK_MXFILE,
+                useCanvasStore.getState().currentPageId,
+            )
+            if (held) return held
+        }
+        // Only the XML is read from this export. Without embedImages: false
+        // draw.io downloads the diagram's pictures first, and a host that
+        // does not answer holds the export for 25 seconds
+        const result = await requestTaggedExport("fetch", "xmlsvg", 10000, {
+            embedImages: false,
+        })
         if (!result?.data) {
             throw new Error("Chart export timed out after 10 seconds")
         }
@@ -476,13 +537,43 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         format: ExportFormat,
         sessionId?: string,
         successMessage?: string,
+        failureMessage?: string,
     ) => {
-        // Map format to draw.io export format
-        const drawioFormat =
-            format === "drawio" || format === "xmlsvg" ? "xmlsvg" : format
-        // Pictures get a margin; a PNG twice the size, of the page on
-        // screen (draw.io renders the first page otherwise), on white
-        // unless the user asked for a transparent background
+        // The draw.io file is asked for as "xml": the document with its
+        // pages as plain XML, which a diff or another tool can read (the
+        // xml of an xmlsvg export has each page compressed)
+        const drawioFormat = format === "drawio" ? "xml" : format
+        // Pictures get a margin, on the page's own background color, else
+        // on white, unless the user asked for a transparent background. A
+        // PNG is twice the size, of the page on screen (draw.io renders the
+        // first page otherwise). An SVG keeps its light colors (draw.io's
+        // default follows the viewer's dark mode: dark shapes on a white
+        // web page)
+        const transparent = prefersTransparentBackground()
+        // draw.io reads the two options by format. For a PNG the page's
+        // own color comes before `background`, and `transparent` removes
+        // both. For an SVG `background` replaces the page's color and
+        // `transparent` is not read: "none" leaves the background out,
+        // except in an editable SVG of a page with its own color, which
+        // gets that color back, and of a page whose colors do not adapt
+        // to dark mode (adaptiveColors="none"), which gets white, so
+        // there the color sent is a transparent one.
+        const model = pageModelXml(
+            chartXMLRef.current,
+            useCanvasStore.getState().currentPageId,
+        )
+        const pageColor = model?.match(
+            /<mxGraphModel\b[^>]*\sbackground="([^"]+)"/,
+        )?.[1]
+        const ownColor = pageColor === "none" ? undefined : pageColor
+        const fixedColors = /<mxGraphModel\b[^>]*\sadaptiveColors="none"/.test(
+            model ?? "",
+        )
+        const svgBackground = !transparent
+            ? (ownColor ?? "#ffffff")
+            : format === "xmlsvg" && (ownColor || fixedColors)
+              ? "transparent"
+              : "none"
         const imageOptions =
             format === "drawio"
                 ? {}
@@ -491,11 +582,11 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
                         border: 20,
                         scale: 2,
                         currentPage: true,
-                        ...(prefersTransparentPng()
+                        ...(transparent
                             ? { transparent: true }
                             : { background: "#ffffff" }),
                     }
-                  : { border: 20 }
+                  : { border: 20, theme: "light", background: svgBackground }
 
         // Each save has its own request id, so two at once never swap
         // results. A large PNG takes a while to render.
@@ -503,28 +594,28 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             { format: drawioFormat, ...imageOptions },
             30000,
         )
-        if (!result?.data) {
+        // An "xml" export answers with the document in xml, a picture
+        // comes in data
+        const exportData = format === "drawio" ? result?.xml : result?.data
+        if (!exportData) {
             console.warn(
                 "Diagram export for saving failed (editor not ready or timed out)",
             )
+            // The export dialog closed with the click: without a message
+            // the user would go on waiting for the file
+            if (failureMessage) toast.error(failureMessage)
             return
         }
-        const exportData = result.data
-        const fullDiagramXML = result.xml
         let fileContent: string
         let mimeType: string
         let extension: string
 
         if (format === "drawio") {
-            // Prefer the complete document from the export event so all pages are saved.
-            const xml = fullDiagramXML?.trim()
-                ? fullDiagramXML
-                : extractDiagramXML(exportData)
             fileContent =
-                normalizeToMxfile(xml, {
+                normalizeToMxfile(exportData, {
                     pageId: "page-1",
                     pageName: "Page-1",
-                }) ?? xml
+                }) ?? exportData
             mimeType = "application/xml"
             extension = ".drawio"
         } else if (format === "png") {
@@ -544,8 +635,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
             extension = ".svg"
         }
 
-        // Log save event to Langfuse (flags the trace)
-        logSaveToLangfuse(filename, format, sessionId)
+        // Log save event to Langfuse (flags the chat's trace). The MCP
+        // preview has no chat session, and its server no such route
+        if (sessionId) logSaveToLangfuse(filename, format, sessionId)
 
         // Handle download
         let url: string

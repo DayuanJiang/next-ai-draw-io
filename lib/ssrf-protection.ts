@@ -3,6 +3,8 @@
  */
 
 import { lookup } from "node:dns/promises"
+import type { LookupFunction } from "node:net"
+import { Agent } from "undici"
 
 /**
  * Check if an IP address (IPv4 or IPv6) belongs to a private/internal range.
@@ -83,29 +85,83 @@ function isPrivateHostname(hostname: string): boolean {
 }
 
 /**
- * Check if URL points to private/internal network.
- * Blocks: localhost, private IPs, link-local, AWS metadata service.
+ * Why a URL must not be fetched, or null for a public address. "private": it
+ * points to a private/internal network (localhost, private IPs, link-local,
+ * AWS metadata service). "unresolved": its host name has no DNS answer,
+ * which is blocked as well; told apart so that a mistyped address is not
+ * reported to the user as a private one.
  *
  * Resolves the hostname via DNS and validates every returned address, so
  * public-looking names that map to internal IPs (e.g. "127-0-0-1.sslip.io")
  * are caught even though they pass the string-only check.
  */
-export async function isPrivateUrl(urlString: string): Promise<boolean> {
+export async function blockedUrlReason(
+    urlString: string,
+): Promise<"private" | "unresolved" | null> {
+    let hostname: string
     try {
-        const url = new URL(urlString)
-        const hostname = url.hostname
+        hostname = new URL(urlString).hostname
+    } catch {
+        return "private" // Invalid URL - block it
+    }
 
-        // Fast path: obvious string matches and literal IPs.
-        if (isPrivateHostname(hostname)) return true
+    // Fast path: obvious string matches and literal IPs.
+    if (isPrivateHostname(hostname)) return "private"
 
-        // Resolve DNS and reject if any address is private.
-        const stripped = hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "")
+    // Resolve DNS and reject if any address is private.
+    const stripped = hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "")
+    try {
         const addresses = await lookup(stripped, { all: true })
         return addresses.some(({ address }) => isPrivateIp(address))
+            ? "private"
+            : null
     } catch {
-        return true // Invalid URL or DNS failure - block it
+        return "unresolved" // DNS failure - block it
     }
 }
+
+/** Whether a URL must not be fetched (see blockedUrlReason) */
+export async function isPrivateUrl(urlString: string): Promise<boolean> {
+    return (await blockedUrlReason(urlString)) !== null
+}
+
+/** The DNS lookup of a socket that may only connect to public addresses */
+export const publicOnlyLookup: LookupFunction = (
+    hostname,
+    options,
+    callback,
+) => {
+    lookup(hostname, { ...options, all: true }).then(
+        (addresses) => {
+            if (addresses.some(({ address }) => isPrivateIp(address))) {
+                callback(
+                    new Error(`${hostname} resolves to a private address`),
+                    [],
+                )
+            } else if (options.all) {
+                callback(null, addresses)
+            } else {
+                callback(null, addresses[0].address, addresses[0].family)
+            }
+        },
+        (error) => callback(error, []),
+    )
+}
+
+/**
+ * A fetch `dispatcher` whose connections go to public addresses only.
+ * isPrivateUrl resolves a host name for its check and fetch resolves it
+ * again to connect, so a DNS server could answer the check with a public
+ * address and the connection with a private one (DNS rebinding). This checks
+ * the addresses the socket is about to use. Undefined when Node sends fetch
+ * through the environment's proxy (NODE_USE_ENV_PROXY, which the desktop app
+ * sets): the proxy resolves the names, and a dispatcher of ours would go
+ * around it.
+ */
+export const publicOnlyDispatcher =
+    process.env.NODE_USE_ENV_PROXY === "1"
+        ? undefined
+        : new Agent({ connect: { lookup: publicOnlyLookup } })
 
 /**
  * Whether private URLs are allowed (defaults to true)
@@ -142,10 +198,12 @@ const CREDENTIAL_HEADERS = [
 /**
  * A fetch for requests to a base URL the client chose. With private URLs
  * blocked, a public URL could still redirect the request to an internal
- * host, so redirects are refused. With private URLs allowed but the quota
- * on (DYNAMODB_QUOTA_TABLE), a request to a private address counts as the
- * server's: a public URL's redirects are followed only to public addresses,
- * or it could reach the server's own network uncounted. Undefined otherwise.
+ * host, so redirects are refused, and its name could resolve to one when
+ * the socket opens, so the connection is checked as well. With private URLs
+ * allowed but the quota on (DYNAMODB_QUOTA_TABLE), a request to a private
+ * address counts as the server's: a public URL's redirects are followed only
+ * to public addresses, or it could reach the server's own network uncounted.
+ * Undefined otherwise.
  */
 export function redirectGuardedFetch(): typeof fetch | undefined {
     const blockAll = !allowPrivateUrls()
@@ -155,8 +213,14 @@ export function redirectGuardedFetch(): typeof fetch | undefined {
         let next = init
         // A request to a private address already counts as the server's
         let startsPrivate: boolean | undefined
+        // With private URLs blocked, the connection must not reach one either
+        const dispatcher = blockAll ? publicOnlyDispatcher : undefined
         for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-            const response = await fetch(url, { ...next, redirect: "manual" })
+            const response = await fetch(url, {
+                ...next,
+                redirect: "manual",
+                dispatcher,
+            } as RequestInit)
             const location = response.headers.get("location")
             if (response.status < 300 || response.status >= 400 || !location) {
                 return response

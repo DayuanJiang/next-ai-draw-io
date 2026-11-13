@@ -81,6 +81,14 @@ function escapeAttr(s: string): string {
 }
 
 /**
+ * An attribute's value, "" when it has none. Never getAttribute: linkedom's
+ * escapes &, < and > again in XML documents, so a page named "R&D" would
+ * read as "R&amp;D" and no selector with the real name would find it.
+ */
+export const attr = (el: Element, name: string) =>
+    el.getAttributeNode(name)?.value ?? ""
+
+/**
  * Strip a leading <?xml ... ?> declaration from an XML string. The XML spec
  * only permits the declaration at the very start of a document, so embedding
  * a declaration inside another element produces invalid XML. Callers must
@@ -198,12 +206,26 @@ export function projectPage(
     const found = findPageElement(doc, selector)
     if (!found) return { ok: false, reason: "notfound" }
     const serializer = new XMLSerializer()
+    // The file's variables go along: a label that uses one (%company%)
+    // would otherwise be exported with the placeholder in it
+    const vars = attr(doc.documentElement, "vars")
     return {
         ok: true,
-        xml: `<mxfile host="app.diagrams.net">${serializer.serializeToString(found.element)}</mxfile>`,
+        xml: `<mxfile host="app.diagrams.net"${vars ? ` vars="${escapeAttr(vars)}"` : ""}>${serializer.serializeToString(found.element)}</mxfile>`,
         index: found.index,
-        name: found.element.getAttribute("name") || "",
+        name: attr(found.element, "name"),
     }
+}
+
+/**
+ * The cells drawn on a page: every mxCell but the root cells "0" and "1",
+ * which each page has and the model never writes. A blank page has 0, and
+ * the count matches the shapes and connectors on the version cards.
+ */
+function countCells(page: Element): number {
+    return Array.from(page.querySelectorAll("mxCell")).filter(
+        (cell) => !["0", "1"].includes(attr(cell, "id")),
+    ).length
 }
 
 /** Walk every <diagram> child of <mxfile> and return summary info. */
@@ -211,13 +233,11 @@ export function listPagesFromDoc(doc: Document): PageInfo[] {
     const diagrams = doc.querySelectorAll("diagram")
     const result: PageInfo[] = []
     diagrams.forEach((d, idx) => {
-        const root = d.querySelector("root")
-        const cellCount = root ? root.querySelectorAll("mxCell").length : 0
         result.push({
-            id: d.getAttribute("id") || "",
-            name: d.getAttribute("name") || `Page-${idx + 1}`,
+            id: attr(d, "id"),
+            name: attr(d, "name") || `Page-${idx + 1}`,
             index: idx,
-            cellCount,
+            cellCount: countCells(d),
         })
     })
     return result
@@ -243,7 +263,7 @@ export function findPageElement(
 
     if (selector?.page_id) {
         for (let i = 0; i < diagrams.length; i++) {
-            if (diagrams[i].getAttribute("id") === selector.page_id) {
+            if (attr(diagrams[i], "id") === selector.page_id) {
                 return { element: diagrams[i], index: i }
             }
         }
@@ -251,7 +271,7 @@ export function findPageElement(
     }
     if (selector?.page_name) {
         for (let i = 0; i < diagrams.length; i++) {
-            if (diagrams[i].getAttribute("name") === selector.page_name) {
+            if (attr(diagrams[i], "name") === selector.page_name) {
                 return { element: diagrams[i], index: i }
             }
         }
@@ -328,7 +348,7 @@ export function addPageToDoc(
         id,
         name,
         index: existing.length,
-        cellCount: imported.querySelectorAll("mxCell").length,
+        cellCount: countCells(imported),
     }
 }
 
@@ -362,7 +382,7 @@ export function deletePageFromDoc(
     if (listPagesFromDoc(doc).length <= 1) {
         return { ok: false, reason: "Cannot delete the only remaining page" }
     }
-    const id = found.element.getAttribute("id") || ""
+    const id = attr(found.element, "id")
     const index = found.index
     found.element.parentNode?.removeChild(found.element)
     return { ok: true, deletedId: id, deletedIndex: index }

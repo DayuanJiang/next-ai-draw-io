@@ -2,6 +2,7 @@
 
 import { Bookmark, Edit2, Plus } from "lucide-react"
 import { useEffect, useId, useState } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -95,6 +96,9 @@ export function TemplateFormDialog({
                       title: title.trim() || undefined,
                   })
             if (result) {
+                // The form just closes: opened from the message box's menu,
+                // nothing else on screen shows that the prompt was saved
+                toast.success(dict.templates.saved)
                 onSuccess()
                 onOpenChange(false)
             } else {
@@ -107,7 +111,10 @@ export function TemplateFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px] overflow-hidden">
+            {/* The text boxes grow with their text up to a share of the
+                window's height and scroll after that, so the buttons stay
+                on screen; in a very short window the dialog scrolls */}
+            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-x-hidden overflow-y-auto sm:max-w-[500px]">
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -142,7 +149,7 @@ export function TemplateFormDialog({
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
                                 placeholder={dict.templates.promptPlaceholder}
-                                className="min-h-[100px] resize-none break-words"
+                                className="max-h-[30vh] min-h-[100px] resize-none break-words"
                                 required
                             />
                         </div>
@@ -181,7 +188,7 @@ export function TemplateFormDialog({
                                 placeholder={
                                     dict.templates.descriptionPlaceholder
                                 }
-                                className="min-h-[60px] resize-none"
+                                className="max-h-[15vh] min-h-[60px] resize-none"
                             />
                         </div>
 

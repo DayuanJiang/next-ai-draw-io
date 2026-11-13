@@ -53,7 +53,7 @@ Operations:
 - add: Add a new cell. Provide cell_id (new unique id) and new_xml.
 - delete: Remove a cell. Cascade is automatic: children AND edges (source/target) are auto-deleted. Only specify ONE cell_id.
 
-For update/add, new_xml is the complete mxCell (inside its <object> wrapper when it has custom data) in the compact form (a shape with x, y, w, h; an edge with source and target), with its complete style (named styles are not available in edit_diagram).
+For update/add, new_xml is the complete mxCell (inside its <object> wrapper when it has custom data) in the compact form (a shape with x, y, w, h; an edge with source and target). Its style can use the named styles of an earlier display_diagram call; edit_diagram defines none itself (no mxStyle).
 
 ⚠️ JSON ESCAPING: Every " inside new_xml MUST be escaped as \\". Example: id=\\"5\\" value=\\"Label\\"
 
@@ -71,10 +71,14 @@ Example - Delete container (children & edges auto-deleted):
                             .describe(
                                 "Operation to perform: add, update, or delete",
                             ),
+                        // Optional, so that a call with one add or update
+                        // that lacks it passes the input check: editDiagram
+                        // then reads the id from new_xml
                         cell_id: z
                             .string()
+                            .optional()
                             .describe(
-                                "The id of the mxCell. Must match the id attribute in new_xml.",
+                                "The id of the mxCell. Must match the id attribute in new_xml. Required for delete.",
                             ),
                         new_xml: z
                             .string()

@@ -1,5 +1,9 @@
 import { app, Menu, type MenuItemConstructorOptions, shell } from "electron"
-import { getMenuTranslations, getPreferredLocale } from "./menu-i18n"
+import {
+    getMenuTranslations,
+    getPreferredLocale,
+    type RoleLabels,
+} from "./menu-i18n"
 
 /**
  * Build and set the application menu with i18n support
@@ -21,6 +25,13 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     const locale = getPreferredLocale(app.getLocale())
     const t = getMenuTranslations(locale)
 
+    // An item that Electron runs by its role. Electron labels these in
+    // English on every system, so the other languages bring their own label.
+    const role = (name: keyof RoleLabels): MenuItemConstructorOptions => {
+        const label = t.roles?.[name]
+        return label ? { role: name, label } : { role: name }
+    }
+
     const template: MenuItemConstructorOptions[] = []
 
     // macOS app menu
@@ -28,15 +39,15 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
         template.push({
             label: app.name,
             submenu: [
-                { role: "about" }, // System-translated
+                role("about"),
                 { type: "separator" },
-                { role: "services" }, // System-translated
+                role("services"),
                 { type: "separator" },
-                { role: "hide" }, // System-translated
-                { role: "hideOthers" }, // System-translated
-                { role: "unhide" }, // System-translated
+                role("hide"),
+                role("hideOthers"),
+                role("unhide"),
                 { type: "separator" },
-                { role: "quit" }, // System-translated
+                role("quit"),
             ],
         })
     }
@@ -44,33 +55,29 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     // File menu
     template.push({
         label: t.file,
-        submenu: [
-            isMac ? { role: "close" } : { role: "quit" }, // System-translated
-        ],
+        submenu: [isMac ? role("close") : role("quit")],
     })
 
     // Edit menu
     template.push({
         label: t.edit,
         submenu: [
-            { role: "undo" }, // System-translated
-            { role: "redo" }, // System-translated
+            role("undo"),
+            role("redo"),
             { type: "separator" },
-            { role: "cut" }, // System-translated
-            { role: "copy" }, // System-translated
-            { role: "paste" }, // System-translated
+            role("cut"),
+            role("copy"),
+            role("paste"),
             ...(isMac
                 ? [
-                      {
-                          role: "pasteAndMatchStyle",
-                      } as MenuItemConstructorOptions, // System-translated
-                      { role: "delete" } as MenuItemConstructorOptions, // System-translated
-                      { role: "selectAll" } as MenuItemConstructorOptions, // System-translated
+                      role("pasteAndMatchStyle"),
+                      role("delete"),
+                      role("selectAll"),
                   ]
                 : [
-                      { role: "delete" } as MenuItemConstructorOptions, // System-translated
+                      role("delete"),
                       { type: "separator" } as MenuItemConstructorOptions,
-                      { role: "selectAll" } as MenuItemConstructorOptions, // System-translated
+                      role("selectAll"),
                   ]),
         ],
     })
@@ -79,15 +86,15 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     template.push({
         label: t.view,
         submenu: [
-            { role: "reload" }, // System-translated
-            { role: "forceReload" }, // System-translated
-            { role: "toggleDevTools" }, // System-translated
+            role("reload"),
+            role("forceReload"),
+            role("toggleDevTools"),
             { type: "separator" },
-            { role: "resetZoom" }, // System-translated
-            { role: "zoomIn" }, // System-translated
-            { role: "zoomOut" }, // System-translated
+            role("resetZoom"),
+            role("zoomIn"),
+            role("zoomOut"),
             { type: "separator" },
-            { role: "togglefullscreen" }, // System-translated
+            role("togglefullscreen"),
         ],
     })
 
@@ -95,14 +102,14 @@ function getMenuTemplate(): MenuItemConstructorOptions[] {
     template.push({
         label: t.window,
         submenu: [
-            { role: "minimize" }, // System-translated
-            { role: "zoom" }, // System-translated
+            role("minimize"),
+            role("zoom"),
             ...(isMac
                 ? [
                       { type: "separator" } as MenuItemConstructorOptions,
-                      { role: "front" } as MenuItemConstructorOptions, // System-translated
+                      role("front"),
                   ]
-                : [{ role: "close" } as MenuItemConstructorOptions]), // System-translated
+                : [role("close")]),
         ],
     })
 

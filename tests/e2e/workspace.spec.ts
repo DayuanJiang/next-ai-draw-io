@@ -16,7 +16,12 @@ import {
     waitForComplete,
     waitForCompleteCount,
 } from "./lib/fixtures"
-import { createMockSSEResponse, sse, toolCallEvents } from "./lib/helpers"
+import {
+    createMockSSEResponse,
+    createTextOnlyResponse,
+    sse,
+    toolCallEvents,
+} from "./lib/helpers"
 
 /** An edit_diagram response that adds one node next to "Start" */
 function createEditResponse() {
@@ -135,12 +140,18 @@ function drawioTabs(page: Page) {
     return getIframeContent(page).locator(".geTabContainer")
 }
 
-/** How wide the paper shows on screen, which changes with the zoom */
+/**
+ * How wide the paper is laid out, which changes with the zoom draw.io has
+ * applied. A zoom key first shows a preview (a CSS transform, which this
+ * width leaves out) and applies the zoom up to 0.6 s later; a redraw in
+ * between takes the preview off the paper, which then shows at its old
+ * width for a moment.
+ */
 function paperWidth(page: Page) {
     return getIframeContent(page)
         .locator(".geBackgroundPage")
         .first()
-        .evaluate((el) => Math.round(el.getBoundingClientRect().width))
+        .evaluate((el) => (el as HTMLElement).offsetWidth)
 }
 
 /** Zooms with draw.io's own shortcut, the focus in an empty canvas corner */
@@ -181,6 +192,29 @@ test.describe("Workspace", () => {
         await page.reload({ waitUntil: "networkidle" })
         await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
         await expect(card).toHaveCount(0)
+    })
+
+    test("the MCP video starts only once draw.io has loaded", async ({
+        page,
+    }) => {
+        // Hold draw.io back, as a slow connection does: a playing video
+        // downloads its 2 MB ahead of the canvas
+        let release = () => {}
+        const held = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        await page.route("**/drawio/index.html*", async (route) => {
+            await held
+            await route.continue()
+        })
+        await page.goto("/")
+        const video = page.locator('[data-testid="mcp-video"]')
+        await expect(video).toBeVisible()
+        const paused = () => video.evaluate((v: HTMLVideoElement) => v.paused)
+        await page.waitForTimeout(1000)
+        expect(await paused()).toBe(true)
+        release()
+        await expect.poll(paused, { timeout: 30000 }).toBe(false)
     })
 
     test("the start screen links the docs in a new tab, the editor does not", async ({
@@ -275,6 +309,52 @@ test.describe("Workspace", () => {
         await expect(page.locator('[data-testid="version-card"]')).toHaveCount(
             1,
         )
+    })
+
+    test("a title too long for the header leaves the grid icon its size", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(
+            page,
+            "Create a flowchart of the quarterly planning of the platform team",
+        )
+        await waitForComplete(page)
+        const title = page.locator('[data-testid="session-title"]')
+        await expect(title).toContainText("Create a flowchart")
+        const icon = await title.locator("svg").first().boundingBox()
+        // (Squeezed it was 3 px wide; the box of the 16 px icon is a
+        // fraction under 16 while the panel's entrance still plays)
+        expect(icon?.width).toBeGreaterThan(15)
+    })
+
+    test("a click on the canvas closes the diagram list and the add menu", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        const canvas = getIframeContent(page).locator(".geDiagramContainer")
+        const popup = page.locator('[data-slot="popover-content"]')
+        for (const trigger of ["session-title", "composer-add"]) {
+            await page.getByTestId(trigger).click()
+            await expect(popup).toBeVisible()
+            await canvas.click({ position: { x: 10, y: 10 } })
+            await expect(popup).toHaveCount(0)
+            // The focus stays in the canvas, where the keys go; a closed
+            // menu gives it back to its button a moment after it is gone
+            await page.waitForTimeout(300)
+            await expect(getIframe(page)).toBeFocused()
+        }
+        // Another window or tab taking over leaves the list open, with
+        // what was typed in its search
+        await page.getByTestId("session-title").click()
+        await popup.getByRole("textbox").fill("flow")
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")))
+        await page.waitForTimeout(300)
+        await expect(popup.getByRole("textbox")).toHaveValue("flow")
     })
 
     test("opening a .drawio file loads it into a new diagram", async ({
@@ -771,6 +851,38 @@ test.describe("Workspace", () => {
         await expect(style).toBeVisible()
     })
 
+    test("the buttons next to a selection leave draw.io's rotation handle free", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        const canvas = getIframeContent(page)
+        // With the chat panel hidden the bar has both buttons
+        await page.getByRole("button", { name: "Hide chat panel" }).click()
+        await canvas.getByText("Process", { exact: true }).click()
+        const ask = page.locator('[data-testid="selection-ask"]')
+        await expect(ask).toBeVisible()
+        // draw.io draws the handle outside the shape's top right corner;
+        // it alone has this cursor
+        const handle = await boxOf(
+            canvas.locator('svg g[style*="cursor: crosshair"]'),
+        )
+        for (const button of [
+            ask,
+            page.locator('[data-testid="selection-style"]'),
+        ]) {
+            const box = await boxOf(button)
+            const overlaps =
+                box.x < handle.x + handle.width &&
+                handle.x < box.x + box.width &&
+                box.y < handle.y + handle.height &&
+                handle.y < box.y + box.height
+            expect(overlaps).toBe(false)
+        }
+    })
+
     test("with the chat panel hidden, a selection also offers ask AI, which opens the panel", async ({
         page,
     }) => {
@@ -1191,6 +1303,32 @@ test.describe("Workspace", () => {
         await expect(toast).toHaveCount(0)
     })
 
+    test("a dialog taller than the window stays inside it and scrolls", async ({
+        page,
+    }) => {
+        await page.setViewportSize({ width: 1280, height: 480 })
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await drawAndEdit(page)
+        await page.locator('[data-testid="version-thumb"]').first().click()
+        const dialog = page.getByRole("dialog")
+        await expect(dialog).toContainText("Version 1")
+        // Once it has slid in, the dialog is within the window
+        await expect
+            .poll(async () => (await boxOf(dialog)).y)
+            .toBeGreaterThanOrEqual(0)
+        const box = await boxOf(dialog)
+        expect(box.y + box.height).toBeLessThanOrEqual(480)
+        // Its close button is on screen, and its last button is reached
+        // by scrolling the dialog
+        await expect(
+            dialog.getByRole("button", { name: "Close" }),
+        ).toBeInViewport()
+        const restore = page.locator('[data-testid="compare-restore"]')
+        await restore.scrollIntoViewIfNeeded()
+        await expect(restore).toBeInViewport({ ratio: 1 })
+    })
+
     test("a broken file leaves the chat on screen", async ({ page }) => {
         await page.route("**/api/chat", drawThenEdit())
         await openApp(page)
@@ -1237,6 +1375,19 @@ test.describe("Workspace", () => {
         })
         await expect(
             page.getByText("notes.xml isn't a draw.io diagram."),
+        ).toBeVisible()
+        await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
+        // A picture without the diagram inside, as the "SVG image" export
+        // writes it: the message names the formats that open again
+        await openDrawioFile(
+            page,
+            "picture.svg",
+            '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>',
+        )
+        await expect(
+            page.getByText(
+                "picture.svg is a plain SVG picture with no draw.io diagram inside. To open a diagram again later, export it as Editable SVG or as a draw.io file.",
+            ),
         ).toBeVisible()
         await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
     })
@@ -1582,10 +1733,166 @@ test.describe("Workspace", () => {
         await expect(canvas.getByText("Review Step")).toBeVisible()
         await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
         // The model was sent the canvas with the copy
-        expect(bodies[2].xml.match(/value="Start"/g)).toHaveLength(2)
+        expect(
+            bodies[2].messages
+                .at(-1)
+                .metadata.diagram.xml.match(/value="Start"/g),
+        ).toHaveLength(2)
         await expect(page.locator('[data-testid="version-undo"]')).toHaveText(
             "Undo change",
         )
+    })
+
+    test("regenerate keeps what was drawn by hand when the answer drew nothing", async ({
+        page,
+    }) => {
+        // The snapshot from before the message has none of the user's work
+        // since: loading it would drop that work, with no undo
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body:
+                    bodies.length === 1
+                        ? createMockSSEResponse(FLOWCHART_XML, "Flowchart.")
+                        : createTextOnlyResponse(`Answer ${bodies.length}.`),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        await sendMessage(page, "What is this?")
+        await expect(page.getByText("Answer 2.")).toBeVisible()
+        // A copy of "Start", made by hand after the answer
+        const canvas = getIframeContent(page)
+        await canvas.getByText("Start", { exact: true }).click()
+        await page.keyboard.press("ControlOrMeta+d")
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        await page.waitForTimeout(1200)
+
+        await page.getByText("Answer 2.").hover()
+        await page.getByRole("button", { name: "Regenerate response" }).click()
+        await expect(page.getByText("Answer 3.")).toBeVisible()
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        // The model was sent the canvas with the copy
+        expect(
+            bodies[2].messages
+                .at(-1)
+                .metadata.diagram.xml.match(/value="Start"/g),
+        ).toHaveLength(2)
+    })
+
+    test("regenerate after a drawing keeps the hand edits made since as a version", async ({
+        page,
+    }) => {
+        // The answer is drawn again from the snapshot of its message, which
+        // has none of the user's work since
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body:
+                    bodies.length === 1
+                        ? createMockSSEResponse(FLOWCHART_XML, "Flowchart.")
+                        : bodies.length === 2
+                          ? createEditResponse()
+                          : createTextOnlyResponse(`Answer ${bodies.length}.`),
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        await sendMessage(page, "Add a review step")
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Review Step")).toBeVisible()
+        // A copy of "Start", made by hand after the answer
+        await canvas.getByText("Start", { exact: true }).click()
+        await page.keyboard.press("ControlOrMeta+d")
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        await page.waitForTimeout(1200)
+
+        await page
+            .getByRole("button", { name: "Regenerate response" })
+            .last()
+            .click()
+        await expect(page.getByText("Answer 3.")).toBeVisible()
+        // The answer started from the diagram of its message
+        await expect(canvas.getByText("Review Step")).toHaveCount(0)
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(1)
+        // The canvas from before is a version, next to the first drawing
+        await expect(
+            page.getByText("What you had is kept as v3."),
+        ).toBeVisible()
+        await expect(page.locator('[data-testid="version-thumb"]')).toHaveCount(
+            2,
+        )
+        // The message's Undo puts it back
+        await page.getByRole("button", { name: "Undo", exact: true }).click()
+        await expect(canvas.getByText("Start", { exact: true })).toHaveCount(2)
+        await expect(canvas.getByText("Review Step")).toBeVisible()
+    })
+
+    test("a diagram written as the answer's text goes back to the model as a failed drawing", async ({
+        page,
+    }) => {
+        // The model wrote the XML into its answer and called no tool
+        const written =
+            '<mxCell id="2" value="Typed" style="rounded=1;" x="40" y="40" w="120" h="60"/>'
+        // The answer to the failed call goes on in the same message, as the
+        // server sends it: a start without a message id
+        const drawn = sse([
+            { type: "start" },
+            {
+                type: "tool-input-start",
+                toolCallId: "d1",
+                toolName: "display_diagram",
+            },
+            {
+                type: "tool-input-available",
+                toolCallId: "d1",
+                toolName: "display_diagram",
+                input: { xml: FLOWCHART_XML },
+            },
+            { type: "finish" },
+        ])
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body:
+                    bodies.length === 1
+                        ? createTextOnlyResponse(written)
+                        : drawn,
+            })
+        })
+        await openApp(page)
+        await sendMessage(page, "Create a flowchart")
+        await expect(
+            getIframeContent(page).getByText("Start", { exact: true }),
+        ).toBeVisible({ timeout: 15000 })
+        // The second request carries the text as a drawing call that failed
+        const call = bodies[1].messages
+            .at(-1)
+            .parts.find((p: any) => p.type === "tool-display_diagram")
+        expect(call).toMatchObject({
+            state: "output-error",
+            input: { xml: written },
+        })
+        expect(
+            bodies[1].messages.at(-1).parts.some((p: any) => p.type === "text"),
+        ).toBe(false)
+        // The chat shows the failed attempt, folded, and no screen of XML
+        const panel = page.locator('[data-testid="chat-panel"]')
+        await expect(
+            panel.getByText("This attempt failed", { exact: true }),
+        ).toBeVisible()
+        await expect(panel.getByText('value="Typed"')).toHaveCount(0)
     })
 
     test("page settings draw.io keeps in place follow the AI's diagram", async ({
@@ -1723,6 +2030,54 @@ test.describe("Workspace", () => {
         await expect.poll(savedPageId, { timeout: 10000 }).toBe("orig")
     })
 
+    test("a message sent again from another page leaves its selected shapes out", async ({
+        page,
+    }) => {
+        // The model reads the page on screen: the ids selected on the
+        // other page are other shapes there, or none
+        const bodies: any[] = []
+        await page.route("**/api/chat", (route) => {
+            bodies.push(route.request().postDataJSON())
+            return route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse(`Answer ${bodies.length}.`),
+            })
+        })
+        await openApp(page)
+        await openDrawioFile(page, "two.drawio", TWO_PAGE_FILE)
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        await drawioTabs(page).getByText("P1", { exact: true }).click()
+        await canvas.getByText("Old B").click()
+        await expect(
+            page.locator('[data-testid="selection-chip"]'),
+        ).toContainText("Old B")
+        await sendMessage(page, "What is this?")
+        await expect(page.getByText("Answer 1.")).toBeVisible()
+        const sentWith = (body: any) => body.messages.at(-1).metadata
+        expect(sentWith(bodies[0]).selectedCells).toHaveLength(1)
+
+        const regenerate = async () => {
+            await page.getByText(`Answer ${bodies.length}.`).hover()
+            await page
+                .getByRole("button", { name: "Regenerate response" })
+                .click()
+        }
+        // On its own page the message keeps them
+        await regenerate()
+        await expect(page.getByText("Answer 2.")).toBeVisible()
+        expect(sentWith(bodies[1]).selectedCells).toHaveLength(1)
+
+        await drawioTabs(page).getByText("P0", { exact: true }).click()
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        await regenerate()
+        await expect(page.getByText("Answer 3.")).toBeVisible()
+        expect(sentWith(bodies[2]).diagram.xml).toContain("Old A")
+        expect(sentWith(bodies[2]).selectedCells).toBeUndefined()
+        expect(bodies[2].selectedCells).toBeUndefined()
+    })
+
     test("the AI reads and draws the page the user is viewing", async ({
         page,
     }) => {
@@ -1741,8 +2096,9 @@ test.describe("Workspace", () => {
         await sendMessage(page, "Create a flowchart")
         await waitForComplete(page)
         // The model got the page on screen
-        expect(bodies[0].xml).toContain("Old B")
-        expect(bodies[0].xml).not.toContain("Old A")
+        const sent = bodies[0].messages.at(-1).metadata.diagram.xml
+        expect(sent).toContain("Old B")
+        expect(sent).not.toContain("Old A")
         // Its drawing replaced that page, and only that page
         await expect(canvas.getByText("Process", { exact: true })).toBeVisible()
         await expect(canvas.getByText("Old B")).toHaveCount(0)
@@ -1867,9 +2223,8 @@ test.describe("Workspace", () => {
     }) => {
         await page.route("**/api/chat", drawThenEdit())
         await openApp(page)
-        await sendMessage(page, "Create a flowchart")
-        await waitForComplete(page)
-        // Hold the sessions store: the first save waits to be written
+        // Hold the sessions store: the first save, made when the message
+        // is sent, waits to be written
         await page.evaluate(async () => {
             const w = window as any
             const db: IDBDatabase = await new Promise((resolve) => {
@@ -1885,6 +2240,8 @@ test.describe("Workspace", () => {
             }
             keepBusy()
         })
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
         await page.waitForTimeout(1500)
         await expect(page).not.toHaveURL(/session=/)
         await page.locator('[data-testid="session-title"]').click()
@@ -1985,6 +2342,10 @@ test.describe("Workspace", () => {
             .getByRole("button", { name: /Create a flowchart/ })
             .getByRole("button", { name: "Delete this diagram?" })
             .click()
+        // The confirmation names the diagram to delete
+        await expect(page.getByRole("alertdialog")).toContainText(
+            "Create a flowchart",
+        )
         await page.getByRole("button", { name: "Delete", exact: true }).click()
         await expect(page.locator('[data-testid="lobby-hero"]')).toBeVisible()
         // The empty chat on screen now has no title of its own; "Foo" was
@@ -2092,10 +2453,57 @@ test.describe("Workspace", () => {
             .locator('[data-testid="version-card"]')
             .getByRole("button", { name: "Compare" })
             .click()
-        await expect(page.getByRole("dialog")).toContainText("their order")
+        // The page compared is the version's, which need not be the first
+        await expect(page.getByRole("dialog")).toContainText(
+            "On the page this version was made on, the shapes and connectors are the same as in version 1; their order",
+        )
         await expect(
             page.locator('[data-testid="compare-restore"]'),
         ).toBeEnabled()
+    })
+
+    test("compare shows the canvas's picture of the page the version was made on", async ({
+        page,
+    }) => {
+        await page.route("**/api/chat", drawThenEdit())
+        await openApp(page)
+        await openDrawioFile(page, "two.drawio", TWO_PAGE_FILE)
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        // The AI draws the flowchart, taller than wide, on the second page
+        await drawioTabs(page).getByText("P1", { exact: true }).click()
+        await expect(canvas.getByText("Old B")).toBeVisible()
+        await sendMessage(page, "Create a flowchart")
+        await waitForComplete(page)
+        await page.waitForTimeout(1500)
+        // Back on the first page, which holds one wide box
+        await drawioTabs(page).getByText("P0", { exact: true }).click()
+        await expect(canvas.getByText("Old A")).toBeVisible()
+        await page
+            .locator('[data-testid="version-card"]')
+            .getByRole("button", { name: "Compare" })
+            .click()
+        const dialog = page.getByRole("dialog")
+        await expect(dialog).toContainText(
+            "This version is what the canvas shows now.",
+        )
+        // Both pictures are of the second page: the flowchart's shape, not
+        // the wide box of the page on screen
+        const pictures = dialog.locator("figure img")
+        await expect(pictures).toHaveCount(2)
+        const widthToHeight = await pictures.evaluateAll((images) =>
+            Promise.all(
+                (images as HTMLImageElement[]).map(async (image) => {
+                    await image.decode()
+                    return image.naturalWidth / image.naturalHeight
+                }),
+            ),
+        )
+        expect(widthToHeight[0]).toBeLessThan(1)
+        expect(widthToHeight[1]).toBeLessThan(1)
+        // The canvas stays on the page the user is viewing
+        await page.keyboard.press("Escape")
+        await expect(canvas.getByText("Old A")).toBeVisible()
     })
 
     test("a file name typed in the export dialog stays when the title comes", async ({
@@ -2121,6 +2529,86 @@ test.describe("Workspace", () => {
         await expect(page).toHaveURL(/session=/, { timeout: 10000 })
         await page.waitForTimeout(1000)
         await expect(name).toHaveValue("my-arch")
+    })
+
+    test("the versions strip brings a restored older version into view", async ({
+        page,
+    }) => {
+        const file = (label: string) =>
+            `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("a", label, 40)}</root></mxGraphModel></diagram></mxfile>`
+        await openApp(page)
+        // More versions than the strip is wide
+        await seedSession(page, {
+            id: "strip",
+            title: "Strip",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            messages: [
+                {
+                    id: "u1",
+                    role: "user",
+                    parts: [{ type: "text", text: "Draw boxes" }],
+                },
+            ],
+            xmlSnapshots: [],
+            diagramXml: file("Box 8"),
+            versions: Array.from({ length: 8 }, (_, i) => ({
+                id: `v${i + 1}`,
+                number: i + 1,
+                xml: file(`Box ${i + 1}`),
+                svg: "",
+                turnIndex: 0,
+                summary: {
+                    shapesAdded: 0,
+                    shapesRemoved: 0,
+                    shapesChanged: 1,
+                    edgesAdded: 0,
+                    edgesRemoved: 0,
+                    edgesChanged: 0,
+                },
+            })),
+        })
+        await page.goto("/?session=strip", { waitUntil: "networkidle" })
+        const canvas = getIframeContent(page)
+        await expect(canvas.getByText("Box 8")).toBeVisible({ timeout: 30000 })
+        const thumbs = page.locator('[data-testid="version-thumb"]')
+        await expect(thumbs).toHaveCount(8)
+        // How far a thumbnail's edges are inside the strip's visible part
+        // (negative: cut off). Once the strip is scrolled, its first 40 px
+        // fade out.
+        const insideStrip = (index: number) =>
+            thumbs.nth(index).evaluate((thumb) => {
+                const strip = (
+                    thumb.parentElement as HTMLElement
+                ).getBoundingClientRect()
+                const box = thumb.getBoundingClientRect()
+                return {
+                    left: box.left - strip.left,
+                    right: strip.right - box.right,
+                }
+            })
+        // The newest version is on the canvas, and in view
+        await expect
+            .poll(async () => (await insideStrip(7)).right)
+            .toBeGreaterThanOrEqual(0)
+        expect((await insideStrip(1)).left).toBeLessThan(0)
+        // Restore v2 from the compare dialog of the newest (a click on its
+        // own thumbnail would scroll the strip to it)
+        await thumbs.last().click()
+        const dialog = page.getByRole("dialog")
+        for (let i = 0; i < 6; i++) {
+            await dialog
+                .getByRole("button", { name: "Previous version" })
+                .click()
+        }
+        await expect(dialog).toContainText("Version 2")
+        await page.locator('[data-testid="compare-restore"]').click()
+        await expect(canvas.getByText("Box 2")).toBeVisible()
+        // Its thumbnail is whole, clear of the fade at the left edge
+        await expect
+            .poll(async () => (await insideStrip(1)).left)
+            .toBeGreaterThanOrEqual(40)
+        expect((await insideStrip(1)).right).toBeGreaterThanOrEqual(0)
     })
 })
 
@@ -2796,7 +3284,9 @@ test.describe("Edge cases", () => {
         ).toBeVisible()
         await sendMessage(page, "Tidy it up")
         await expect.poll(() => bodies.length, { timeout: 15000 }).toBe(1)
-        expect(bodies[0].xml).toContain('value="Lab"')
+        expect(bodies[0].messages.at(-1).metadata.diagram.xml).toContain(
+            'value="Lab"',
+        )
     })
 
     test("variables of the AI's file are applied", async ({ page }) => {
@@ -2866,7 +3356,11 @@ test.describe("Edge cases", () => {
         })
         // The next message waits for its diagram export
         await sendMessage(page, "Second")
-        await page.getByText("First", { exact: true }).hover()
+        // The message (the chat's title says the same)
+        await page
+            .getByRole("paragraph")
+            .filter({ hasText: /^First$/ })
+            .hover()
         await page.getByRole("button", { name: "Edit message" }).click()
         const editor = page.locator("textarea").filter({ hasText: "First" })
         await editor.fill("First, edited")
@@ -3189,6 +3683,55 @@ test.describe("Edge cases", () => {
         })
         await expect(page.getByText("First words.")).toBeVisible()
         await expect(page.getByText("Second words.")).toBeVisible()
+    })
+
+    test("a failed call the model answers with words is not sent again", async ({
+        page,
+    }) => {
+        // The retry's reply is a new step of the same answer: the failed
+        // call of the step before it kept sending the request, up to the
+        // retry limit and its error
+        const replies = [
+            sse([
+                { type: "start", messageId: "m1" },
+                { type: "start-step" },
+                {
+                    type: "tool-input-available",
+                    toolCallId: "d1",
+                    toolName: "display_diagram",
+                    input: { xml: boxCell("1", "Bad", 40, "0") },
+                },
+                { type: "finish-step" },
+                { type: "finish" },
+            ]),
+            sse([
+                { type: "start", messageId: "m1" },
+                { type: "start-step" },
+                { type: "text-start", id: "t1" },
+                { type: "text-delta", id: "t1", delta: "Which shape is it?" },
+                { type: "text-end", id: "t1" },
+                { type: "finish-step" },
+                { type: "finish" },
+            ]),
+        ]
+        let n = 0
+        await page.route("**/api/chat", (route) =>
+            route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: replies[n++] ?? replies[1],
+            }),
+        )
+        await openApp(page)
+        await sendMessage(page, "Draw")
+        await expect(page.getByText("Which shape is it?")).toBeVisible({
+            timeout: 15000,
+        })
+        await expect(getSendButton(page)).toBeVisible()
+        // Long enough for the requests that used to follow
+        await page.waitForTimeout(1500)
+        expect(n).toBe(2)
+        await expect(page.getByText("Auto-retry limit reached")).toHaveCount(0)
     })
 
     test("a message stays with its chat when another comes on screen while its image is read", async ({
@@ -3817,7 +4360,9 @@ test.describe("Edge cases", () => {
         await expect.poll(() => prompts.length).toBe(2)
         expect(prompts[1]).toBe("Template prompt for a shop")
         await page.getByRole("button", { name: "Saved prompts" }).click()
-        await expect(page.getByRole("dialog").getByText("1 uses")).toBeVisible()
+        await expect(
+            page.getByRole("dialog").getByText("Used 1×"),
+        ).toBeVisible()
     })
 
     test("a saved prompt picked over typed text replaces it only when confirmed", async ({
@@ -4581,11 +5126,16 @@ test.describe("Edge cases", () => {
             }
         })
         await openApp(page)
-        await openSettingsTab(page, "general")
-        await page.locator("#language-select").click()
-        await page.getByRole("option", { name: "日本語", exact: true }).click()
+        // The Japanese page as a step of its own in the browser history,
+        // as a link to it makes one (the language setting puts the new
+        // page in the place of the old one)
+        await page.evaluate(() => {
+            ;(window as any).next.router.push("/ja")
+        })
         await expect(page).toHaveURL(/\/ja/, { timeout: 15000 })
-        await page.keyboard.press("Escape")
+        await expect(getSendButton(page, "送信")).toBeVisible({
+            timeout: 15000,
+        })
         await expect(
             page.locator('[data-testid="canvas-loading"]'),
         ).toHaveCount(0, { timeout: 30000 })
@@ -5074,7 +5624,6 @@ test.describe("Edge cases", () => {
     test("at the chat limit, saving a chat left by browser back keeps the chat gone back to", async ({
         page,
     }) => {
-        await answerWithPause(page)
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("b", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)
         // 50 saved chats; the one gone back to is the oldest
@@ -5113,10 +5662,12 @@ test.describe("Edge cases", () => {
             },
             { doc },
         )
-        await sendMessage(page, "Chat A two")
-        await expect(page.getByText("A is answering.")).toBeVisible({
-            timeout: 15000,
-        })
+        // A file just opened is a new chat that waits for its first save
+        // (a message is saved when it is sent)
+        await openDrawioFile(page, "mine.drawio", TWO_PAGE_FILE)
+        await expect(
+            page.locator('[data-testid="session-title"]'),
+        ).toContainText("mine")
         await page.evaluate(() => {
             ;(window as any).next.router.replace("?session=oldest")
         })
@@ -5125,6 +5676,12 @@ test.describe("Edge cases", () => {
         ).toBeVisible({ timeout: 15000 })
         // Kept from the start, not saved again after being deleted
         expect((await savedChats(page)).map((c) => c.id)).toContain("oldest")
+        // The next oldest made room: a message names it and the limit
+        await expect(
+            page.getByText(
+                'This browser keeps 50 diagrams. The oldest one, "Chat 1", was deleted to make room.',
+            ),
+        ).toBeVisible()
         await page.waitForTimeout(1500)
         const ids = (await savedChats(page)).map((c) => c.id)
         expect(ids).toContain("oldest")
@@ -5353,13 +5910,6 @@ test.describe("Edge cases", () => {
     test("at the chat limit, the oldest chat opened from the list while the new chat waits for its save is kept", async ({
         page,
     }) => {
-        await page.route("**/api/chat", (route) =>
-            route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(boxCell("a", "AyOne", 40), "A."),
-            }),
-        )
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("b", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)
         // 50 saved chats; the one opened from the list is the oldest
@@ -5405,8 +5955,12 @@ test.describe("Edge cases", () => {
         const oldest = page
             .getByRole("dialog")
             .getByRole("button", { name: /The oldest/ })
-        await sendMessage(page, "Chat A")
-        await waitForComplete(page)
+        // A file just opened is a new chat that waits for its first save
+        // (a message is saved when it is sent)
+        await openDrawioFile(page, "mine.drawio", TWO_PAGE_FILE)
+        await expect(
+            page.locator('[data-testid="session-title"]'),
+        ).toContainText("mine")
         // Within the auto-save's wait: opening it saves this chat first
         await page.locator('[data-testid="session-title"]').click()
         await oldest.click()
@@ -5494,13 +6048,6 @@ test.describe("Edge cases", () => {
                 }
             })
         })
-        await page.route("**/api/chat", (route) =>
-            route.fulfill({
-                status: 200,
-                contentType: "text/event-stream",
-                body: createMockSSEResponse(boxCell("a", "AyOne", 40), "A."),
-            }),
-        )
         const doc = `<mxfile><diagram name="P" id="p"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${boxCell("b", "BeeOne", 40)}</root></mxGraphModel></diagram></mxfile>`
         await openApp(page)
         await page.evaluate(
@@ -5542,8 +6089,12 @@ test.describe("Edge cases", () => {
         await expect(
             page.locator('[data-testid="canvas-loading"]'),
         ).toHaveCount(0, { timeout: 30000 })
-        await sendMessage(page, "Chat A")
-        await waitForComplete(page)
+        // A file just opened is a new chat that waits for its first save
+        // (a message is saved when it is sent)
+        await openDrawioFile(page, "mine.drawio", TWO_PAGE_FILE)
+        await expect(
+            page.locator('[data-testid="session-title"]'),
+        ).toContainText("mine")
         await page.locator('[data-testid="session-title"]').click()
         await page
             .getByRole("dialog")

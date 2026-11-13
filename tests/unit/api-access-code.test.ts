@@ -10,6 +10,7 @@ import { checkAccessCode } from "@/lib/access-code"
 vi.mock("@/lib/ssrf-protection", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/lib/ssrf-protection")>()),
     isPrivateUrl: async () => false,
+    blockedUrlReason: async () => null,
 }))
 
 function post(path: string, body: unknown, accessCode?: string): Request {

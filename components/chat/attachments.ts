@@ -1,4 +1,8 @@
-import { MAX_FILES, MAX_FILE_SIZE as MAX_IMAGE_SIZE } from "@/lib/chat-helpers"
+import {
+    imageTypeOf,
+    MAX_FILES,
+    MAX_FILE_SIZE as MAX_IMAGE_SIZE,
+} from "@/lib/chat-helpers"
 import { formatMessage } from "@/lib/i18n/utils"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 
@@ -27,17 +31,97 @@ function isValidFileType(file: File): boolean {
     )
 }
 
+// Longest side of a picture after it is scaled down; the models scale
+// larger pictures down themselves
+const MAX_IMAGE_SIDE = 2000
+
+/** A picture over the size limit, which shrinkImage can scale down */
+export function isOversizedImage(file: File): boolean {
+    return (
+        SUPPORTED_IMAGE_TYPES.includes(file.type) && file.size > MAX_IMAGE_SIZE
+    )
+}
+
+// The file each scaled down picture was made from
+const pickedFiles = new WeakMap<File, File>()
+
+/**
+ * The file as the user picked it: a scaled down picture has another name,
+ * size and date, by which a file picked twice could not be known
+ */
+export const pickedFile = (file: File) => pickedFiles.get(file) ?? file
+
+/**
+ * The picture as a JPEG of at most 2000 pixels a side: a phone photo or a
+ * large screenshot is over the size limit as it is. A file the browser
+ * cannot read as a picture is returned unchanged.
+ */
+export async function shrinkImage(file: File): Promise<File> {
+    try {
+        const bitmap = await createImageBitmap(file)
+        const scale = Math.min(
+            1,
+            MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height),
+        )
+        const canvas = document.createElement("canvas")
+        canvas.width = Math.round(bitmap.width * scale)
+        canvas.height = Math.round(bitmap.height * scale)
+        const context = canvas.getContext("2d")
+        if (!context) return file
+        // JPEG has no transparency: see-through parts are painted white,
+        // which a bare canvas would turn black
+        context.fillStyle = "white"
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+        bitmap.close()
+        const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, "image/jpeg", 0.85),
+        )
+        if (!blob) return file
+        const shrunk = new File(
+            [blob],
+            `${file.name.replace(/\.[^.]+$/, "")}.jpg`,
+            { type: "image/jpeg" },
+        )
+        pickedFiles.set(shrunk, file)
+        return shrunk
+    } catch {
+        return file
+    }
+}
+
+/**
+ * The image format each picture's content is in, read from its first bytes
+ * (undefined: none the models read). The type the browser reports only
+ * repeats the file's name.
+ */
+export async function readImageTypes(
+    files: File[],
+): Promise<Map<File, string | undefined>> {
+    const types = new Map<File, string | undefined>()
+    for (const file of files) {
+        if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) continue
+        const head = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+        types.set(file, imageTypeOf(String.fromCharCode(...head)))
+    }
+    return types
+}
+
 function formatFileSize(bytes: number): string {
     const mb = bytes / 1024 / 1024
     if (mb < 0.01) return `${(bytes / 1024).toFixed(0)}KB`
     return `${mb.toFixed(2)}MB`
 }
 
-/** Keep the files that can be attached; describe the rest as errors */
+/**
+ * Keep the files that can be attached; describe the rest as errors.
+ * imageTypes is what readImageTypes found in the pictures.
+ */
 export function validateFiles(
     newFiles: File[],
     existingCount: number,
     dict: any,
+    imageTypes: Map<File, string | undefined>,
 ): { validFiles: File[]; errors: string[] } {
     const errors: string[] = []
     const validFiles: File[] = []
@@ -48,11 +132,16 @@ export function validateFiles(
         return { validFiles, errors }
     }
 
-    for (const file of newFiles) {
+    for (const [index, file] of newFiles.entries()) {
         if (validFiles.length >= availableSlots) {
             errors.push(
                 formatMessage(dict.errors.onlyMoreAllowed, {
                     slots: availableSlots,
+                    // The files left out, so the user knows which they are
+                    names: newFiles
+                        .slice(index)
+                        .map((f) => f.name)
+                        .join(", "),
                 }),
             )
             break
@@ -71,6 +160,16 @@ export function validateFiles(
             )
             continue
         }
+        // A file named as a picture that is none the models read (a HEIC
+        // photo or an Office file named .jpg) fails the whole request at
+        // the provider, whose error does not say which file is wrong
+        const imageType = imageTypes.get(file)
+        if (imageTypes.has(file) && !imageType) {
+            errors.push(
+                formatMessage(dict.errors.notAnImage, { name: file.name }),
+            )
+            continue
+        }
         // PDFs and text files are extracted in the browser, so only images
         // have a size limit
         const isExtractedFile = isPdfFile(file) || isTextFile(file)
@@ -80,6 +179,17 @@ export function validateFiles(
                     name: file.name,
                     size: formatFileSize(file.size),
                     max: MAX_IMAGE_SIZE / 1024 / 1024,
+                }),
+            )
+        } else if (imageType && imageType !== file.type) {
+            // A picture in another format than its name says (a PNG saved
+            // as .jpg) goes out as what it is: Claude refuses a picture
+            // sent as another format. The date stays, by which a file
+            // picked twice is known.
+            validFiles.push(
+                new File([file], file.name, {
+                    type: imageType,
+                    lastModified: file.lastModified,
                 }),
             )
         } else {

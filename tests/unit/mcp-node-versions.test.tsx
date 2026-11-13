@@ -1,6 +1,7 @@
-import { act, cleanup, renderHook } from "@testing-library/react"
+import { act, cleanup, render, renderHook } from "@testing-library/react"
 import type React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { VersionsProvider } from "@/components/canvas/versions-context"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
 import en from "@/lib/i18n/dictionaries/en.json"
@@ -14,7 +15,10 @@ import {
     newVersionCache as cache,
     useNodeVersions,
 } from "@/packages/mcp-server/shell/node-versions-source"
-import { versionLabel } from "@/packages/mcp-server/shell/versions-panel"
+import {
+    VersionsPanel,
+    versionLabel,
+} from "@/packages/mcp-server/shell/versions-panel"
 import { useCanvasStore } from "@/stores/canvas-store"
 
 // The shell's version cards come from the MCP server's History (GET
@@ -423,6 +427,25 @@ describe("buildVersions", () => {
             "Opened the file",
             "Added a page",
         ])
+        // A rename changes no cell: the card says what it was, and names
+        // the page that was renamed (here the second one)
+        const second = (name: string) =>
+            A.replace(
+                "</mxfile>",
+                `<diagram id="p2" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>`,
+            )
+        const renamed = buildVersions(
+            list(
+                [
+                    entry(0, second("Page-2")),
+                    entry(1, second("Schema"), { source: "rename_page" }),
+                ],
+                1,
+            ),
+            cache(),
+        )
+        expect(versionLabel(renamed.versions[1], dict)).toBe("Renamed a page")
+        expect(renamed.versions[1].pageId).toBe("p2")
     })
 
     it("keeps the cells each change touched, to outline them again", () => {
@@ -431,6 +454,127 @@ describe("buildVersions", () => {
             cache(),
         )
         expect(versions[1].touchedIds).toEqual(["b", "c"])
+    })
+
+    it("counts a hand edit that lost to a write from the entry it was made on", () => {
+        // The user renamed A while the AI added B: the server keeps the
+        // edit after the AI's write, and names the entry it was made on
+        const byHand = doc(cell("a", "A by hand"))
+        const { versions } = buildVersions(
+            list(
+                [
+                    entry(0, A),
+                    entry(1, AB),
+                    entry(2, byHand, { source: "user", basedOn: 0 }),
+                ],
+                1,
+            ),
+            cache(),
+        )
+        // From the AI's write it would be two changes: A renamed, B removed
+        expect(versions[2].summary).toMatchObject({
+            shapesChanged: 1,
+            shapesRemoved: 0,
+        })
+        expect(versions[2].beforeXml).toBe(A)
+        // Undo of the edit, once restored, still goes to the canvas it
+        // replaced: the AI's write
+        expect(versions[2].beforeId).toBe("1")
+    })
+
+    it("counts the pages a version added or removed", () => {
+        const pages = (...names: string[]) =>
+            `<mxfile>${names.map((name) => `<diagram id="${name}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cell("a", "A")}</root></mxGraphModel></diagram>`).join("")}</mxfile>`
+        const { versions } = buildVersions(
+            list(
+                [
+                    entry(0, pages("One")),
+                    entry(1, pages("One", "Two", "Three"), { source: "user" }),
+                    entry(2, pages("One", "Three")),
+                ],
+                2,
+            ),
+            cache(),
+        )
+        expect(versions.map((v) => v.pagesAdded)).toEqual([0, 2, -1])
+    })
+
+    it("counts no shape as drawn or changed when a page is only added or removed", () => {
+        const page = (name: string, cells: string) =>
+            `<diagram id="${name}" name="${name}"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel></diagram>`
+        const file = (...pages: string[]) =>
+            `<mxfile>${pages.join("")}</mxfile>`
+        const blank = page("Blank", "")
+        const one = page("One", cell("2", "A") + cell("3", "B"))
+        const two = page("Two", cell("2", "A") + cell("4", "C"))
+        // What the card of the last entry tells, after the entry before it
+        const last = (before: string, after: string) => {
+            const { versions } = buildVersions(
+                list([entry(0, A), entry(1, before), entry(2, after)], 2),
+                cache(),
+            )
+            const { summary, fromScratch, touchedIds, pagesAdded } =
+                versions.at(-1) as (typeof versions)[number]
+            return {
+                cells: Object.values(summary).reduce((a, b) => a + b),
+                fromScratch,
+                touchedIds,
+                pagesAdded,
+            }
+        }
+        const removed = {
+            cells: 0,
+            fromScratch: false,
+            touchedIds: [],
+            pagesAdded: -1,
+        }
+        // The first page deleted: the page left is not compared with it,
+        // whether the deleted page was blank or had shapes with the same ids
+        expect(last(file(blank, one), file(one))).toEqual(removed)
+        expect(last(file(one, two), file(two))).toEqual(removed)
+        // A blank first page: the page count is still told
+        expect(last(file(blank, one), file(blank))).toEqual(removed)
+        expect(last(file(blank), file(blank, page("New", "")))).toEqual({
+            ...removed,
+            pagesAdded: 1,
+        })
+    })
+
+    it("pictures a version that changed no shape as the one it was made on, until it has a picture of its own", () => {
+        // A page renamed, and replaced by the next write before the tab
+        // showed it: the tab took no picture of it
+        const renamed = A.replace('name="Page-1"', 'name="Overview"')
+        const entries = [
+            entry(0, A, { svg: "data:A" }),
+            entry(1, renamed, { source: "rename_page" }),
+            entry(
+                2,
+                doc(cell("a", "A") + cell("b", "B")).replace(
+                    'name="Page-1"',
+                    'name="Overview"',
+                ),
+            ),
+        ]
+        const { versions } = buildVersions(list(entries, 2), cache())
+        expect(versions[1].svg).toBe("data:A")
+        // A version whose shapes changed has no such stand-in
+        expect(
+            buildVersions(
+                list(
+                    [
+                        entry(0, A, { svg: "data:A" }),
+                        entry(1, AB),
+                        entry(2, ABC),
+                    ],
+                    2,
+                ),
+                cache(),
+            ).versions[1].svg,
+        ).toBe("")
+        entries[1] = { ...entries[1], svg: "data:renamed" }
+        expect(buildVersions(list(entries, 2), cache()).versions[1].svg).toBe(
+            "data:renamed",
+        )
     })
 })
 
@@ -668,6 +812,82 @@ describe("useNodeVersions", () => {
         ])
     })
 
+    it("does not call a hand edit undone that lost to the AI's write", async () => {
+        // The AI wrote AB while the user was editing A: the server keeps
+        // the AI's write on the canvas and the user's edit after it
+        const manual = doc(cell("a", "A") + cell("m", "M"))
+        const server = fakeSync(
+            list(
+                [
+                    entry(0, A),
+                    entry(1, AB),
+                    entry(2, manual, { source: "user" }),
+                ],
+                1,
+            ),
+        )
+        const { result } = renderHook(() => useNodeVersions(server.sync), {
+            wrapper,
+        })
+        await flush()
+        expect(result.current.onCanvasId).toBe("1")
+        expect(result.current.undoneId).toBeNull()
+        expect(result.current.canRedo).toBe(false)
+        expect(result.current.canUndo).toBe(false)
+        // The same for what a tab showed when the session came back from
+        // its file
+        await act(async () =>
+            server.serve(
+                list(
+                    [entry(0, AB), entry(1, manual, { source: "recover" })],
+                    0,
+                ),
+            ),
+        )
+        expect(result.current.undoneId).toBeNull()
+        // A hand edit taken back with a restore is undone: the canvas
+        // shows the restore's copy, newer than the edit
+        await act(async () =>
+            server.serve(
+                list(
+                    [
+                        entry(0, AB),
+                        entry(1, manual, { source: "user" }),
+                        entry(2, AB, { firstId: 0, source: "restore" }),
+                    ],
+                    2,
+                ),
+            ),
+        )
+        expect(result.current.undoneId).toBe("1")
+        expect(result.current.canRedo).toBe(true)
+    })
+
+    it("calls a hand edit undone when Ctrl+Z in the editor took back its restore", async () => {
+        // The user edited AB by hand, went back to AB with its card and
+        // brought the edit back with its own: History has a copy of each
+        const manual = doc(cell("a", "A") + cell("b", "B") + cell("m", "M"))
+        const entries = [
+            entry(0, AB),
+            entry(1, manual, { source: "user" }),
+            entry(2, AB, { firstId: 0, source: "restore" }),
+            entry(3, manual, { firstId: 1, source: "restore" }),
+        ]
+        const server = fakeSync(list(entries, 3))
+        const { result } = renderHook(() => useNodeVersions(server.sync), {
+            wrapper,
+        })
+        await flush()
+        expect(result.current.onCanvasId).toBe("1")
+        expect(result.current.canUndo).toBe(true)
+        // Ctrl+Z in the editor: the tab pushes AB, which adds no entry, so
+        // the canvas shows the copy of AB from before the edit's own copy
+        await act(async () => server.serve(list(entries, 2)))
+        expect(result.current.onCanvasId).toBe("0")
+        expect(result.current.undoneId).toBe("1")
+        expect(result.current.canRedo).toBe(true)
+    })
+
     it("names the version a hand edit was made on: the one on the canvas last", async () => {
         const server = fakeSync(list([entry(0, A), entry(1, AB)], 0))
         const { result } = renderHook(() => useNodeVersions(server.sync), {
@@ -730,5 +950,42 @@ describe("useNodeVersions", () => {
             (server.sync.fetchHistory as ReturnType<typeof vi.fn>).mock.calls
                 .length,
         ).toBe(reads + 1)
+    })
+})
+
+describe("VersionsPanel", () => {
+    it("scrolls to the newest card, also once the server's buffer is full and the count stays the same", () => {
+        // jsdom has no scrolling
+        const scrollTo = vi.fn()
+        Element.prototype.scrollTo = scrollTo
+        const source = (versions: ReturnType<typeof buildVersions>) => ({
+            versions: versions.versions,
+            onCanvasId: versions.onCanvasId,
+            undoneId: null,
+            isBusy: false,
+            canUndo: false,
+            canRedo: false,
+            restore: vi.fn(),
+            undo: vi.fn(),
+            redo: vi.fn(),
+        })
+        const panel = (versions: ReturnType<typeof buildVersions>) => (
+            <DictionaryProvider dictionary={en as unknown as Dictionary}>
+                <VersionsProvider value={source(versions)}>
+                    <VersionsPanel versions={versions.versions} />
+                </VersionsProvider>
+            </DictionaryProvider>
+        )
+        const kept = cache()
+        const first = buildVersions(list([entry(0, A), entry(1, AB)], 1), kept)
+        const { rerender } = render(panel(first))
+        expect(scrollTo).toHaveBeenCalledTimes(1)
+        // The oldest entry dropped out as the new one came: two cards still
+        const next = buildVersions(list([entry(1, AB), entry(2, ABC)], 2), kept)
+        rerender(panel(next))
+        expect(scrollTo).toHaveBeenCalledTimes(2)
+        // The same list again: nothing to scroll to
+        rerender(panel(next))
+        expect(scrollTo).toHaveBeenCalledTimes(2)
     })
 })

@@ -36,8 +36,14 @@ import { readAttributes, type TagAttribute } from "./xml-attributes.ts"
 const CELL_BLOCK =
     /<mxCell\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*(?:\/>|>([\s\S]*?)<\/mxCell>)/g
 
+// CELL_BLOCK after the opening tag of the <object> or <UserObject> around
+// the cell, which holds the id of a cell with a link or custom data
+const WRAPPED_CELL_BLOCK =
+    /(?:<(?:UserObject|object)\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*>\s*)?<mxCell\b((?:[^<>"']|"[^"]*"|'[^']*')*?)\s*(?:\/>|>([\s\S]*?)<\/mxCell>)/g
+
 // The cell's own geometry, as opposed to one inside its custom data
-const OWN_GEOMETRY = /<mxGeometry\b(?:[^<>"']|"[^"]*"|'[^']*')*?\bas="geometry"/
+const OWN_GEOMETRY =
+    /<mxGeometry\b(?:[^<>"']|"[^"]*"|'[^']*')*?\bas=(?:"geometry"|'geometry')/
 
 // The four compact attributes and the names draw.io uses for them
 const SIZE_ATTRS = new Map([
@@ -61,23 +67,91 @@ const attributeText = (attrs: TagAttribute[]) =>
     attrs.map((a) => attr(a.name, a.value)).join("")
 
 /**
+ * "edge" or "vertex" by the rule above; null for a root cell or a layer, and
+ * for anything else that is neither
+ */
+function kindOf(
+    byName: Map<string, string>,
+    body: string,
+): "edge" | "vertex" | null {
+    if (
+        byName.get("edge") === "1" ||
+        (byName.get("vertex") !== "1" &&
+            (byName.has("source") || byName.has("target")))
+    ) {
+        return "edge"
+    }
+    return byName.get("vertex") === "1" ||
+        [...byName.keys()].some(isSize) ||
+        OWN_GEOMETRY.test(body)
+        ? "vertex"
+        : null
+}
+
+/**
+ * A page's root cell and its layers. The root cell is the cell without a
+ * parent that is no shape or edge, and the layers are its children. draw.io
+ * calls them "0" and "1"; a file made from one of its templates has longer
+ * ids ("WIyWlLk6GJQsqaUBKTNV-0" and "WIyWlLk6GJQsqaUBKTNV-1").
+ *
+ * root: the root cell's id, "0" when the page has no root cell. rootEnd:
+ * where the root cell ends in the XML, or undefined without one.
+ */
+export function rootAndLayersOf(xml: string): {
+    root: string
+    rootEnd?: number
+    layers: string[]
+} {
+    const attrsOf = (text: string) =>
+        new Map(readAttributes(text).map((a) => [a.name, a.value]))
+    const cells = Array.from(xml.matchAll(WRAPPED_CELL_BLOCK), (match) => {
+        const byName = attrsOf(match[2])
+        return {
+            id: (match[1] === undefined ? byName : attrsOf(match[1])).get("id"),
+            byName,
+            body: match[3] ?? "",
+            end: match.index + match[0].length,
+        }
+    })
+    const rootCell = cells.find(
+        ({ byName, body }) =>
+            !byName.has("parent") && kindOf(byName, body) === null,
+    )
+    const root = rootCell?.id ?? "0"
+    const layers = cells.flatMap(({ id, byName }) =>
+        id && byName.get("parent") === root ? [id] : [],
+    )
+    return { root, rootEnd: rootCell?.end, layers }
+}
+
+/**
  * The layer a cell without a parent goes on: layer "1" when the page has
  * it, as foldCells leaves parent="1" out (draw.io may save another layer
- * before it); otherwise the page's first layer (a cell whose parent is
- * "0"), or "1" on a page without layers
+ * before it); otherwise the page's first layer, or "1" on a page without
+ * layers
  */
 export function defaultLayerOf(xml: string): string {
-    let first: string | undefined
-    for (const [, attrText] of xml.matchAll(CELL_BLOCK)) {
-        const attrs = new Map(
+    const { layers } = rootAndLayersOf(xml)
+    return layers.includes("1") ? "1" : (layers[0] ?? "1")
+}
+
+/**
+ * Whether the XML holds a shape that says vertex="1" but not where it is:
+ * no x, y, w or h and no mxGeometry. expandCompactCells gives such a shape
+ * the default place, the page's corner, which suits a new cell but would
+ * move one that an update replaces.
+ */
+export function hasShapeWithoutPlace(xml: string): boolean {
+    return Array.from(xml.matchAll(CELL_BLOCK)).some(([, attrText, body]) => {
+        const byName = new Map(
             readAttributes(attrText).map((a) => [a.name, a.value]),
         )
-        const id = attrs.get("id")
-        if (attrs.get("parent") !== "0" || !id) continue
-        if (id === "1") return id
-        first ??= id
-    }
-    return first ?? "1"
+        return (
+            kindOf(byName, body ?? "") === "vertex" &&
+            ![...byName.keys()].some(isSize) &&
+            !OWN_GEOMETRY.test(body ?? "")
+        )
+    })
 }
 
 /**
@@ -92,15 +166,11 @@ export function expandCompactCells(xml: string, layer = "1"): string {
         const size = attrs.filter((a) => isSize(a.name))
         const inner = body ?? ""
         const hasGeometry = OWN_GEOMETRY.test(inner)
-        const isEdge =
-            byName.get("edge") === "1" ||
-            (byName.get("vertex") !== "1" &&
-                (byName.has("source") || byName.has("target")))
-        const isVertex =
-            !isEdge &&
-            (byName.get("vertex") === "1" || size.length > 0 || hasGeometry)
+        const kind = kindOf(byName, inner)
         // Root cells and anything else the model wrote in full are left alone
-        if (!isEdge && !isVertex) return block
+        if (!kind) return block
+        const isEdge = kind === "edge"
+        const isVertex = kind === "vertex"
         const complete =
             size.length === 0 &&
             byName.has(isEdge ? "edge" : "vertex") &&
@@ -138,8 +208,15 @@ export function expandCompactCells(xml: string, layer = "1"): string {
             if (isEdge) {
                 geometry = '<mxGeometry relative="1" as="geometry"/>'
             } else {
+                // A model may end a number as it ends a style entry (h="19;").
+                // draw.io reads 19 and writes 19 back, so the semicolon is
+                // dropped here: left in, draw.io's copy of the cell would
+                // differ from the saved one and look like a hand edit
                 const get = (short: string, long: string, fallback: string) =>
-                    byName.get(short) ?? byName.get(long) ?? fallback
+                    (byName.get(short) ?? byName.get(long) ?? fallback).replace(
+                        /^(-?\d+(?:\.\d+)?);$/,
+                        "$1",
+                    )
                 geometry = `<mxGeometry${attr("x", get("x", "x", "0"))}${attr("y", get("y", "y", "0"))}${attr("width", get("w", "width", "120"))}${attr("height", get("h", "height", "60"))} as="geometry"/>`
             }
         }

@@ -245,7 +245,9 @@ export function DemoPlayer({
         }
         for (const id of edges) {
             const { line } = edgeParts(id)
-            if (!line) continue
+            // Some browsers' SVG paths have no getTotalLength: there the line
+            // shows without being drawn
+            if (typeof line?.getTotalLength !== "function") continue
             const length = Math.ceil(line.getTotalLength())
             line.style.strokeDasharray = `${length}`
             line.style.strokeDashoffset = `${length}`
@@ -708,10 +710,10 @@ export function DemoPlayer({
                                     {s.title}
                                 </span>
                             </span>
-                            {/* The docs' column and a phone are too narrow
-                                for the notes */}
+                            {/* The docs' column, a phone and a tablet are
+                                too narrow for the notes */}
                             <span
-                                className={`mt-0.5 hidden truncate pl-[26px] text-[12px] text-muted-foreground ${docs ? "" : "md:block"}`}
+                                className={`mt-0.5 hidden truncate pl-[26px] text-[12px] text-muted-foreground ${docs ? "" : "lg:block"}`}
                             >
                                 {s.text}
                             </span>

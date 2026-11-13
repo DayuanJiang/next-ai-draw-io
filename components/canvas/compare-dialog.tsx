@@ -14,6 +14,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { cellLabels, diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
 import { formatMessage } from "@/lib/i18n/utils"
 import { describeChangeSummary } from "@/lib/version-text"
+import { useCanvasStore } from "@/stores/canvas-store"
 import { useUiStore } from "@/stores/ui-store"
 
 // Changed shapes named under the summary; more are counted
@@ -43,7 +44,7 @@ export function CompareDialog() {
     const dict = useDictionary()
     const t = dict.versions
     const { versions, isBusy, restore } = useVersionsContext()
-    const { getVersionSvg, chartXML } = useDiagram()
+    const { getVersionSvg, requestExport, chartXML } = useDiagram()
     const versionId = useUiStore((s) => s.compareVersionId)
     const openCompare = useUiStore((s) => s.openCompare)
     const closeCompare = useUiStore((s) => s.closeCompare)
@@ -83,12 +84,22 @@ export function CompareDialog() {
     }, [versionId, version, closeCompare])
 
     // Picture of the canvas as it is now, taken again once an answer that
-    // was running is done ("" when none could be made)
+    // was running is done ("" when none could be made). Of the page the
+    // version was made on, as the version's own picture and the changes
+    // named above are: while another page is on screen, draw.io renders
+    // that page only as a PNG
     useEffect(() => {
         if (!versionId) return
         let cancelled = false
         setCurrentSvg(null)
-        getVersionSvg().then((svg) => {
+        const pageId = version?.pageId
+        const picture: Promise<string | null | undefined> =
+            pageId && pageId !== useCanvasStore.getState().currentPageId
+                ? requestExport({ format: "png", pageId, scale: 2 }, 4000).then(
+                      (result) => result?.data,
+                  )
+                : getVersionSvg()
+        picture.then((svg) => {
             if (!cancelled) setCurrentSvg(svg ?? "")
         })
         return () => {

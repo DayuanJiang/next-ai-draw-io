@@ -16,8 +16,9 @@ import {
     ThumbsUp,
     X,
 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
-import ReactMarkdown from "react-markdown"
+import { memo, useEffect, useRef, useState } from "react"
+import ReactMarkdown, { type Options } from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
 import { Reasoning } from "@/components/ai-elements/reasoning"
 import { Shimmer } from "@/components/ai-elements/shimmer"
@@ -39,6 +40,7 @@ import {
     getUserOriginalText,
     splitTextIntoFileSections,
     type TextSection,
+    withoutToolCallMarker,
 } from "./message-text"
 import { ReplyUsageNote } from "./reply-usage"
 import { ToolActivity } from "./tool-activity"
@@ -71,14 +73,14 @@ function ActionButton({
 }
 
 /** Copies a message's text, with a short "copied" state */
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, label }: { text: string; label: string }) {
     const dict = useDictionary()
     const { copied, copy } = useCopy(() =>
         toast.error(dict.chat.failedToCopyDetail),
     )
     return (
         <ActionButton
-            label={copied ? dict.chat.copied : dict.chat.copyResponse}
+            label={copied ? dict.chat.copied : label}
             onClick={() => copy(text)}
         >
             {copied ? <Check /> : <Copy />}
@@ -132,7 +134,39 @@ function AttachedSection({ section }: { section: TextSection }) {
     )
 }
 
-function MessageText({ text }: { text: string }) {
+// Tables, strikethrough and bare links, as models write them. A single "~"
+// stays as typed: it also stands for "about" ("~200 px")
+const MARKDOWN_PLUGINS: Options["remarkPlugins"] = [
+    [remarkGfm, { singleTilde: false }],
+]
+
+const MARKDOWN_COMPONENTS: Options["components"] = {
+    // A table wider than the panel scrolls sideways in its own box
+    table: ({ node: _node, ...props }) => (
+        <div className="overflow-x-auto">
+            <table {...props} />
+        </div>
+    ),
+    // A picture shows as a link to it. As a picture, the browser would
+    // request whatever address the model wrote, and text hidden in an
+    // attached page or file can make it put the conversation into that
+    // address. (Markdown gives the address as text; the check is for the
+    // type, which also allows a Blob.)
+    img: ({ src, alt }) =>
+        typeof src === "string" ? <a href={src}>{alt || src}</a> : null,
+}
+
+// Memoized: the list renders again on each streamed chunk and each key typed
+// in the message box, and a message whose text is the same would parse its
+// Markdown again
+const MessageText = memo(function MessageText({
+    text,
+    typed,
+}: {
+    text: string
+    /** The user's own text: its lines stay as typed */
+    typed?: boolean
+}) {
     const sections = splitTextIntoFileSections(text)
     return (
         <div className="space-y-2">
@@ -142,10 +176,19 @@ function MessageText({ text }: { text: string }) {
                         key={index}
                         className={cn(
                             "prose prose-sm max-w-none break-words text-[14px] leading-relaxed text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-                            "prose-p:my-1.5 prose-pre:bg-surface-2 prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none dark:prose-invert",
+                            "prose-p:my-1.5 prose-table:my-2 prose-pre:bg-surface-2 prose-pre:text-foreground prose-code:before:content-none prose-code:after:content-none dark:prose-invert",
+                            // Markdown joins the lines of a paragraph into
+                            // one; a request typed on several lines
+                            // (Shift+Enter) keeps them
+                            typed && "[&_p]:whitespace-pre-line",
                         )}
                     >
-                        <ReactMarkdown>{section.content}</ReactMarkdown>
+                        <ReactMarkdown
+                            remarkPlugins={MARKDOWN_PLUGINS}
+                            components={MARKDOWN_COMPONENTS}
+                        >
+                            {section.content}
+                        </ReactMarkdown>
                     </div>
                 ) : (
                     <AttachedSection key={index} section={section} />
@@ -153,7 +196,7 @@ function MessageText({ text }: { text: string }) {
             )}
         </div>
     )
-}
+})
 
 function UserMessage({
     message,
@@ -262,7 +305,12 @@ function UserMessage({
                         <Pencil />
                     </ActionButton>
                 )}
-                <CopyButton text={text} />
+                {/* The typed text, as the edit box and "Save as template"
+                    take it; the text of attached files stays out */}
+                <CopyButton
+                    text={getUserOriginalText(message)}
+                    label={dict.chat.copyMessage}
+                />
                 <ActionButton
                     label={dict.templates.saveAsTemplate}
                     onClick={() => setSaveTemplate(true)}
@@ -317,7 +365,7 @@ function UserMessage({
                         ))}
                     </div>
                 )}
-                {text && <MessageText text={text} />}
+                {text && <MessageText text={text} typed />}
             </div>
             {saveTemplate && (
                 <TemplateFormDialog
@@ -336,11 +384,14 @@ function AssistantMessage({
     index,
     isLastMessage,
     isLastAssistant,
+    answerStartedAt,
 }: {
     message: UIMessage
     index: number
     isLastMessage: boolean
     isLastAssistant: boolean
+    /** When the request of the answer on its way went out; 0 without one */
+    answerStartedAt: number
 }) {
     const dict = useDictionary()
     // The thinking header in the page language; while streaming, duration
@@ -376,7 +427,6 @@ function AssistantMessage({
     const isCachedExample = parts.some((p: any) =>
         p.toolCallId?.startsWith("cached-"),
     )
-    const text = getMessageTextContent(message)
     // None on cached examples and on answers saved before it was recorded
     const usage = (message.metadata as ChatMessageMetadata | undefined)?.usage
 
@@ -476,11 +526,16 @@ function AssistantMessage({
         } else if (isToolUIPart(part))
             blocks.push({ kind: "tool", index: partIndex, texts: [] })
         else if (part.type === "text") {
-            const text = (part as { text: string }).text
+            const text = withoutToolCallMarker((part as { text: string }).text)
             if (last?.kind === "text") last.texts.push(text)
             else blocks.push({ kind: "text", index: partIndex, texts: [text] })
         }
     })
+    // The answer's text as shown, for its copy button
+    const text = blocks
+        .filter((block) => block.kind === "text")
+        .flatMap((block) => block.texts)
+        .join("\n")
     // Seconds of each reasoning row, by the index of its first part
     const savedSeconds = (
         message.metadata as
@@ -504,6 +559,13 @@ function AssistantMessage({
                             key={`r-${block.index}`}
                             className="w-full"
                             isStreaming={isStreamingReasoning}
+                            // The first thing of the answer: the model
+                            // has been thinking since the request went
+                            // out. Claude on Bedrock sends its thinking
+                            // only when it is over, minutes later.
+                            startedAt={
+                                blockIndex === 0 ? answerStartedAt : undefined
+                            }
                             defaultOpen={!isRestored}
                             getThinkingMessage={thinkingMessage}
                             initialDuration={
@@ -558,7 +620,12 @@ function AssistantMessage({
                             "[@media(hover:hover)]:opacity-100",
                     )}
                 >
-                    {text && <CopyButton text={text} />}
+                    {text && (
+                        <CopyButton
+                            text={text}
+                            label={dict.chat.copyResponse}
+                        />
+                    )}
                     {isLastAssistant && !isCachedExample && (
                         <ActionButton
                             label={dict.chat.regenerate}
@@ -807,8 +874,38 @@ function ErrorNotice({
     )
 }
 
-// Nothing new on screen for this long while answering: say it is still at work
-const QUIET_MS = 5000
+/**
+ * The user stopped the answer: said in the page's language, in the muted
+ * text of a stopped call, with Retry
+ */
+function StoppedNotice({ onRetry }: { onRetry?: () => void }) {
+    const dict = useDictionary()
+    return (
+        <div
+            className="flex items-center gap-2.5 px-1 text-[13px] text-muted-foreground"
+            data-testid="stopped-notice"
+        >
+            {dict.versions.stopped}
+            {onRetry && (
+                <button
+                    type="button"
+                    onClick={onRetry}
+                    className="inline-flex h-7 items-center gap-1 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+                    data-testid="retry-button"
+                >
+                    <RotateCcw className="size-3.5" />
+                    {dict.chat.retry}
+                </button>
+            )}
+        </div>
+    )
+}
+
+// Nothing new on screen for this long while answering: say it is still at
+// work. Short, because GPT-6 Luna and DeepSeek on Bedrock go quiet after
+// their plan sentence in every answer (the drawing comes in one piece 5 to
+// 20 seconds later), and longer than the pauses inside a streamed text.
+const QUIET_MS = 2000
 
 /**
  * Seconds since the answer began, and whether it has shown nothing new
@@ -831,6 +928,7 @@ function useAnswerClock(busy: boolean, signature: string) {
         setChangedAt(Date.now())
     }, [signature])
     return {
+        startedAt,
         seconds: startedAt
             ? Math.max(0, Math.round((now - startedAt) / 1000))
             : 0,
@@ -847,6 +945,84 @@ export function MessageList() {
     const endRef = useRef<HTMLDivElement>(null)
     const prevCountRef = useRef(0)
     const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    // Whether the list follows the answer as it grows; off from when the
+    // user scrolls up to read something earlier until they are back at the
+    // end
+    const followRef = useRef(true)
+
+    useEffect(() => {
+        // The chat panel's scroll area
+        const scroller = endRef.current?.closest(".overflow-y-auto")
+        if (!scroller) return
+        // The user takes the list: the wheel or trackpad turned up, a
+        // finger on it, or the scrollbar grabbed (a press on the area
+        // itself: everything else in it is its content). These inputs
+        // tell it, because the browser also moves the list up on its own
+        // when the content changes.
+        const take = (event: Event) => {
+            if (event instanceof WheelEvent && event.deltaY >= 0) {
+                // A turn down that reaches the end follows again at once:
+                // when its smooth scroll arrives, the answer may have
+                // grown past the place it was heading for
+                const { scrollTop, scrollHeight, clientHeight } = scroller
+                if (scrollHeight - scrollTop - clientHeight < event.deltaY) {
+                    followRef.current = true
+                }
+                return
+            }
+            if (event.type === "pointerdown" && event.target !== scroller) {
+                return
+            }
+            // At the top there is nowhere to go
+            if (scroller.scrollTop === 0) return
+            // A smooth scroll to the end may be on its way and would bring
+            // the list back: an instant one to where it is now ends it.
+            // Only at this first step: later it would cut short the
+            // wheel's own smooth scroll.
+            if (followRef.current) {
+                scroller.scrollTo({ top: scroller.scrollTop })
+            }
+            followRef.current = false
+        }
+        // Page Up, the up arrow and Home scroll the list too, once it was
+        // clicked. The key is pressed on the page and does not say what
+        // it scrolls: the user takes the list when it moves up right
+        // after one.
+        let upKeyAt = Number.NEGATIVE_INFINITY
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (!["PageUp", "ArrowUp", "Home"].includes(event.key)) return
+            upKeyAt = event.timeStamp
+            // (As above: ends a smooth scroll to the end on its way)
+            if (followRef.current) {
+                scroller.scrollTo({ top: scroller.scrollTop })
+            }
+        }
+        // Scrolled back down to the end: follow again
+        let lastTop = scroller.scrollTop
+        const onScroll = (event: Event) => {
+            const { scrollTop, scrollHeight, clientHeight } = scroller
+            if (scrollTop < lastTop && event.timeStamp - upKeyAt < 500) {
+                followRef.current = false
+            } else if (
+                scrollTop > lastTop &&
+                scrollHeight - scrollTop - clientHeight < 80
+            ) {
+                followRef.current = true
+            }
+            lastTop = scrollTop
+        }
+        const takes = ["wheel", "touchmove", "pointerdown"]
+        for (const name of takes) {
+            scroller.addEventListener(name, take, { passive: true })
+        }
+        scroller.addEventListener("scroll", onScroll, { passive: true })
+        document.addEventListener("keydown", onKeyDown)
+        return () => {
+            for (const name of takes) scroller.removeEventListener(name, take)
+            scroller.removeEventListener("scroll", onScroll)
+            document.removeEventListener("keydown", onKeyDown)
+        }
+    }, [])
 
     // Keep the newest message in view; jump instantly on bulk loads
     useEffect(() => {
@@ -857,10 +1033,15 @@ export function MessageList() {
             endRef.current.scrollIntoView({ behavior: "instant", block: "end" })
             return
         }
+        // A question just went out (sent, edited, regenerated, retried):
+        // it comes into view and its answer is followed
+        if (messages.at(-1)?.role === "user") followRef.current = true
+        if (!followRef.current) return
         if (!throttleRef.current) {
             endRef.current.scrollIntoView({ behavior: "smooth", block: "end" })
             throttleRef.current = setTimeout(() => {
                 throttleRef.current = null
+                if (!followRef.current) return
                 endRef.current?.scrollIntoView({
                     behavior: "smooth",
                     block: "end",
@@ -904,13 +1085,48 @@ export function MessageList() {
         lastTool?.state !== "input-streaming" &&
         lastTool?.state !== "input-available"
 
+    // For screen readers, when the answer ends: what its last drawing did,
+    // as its version card says, or that the answer is complete. Empty while
+    // it streams (so the next answer's sentence is a change, which is read),
+    // after Stop, and on an error card, which is an alert of its own.
+    const drawing =
+        last?.role === "assistant"
+            ? last.parts.findLast(
+                  (part) =>
+                      (part.type === "tool-display_diagram" ||
+                          part.type === "tool-edit_diagram") &&
+                      part.state === "output-available",
+              )
+            : undefined
+    const answerOutcome =
+        engine.isBusy ||
+        last?.role !== "assistant" ||
+        noticeOf(last) ||
+        engine.stoppedRef.current
+            ? ""
+            : drawing?.type === "tool-edit_diagram"
+              ? dict.versions.edited
+              : drawing
+                ? dict.versions.created
+                : dict.chat.answerComplete
+
     return (
         <div className="space-y-4 px-4 pt-4 pb-2">
+            <div className="sr-only" aria-live="polite">
+                {answerOutcome}
+            </div>
             {messages.map((message, index) => {
                 const isRestored = engine.loadedMessageIdsRef.current.has(
                     message.id,
                 )
                 const notice = noticeOf(message)
+                // On the newest notice: it sends the last question again
+                const onRetry =
+                    index === messages.length - 1 &&
+                    !engine.isBusy &&
+                    lastUserIndex >= 0
+                        ? engine.retryLastMessage
+                        : undefined
                 return (
                     <div
                         key={message.id}
@@ -922,6 +1138,8 @@ export function MessageList() {
                                 index={index}
                                 isLast={index === lastUserIndex}
                             />
+                        ) : notice?.stopped ? (
+                            <StoppedNotice onRetry={onRetry} />
                         ) : notice ? (
                             <ErrorNotice
                                 text={notice.text}
@@ -934,13 +1152,7 @@ export function MessageList() {
                                             : "list",
                                     )
                                 }
-                                onRetry={
-                                    index === messages.length - 1 &&
-                                    !engine.isBusy &&
-                                    lastUserIndex >= 0
-                                        ? engine.retryLastMessage
-                                        : undefined
-                                }
+                                onRetry={onRetry}
                                 onReport={
                                     notice.openModelConfig || notice.accessCode
                                         ? undefined
@@ -959,7 +1171,15 @@ export function MessageList() {
                                 message={message}
                                 index={index}
                                 isLastMessage={index === messages.length - 1}
-                                isLastAssistant={index === lastAssistantIndex}
+                                answerStartedAt={clock.startedAt}
+                                // Of the newest question: when that one
+                                // got no answer (it failed or was stopped
+                                // at once), Regenerate under the answer
+                                // before it would drop the question
+                                isLastAssistant={
+                                    index === lastAssistantIndex &&
+                                    index > lastUserIndex
+                                }
                             />
                         )}
                     </div>
@@ -967,8 +1187,20 @@ export function MessageList() {
             })}
             {engine.status === "submitted" &&
                 messages[messages.length - 1]?.role === "user" && (
-                    <div className="px-1 text-[13px]" aria-live="polite">
-                        <Shimmer as="span">{dict.reasoning.thinking}</Shimmer>
+                    // The seconds show it is alive: a model can think for
+                    // minutes before its first output. A screen reader
+                    // reads the row once; the seconds stay silent.
+                    <div
+                        className="px-1 text-[13px]"
+                        aria-live={clock.seconds ? "off" : "polite"}
+                    >
+                        <Shimmer as="span">
+                            {clock.seconds
+                                ? formatMessage(dict.reasoning.thinkingFor, {
+                                      duration: clock.seconds,
+                                  })
+                                : dict.reasoning.thinking}
+                        </Shimmer>
                     </div>
                 )}
             {silentWork && (

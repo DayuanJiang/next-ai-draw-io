@@ -1,5 +1,7 @@
 import { z } from "zod"
 import { getApiEndpoint } from "@/lib/base-path"
+import type { Dictionary } from "@/lib/i18n/dictionaries"
+import { formatMessage } from "@/lib/i18n/utils"
 import { STORAGE_KEYS } from "@/lib/storage"
 
 export interface UrlData {
@@ -16,7 +18,11 @@ const UrlResponseSchema = z.object({
     charCount: z.number().int().nonnegative(),
 })
 
-export async function extractUrlContent(url: string): Promise<UrlData> {
+/** A failure is thrown with its text for the user, taken from `dict` */
+export async function extractUrlContent(
+    url: string,
+    dict: Dictionary,
+): Promise<UrlData> {
     const response = await fetch(getApiEndpoint("/api/parse-url"), {
         method: "POST",
         headers: {
@@ -33,16 +39,19 @@ export async function extractUrlContent(url: string): Promise<UrlData> {
         .catch(() => ({ error: "Unexpected non-JSON response" }))
 
     if (!response.ok) {
-        const message =
-            typeof raw === "object" && raw && "error" in raw
-                ? String((raw as any).error)
-                : "Failed to extract URL content"
-        throw new Error(message)
+        // The server names the cause with a code and sends its numbers
+        // along; its own `error` text is English only
+        const texts = dict.url.errors as Record<string, string>
+        throw new Error(
+            response.status === 401
+                ? dict.errors.invalidAccessCode
+                : formatMessage(texts[raw?.code] ?? dict.url.failed, raw),
+        )
     }
 
     const parsed = UrlResponseSchema.safeParse(raw)
     if (!parsed.success) {
-        throw new Error("Malformed response from URL extraction API")
+        throw new Error(dict.url.failed)
     }
 
     return {

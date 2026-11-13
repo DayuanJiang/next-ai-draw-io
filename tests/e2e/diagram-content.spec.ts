@@ -141,6 +141,53 @@ test("an edit with a fixable cell is fixed, not rejected", async ({
     await expect(p.getByText(/exactly one cell/)).toHaveCount(0)
 })
 
+test("a drawing whose numbers lack their closing quote is drawn", async ({
+    page: p,
+}) => {
+    // The three forms models wrote on the demo site: before />, before
+    // the next attribute, and on a waypoint
+    const canvas = await mockReplies(p, [
+        streamedToolCall("display_diagram", {
+            xml: `<mxCell id="2" value="Gateway" style="rounded=1;" x="40" y="40" w="120" h="60/>
+<mxCell id="3" value="Billing" style="rounded=1;" x="300" y="40" w="120 h="60"/>
+<mxCell id="4" value="Ledger" style="rounded=1;" x="300" y="200" w="120 h="60/>
+<mxCell id="5" value="posts" source="2" target="4"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="100" y="230/></Array></mxGeometry></mxCell>`,
+        }),
+    ])
+    await sendMessage(p, "Draw the payment flow")
+    await waitForCompleteCount(p, 1)
+    for (const label of ["Gateway", "Billing", "Ledger", "posts"]) {
+        await expect(canvas.getByText(label, { exact: true })).toBeVisible({
+            timeout: 15000,
+        })
+    }
+})
+
+test("an add or update without cell_id uses the id of its cell", async ({
+    page: p,
+}) => {
+    const canvas = await mockReplies(p, [
+        streamedToolCall("display_diagram", {
+            xml: cell("a", "Alpha", 40) + cell("b", "Beta", 220),
+        }),
+        streamedToolCall("edit_diagram", {
+            operations: [
+                { operation: "update", new_xml: cell("b", "Beta two", 220) },
+                { operation: "add", new_xml: cell("c", "Gamma", 400) },
+            ],
+        }),
+    ])
+    await sendMessage(p, "Draw two boxes")
+    await waitForCompleteCount(p, 1)
+    await sendMessage(p, "Change them")
+    await waitForCompleteCount(p, 2)
+    await expect(canvas.getByText("Gamma", { exact: true })).toBeVisible({
+        timeout: 15000,
+    })
+    await expect(canvas.getByText("Beta two", { exact: true })).toBeVisible()
+    await expect(canvas.getByText("Alpha", { exact: true })).toBeVisible()
+})
+
 test("edit_diagram applies all operations or none", async ({ page: p }) => {
     const canvas = await mockReplies(p, [
         streamedToolCall("display_diagram", {
@@ -169,7 +216,11 @@ test("edit_diagram applies all operations or none", async ({ page: p }) => {
                     cell_id: "c",
                     new_xml: cell("c", "Broken", 400),
                 },
-                { operation: "delete", cell_id: "missing" },
+                {
+                    operation: "update",
+                    cell_id: "missing",
+                    new_xml: cell("missing", "Nowhere", 580),
+                },
             ],
         }),
     ])
@@ -719,7 +770,8 @@ test("the request after a failed screenshot check keeps the model and diagram", 
     page: p,
 }) => {
     // After a failed check the SDK sends the next request itself; it must
-    // carry the turn's model headers and diagram
+    // carry the turn's model headers, and the drawing the model goes on
+    // from (in the failed call's result: the user message stays as sent)
     await p.addInitScript(() => {
         localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
     })
@@ -754,13 +806,57 @@ test("the request after a failed screenshot check keeps the model and diagram", 
     await expect.poll(() => requests.length, { timeout: 20000 }).toBe(2)
     const [first, retry] = requests
     expect(retry.body.sessionId).toBe(first.body.sessionId)
-    expect(first.body.xml).not.toContain('value="Alpha"')
-    expect(retry.body.xml).toContain('value="Alpha"')
+    expect(retry.body.messages[0]).toEqual(first.body.messages[0])
+    const failed = retry.body.messages
+        .at(-1)
+        .parts.find((part: any) => part.type === "tool-display_diagram")
+    expect(failed.errorText).toMatch(/Current diagram XML:[\s\S]*value="Alpha"/)
     for (const name of Object.keys(first.headers)) {
         if (name.startsWith("x-")) {
             expect(retry.headers[name], name).toBe(first.headers[name])
         }
     }
+})
+
+test("a screenshot check the server could not run does not show as valid", async ({
+    page: p,
+}) => {
+    await p.addInitScript(() => {
+        localStorage.setItem("next-ai-draw-io-vlm-validation-enabled", "true")
+    })
+    let requests = 0
+    await p.route("**/api/chat", async (route) => {
+        requests++
+        await route.fulfill({
+            status: 200,
+            contentType: "text/event-stream",
+            body: drawReply("d1", cell("a", "Alpha", 40)),
+        })
+    })
+    // What the server answers without a model for the check
+    await p.route("**/api/validate-diagram", (route) =>
+        route.fulfill({
+            status: 503,
+            json: { error: "This server has no model for screenshot checks." },
+        }),
+    )
+    await openApp(p)
+    await sendMessage(p, "Draw a box")
+    await expect(p.frameLocator("iframe").getByText("Alpha")).toBeVisible({
+        timeout: 15000,
+    })
+    const card = p
+        .locator("div.rounded-xl", { hasText: "Validate Diagram" })
+        .last()
+    await expect(card.getByText("Error", { exact: true })).toBeVisible()
+    await expect(card.getByText("Valid", { exact: true })).toHaveCount(0)
+    // Its reason shows when the card is opened
+    await card.getByRole("button").click()
+    await expect(
+        card.getByText("This server has no model for screenshot checks."),
+    ).toBeVisible()
+    // The drawing stands: the model is not asked again
+    expect(requests).toBe(1)
 })
 
 // A display_diagram cut off by the output limit: its last cell is half
@@ -989,11 +1085,13 @@ test("the request after opening a compressed file has the cells", async ({
     ).toBeVisible()
     await sendMessage(p, "What is this?")
     await expect(p.getByText("Looks fine.")).toBeVisible()
-    // Regenerate sends the snapshot taken before the message
+    // Regenerate sends the diagram again
     await p.getByText("Looks fine.").hover()
     await p.getByRole("button", { name: "Regenerate response" }).click()
     await expect.poll(() => requests.length).toBe(2)
-    expect(requests[1].xml).toContain('value="Packed"')
+    expect(requests[1].messages.at(-1).metadata.diagram.xml).toContain(
+        'value="Packed"',
+    )
 })
 
 test("a rejected drawing stops saying it tries again once retries end", async ({

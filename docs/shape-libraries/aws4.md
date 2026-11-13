@@ -42,7 +42,7 @@ Other boundaries:
 - Availability Zone (no icon): `fillColor=none;strokeColor=#147EBA;dashed=1;verticalAlign=top;fontColor=#147EBA;container=1;collapsible=0;pointerEvents=0;`
 - Security group (no icon): `fillColor=none;strokeColor=#DD3522;verticalAlign=top;fontColor=#DD3522;container=1;collapsible=0;pointerEvents=0;`
 
-## Shapes (1032)
+## Shapes (1031)
 
 - `a1_instance`
 - `access_analyzer`
@@ -723,7 +723,6 @@ Other boundaries:
 - `msk_amazon_msk_connect`
 - `multimedia`
 - `multiple_volumes_resource`
-- `mxgraph.aws4`
 - `mysql_db_instance`
 - `mysql_db_instance_alternate`
 - `namespace`

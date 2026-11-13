@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { SecretInput, SettingField } from "@/app/[lang]/admin/setting-field"
 import { DictionaryProvider } from "@/hooks/use-dictionary"
-import type { SettingDef } from "@/lib/admin/settings-registry"
+import { SETTINGS_BY_KEY, type SettingDef } from "@/lib/admin/settings-registry"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
 import en from "@/lib/i18n/dictionaries/en.json"
 
@@ -83,5 +83,26 @@ describe("SettingField secret", () => {
 
         typeInto(en.admin.settings.LANGFUSE_SECRET_KEY.label, "")
         expect(onChange).toHaveBeenLastCalledWith(undefined)
+    })
+})
+
+describe("SettingField switch", () => {
+    it("shows the diagram check as on while it is unset, as the server runs it", () => {
+        // validate-diagram checks unless ENABLE_VLM_VALIDATION is "false"
+        const def = SETTINGS_BY_KEY.get("ENABLE_VLM_VALIDATION") as SettingDef
+        render(
+            withDict(
+                <SettingField
+                    def={def}
+                    state={{ key: def.key, source: "default", value: null }}
+                    pendingValue={undefined}
+                    disabled={false}
+                    onChange={() => {}}
+                />,
+            ),
+        )
+        expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe(
+            "true",
+        )
     })
 })

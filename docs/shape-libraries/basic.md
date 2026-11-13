@@ -13,7 +13,7 @@
 
 
 
-## Shapes (31)
+## Shapes (30)
 
 - `4_point_star`
 - `6_point_star`
@@ -29,7 +29,6 @@
 - `heart`
 - `loud_callout`
 - `moon`
-- `mxgraph.basic`
 - `no_symbol`
 - `octagon`
 - `orthogonal_triangle`

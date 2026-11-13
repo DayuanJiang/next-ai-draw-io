@@ -240,3 +240,152 @@ describe("a tool call that never got its result", () => {
         expect(sent[0]).not.toContain("call-without-result")
     })
 })
+
+describe("a server model that is gone", () => {
+    it("is refused with its own code, before any provider is called", async () => {
+        // Its provider was removed or renamed in the admin panel after the
+        // page loaded: the request's provider header is the old name's slug
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    { name: "New Name", provider: "openai", models: ["m1"] },
+                ],
+            }),
+        )
+        const fetchMock = vi.fn()
+        vi.stubGlobal("fetch", fetchMock)
+        const res = await chat(
+            new Request("http://localhost/api/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-selected-model-id": "server:old-name:m1",
+                    "x-ai-provider": "old-name",
+                    "x-ai-model": "m1",
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            id: "u1",
+                            role: "user",
+                            parts: [{ type: "text", text: "Draw two boxes" }],
+                        },
+                    ],
+                }),
+            }),
+        )
+        expect(res.status).toBe(400)
+        expect((await res.json()).code).toBe("server_model_gone")
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+})
+
+/** A first message, from a page that names no model */
+const firstMessage = (headers: Record<string, string> = {}) =>
+    chat(
+        new Request("http://localhost/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...headers },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        id: "u1",
+                        role: "user",
+                        parts: [{ type: "text", text: "Draw two boxes" }],
+                    },
+                ],
+                xml: "",
+            }),
+        }),
+    )
+
+describe("a request that names no model", () => {
+    it("runs on the default of the server's model list when there is no AI_MODEL", async () => {
+        // A page sends its first message before the list has reached it
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            JSON.stringify({
+                providers: [
+                    { name: "First", provider: "openai", models: ["m1"] },
+                    {
+                        name: "Second",
+                        provider: "openai",
+                        models: ["m2", "m3"],
+                        default: true,
+                    },
+                ],
+            }),
+        )
+        process.env.OPENAI_API_KEY = "server-key"
+        const sent: string[] = []
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (_url: string, init?: RequestInit) => {
+                sent.push(String(init?.body ?? ""))
+                return new Response(
+                    JSON.stringify({ error: { message: "x" } }),
+                    {
+                        status: 400,
+                        headers: { "Content-Type": "application/json" },
+                    },
+                )
+            }),
+        )
+        const res = await firstMessage()
+        await res.text()
+        expect(sent).toHaveLength(1)
+        expect(JSON.parse(sent[0]).model).toBe("m2")
+    })
+
+    it("keeps the model and key of a request that names its model in x-ai-model alone", async () => {
+        // A script, on a server whose list has another provider's default
+        process.env.AI_PROVIDER = "openai"
+        process.env.OPENAI_API_KEY = "server-key"
+        vi.stubEnv(
+            "AI_MODELS_CONFIG",
+            '{"providers":[{"name":"Claude","provider":"anthropic","models":["claude-default"],"default":true}]}',
+        )
+        const sent: unknown[] = []
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url: string, init?: RequestInit) => {
+                sent.push([
+                    url,
+                    new Headers(init?.headers).get("authorization"),
+                    JSON.parse(String(init?.body)).model,
+                ])
+                return new Response('{"error":{"message":"x"}}', {
+                    status: 400,
+                    headers: { "Content-Type": "application/json" },
+                })
+            }),
+        )
+        const res = await firstMessage({
+            "x-ai-model": "gpt-4o-mini",
+            "x-ai-api-key": "sk-user-key",
+        })
+        await res.text()
+        expect(sent).toEqual([
+            [
+                "https://api.openai.com/v1/responses",
+                "Bearer sk-user-key",
+                "gpt-4o-mini",
+            ],
+        ])
+    })
+
+    it("says how to choose Bedrock in the part of the error the chat shows", async () => {
+        // AWS credentials alone (an instance role, or AWS_ACCESS_KEY_ID)
+        // select no provider
+        for (const key of Object.keys(process.env)) {
+            if (/_API_KEY$|_AUTH_TOKEN$/.test(key)) vi.stubEnv(key, undefined)
+        }
+        vi.stubEnv("AI_MODELS_CONFIG", "")
+        process.env.AI_MODEL = "global.anthropic.claude-sonnet-5-5"
+        const res = await firstMessage()
+        expect(res.status).toBe(500)
+        // The chat shows this text, which the route cuts to 500 characters
+        expect((await res.json()).message).toContain("AI_PROVIDER=bedrock")
+    })
+})

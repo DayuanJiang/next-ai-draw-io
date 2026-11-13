@@ -13,7 +13,7 @@
 
 
 
-## Shapes (41)
+## Shapes (40)
 
 - `api`
 - `c_c_m`
@@ -36,7 +36,6 @@
 - `kubelet`
 - `limits`
 - `master`
-- `mxgraph.kubernetes`
 - `netpol`
 - `node`
 - `ns`

@@ -13,7 +13,7 @@
 
 
 
-## Shapes (35)
+## Shapes (34)
 
 - `annotation_1`
 - `annotation_2`
@@ -33,7 +33,6 @@
 - `manual_operation`
 - `merge_or_storage`
 - `multi-document`
-- `mxgraph.flowchart`
 - `off-page_reference`
 - `on-page_reference`
 - `or`

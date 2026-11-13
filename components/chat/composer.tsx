@@ -44,7 +44,15 @@ import { extractUrlContent } from "@/lib/url-utils"
 import { cn } from "@/lib/utils"
 import { isSendKey, useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
-import { ATTACHMENT_ACCEPT, isDiagramFile, validateFiles } from "./attachments"
+import {
+    ATTACHMENT_ACCEPT,
+    isDiagramFile,
+    isOversizedImage,
+    pickedFile,
+    readImageTypes,
+    shrinkImage,
+    validateFiles,
+} from "./attachments"
 import { useChatEngine } from "./chat-engine"
 
 /**
@@ -173,15 +181,26 @@ export function Composer({
     const sendShortcut = useSettingsStore((s) => s.sendShortcut)
     const openSettings = useUiStore((s) => s.openSettings)
     const focusToken = useUiStore((s) => s.focusComposerToken)
+    const focusComposer = useUiStore((s) => s.focusComposer)
 
     const formRef = useRef<HTMLFormElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [addOpen, setAddOpen] = useState(false)
+    const addButtonRef = useRef<HTMLButtonElement>(null)
+    // For an item of the add menu that opens a dialog: closing, the dialog
+    // gives the focus back to what has it as it opens. The item goes away
+    // with the menu, so the menu's button takes the focus first
+    const closeAddMenu = () => {
+        setAddOpen(false)
+        addButtonRef.current?.focus()
+    }
     const [templatesOpen, setTemplatesOpen] = useState(false)
     const templatePickedRef = useRef(false)
     const [showUrlDialog, setShowUrlDialog] = useState(false)
+    const urlDialogOpenRef = useRef(showUrlDialog)
+    urlDialogOpenRef.current = showUrlDialog
     const [isExtractingUrl, setIsExtractingUrl] = useState(false)
     const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
 
@@ -189,8 +208,13 @@ export function Composer({
     // Allow a retry when the last request failed, even mid-stream. While
     // the chat is being left, what is typed could not be sent.
     const isDisabled = (isBusy && !error) || engine.isLeaving
+    // Sets of added files still being read (addFiles)
+    const [filesBeingAdded, setFilesBeingAdded] = useState(0)
     const canSend =
-        !isDisabled && !engine.isExtractingAttachments && !!input.trim()
+        !isDisabled &&
+        !engine.isExtractingAttachments &&
+        filesBeingAdded === 0 &&
+        !!input.trim()
 
     const adjustHeight = useCallback(() => {
         const textarea = textareaRef.current
@@ -211,48 +235,145 @@ export function Composer({
         }
     }, [isHero, attachmentCount])
 
-    // Focus requests from elsewhere (new chat, "ask AI" button, ⌘/)
-    useEffect(() => {
-        if (focusToken === 0 && !autoFocus) return
-        const timer = setTimeout(() => textareaRef.current?.focus(), 60)
-        return () => clearTimeout(timer)
-    }, [focusToken, autoFocus])
-
-    // The chat is left while the user types (browser back): the browser
-    // takes the focus from the input it disables, after this runs. It gets
-    // the focus back once enabled, unless something else took it meanwhile.
+    // An answer in progress, or leaving the chat (browser back), disables
+    // the input the user types in: the browser takes the focus from the
+    // input it disables, after this runs. It gets the focus back once
+    // enabled, so the next message can be typed at once, unless something
+    // else took the focus meanwhile. A press on Stop leaves the focus on
+    // that button, which is the disabled Send button by now and loses it
+    // to the page a moment later. Text selected in the chat meanwhile (to
+    // copy it) stays selected: a focused box would take the selection.
     const refocusRef = useRef(false)
-    const isLeaving = engine.isLeaving
     useLayoutEffect(() => {
         if (isDisabled) {
-            if (isLeaving && document.activeElement === textareaRef.current) {
+            if (document.activeElement === textareaRef.current) {
                 refocusRef.current = true
             }
             return
         }
         if (!refocusRef.current) return
         refocusRef.current = false
-        if (document.activeElement === document.body) {
+        const active = document.activeElement
+        if (
+            (active === document.body || formRef.current?.contains(active)) &&
+            !window.getSelection()?.toString()
+        ) {
             textareaRef.current?.focus()
         }
-    }, [isDisabled, isLeaving])
+    }, [isDisabled])
 
-    const addFiles = (added: File[]) => {
+    // Focus requests from elsewhere (new chat, "ask AI" button, ⌘/, the
+    // start screen's box once its message is sent). A box that an answer in
+    // progress disables takes the focus when the answer ends.
+    useEffect(() => {
+        if (focusToken === 0 && !autoFocus) return
+        if (textareaRef.current?.disabled) {
+            refocusRef.current = true
+            return
+        }
+        const timer = setTimeout(() => textareaRef.current?.focus(), 60)
+        return () => clearTimeout(timer)
+    }, [focusToken, autoFocus])
+
+    const send = () => {
+        if (!canSend) return
+        // A click on Send takes the focus from the box. Put back here, the
+        // box gets it again when the answer ends (above). The start
+        // screen's box hands over to the panel's instead.
+        if (!isHero) textareaRef.current?.focus()
+        engine.submit()
+        // The answer shows in the chat panel, whose box takes the focus
+        // over for the next message. Not on phones, where a focused box
+        // brings up the keyboard: there this box does not focus itself.
+        if (isHero && autoFocus) focusComposer()
+    }
+
+    const addFiles = async (added: File[]) => {
         // A draw.io file is opened as the diagram, as "Open .drawio file"
         // does; what is typed and attached stays for the next message
         const diagram = added.find(isDiagramFile)
         if (diagram) engine.openDiagramFile(diagram, { keepComposer: true })
-        const newFiles = added.filter((file) => !isDiagramFile(file))
+        // A file that is attached already is not attached a second time
+        const newFiles = added.filter(
+            (file) =>
+                !isDiagramFile(file) &&
+                !files
+                    .map(pickedFile)
+                    .some(
+                        (f) =>
+                            f.name === file.name &&
+                            f.size === file.size &&
+                            f.lastModified === file.lastModified,
+                    ),
+        )
         if (newFiles.length === 0) return
+        // A picture over the size limit (a phone photo, a large screenshot)
+        // is scaled down to fit. The attachments can change meanwhile, so
+        // from here on they are read from the ref. Until the files are
+        // attached the message cannot be sent: it would go without them.
+        setFilesBeingAdded((n) => n + 1)
+        const read = async () => {
+            const sized = await Promise.all(
+                newFiles.map((file) =>
+                    isOversizedImage(file) ? shrinkImage(file) : file,
+                ),
+            )
+            return { sized, imageTypes: await readImageTypes(sized) }
+        }
+        // (Also when a file cannot be read: it went away meanwhile)
+        const { sized, imageTypes } = await read().finally(() =>
+            setFilesBeingAdded((n) => n - 1),
+        )
+        const attached = filesRef.current
         const { validFiles, errors } = validateFiles(
-            newFiles,
-            files.length,
+            sized,
+            attached.length,
             dict,
+            imageTypes,
         )
         showValidationErrors(errors, dict)
-        if (validFiles.length > 0) setFiles([...files, ...validFiles])
+        if (validFiles.length > 0) setFiles([...attached, ...validFiles])
         warnIfNoImageInput(validFiles, selectedModel, dict)
     }
+
+    // A file dragged anywhere over the page goes to the message box: the
+    // browser opens a file dropped beside the box in a new tab (Firefox: in
+    // place of the app). The canvas is draw.io's own frame and takes the
+    // files dropped on it. Set up again on every render, so the handlers
+    // see the current attachments.
+    useEffect(() => {
+        const hasFiles = (e: DragEvent) =>
+            e.dataTransfer?.types.includes("Files")
+        const onDragOver = (e: DragEvent) => {
+            if (!hasFiles(e)) return
+            e.preventDefault()
+            setIsDragging(true)
+        }
+        // The drag left the page: out of the window (no related target),
+        // or onto the canvas
+        const onDragLeave = (e: DragEvent) => {
+            if (
+                !e.relatedTarget ||
+                e.relatedTarget instanceof HTMLIFrameElement
+            ) {
+                setIsDragging(false)
+            }
+        }
+        const onDrop = (e: DragEvent) => {
+            if (!hasFiles(e)) return
+            e.preventDefault()
+            setIsDragging(false)
+            if (!isDisabled) addFiles(Array.from(e.dataTransfer?.files ?? []))
+        }
+        window.addEventListener("dragover", onDragOver)
+        window.addEventListener("dragleave", onDragLeave)
+        window.addEventListener("drop", onDrop)
+        return () => {
+            window.removeEventListener("dragover", onDragOver)
+            window.removeEventListener("dragleave", onDragLeave)
+            window.removeEventListener("drop", onDrop)
+        }
+    })
 
     // Switching to a model that cannot read images while one is attached
     // warns too. The attached files are read from a ref, so attaching is
@@ -274,31 +395,39 @@ export function Composer({
         if (e.nativeEvent.isComposing || e.keyCode === 229) return
         if (isSendKey(e, sendShortcut)) {
             e.preventDefault()
-            if (canSend) engine.submit()
+            send()
         }
     }
 
-    const handlePaste = async (e: React.ClipboardEvent) => {
+    const handlePaste = (e: React.ClipboardEvent) => {
         if (isDisabled) return
-        const imageItems = Array.from(e.clipboardData.items).filter((item) =>
-            item.type.startsWith("image/"),
+        const pasted = Array.from(e.clipboardData.files)
+        if (pasted.length === 0) return
+        // SVG is read as text and keeps its name, as a .drawio.svg must
+        const isPicture = (file: File) =>
+            file.type.startsWith("image/") && !isTextFile(file)
+        // A file copied in the file manager (a PDF, a text file, a .drawio
+        // file) comes with its name as text, which stays out of the box. A
+        // copied picture can come with text of its own (a spreadsheet's
+        // cells), which is pasted as usual.
+        if (!pasted.every(isPicture)) e.preventDefault()
+        addFiles(
+            pasted.map((file, index) =>
+                // A picture from the clipboard is always named "image.png"
+                isPicture(file)
+                    ? new File(
+                          [file],
+                          `pasted-image-${Date.now()}-${index}.${file.type.split("/")[1]}`,
+                          { type: file.type },
+                      )
+                    : file,
+            ),
         )
-        if (imageItems.length === 0) return
-        const imageFiles = imageItems
-            .map((item, index) => {
-                const file = item.getAsFile()
-                if (!file) return null
-                return new File(
-                    [file],
-                    `pasted-image-${Date.now()}-${index}.${file.type.split("/")[1]}`,
-                    { type: file.type },
-                )
-            })
-            .filter((f): f is File => f !== null)
-        addFiles(imageFiles)
     }
 
-    const handleUrlExtract = async (url: string) => {
+    // Called by the URL dialog (fromDialog) and by the link offered above
+    // the box, which can be read while the dialog is open for another link
+    const handleUrlExtract = async (url: string, fromDialog = false) => {
         setIsExtractingUrl(true)
         // Functional updates, so a removal or send made while extracting is
         // not overwritten when the request finishes
@@ -312,23 +441,28 @@ export function Composer({
                     isExtracting: true,
                 }),
             )
-            const data = await extractUrlContent(url)
+            const data = await extractUrlContent(url, dict)
             setUrlData((prev) =>
                 prev.has(url) ? new Map(prev).set(url, data) : prev,
             )
-            setShowUrlDialog(false)
+            if (fromDialog) setShowUrlDialog(false)
         } catch (err) {
             setUrlData((prev) => {
                 const next = new Map(prev)
                 next.delete(url)
                 return next
             })
-            toast.error(
-                <span className="text-muted-foreground">
-                    {err instanceof Error ? err.message : dict.url.failed}
-                </span>,
-                { duration: 5000 },
-            )
+            const reason = err instanceof Error ? err.message : dict.url.failed
+            // The dialog shows the reason under the address it asked for,
+            // where it stays; a dialog closed meanwhile cannot, so a toast
+            // does, as for the link offered above the box
+            if (!(fromDialog && urlDialogOpenRef.current)) {
+                toast.error(
+                    <span className="text-muted-foreground">{reason}</span>,
+                    { duration: 5000 },
+                )
+            }
+            return reason
         } finally {
             setIsExtractingUrl(false)
         }
@@ -350,26 +484,34 @@ export function Composer({
     const hasChips =
         chatSelection.length > 0 || files.length > 0 || urlData.size > 0
 
+    // The model cannot open a link that is only typed into the message,
+    // and draws from what it knows of the address. The first link that is
+    // not attached is offered for reading, as "Extract from URL" does.
+    // Chinese and Japanese text and full-width punctuation follow a link
+    // without a space, so the link ends where they begin. The punctuation
+    // that ends a sentence is not part of it; a closing bracket is, when
+    // the link opens it ("/wiki/Raft_(algorithm)").
+    const typedLink = input
+        .match(/https?:\/\/[^\s<>"'\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]+/g)
+        ?.map((link) => {
+            while (
+                /[.,;:!?\]]$/.test(link) ||
+                (link.endsWith(")") &&
+                    link.split(")").length > link.split("(").length)
+            ) {
+                link = link.slice(0, -1)
+            }
+            return link
+        })
+        .find((link) => !urlData.has(link))
+
     return (
         <form
             ref={formRef}
             id={isHero ? "hero-chat-form" : "chat-form"}
             onSubmit={(e) => {
                 e.preventDefault()
-                if (canSend) engine.submit()
-            }}
-            onDragOver={(e) => {
-                e.preventDefault()
-                setIsDragging(true)
-            }}
-            onDragLeave={(e) => {
-                e.preventDefault()
-                setIsDragging(false)
-            }}
-            onDrop={(e) => {
-                e.preventDefault()
-                setIsDragging(false)
-                if (!isDisabled) addFiles(Array.from(e.dataTransfer.files))
+                send()
             }}
             className={cn(
                 "group/composer relative w-full rounded-[14px] border border-border bg-card transition-[border-color,box-shadow] duration-150",
@@ -422,6 +564,24 @@ export function Composer({
                 </div>
             )}
 
+            {typedLink && (
+                <div
+                    className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3.5 pt-2.5 text-xs text-muted-foreground"
+                    data-testid="typed-link-hint"
+                >
+                    <Globe className="size-3.5 shrink-0" />
+                    <span>{dict.url.typedLinkHint}</span>
+                    <button
+                        type="button"
+                        disabled={isDisabled || isExtractingUrl}
+                        onClick={() => handleUrlExtract(typedLink)}
+                        className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground disabled:opacity-60"
+                    >
+                        {dict.url.readTypedLink}
+                    </button>
+                </div>
+            )}
+
             <textarea
                 ref={textareaRef}
                 value={input}
@@ -429,10 +589,14 @@ export function Composer({
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder={
-                    placeholder ??
-                    (chatSelection.length > 0
-                        ? dict.selection.placeholder
-                        : dict.chat.placeholder)
+                    // An attachment alone cannot be sent: the box says what
+                    // is missing while Send stays grey
+                    attachmentCount > 0
+                        ? dict.chat.placeholderAttached
+                        : (placeholder ??
+                          (chatSelection.length > 0
+                              ? dict.selection.placeholder
+                              : dict.chat.placeholder))
                 }
                 disabled={isDisabled}
                 aria-label={dict.chat.inputLabel}
@@ -456,6 +620,7 @@ export function Composer({
                 <Popover open={addOpen} onOpenChange={setAddOpen}>
                     <PopoverTrigger asChild>
                         <IconButton
+                            ref={addButtonRef}
                             label={dict.chat.attach}
                             tooltipSide="top"
                             disabled={isDisabled}
@@ -467,6 +632,8 @@ export function Composer({
                     <PopoverContent
                         side="top"
                         align="start"
+                        // A dialog to screen readers, which read its name
+                        aria-label={dict.chat.attach}
                         className="w-64 p-1"
                     >
                         <MenuItem
@@ -481,7 +648,7 @@ export function Composer({
                         <MenuItem
                             icon={<Globe />}
                             onClick={() => {
-                                setAddOpen(false)
+                                closeAddMenu()
                                 setShowUrlDialog(true)
                             }}
                         >
@@ -492,7 +659,7 @@ export function Composer({
                             disabled={!input.trim()}
                             disabledHint={dict.templates.saveDisabledHint}
                             onClick={() => {
-                                setAddOpen(false)
+                                closeAddMenu()
                                 setSaveTemplateOpen(true)
                             }}
                         >
@@ -570,7 +737,7 @@ export function Composer({
             <UrlInputDialog
                 open={showUrlDialog}
                 onOpenChange={setShowUrlDialog}
-                onSubmit={handleUrlExtract}
+                onSubmit={(url) => handleUrlExtract(url, true)}
                 isExtracting={isExtractingUrl}
             />
             <TemplateFormDialog

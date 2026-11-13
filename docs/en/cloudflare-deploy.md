@@ -4,6 +4,16 @@ This page shows you how to deploy Next AI Draw.io as a Cloudflare Worker, a prog
 
 The Worker is deployed to Cloudflare's servers around the world, so it answers with very low latency. Hosting on a `workers.dev` address is free. If you need it, Cloudflare's R2 storage adds full Next.js ISR support.
 
+## What does not work on a Worker
+
+The landing page and the editor work on a Worker. Three things fail there, because they read Markdown files from disk when a request arrives, and a Worker has no such files:
+
+- The documentation pages under `/docs` return an error.
+- `/sitemap.xml` returns an error.
+- In a chat, the AI cannot look up draw.io's shape libraries, so it has to guess the icon names in AWS, Azure, GCP, Kubernetes and similar diagrams.
+
+With [Docker](./docker.md), all three work.
+
 ## What you need
 
 - A Cloudflare account. The free plan works for a basic deployment.

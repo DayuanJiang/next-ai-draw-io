@@ -4,6 +4,7 @@ import {
     cn,
     extractCompleteMxCells,
     extractDiagramXML,
+    formatXML,
     isRealDiagram,
 } from "@/lib/utils"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
@@ -54,6 +55,40 @@ describe("extractCompleteMxCells", () => {
         const xml = `<mxCell id="2" vertex="1" parent="1"/><mxCell id="3" vertex="1" parent="1"><mxGeometry as="geometry"/>`
         expect(extractCompleteMxCells(xml)).toBe(
             '<mxCell id="2" vertex="1" parent="1"/>',
+        )
+    })
+})
+
+describe("formatXML", () => {
+    it("puts each tag on its own line, indented under its parent", () => {
+        // The same opening tag twice: each is indented where it stands
+        const cell =
+            '<mxCell vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>'
+        expect(formatXML(`<root><mxCell id="0"/>${cell}${cell}</root>`)).toBe(
+            [
+                "<root>",
+                '  <mxCell id="0"/>',
+                '  <mxCell vertex="1" parent="1">',
+                '    <mxGeometry as="geometry"/>',
+                "  </mxCell>",
+                '  <mxCell vertex="1" parent="1">',
+                '    <mxGeometry as="geometry"/>',
+                "  </mxCell>",
+                "</root>",
+            ].join("\n"),
+        )
+    })
+
+    it("keeps text on the line of its tag, also when the same tag held tags before", () => {
+        expect(formatXML("<root><foo><bar/></foo><foo>text</foo></root>")).toBe(
+            [
+                "<root>",
+                "  <foo>",
+                "    <bar/>",
+                "  </foo>",
+                "  <foo>text</foo>",
+                "</root>",
+            ].join("\n"),
         )
     })
 })

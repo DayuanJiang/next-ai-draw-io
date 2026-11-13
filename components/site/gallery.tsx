@@ -109,9 +109,10 @@ function Card({
                         {item.model}
                     </span>
                 </span>
-                <h3 className="mt-2 text-[15px] leading-snug font-semibold">
+                {/* Next after the page's h1 */}
+                <h2 className="mt-2 text-[15px] leading-snug font-semibold">
                     {item.title[lang]}
-                </h3>
+                </h2>
                 <p className="mt-1.5 flex-1 text-[13.5px] leading-relaxed text-muted-foreground">
                     <span className="sr-only">{t.prompt}: </span>
                     <span lang="en">{item.prompt}</span>
@@ -132,7 +133,9 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
     const t = GALLERY_TEXTS[lang]
     const { copied, copy } = useCopy()
     return (
-        <div className="mt-3 flex items-center gap-2">
+        // Each button keeps its text on one line; in a narrow card the
+        // second one goes below the first
+        <div className="mt-3 flex flex-wrap items-center gap-2">
             {!item.attachment && (
                 <Link
                     href={`/${lang}?prompt=${encodeURIComponent(item.prompt)}`}
@@ -141,7 +144,7 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
                     // The editor takes the prompt out of the address, which
                     // search engines report as a redirect: keep them out
                     rel="nofollow"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[13px] font-medium text-background"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[13px] font-medium whitespace-nowrap text-background"
                 >
                     <SquarePen className="size-3.5" />
                     {t.tryPrompt}
@@ -150,7 +153,7 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
             <button
                 type="button"
                 onClick={() => copy(item.prompt)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[13px] text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[13px] whitespace-nowrap text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
             >
                 {copied ? (
                     <Check className="size-3.5" />
@@ -163,7 +166,7 @@ function Actions({ item, lang }: { item: GalleryItem; lang: Locale }) {
     )
 }
 
-/** One diagram as large as the window allows; Escape or a click outside closes it */
+/** One diagram, enlarged; Escape or a click outside closes it */
 function Enlarged({
     item,
     lang,
@@ -175,16 +178,31 @@ function Enlarged({
 }) {
     const t = GALLERY_TEXTS[lang]
     const close = useRef<HTMLButtonElement>(null)
+    const scroller = useRef<HTMLDivElement>(null)
     useEffect(() => {
         // Focus moves into the dialog and back to the card when it closes
         const before = document.activeElement as HTMLElement | null
         close.current?.focus()
         const onKey = (event: KeyboardEvent) => {
             if (event.key === "Escape") onClose()
+            // Tab goes between the dialog's two stops and not to the page
+            // behind: the close button, and the diagram's area, which the
+            // arrow keys scroll while it has the focus
+            if (event.key === "Tab") {
+                event.preventDefault()
+                const next =
+                    document.activeElement === close.current
+                        ? scroller.current
+                        : close.current
+                next?.focus()
+            }
         }
         document.addEventListener("keydown", onKey)
+        // The page behind does not scroll under the dialog
+        document.body.style.overflow = "hidden"
         return () => {
             document.removeEventListener("keydown", onKey)
+            document.body.style.overflow = ""
             before?.focus()
         }
     }, [onClose])
@@ -204,9 +222,9 @@ function Enlarged({
                 className="flex max-h-full w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_30px_80px_-30px_rgba(0,0,0,0.6)]"
             >
                 <div className="flex items-center gap-3 border-b border-border px-4 py-2.5">
-                    <h3 className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">
+                    <h2 className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">
                         {item.title[lang]}
-                    </h3>
+                    </h2>
                     <button
                         ref={close}
                         type="button"
@@ -218,13 +236,21 @@ function Enlarged({
                         <X className="size-4" />
                     </button>
                 </div>
-                <div className="lp-grid flex min-h-0 flex-1 items-center justify-center overflow-auto p-4 md:p-6">
+                {/* A phone's screen is no wider than the card. There the
+                    diagram keeps its own size, as draw.io shows it at 100%,
+                    and is dragged around; the margin centers it without
+                    cutting off the part that overflows. */}
+                <div
+                    ref={scroller}
+                    tabIndex={0}
+                    className="lp-grid flex min-h-0 flex-1 overflow-auto p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:p-6"
+                >
                     <Image
                         src={item.src}
                         alt={item.title[lang]}
                         width={1200}
                         height={900}
-                        className="max-h-[78vh] w-auto max-w-full object-contain"
+                        className="m-auto w-auto object-contain max-md:h-auto max-md:max-w-none md:max-h-[78vh] md:max-w-full"
                     />
                 </div>
             </div>

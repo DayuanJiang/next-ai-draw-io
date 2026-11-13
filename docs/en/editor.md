@@ -12,7 +12,7 @@ On the start screen, the examples show what the editor can do. Pick one and pres
 
 To start from something you already have:
 
-- **Pictures**: attach a screenshot, a photo of a whiteboard or a diagram from another tool, and ask the AI to redraw it. PNG, JPEG, GIF and WebP images up to 2 MB each.
+- **Pictures**: attach a screenshot, a photo of a whiteboard or a diagram from another tool, and ask the AI to redraw it. PNG, JPEG, GIF and WebP images; a picture over 2 MB is scaled down first.
 - **Documents**: attach a PDF or a text file (Markdown, JSON, CSV, YAML, code and more), and ask for a diagram of what it describes. Their text is read, up to 150,000 characters per file.
 - **Web pages**: choose Add, then Extract from URL, and paste the address of a page.
 - **draw.io files**: attach a `.drawio` or `.drawio.svg` file to open it on the canvas.
@@ -39,7 +39,7 @@ Each change the AI makes is outlined for a few seconds, so you can see what it d
 
 ## Your diagrams
 
-Diagrams are saved in this browser as you work. The Diagrams list holds each diagram with its conversation: search, rename or delete them there, and choose New diagram to start another one. A diagram stays in the browser and on the device where you made it, so export it to keep a copy or to move it.
+Diagrams are saved in this browser as you work. The Diagrams list holds each diagram with its conversation: search, rename or delete them there, and choose New diagram to start another one. The list holds up to 50 diagrams: when one more is saved, the one changed longest ago is deleted. A diagram stays in the browser and on the device where you made it, so export it to keep a copy or to move it.
 
 ## Export
 
@@ -52,7 +52,7 @@ Export saves the diagram in one of four formats:
 | SVG image | A picture that scales without blur |
 | Editable SVG | A picture that still opens in draw.io |
 
-A PNG can have a transparent background.
+PNG and both SVG formats can have a transparent background.
 
 ## Saved prompts
 

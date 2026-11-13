@@ -13,7 +13,7 @@
 
 
 
-## Shapes (19)
+## Shapes (18)
 
 - `cinder_volume`
 - `cinder_volumeattachment`
@@ -22,7 +22,6 @@
 - `heat_autoscalinggroup`
 - `heat_resourcegroup`
 - `heat_scalingpolicy`
-- `mxgraph.openstack`
 - `neutron_floatingip`
 - `neutron_floatingipassociation`
 - `neutron_net`

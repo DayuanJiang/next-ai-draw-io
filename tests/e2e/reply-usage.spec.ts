@@ -68,6 +68,20 @@ test("an answer shows the tokens and time of all its requests", async ({
     await expect(details).toContainText("Thinking12")
     await expect(details).toContainText("Time5.4")
     await expect(details).toContainText("Estimated cost$0.0373")
+    // The details stay while the pointer is on them, to be read or copied,
+    // and go when it leaves them across the panel, on its way to the canvas
+    const table = page.locator('[data-slot="tooltip-content"]')
+    const box = await table.boundingBox()
+    if (!box) throw new Error("the usage details are not laid out")
+    const y = box.y + box.height / 2
+    await page.mouse.move(box.x + box.width / 2, y, { steps: 5 })
+    await page.waitForTimeout(300)
+    await expect(table).toBeVisible()
+    await page.mouse.move(box.x - 30, y)
+    await page.waitForTimeout(100)
+    await page.mouse.move(box.x - 60, y)
+    await page.mouse.move(200, 300, { steps: 5 })
+    await expect(table).toHaveCount(0)
 
     // Kept with the chat
     await page.waitForURL(/session=/)

@@ -34,6 +34,21 @@ export function describeChangeSummary(
     return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
+/**
+ * "Added 1 page", "Removed 2 pages": how the number of pages changed
+ * (pages: added, or removed when negative); "" when it did not
+ */
+export function describePagesChange(pages: number, t: VersionDict): string {
+    if (pages === 0) return ""
+    const key = pages > 0 ? "pagesAdded" : "pagesRemoved"
+    const count = Math.abs(pages)
+    const text = formatMessage(
+        (count === 1 ? t[`${key}One`] : t[`${key}Other`]) ?? "",
+        { count },
+    )
+    return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 /** "3 shapes, 1 connector": what a diagram drawn from scratch holds */
 export function describeTotals(summary: ChangeSummary, t: VersionDict): string {
     const count = (n: number, key: string) =>

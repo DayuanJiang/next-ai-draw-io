@@ -57,6 +57,7 @@ export function SessionMenu({
     const [draftTitle, setDraftTitle] = useState("")
     const [toDelete, setToDelete] = useState<string | null>(null)
     const renameRef = useRef<HTMLInputElement>(null)
+    const triggerRef = useRef<HTMLButtonElement>(null)
 
     useEffect(() => {
         if (!open) {
@@ -75,6 +76,8 @@ export function SessionMenu({
         shownTitle(s.title).toLowerCase().includes(query.trim().toLowerCase()),
     )
 
+    const deleteTarget = engine.sessions.find((s) => s.id === toDelete)
+
     const commitRename = async () => {
         const next = draftTitle.trim()
         setRenaming(false)
@@ -84,9 +87,13 @@ export function SessionMenu({
     return (
         <>
             <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>{children}</PopoverTrigger>
+                <PopoverTrigger asChild ref={triggerRef}>
+                    {children}
+                </PopoverTrigger>
                 <PopoverContent
                     align={align}
+                    // A dialog to screen readers, which read its name
+                    aria-label={dict.lobby.recent}
                     className="flex max-h-[min(560px,80vh)] w-[340px] flex-col overflow-hidden rounded-xl p-0 shadow-pop"
                 >
                     <div className="border-b border-border p-3">
@@ -164,6 +171,7 @@ export function SessionMenu({
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
                                     placeholder={t.searchPlaceholder}
+                                    aria-label={t.searchPlaceholder}
                                     className="h-8 w-full rounded-lg bg-muted pr-2.5 pl-8 text-[13px] outline-none placeholder:text-faint"
                                 />
                             </div>
@@ -251,6 +259,13 @@ export function SessionMenu({
                                             }
                                             onClick={(e) => {
                                                 e.stopPropagation()
+                                                // The list closes as the
+                                                // confirmation opens, and
+                                                // this button with it: the
+                                                // list's button takes the
+                                                // focus the confirmation
+                                                // gives back as it closes
+                                                triggerRef.current?.focus()
                                                 setToDelete(session.id)
                                             }}
                                             aria-label={t.deleteTitle}
@@ -274,6 +289,13 @@ export function SessionMenu({
                     <AlertDialogHeader>
                         <AlertDialogTitle>{t.deleteTitle}</AlertDialogTitle>
                         <AlertDialogDescription>
+                            {/* Which one: it can be another diagram than
+                                the one on screen behind the dialog. The
+                                fixed height keeps the dialog's size while
+                                it closes */}
+                            <span className="mb-1 line-clamp-1 h-5 break-all font-medium text-foreground">
+                                {deleteTarget && shownTitle(deleteTarget.title)}
+                            </span>
                             {t.deleteDescription}
                         </AlertDialogDescription>
                     </AlertDialogHeader>

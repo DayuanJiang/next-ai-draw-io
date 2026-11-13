@@ -37,6 +37,7 @@ import { BrandMark } from "@/components/workspace/brand-mark"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
+import { formatMessage } from "@/lib/i18n/utils"
 import { STORAGE_KEYS } from "@/lib/storage"
 import { cn } from "@/lib/utils"
 import {
@@ -56,12 +57,15 @@ const LANGUAGE_LABELS: Record<Locale, string> = {
 function Row({
     label,
     description,
+    note,
     htmlFor,
     children,
     stacked = false,
 }: {
     label: string
     description?: string
+    /** Why the value entered will not apply as it is */
+    note?: string
     htmlFor?: string
     children: React.ReactNode
     stacked?: boolean
@@ -85,6 +89,11 @@ function Row({
                 {description && (
                     <p className="max-w-[34em] text-xs text-muted-foreground">
                         {description}
+                    </p>
+                )}
+                {note && (
+                    <p className="max-w-[34em] text-xs text-amber-700 dark:text-amber-400">
+                        {note}
                     </p>
                 )}
             </div>
@@ -210,10 +219,22 @@ function GeneralTab({ open }: { open: boolean }) {
             const params = new URLSearchParams(search.toString())
             if (sessionId) params.set("session", sessionId)
             const query = params.toString() ? `?${params.toString()}` : ""
-            router.push((parts.join("/") || "/") + query)
+            // In place of this page in the browser history: the old
+            // language's address redirects to the saved language, so a
+            // step back to it would come straight back here
+            router.replace((parts.join("/") || "/") + query)
         })
 
     const saveAccessCode = async () => {
+        const code = accessCode.trim()
+        // The code travels in a request header, which carries Latin-1
+        // only: with Chinese or full-width characters (pasted along with
+        // the code) fetch throws before sending, which would read as a
+        // network error. Such a code can never reach the server.
+        if (/[\u0100-\uffff]/.test(code)) {
+            setAccessError(t.accessCodeWrong)
+            return
+        }
         setAccessError("")
         setIsVerifying(true)
         try {
@@ -221,15 +242,17 @@ function GeneralTab({ open }: { open: boolean }) {
                 getApiEndpoint("/api/verify-access-code"),
                 {
                     method: "POST",
-                    headers: { "x-access-code": accessCode.trim() },
+                    headers: { "x-access-code": code },
                 },
             )
             const data = await response.json()
             if (!data.valid) {
-                setAccessError(data.message || dict.errors.invalidAccessCode)
+                // The server's message is English, and the chat's own text
+                // sends the user to Settings, where they are now
+                setAccessError(t.accessCodeWrong)
                 return
             }
-            localStorage.setItem(STORAGE_KEYS.accessCode, accessCode.trim())
+            localStorage.setItem(STORAGE_KEYS.accessCode, code)
             toast.success(t.accessCodeSaved)
         } catch {
             setAccessError(dict.errors.networkError)
@@ -293,7 +316,12 @@ function GeneralTab({ open }: { open: boolean }) {
                 </Row>
                 <Row
                     label={t.language}
-                    description={t.languageDescription}
+                    // The select is greyed while an answer runs: say why
+                    description={
+                        engine.isBusy
+                            ? dict.sessionHistory.busyHint
+                            : t.languageDescription
+                    }
                     htmlFor="language-select"
                 >
                     <Select
@@ -359,6 +387,15 @@ function GeneralTab({ open }: { open: boolean }) {
                                 <div className="flex gap-2">
                                     <Input
                                         id="access-code"
+                                        // No code saved yet: nothing works
+                                        // without one, so the cursor starts
+                                        // here (the chat opens this page
+                                        // when the server asks for a code)
+                                        autoFocus={
+                                            !localStorage.getItem(
+                                                STORAGE_KEYS.accessCode,
+                                            )
+                                        }
                                         type="password"
                                         value={accessCode}
                                         onChange={(e) =>
@@ -438,6 +475,34 @@ function DrawingTab() {
     const dict = useDictionary()
     const t = dict.settings
     const settings = useSettingsStore()
+    // What the server gives its own models at most (the user's value can
+    // only lower that), and the highest value it takes from a user
+    const [tokenLimits, setTokenLimits] = useState<{
+        server: number
+        max: number
+    } | null>(null)
+    useEffect(() => {
+        fetch(getApiEndpoint("/api/config"))
+            .then((res) => res.json())
+            .then((data) => setTokenLimits(data.maxOutputTokens))
+            .catch(() => {})
+    }, [])
+    // The server ignores a value out of range, and keeps its own models
+    // at its own limit (not in the desktop app, where every key is the
+    // user's): say so, as the hint above asks to raise the value
+    const tokens = Number(settings.maxOutputTokens)
+    const tokensNote =
+        !settings.maxOutputTokens || !tokenLimits
+            ? undefined
+            : tokens < 1 || tokens > tokenLimits.max
+              ? formatMessage(t.maxOutputTokensIgnored, {
+                    max: tokenLimits.max,
+                })
+              : tokens > tokenLimits.server && !window.electronAPI?.isElectron
+                ? formatMessage(t.maxOutputTokensServerCap, {
+                      limit: tokenLimits.server,
+                  })
+                : undefined
 
     return (
         <div className="divide-y divide-border">
@@ -485,6 +550,7 @@ function DrawingTab() {
             <Row
                 label={t.maxOutputTokens}
                 description={t.maxOutputTokensDescription}
+                note={tokensNote}
                 htmlFor="max-output-tokens"
             >
                 <Input
@@ -495,7 +561,8 @@ function DrawingTab() {
                     onChange={(e) =>
                         settings.setMaxOutputTokens(e.target.value)
                     }
-                    placeholder="64000"
+                    // The default, used when the field is empty
+                    placeholder={tokenLimits ? String(tokenLimits.server) : ""}
                     className="h-8 w-28 text-sm"
                 />
             </Row>
@@ -556,15 +623,17 @@ function AboutTab() {
                     GitHub
                 </a>
                 {showAbout && (
-                    <a
+                    // A Link, like the MCP card: it adds the base path of
+                    // a deployment under a sub-path
+                    <Link
                         href={aboutPath}
                         target="_blank"
-                        rel="noopener noreferrer"
+                        prefetch={false}
                         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground"
                     >
                         <Info className="size-3.5" />
                         {dict.settings.projectWebsite}
-                    </a>
+                    </Link>
                 )}
             </div>
         </div>

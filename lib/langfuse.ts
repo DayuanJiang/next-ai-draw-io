@@ -71,7 +71,11 @@ export async function scoreLatestTrace(
             metadata,
         },
     })
-    await langfuse.api.ingestion.batch({ batch })
+    const result = await langfuse.api.ingestion.batch({ batch })
+    // Langfuse answers a rejected event with 207 and lists it here
+    if (result?.errors?.length) {
+        throw new Error(JSON.stringify(result.errors))
+    }
     return true
 }
 

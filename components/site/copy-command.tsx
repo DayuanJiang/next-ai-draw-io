@@ -24,7 +24,12 @@ export function CopyCommand({
     return (
         <div className="flex items-start gap-2 rounded-lg border border-border bg-[#14181d] py-2.5 pr-2 pl-3.5 text-[#ececec] dark:bg-black/40">
             {multiline ? (
-                <pre className="min-w-0 flex-1 overflow-x-auto py-0.5 font-mono text-[12px] leading-relaxed [font-variant-ligatures:none]">
+                // Long lines scroll sideways: the block takes focus so the
+                // arrow keys can scroll it too
+                <pre
+                    tabIndex={0}
+                    className="min-w-0 flex-1 overflow-x-auto rounded-sm py-0.5 font-mono text-[12px] leading-relaxed [font-variant-ligatures:none] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffd84d]"
+                >
                     <code>{command}</code>
                 </pre>
             ) : (

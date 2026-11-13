@@ -43,8 +43,12 @@ export async function SiteHeader({
                     Next AI Draw.io
                 </span>
             </Link>
-            {/* Below 1024 px the text links move into the menu */}
-            <nav className="flex items-center gap-1 text-[14px] text-muted-foreground lg:gap-6">
+            {/* Below 1024 px the text links move into the menu. A page has
+                other <nav>s (languages, docs pages): each has a name. */}
+            <nav
+                aria-label={t.menu}
+                className="flex items-center gap-1 text-[14px] text-muted-foreground lg:gap-6"
+            >
                 {pages.map(({ page, label }) => (
                     <Link
                         key={page}

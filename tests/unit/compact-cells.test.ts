@@ -149,7 +149,10 @@ describe("compact cells through the pipeline", () => {
         )?.[1]
 
     it("prepareNewDiagram expands them and still adds the defaults", () => {
-        const prepared = prepareNewDiagram(`${shape}\n${edge}`)
+        // (with the edge's target, or the edge would be drawn without it)
+        const prepared = prepareNewDiagram(
+            `${shape}\n${edge}<mxCell id="3" x="0" y="0" w="10" h="10"/>`,
+        )
         expect(prepared.ok).toBe(true)
         if (!prepared.ok) return
         expect(prepared.xml).toContain(
@@ -206,6 +209,17 @@ describe("a compact cell with a slip", () => {
         if (!prepared.ok) return
         expect(prepared.xml).toContain(
             '<mxGeometry x="535" y="276" width="225" height="112" as="geometry"/>',
+        )
+    })
+
+    it("drops a semicolon after a number, as draw.io reads the number alone", () => {
+        // From the demo site: h="75;" in an edit_diagram update
+        expect(
+            expandCompactCells(
+                '<mxCell id="22" value="" style="rounded=0;" x="291" y="-18.5;" w="8" h="75;"/>',
+            ),
+        ).toContain(
+            '<mxGeometry x="291" y="-18.5" width="8" height="75" as="geometry"/>',
         )
     })
 })
@@ -287,6 +301,17 @@ describe("review round: cells the model may write", () => {
         expect(foldCells(xml)).toBe(xml)
     })
 
+    it("reads a geometry written with single quotes as the cell's own", () => {
+        // Some models quote XML attributes this way inside a JSON string
+        const xml =
+            "<mxCell id='2' value='A' vertex='1' parent='1'><mxGeometry x='1' y='2' width='3' height='4' as='geometry'/></mxCell>"
+        expect(expandCompactCells(xml)).toBe(xml)
+        // Without its parent the cell is rebuilt, around that one geometry
+        expect(expandCompactCells(xml.replace(" parent='1'", ""))).toBe(
+            `<mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x='1' y='2' width='3' height='4' as='geometry'/></mxCell>`,
+        )
+    })
+
     it("ignores prototype names and folds only cells that name their parent", () => {
         expect(expandCompactCells('<mxCell id="2" toString="x"/>')).toBe(
             '<mxCell id="2" toString="x"/>',
@@ -351,6 +376,26 @@ describe("review round: cells the model may write", () => {
         expect(outcome.xml).toContain(
             '<mxCell id="3" value="C" vertex="1" parent="1"',
         )
+    })
+
+    it("counts a layer with custom data, whose id is on the <object> around it", () => {
+        const page = (cells: string) =>
+            `<mxfile><diagram id="p1" name="Page-1"><mxGraphModel><root>${cells}</root></mxGraphModel></diagram></mxfile>`
+        expect(
+            defaultLayerOf(
+                page(
+                    '<mxCell id="0"/><object id="L" label="Layer" owner="ops"><mxCell parent="0"/></object>',
+                ),
+            ),
+        ).toBe("L")
+        // And under a root cell that has custom data itself
+        expect(
+            defaultLayerOf(
+                page(
+                    '<UserObject id="r0" label="" owner="ops"><mxCell/></UserObject><mxCell id="r1" parent="r0"/>',
+                ),
+            ),
+        ).toBe("r1")
     })
 
     it("refuses a compact shape with a root cell id instead of dropping it", () => {

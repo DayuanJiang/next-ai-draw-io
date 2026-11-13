@@ -30,7 +30,7 @@ import {
     publicDefaultUrl,
 } from "@/lib/providers"
 import { isPrivateUrl, redirectGuardedFetch } from "@/lib/ssrf-protection"
-import { thinkingSwitchOf } from "@/lib/thinking-capabilities"
+import { thinkingSwitchOf, thinksByDefault } from "@/lib/thinking-capabilities"
 import {
     isOfficialOpenAIUrl,
     normalizeBaseUrl,
@@ -96,8 +96,9 @@ export interface ClientOverrides {
     awsSessionToken?: string | null
     // Vertex AI config
     vertexApiKey?: string | null // Express Mode API key
-    // baseUrl is the server's own <P>_BASE_URL (the admin panel's Test),
-    // not one a user chose: no redirect guard
+    // baseUrl is the deployment's own (the admin panel's Test: the server's
+    // <P>_BASE_URL or the entry's URL), not one a user chose: no redirect
+    // guard
     trustedBaseUrl?: boolean
     // Custom headers (e.g., for EdgeOne cookie auth)
     headers?: Record<string, string>
@@ -304,7 +305,7 @@ function geminiThinkingOptions(
  * - AZURE_REASONING_EFFORT: Azure/OpenAI reasoning effort (low/medium/high)
  * - AZURE_REASONING_SUMMARY: Azure reasoning summary (none/brief/detailed)
  * - BEDROCK_REASONING_BUDGET_TOKENS: Bedrock Claude reasoning budget in tokens (1024-64000)
- * - BEDROCK_REASONING_EFFORT: Bedrock Nova reasoning effort (low/medium/high)
+ * - BEDROCK_REASONING_EFFORT: Bedrock reasoning effort (low/medium/high) for Nova, the GPT models and Claude 5 on the server's keys
  * - OLLAMA_ENABLE_THINKING: Enable Ollama thinking mode (set to "true")
  */
 function buildProviderOptions(
@@ -444,6 +445,14 @@ function buildProviderOptions(
 
                 options.bedrock = { reasoningConfig }
             }
+            // The GPT models take the effort alone. Left to themselves they
+            // think for most of the wait (GPT-6 Luna, a 40 node flowchart:
+            // 87 of 118 seconds).
+            else if (modelId?.includes("openai.") && reasoningEffort) {
+                options.bedrock = {
+                    reasoningConfig: { maxReasoningEffort: reasoningEffort },
+                }
+            }
             break
         }
 
@@ -560,6 +569,71 @@ export function applyThinkingSwitch(
     return Object.keys(options).length > 0 ? options : undefined
 }
 
+// How much a Claude model on the server's keys thinks, unless
+// BEDROCK_REASONING_EFFORT says otherwise. Measured on Bedrock with a 12
+// step and a 40 node flowchart. Sonnet 5.5 at "medium": 10 to 27 s and
+// 168 s, where its own effort gave no answer to the second in 300 s.
+// Haiku 5.5 at "medium" draws the first like at its own effort, and on the
+// second its thinking still uses up the 64,000 token output limit in four
+// runs of six. At "low" it draws the second every time (17,000 to 41,000
+// tokens), and in 11 runs of 27 it writes a mid-size diagram's XML into
+// its answer without calling the tool, against 3 of 26 at its own effort
+// and 3 of 32 at "medium".
+const SERVER_THINKING_EFFORT = "medium"
+
+/**
+ * The provider options for a model on the server's keys, where the user's
+ * thinking switch does not apply. A Claude model that thinks by default
+ * (lib/thinking-capabilities.ts) leaves the text of its thinking out, and
+ * the chat would show nothing while it thinks (Haiku 5.5: 80 seconds for a
+ * 12 step flowchart, four minutes for 40 nodes). It is asked for a summary
+ * of its thinking as it goes, at the effort above. These models take no
+ * thinking budget, so one from the environment gives way. Thinking that the
+ * server turned off (ANTHROPIC_THINKING_TYPE=disabled) stays off.
+ */
+export function serverThinkingDefaults(
+    providerOptions: Record<string, any> | undefined,
+    provider: ProviderName,
+    modelId: string,
+): Record<string, any> | undefined {
+    if (!thinksByDefault(provider, modelId)) return providerOptions
+    // Read from the variable itself: the options carry it only next to a
+    // budget, which these models do not take. They think when the request
+    // says nothing, so off is said explicitly.
+    if (
+        provider === "anthropic" &&
+        process.env.ANTHROPIC_THINKING_TYPE === "disabled"
+    ) {
+        return {
+            ...providerOptions,
+            anthropic: {
+                ...providerOptions?.anthropic,
+                thinking: { type: "disabled" },
+            },
+        }
+    }
+    const thinking = { type: "adaptive", display: "summarized" }
+    if (provider === "bedrock") {
+        const effort =
+            process.env.BEDROCK_REASONING_EFFORT || SERVER_THINKING_EFFORT
+        return {
+            ...providerOptions,
+            bedrock: {
+                ...providerOptions?.bedrock,
+                reasoningConfig: { ...thinking, maxReasoningEffort: effort },
+            },
+        }
+    }
+    return {
+        ...providerOptions,
+        anthropic: {
+            ...providerOptions?.anthropic,
+            thinking,
+            effort: SERVER_THINKING_EFFORT,
+        },
+    }
+}
+
 /**
  * The names of a provider's server key and base URL variables, from the
  * record: <PREFIX>_API_KEY (or the record's own keyEnv) and <PREFIX>_BASE_URL.
@@ -577,6 +651,8 @@ export function envVarsOf(provider: ProviderName): {
         baseUrl: `${envPrefix}_BASE_URL`,
     }
 }
+
+type EnvReader = (name: string) => string | null | undefined
 
 // The key variable the server must have for each provider; null where it
 // needs none of this kind: Bedrock (the AWS SDK uses an IAM role or the
@@ -599,15 +675,16 @@ const REQUIRED_KEY_VARS = Object.fromEntries(
  * back to the default one; a provider with a resourceNameEnv (Azure) then
  * needs its base URL variable, the server model's own URL variable or the
  * resource name. Providers with no required key variable pass unless a
- * custom variable was given.
+ * custom variable was given. env reads a variable (see detectProvider).
  */
 function serverCredentialError(
     provider: ProviderName,
     customApiKeyEnv?: string | string[],
     customBaseUrlEnv?: string,
+    env: EnvReader = (name) => process.env[name],
 ): string | null {
     if (Array.isArray(customApiKeyEnv)) {
-        const hasAnyKey = customApiKeyEnv.some((envVar) => process.env[envVar])
+        const hasAnyKey = customApiKeyEnv.some((envVar) => env(envVar))
         if (!hasAnyKey) {
             return (
                 `At least one of [${customApiKeyEnv.join(", ")}] environment variables is required for ${provider} provider. ` +
@@ -621,8 +698,8 @@ function serverCredentialError(
     const requiredKeyEnv = REQUIRED_KEY_VARS[provider]
     if (altKeyEnv && !customApiKeyEnv) {
         const hasCredential = !!(
-            (requiredKeyEnv && process.env[requiredKeyEnv]) ||
-            process.env[altKeyEnv]
+            (requiredKeyEnv && env(requiredKeyEnv)) ||
+            env(altKeyEnv)
         )
         if (!hasCredential) {
             return (
@@ -632,7 +709,7 @@ function serverCredentialError(
         }
     } else {
         const requiredVar = customApiKeyEnv || requiredKeyEnv
-        if (requiredVar && !process.env[requiredVar]) {
+        if (requiredVar && !env(requiredVar)) {
             return (
                 `${requiredVar} environment variable is required for ${provider} provider. ` +
                 `Please set it in your .env.local file.`
@@ -645,9 +722,8 @@ function serverCredentialError(
     if (resourceNameEnv) {
         const baseUrlEnv = envVarsOf(provider).baseUrl as string
         const hasBaseUrl =
-            !!process.env[baseUrlEnv] ||
-            !!(customBaseUrlEnv && process.env[customBaseUrlEnv])
-        const hasResourceName = !!process.env[resourceNameEnv]
+            !!env(baseUrlEnv) || !!(customBaseUrlEnv && env(customBaseUrlEnv))
+        const hasResourceName = !!env(resourceNameEnv)
         if (!hasBaseUrl && !hasResourceName) {
             return (
                 `Azure requires either ${baseUrlEnv} or ${resourceNameEnv} to be set. ` +
@@ -660,12 +736,16 @@ function serverCredentialError(
 
 /**
  * Auto-detect provider based on available API keys
- * Returns the provider if exactly one is configured, otherwise null
+ * Returns the provider if exactly one is configured, otherwise null.
+ * env reads a variable: process.env by default, which includes the keys
+ * the admin panel writes into standard variables (a Vertex AI entry's goes
+ * into GOOGLE_VERTEX_API_KEY); getEnvFallback reads the environment's own.
  */
-function detectProvider(): ProviderName | null {
+export function detectProvider(env?: EnvReader): ProviderName | null {
     const configuredProviders = PROVIDER_NAMES.filter(
         (p) =>
-            REQUIRED_KEY_VARS[p] !== null && serverCredentialError(p) === null,
+            REQUIRED_KEY_VARS[p] !== null &&
+            serverCredentialError(p, undefined, undefined, env) === null,
     )
     return configuredProviders.length === 1 ? configuredProviders[0] : null
 }
@@ -743,8 +823,8 @@ function resolveEndpoint(
     const vars = envVarsOf(provider)
     const clientUrl = overrides?.baseUrl || undefined
     // Requests to a base URL the client chose must not follow redirects. A
-    // trusted URL is the server's own (the admin Test of an entry without
-    // one), not a user's
+    // trusted URL is the deployment's own (the admin panel's Test), not a
+    // user's
     const guarded = !!clientUrl && !overrides?.trustedBaseUrl
 
     switch (def.credential) {
@@ -1098,20 +1178,39 @@ function createModel(
  */
 export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
     // Drop an endpoint path pasted along with the client's base URL
-    const overrides = clientOverrides?.baseUrl
+    let overrides = clientOverrides?.baseUrl
         ? {
               ...clientOverrides,
               baseUrl: normalizeBaseUrl(clientOverrides.baseUrl),
           }
         : clientOverrides
+    // A request that names no provider runs on AI_PROVIDER and AI_MODEL. A
+    // default set in the admin panel becomes these two, but its key lives in
+    // an ADMIN_-prefixed env var. Point at it the way the chat route does for
+    // server models, or the standard env var is required instead (a page
+    // opened before the default was saved still sends no model).
+    if (!overrides?.provider && !overrides?.apiKeyEnv) {
+        const panelDefault = adminProvidersToConfig(
+            loadAdminProviders(),
+        ).providers.find(
+            (p) => p.default && p.provider === process.env.AI_PROVIDER,
+        )
+        if (panelDefault) {
+            overrides = {
+                ...overrides,
+                apiKeyEnv: panelDefault.apiKeyEnv,
+                baseUrlEnv: panelDefault.baseUrlEnv,
+            }
+        }
+    }
     // SECURITY: Prevent SSRF attacks (GHSA-9qf7-mprq-9qgm)
     // If a custom baseUrl is provided, an API key MUST also be provided.
     // This prevents attackers from redirecting server API keys to malicious endpoints.
     // Exceptions, by the provider's credential kind: a provider without keys
     // (EdgeOne); a Vertex key; an optional key (Ollama) only when the server
     // has no key of that provider, otherwise the client must send its own.
-    // A trusted URL is the server's own (the admin Test of an entry without
-    // one), not a user's. An unknown provider name has no kind and is
+    // A trusted URL is the deployment's own (the admin panel's Test), not
+    // a user's. An unknown provider name has no kind and is
     // refused here like any other, and named below.
     const requested = overrides?.provider
         ? providerDef(overrides.provider)
@@ -1135,11 +1234,11 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
         )
     }
 
-    // Check if client is providing their own provider override
+    // The request brings its own key: the server's env vars are not needed.
+    // It may name a model alone and run on AI_PROVIDER with that key.
     const isClientOverride = !!(
-        overrides?.provider &&
-        (overrides?.apiKey ||
-            (requested?.credential === "vertexKey" && overrides?.vertexApiKey))
+        overrides?.apiKey ||
+        (requested?.credential === "vertexKey" && overrides?.vertexApiKey)
     )
 
     // Use client override if provided, otherwise fall back to env vars.
@@ -1190,11 +1289,13 @@ export function getAIModel(clientOverrides?: ClientOverrides): ModelConfig {
                 const keys = Object.entries(REQUIRED_KEY_VARS)
                     .filter(([, envVar]) => envVar)
                     .map(([p, envVar]) => `- ${envVar} for ${p}`)
+                // AI_PROVIDER comes first: the chat shows only the start of
+                // a long error, and Bedrock and Ollama have no key variable
+                // that selects them
                 throw new Error(
-                    `No AI provider configured. Please set one of the following API keys in your .env.local file:\n` +
-                        `${keys.join("\n")}\n` +
-                        `- AWS_ACCESS_KEY_ID for bedrock\n` +
-                        `Or set AI_PROVIDER=ollama for local Ollama.`,
+                    `No AI provider configured. Set AI_PROVIDER (for example AI_PROVIDER=bedrock or AI_PROVIDER=ollama), ` +
+                        `or the API key of one provider, in your .env.local file:\n` +
+                        `${keys.join("\n")}`,
                 )
             }
             throw new Error(
@@ -1402,7 +1503,7 @@ export function supportsPromptCaching(modelId: string): boolean {
  * Note: we no longer guess whether the model supports image input from its
  * name — that heuristic misfired on newer models (see issue #874). If a
  * configured validation model can't handle images, the API call simply errors
- * and the validate-diagram route falls back to "valid".
+ * and the validate-diagram route answers that the check did not run.
  */
 export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
     // AI_MODEL may be comma-separated (multi-model fallback); pick the first.
@@ -1415,17 +1516,8 @@ export function getValidationModel(): ReturnType<typeof getAIModel>["model"] {
         )
     }
 
-    // A default set in the admin panel becomes AI_PROVIDER/AI_MODEL, but its key
-    // lives in an ADMIN_-prefixed env var. Point at it the way the chat route
-    // does for server models, or the standard env var is required instead.
-    const panelDefault = adminProvidersToConfig(
-        loadAdminProviders(),
-    ).providers.find((p) => p.default && p.provider === process.env.AI_PROVIDER)
-
-    const { model } = getAIModel({
-        modelId,
-        apiKeyEnv: panelDefault?.apiKeyEnv,
-        baseUrlEnv: panelDefault?.baseUrlEnv,
-    })
+    // On AI_PROVIDER, with the key of the admin panel's default when that
+    // is where AI_PROVIDER comes from (see getAIModel)
+    const { model } = getAIModel({ modelId })
     return model
 }

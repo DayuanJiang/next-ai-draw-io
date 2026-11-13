@@ -61,11 +61,11 @@ export function LanguageMenu({
                 <Globe className="size-[18px]" />
             </button>
             {/* A list of links that Tab moves through, not a menu with arrow
-                keys */}
+                keys. Above the docs' pages bar (z-20), like the site menu. */}
             {open && (
                 <div
                     id={listId}
-                    className="absolute top-full right-0 z-20 mt-1.5 w-40 rounded-xl border border-border bg-card p-1 shadow-[0_12px_32px_-12px_rgba(20,24,29,0.35)]"
+                    className="absolute top-full right-0 z-30 mt-1.5 w-40 rounded-xl border border-border bg-card p-1 shadow-[0_12px_32px_-12px_rgba(20,24,29,0.35)]"
                 >
                     {i18n.locales.map((locale) => (
                         <Link

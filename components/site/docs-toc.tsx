@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react"
 
+// A jump to a heading puts it 24 px below the top of the window
+// (scroll-mt-6). A heading counts as reached a little below that, and above
+// where a heading that directly follows it lands.
+const REACHED = 48
+
 /** A docs page's headings, with the section being read marked */
 export function DocsToc({
     title,
@@ -14,17 +19,38 @@ export function DocsToc({
 
     useEffect(() => {
         let frame = 0
-        // The last heading that has scrolled past the top third of the window
+        const topOf = (id: string) =>
+            document.getElementById(id)?.getBoundingClientRect().top
+        // The last heading that has come up to the top of the window
         const update = () => {
             frame = 0
             let current = headings[0]?.id
             for (const { id } of headings) {
-                const top = document
-                    .getElementById(id)
-                    ?.getBoundingClientRect().top
-                if (top !== undefined && top < window.innerHeight * 0.3) {
-                    current = id
-                }
+                const top = topOf(id)
+                if (top !== undefined && top < REACHED) current = id
+            }
+            // The last headings cannot come up that far. At the end of the
+            // page, the one a jump went to is marked while it is on the
+            // screen, and the last one otherwise.
+            if (
+                window.scrollY > 0 &&
+                window.innerHeight + window.scrollY >=
+                    document.documentElement.scrollHeight - 1
+            ) {
+                // The address holds the id percent-encoded (a Japanese
+                // heading's). The ids are encoded for the comparison:
+                // decoding the address throws on a mistyped one ("#100%")
+                const jumped = headings.find(
+                    (h) => `#${encodeURIComponent(h.id)}` === location.hash,
+                )
+                const top = jumped && topOf(jumped.id)
+                current =
+                    jumped &&
+                    top !== undefined &&
+                    top >= 0 &&
+                    top < window.innerHeight
+                        ? jumped.id
+                        : headings[headings.length - 1]?.id
             }
             setActive(current)
         }
@@ -33,8 +59,11 @@ export function DocsToc({
         }
         update()
         window.addEventListener("scroll", onScroll, { passive: true })
+        // A jump to a heading may not scroll, at the end of the page
+        window.addEventListener("hashchange", onScroll)
         return () => {
             window.removeEventListener("scroll", onScroll)
+            window.removeEventListener("hashchange", onScroll)
             cancelAnimationFrame(frame)
         }
     }, [headings])

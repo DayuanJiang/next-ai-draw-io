@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { GET as getConfig } from "@/app/api/config/route"
 import {
     DEFAULT_MAX_OUTPUT_TOKENS,
     readCeiling,
@@ -292,6 +293,23 @@ describe("resolveMaxOutputTokens", () => {
         // Without MAX_OUTPUT_TOKENS the default is the cap
         vi.stubEnv("MAX_OUTPUT_TOKENS", undefined)
         expect(resolveMaxOutputTokens("100000", true)).toBe(
+            DEFAULT_MAX_OUTPUT_TOKENS,
+        )
+    })
+
+    it("is told to the settings page, with the highest value a user may set", async () => {
+        vi.stubEnv("MAX_OUTPUT_TOKENS", "400")
+        expect((await (await getConfig()).json()).maxOutputTokens).toEqual({
+            server: 400,
+            max: 200000,
+        })
+        vi.stubEnv("MAX_OUTPUT_TOKENS", undefined)
+        expect((await (await getConfig()).json()).maxOutputTokens).toEqual({
+            server: DEFAULT_MAX_OUTPUT_TOKENS,
+            max: 200000,
+        })
+        // What the page says is ignored really is
+        expect(resolveMaxOutputTokens("200001", false)).toBe(
             DEFAULT_MAX_OUTPUT_TOKENS,
         )
     })

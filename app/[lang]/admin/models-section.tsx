@@ -63,8 +63,10 @@ function ProviderDetail({
     const [modelInput, setModelInput] = useState("")
     const [deleteOpen, setDeleteOpen] = useState(false)
     const [testing, setTesting] = useState<string | null>(null)
+    // detail: why the test failed, or the warning of a test that passed
+    // (the model answered without a tool call, which drawing needs)
     const [testResults, setTestResults] = useState<
-        Record<string, { ok: boolean; message: string }>
+        Record<string, { ok: boolean; message: string; detail?: string }>
     >({})
 
     const info = PROVIDERS[provider.provider]
@@ -101,10 +103,18 @@ function ProviderDetail({
                           message: formatMessage(dict.admin.testOk, {
                               ms: data.responseTime,
                           }),
+                          detail: data.warning,
                       }
                     : {
                           ok: false,
-                          message: data.error || dict.admin.testFailed,
+                          message: dict.admin.testFailed,
+                          // A code without a text has its text in the
+                          // dictionary (a base URL without its /v1)
+                          detail:
+                              data.error ??
+                              (dict.errors.llm as Record<string, string>)[
+                                  data.code
+                              ],
                       },
             }))
         } catch (err) {
@@ -112,10 +122,8 @@ function ProviderDetail({
                 ...prev,
                 [modelId]: {
                     ok: false,
-                    message:
-                        err instanceof Error
-                            ? err.message
-                            : dict.admin.testFailed,
+                    message: dict.admin.testFailed,
+                    detail: err instanceof Error ? err.message : undefined,
                 },
             }))
         } finally {
@@ -260,10 +268,15 @@ function ProviderDetail({
                         <ul className="divide-y">
                             {provider.models.map((modelId, index) => {
                                 const result = testResults[modelId]
+                                const resultColor = !result?.ok
+                                    ? "text-destructive"
+                                    : result.detail
+                                      ? "text-amber-600 dark:text-amber-400"
+                                      : "text-green-600 dark:text-green-400"
                                 return (
                                     <li
                                         key={modelId}
-                                        className="flex items-center gap-2 px-3 py-2"
+                                        className="flex flex-wrap items-center gap-x-2 px-3 py-2"
                                     >
                                         <span className="min-w-0 flex-1 truncate font-mono text-xs">
                                             {modelId}
@@ -281,12 +294,10 @@ function ProviderDetail({
                                             <span
                                                 className={cn(
                                                     "flex items-center gap-1 text-xs",
-                                                    result.ok
-                                                        ? "text-green-600 dark:text-green-400"
-                                                        : "text-destructive",
+                                                    resultColor,
                                                 )}
                                             >
-                                                {result.ok ? (
+                                                {result.ok && !result.detail ? (
                                                     <Check
                                                         className="h-3.5 w-3.5"
                                                         aria-hidden="true"
@@ -297,9 +308,7 @@ function ProviderDetail({
                                                         aria-hidden="true"
                                                     />
                                                 )}
-                                                <span className="max-w-48 truncate">
-                                                    {result.message}
-                                                </span>
+                                                {result.message}
                                             </span>
                                         )}
                                         <Button
@@ -352,6 +361,19 @@ function ProviderDetail({
                                                 aria-hidden="true"
                                             />
                                         </Button>
+                                        {/* On a line of its own, in full: a
+                                            provider's reason does not fit
+                                            next to the buttons */}
+                                        {result?.detail && (
+                                            <p
+                                                className={cn(
+                                                    "w-full whitespace-pre-line break-words pb-1 text-xs",
+                                                    resultColor,
+                                                )}
+                                            >
+                                                {result.detail}
+                                            </p>
+                                        )}
                                     </li>
                                 )
                             })}
@@ -451,8 +473,9 @@ export function ModelsSection({
 
     return (
         <div className="flex min-h-72 flex-col sm:flex-row">
-            {/* Provider list */}
-            <div className="flex w-full shrink-0 flex-col border-b sm:w-52 sm:border-b-0 sm:border-r">
+            {/* Provider list, wide enough for "Amazon Bedrock" beside its
+                source label and star */}
+            <div className="flex w-full shrink-0 flex-col border-b sm:w-64 sm:border-b-0 sm:border-r">
                 <div className="flex-1 space-y-1 p-2">
                     {providers.length === 0 && envProviders.length === 0 && (
                         <p className="px-2 py-6 text-center text-xs text-muted-foreground">
@@ -527,11 +550,16 @@ export function ModelsSection({
                                 (p) => {
                                     // Global-credential providers already in
                                     // the env config can't be added here —
-                                    // panel credentials would override theirs
+                                    // panel credentials would override theirs.
+                                    // The server accepts the provider of a
+                                    // lone AI_MODEL: more of its models are
+                                    // added here.
                                     const envBlocked =
                                         !!PROVIDERS[p].fixedCredentials &&
                                         envProviders.some(
-                                            (e) => e.provider === p,
+                                            (e) =>
+                                                e.provider === p &&
+                                                !e.loneModel,
                                         )
                                     return (
                                         <SelectItem

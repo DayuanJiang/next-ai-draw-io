@@ -55,12 +55,14 @@ export function extractAihubmixModelIds(payload: unknown): string[] {
  * An error this module wrote itself. Only these texts reach the caller:
  * the base URL is the caller's and may be an internal address, so anything
  * else (a parse error quoting the body, a network error naming a host)
- * stays in the server log.
+ * stays in the server log. code: the error hint to show (errors.llm in the
+ * dictionaries) when the status does not tell.
  */
 export class ModelListError extends Error {
     constructor(
         message: string,
         readonly statusCode?: number,
+        readonly code?: string,
     ) {
         super(message)
         this.name = "ModelListError"
@@ -109,9 +111,22 @@ async function getJson(
         signal: AbortSignal.timeout(15_000),
     })
     if (!response.ok) {
+        // Nothing at this path: the address is wrong, most often a base URL
+        // without its /v1. Without the status, which would bring the hint
+        // to check a model ID, and no model ID was sent
+        if (response.status === 404) {
+            throw new ModelListError(
+                "No model list at this address (404). Check the base URL: OpenAI-compatible servers usually need /v1 at the end.",
+                undefined,
+                "wrong_base_url",
+            )
+        }
+        // Google answers a wrong key with 400 and the reason in the body.
+        // The body stays here; the hint goes by the status.
+        const wrongKey = (await response.text()).includes("API_KEY_INVALID")
         throw new ModelListError(
             `The model list request failed (${response.status})`,
-            response.status,
+            wrongKey ? 401 : response.status,
         )
     }
     const text = await response.text()

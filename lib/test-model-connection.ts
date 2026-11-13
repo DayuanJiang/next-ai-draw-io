@@ -1,4 +1,4 @@
-import { streamText, tool } from "ai"
+import { APICallError, streamText, tool } from "ai"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import {
@@ -11,7 +11,7 @@ import {
     checkAndIncrementRequest,
     isQuotaEnabled,
 } from "@/lib/dynamo-quota-manager"
-import { classifyLLMError } from "@/lib/llm-errors"
+import { classifyLLMError, logText } from "@/lib/llm-errors"
 import { PROVIDERS, type ProviderName } from "@/lib/providers"
 import { allowPrivateUrls, isPrivateUrl } from "@/lib/ssrf-protection"
 import { normalizeBaseUrl } from "@/lib/types/model-config"
@@ -47,14 +47,18 @@ const NO_TOOL_CALL_WARNING =
  * Shared by the Settings dialog's Test (/api/validate-model) and the admin
  * panel's Test (/api/admin/test-model). req supplies the EdgeOne endpoint,
  * cookies, access code and the user id for the quota. trustedBaseUrl marks
- * body.baseUrl as the server's own <P>_BASE_URL (the admin panel's Test of
- * an entry without a URL), not one a user typed: chat uses it as it is, so
- * no private-address or redirect rules, and no quota.
+ * body.baseUrl as the deployment's own (the admin panel's Test: the server's
+ * <P>_BASE_URL, or the URL of the entry, which becomes the server's when
+ * saved), not one a user typed: chat uses it as it is, so no
+ * private-address or redirect rules, and no quota. serverCredentials lets
+ * the call run without credentials in the body, on the server's key or IAM
+ * role (the admin panel's Test of an entry without its own, as chat on it).
  */
 export async function testModelConnection(
     req: Request,
     body: TestModelRequest,
     trustedBaseUrl: boolean,
+    serverCredentials = false,
 ): Promise<NextResponse> {
     try {
         const {
@@ -128,8 +132,9 @@ export async function testModelConnection(
             )
         }
 
-        // The credentials the provider's kind asks for
-        switch (credential) {
+        // The credentials the provider's kind asks for, or none when the
+        // server's own may be used
+        switch (serverCredentials ? "none" : credential) {
             case "aws":
                 if (
                     !(apiKey || (awsAccessKeyId && awsSecretAccessKey)) ||
@@ -170,6 +175,7 @@ export async function testModelConnection(
         // The Test button checks the user's own provider. On the server's
         // keys (Ollama Cloud without a key or URL) anyone could run any model.
         if (
+            !serverCredentials &&
             usesServerCredentials(provider, {
                 apiKey,
                 baseUrl,
@@ -180,6 +186,24 @@ export async function testModelConnection(
         ) {
             return NextResponse.json(
                 { valid: false, error: "API key is required" },
+                { status: 400 },
+            )
+        }
+        // Nor on the server's keyless Ollama when private URLs are blocked:
+        // it is an internal address, reached without the request naming
+        // it, where chat runs only the models the server offers
+        if (
+            !trustedBaseUrl &&
+            !allowPrivateUrls() &&
+            credential === "optionalKey" &&
+            !baseUrl &&
+            !apiKey
+        ) {
+            return NextResponse.json(
+                {
+                    valid: false,
+                    error: "A base URL or an API key is required",
+                },
                 { status: 400 },
             )
         }
@@ -248,6 +272,9 @@ export async function testModelConnection(
             // Ends with the request: the user closed the dialog or the page
             abortSignal: req.signal,
             timeout: TEST_TIMEOUT_MS,
+            // The SDK would log the error as it is; the catch below logs it
+            // without a key the provider echoed back
+            onError: () => {},
         })
         let calledTool = false
         let finishReason: string | undefined
@@ -279,7 +306,22 @@ export async function testModelConnection(
                 finishReason !== "length" && { warning: NO_TOOL_CALL_WARNING }),
         })
     } catch (error) {
-        console.error("[validate-model] Error:", error)
+        console.error("[validate-model] Error:", logText(error))
+
+        // A 404 that is not in the provider's error format (no data) and
+        // names no model comes from the address, most often a base URL
+        // without its /v1. Classified, it would be "model not found" and
+        // send the user to check the model ID. The code alone: its text is
+        // in the page's dictionary (errors.llm), and a 404 page says
+        // nothing worth showing.
+        if (
+            APICallError.isInstance(error) &&
+            error.statusCode === 404 &&
+            error.data === undefined &&
+            !/model/i.test(`${error.message} ${error.responseBody ?? ""}`)
+        ) {
+            return NextResponse.json({ valid: false, code: "wrong_base_url" })
+        }
 
         const { code, message } = classifyLLMError(error)
         return NextResponse.json(

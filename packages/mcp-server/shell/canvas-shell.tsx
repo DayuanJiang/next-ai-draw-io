@@ -26,6 +26,18 @@ import { VersionsPanel } from "./versions-panel"
 const iconButton =
     "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&_svg]:size-4"
 
+// localStorage key of the versions panel: "false" once the user hid it,
+// kept for the next visit as the theme is (its prefix, see theme.ts)
+const PANEL_STORAGE_KEY = "mcp:versions-panel"
+
+function readPanelOpen(): boolean {
+    try {
+        return localStorage.getItem(PANEL_STORAGE_KEY) !== "false"
+    } catch {
+        return true
+    }
+}
+
 /**
  * The MCP preview: the web app's canvas without the chat. A slim bar names
  * the session and the sync state; the version cards (from the server's
@@ -39,7 +51,15 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
     const { saveDiagramToFile, hasPendingLoad } = useDiagram()
     const { status, sync } = useMcpSync(config)
     const versions = useNodeVersions(sync)
-    const [panelOpen, setPanelOpen] = useState(true)
+    const [panelOpen, setPanelOpen] = useState(readPanelOpen)
+    const togglePanel = () => {
+        setPanelOpen(!panelOpen)
+        try {
+            localStorage.setItem(PANEL_STORAGE_KEY, String(!panelOpen))
+        } catch {
+            // Storage can be unavailable (private mode, quota)
+        }
+    }
     const [saveOpen, setSaveOpen] = useState(false)
     // The file the diagram was opened from or saved to (load_diagram,
     // export_diagram), named instead of the session id, and whether the
@@ -56,6 +76,16 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
         return sync.onServerChange(readFile)
     }, [sync])
     const unsaved = !!file && fileChanged
+    const fileName = file?.split(/[\\/]/).pop()
+    const sessionCode = config.sessionId.split("-").pop() || config.sessionId
+    // The tab is named after the file or the session, so the tabs of
+    // several sessions can be told apart
+    const tabName = fileName || sessionCode
+    useEffect(() => {
+        document.title = tabName
+            ? `${tabName} | Next AI Draw.io`
+            : "Next AI Draw.io"
+    }, [tabName])
     const drawioSource = useMemo<DrawioSource>(
         () => ({
             editorUrl: config.drawioBaseUrl,
@@ -84,6 +114,7 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
             format,
             undefined,
             dict.save.savedSuccessfully,
+            dict.save.exportFailed,
         )
     }
 
@@ -108,10 +139,7 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                             data-testid="shell-session"
                         >
                             <span className="truncate">
-                                {file
-                                    ? file.split(/[\\/]/).pop()
-                                    : config.sessionId.split("-").pop() ||
-                                      config.sessionId}
+                                {fileName || sessionCode}
                             </span>
                             {unsaved && (
                                 <span
@@ -128,12 +156,16 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                         data-testid="shell-status"
                         data-status={status}
                     >
-                        {dict.shell[status]}
+                        {/* Without a session nothing is synced, and waiting
+                            longer brings none */}
+                        {config.sessionId
+                            ? dict.shell[status]
+                            : dict.shell.noSession}
                     </span>
                     {hasVersions && (
                         <button
                             type="button"
-                            onClick={() => setPanelOpen((open) => !open)}
+                            onClick={togglePanel}
                             aria-label={
                                 panelOpen
                                     ? dict.shell.hideVersions
@@ -188,12 +220,14 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     </button>
                 </header>
                 <div className="flex min-h-0 flex-1">
-                    <div className="relative min-w-0 flex-1">
+                    {/* The page's main landmark, for screen readers; the
+                        versions beside it are an <aside> */}
+                    <main className="relative min-w-0 flex-1">
                         <CanvasStage
                             className="inset-0"
                             drawioSource={drawioSource}
                         />
-                    </div>
+                    </main>
                     {showPanel && (
                         <VersionsPanel versions={versions.versions} />
                     )}
@@ -203,7 +237,13 @@ export function CanvasShell({ config }: { config: ShellConfig }) {
                     open={saveOpen}
                     onOpenChange={setSaveOpen}
                     onSave={save}
-                    defaultFilename={`diagram-${new Date().toLocaleDateString("sv-SE")}`}
+                    // The file the header names, without its extension
+                    // (.drawio, .drawio.svg); a diagram in no file is named
+                    // by the date
+                    defaultFilename={
+                        fileName?.replace(/(\.drawio)?\.\w+$/, "") ||
+                        `diagram-${new Date().toLocaleDateString("sv-SE")}`
+                    }
                 />
                 <AppToaster />
             </div>

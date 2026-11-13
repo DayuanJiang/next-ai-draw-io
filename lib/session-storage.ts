@@ -7,7 +7,7 @@ import type { DiagramVersion } from "@/stores/versions-store"
 const DB_NAME = "next-ai-drawio"
 const DB_VERSION = 2
 const STORE_NAME = "sessions"
-const MAX_SESSIONS = 50
+export const MAX_SESSIONS = 50
 
 // Types
 export interface ChatSession {
@@ -52,6 +52,10 @@ interface ChatSessionDB extends DBSchema {
 // Database singleton
 let dbPromise: Promise<IDBPDatabase<ChatSessionDB>> | null = null
 
+// Every function below drops the cached connection when its request fails, so
+// the next call opens a new one: Safari reports "Connection to Indexed
+// Database server lost" for a page left in the background without closing
+// the connection, and each request on it then fails
 async function getDB(): Promise<IDBPDatabase<ChatSessionDB>> {
     if (!dbPromise) {
         // A failed or lost connection is not cached: the next call reopens it
@@ -110,7 +114,10 @@ export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
         const index = tx.store.index("by-updated")
         const metadata: SessionMetadata[] = []
 
-        // Use cursor to read only metadata fields (avoids loading full messages/XML)
+        // cursor.value loads each chat in full (messages, XML snapshots,
+        // versions) to take these few fields from it: with 50 large chats
+        // that is hundreds of MB, so callers read the list as seldom as
+        // they can
         let cursor = await index.openCursor(null, "prev") // newest first
         while (cursor) {
             const s = cursor.value
@@ -128,6 +135,7 @@ export async function getAllSessionMetadata(): Promise<SessionMetadata[]> {
         return metadata
     } catch (error) {
         console.error("Failed to get session metadata:", error)
+        dbPromise = null
         return []
     }
 }
@@ -139,13 +147,20 @@ export async function getSession(id: string): Promise<ChatSession | null> {
         return (await db.get(STORE_NAME, id)) || null
     } catch (error) {
         console.error("Failed to get session:", error)
+        dbPromise = null
         return null
     }
 }
 
+// Why the latest save failed, for the error record: the toast only says
+// that it did, and iPhones fail with small chats, where storage is not full
+let saveError: unknown
+export const lastSaveError = () => saveError
+
 // Returns false on failure (e.g. storage quota exceeded). Other sessions are
 // never deleted automatically; the caller tells the user instead.
 export async function saveSession(session: ChatSession): Promise<boolean> {
+    saveError = undefined
     if (!isIndexedDBAvailable()) return false
     try {
         const db = await getDB()
@@ -155,8 +170,7 @@ export async function saveSession(session: ChatSession): Promise<boolean> {
         return true
     } catch (error) {
         console.error("Failed to save session:", error)
-        // Reopen the connection next time in case it was lost (Safari reports
-        // "Connection to Indexed Database server lost" without closing it)
+        saveError = error
         dbPromise = null
         return false
     }
@@ -169,6 +183,7 @@ export async function deleteSession(id: string): Promise<void> {
         await db.delete(STORE_NAME, id)
     } catch (error) {
         console.error("Failed to delete session:", error)
+        dbPromise = null
     }
 }
 
@@ -184,13 +199,17 @@ export async function readSessionCount(): Promise<number | null> {
         return await db.count(STORE_NAME)
     } catch (error) {
         console.error("Failed to get session count:", error)
+        dbPromise = null
         return null
     }
 }
 
-// keepId: a chat being opened, which stays
-export async function deleteOldestSession(keepId?: string): Promise<void> {
-    if (!isIndexedDBAvailable()) return
+// keepId: a chat being opened, which stays. Resolves to the title of the
+// deleted chat, or null when none was deleted
+export async function deleteOldestSession(
+    keepId?: string,
+): Promise<string | null> {
+    if (!isIndexedDBAvailable()) return null
     try {
         const db = await getDB()
         const tx = db.transaction(STORE_NAME, "readwrite")
@@ -199,37 +218,48 @@ export async function deleteOldestSession(keepId?: string): Promise<void> {
         while (cursor && cursor.value.id === keepId) {
             cursor = await cursor.continue()
         }
+        const title = cursor?.value.title ?? null
         if (cursor) {
             await cursor.delete()
         }
         await tx.done
+        return title
     } catch (error) {
         console.error("Failed to delete oldest session:", error)
+        dbPromise = null
+        return null
     }
 }
 
 // Enforce max sessions limit. keep: the chat being opened, asked for right
-// before each deletion (it can be clicked while the count is read)
+// before each deletion (it can be clicked while the count is read).
+// Resolves to the titles of the deleted chats: they are gone for good, so
+// the caller tells the user
 export async function enforceSessionLimit(
     keep?: () => string | undefined,
-): Promise<void> {
+): Promise<string[]> {
+    const deleted: string[] = []
     const count = await getSessionCount()
     if (count > MAX_SESSIONS) {
         const toDelete = count - MAX_SESSIONS
         for (let i = 0; i < toDelete; i++) {
-            await deleteOldestSession(keep?.())
+            const title = await deleteOldestSession(keep?.())
+            if (title !== null) deleted.push(title)
         }
     }
+    return deleted
 }
 
+// Resolves to the renamed chat, to null when storage holds no chat of this
+// id, and to false when the renamed chat could not be written
 export async function renameSession(
     id: string,
     title: string,
-): Promise<ChatSession | null> {
+): Promise<ChatSession | null | false> {
     const session = await getSession(id)
     if (!session) return null
     const updated = { ...session, title, updatedAt: Date.now() }
-    return (await saveSession(updated)) ? updated : null
+    return (await saveSession(updated)) && updated
 }
 
 // Helper: Create a new empty session
@@ -249,8 +279,8 @@ export function createEmptySession(): ChatSession {
 const MAX_TITLE_LENGTH = 100
 
 // The [PDF: ...], [File: ...] and [URL: ...] sections the chat appends to
-// the typed text
-const APPENDED_SECTIONS = /\n\n\[(PDF|File|URL):\s*[^\]]+\]\n[\s\S]*$/
+// the typed text; a name may hold "]"
+const APPENDED_SECTIONS = /\n\n\[(PDF|File|URL):\s*[^\n]*\]\n[\s\S]*$/
 
 export function extractTitle(messages: StoredMessage[]): string {
     const firstUserMessage = messages.find((m) => m.role === "user")
@@ -259,9 +289,14 @@ export function extractTitle(messages: StoredMessage[]): string {
     const textPart = firstUserMessage.parts.find((p) => p.type === "text")
     if (!textPart || typeof textPart.text !== "string") return "New Chat"
 
-    // The typed text only, on one line
+    // The typed text only, on one line, without the bold and heading marks
+    // the chat renders as Markdown (the title is plain text). Bold marks
+    // hug their text and stand apart from letters, digits and other stars
+    // outside it: "2 ** 3" and "f(**kwargs)" are operators and stay
     const text = textPart.text
         .replace(APPENDED_SECTIONS, "")
+        .replace(/(?<![\w*])\*\*(\S(?:.*?\S)?)\*\*(?![\w*])/g, "$1")
+        .replace(/^#+\s+/gm, "")
         .replace(/\s+/g, " ")
         .trim()
     if (!text) return "New Chat"

@@ -41,6 +41,7 @@ import {
     shellConfig,
     shutdown,
     startHttpServer,
+    takeLostEdits,
     waitForSelection,
     waitForSync,
 } from "../src/http-server.ts"
@@ -305,6 +306,93 @@ describe("POST /api/state", () => {
         const history = getHistory(id)
         expect(history).toHaveLength(before + 1)
         expect(history.at(-1)?.xml).toBe("<mxfile>lost user edit</mxfile>")
+    })
+
+    // One cell per label: "a" is the user's, "b" the AI's
+    const twoCells = (a: string, b: string) =>
+        `<mxfile><diagram id="p" name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="a" value="${a}" vertex="1" parent="1"/><mxCell id="b" value="${b}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+    // A write as the tools make it: the state, then its History entry
+    const write = (id: string, xml: string) => {
+        const version = setState(id, xml)
+        addHistory(id, xml, "", undefined, { version })
+        return version
+    }
+
+    it("keeps a lost user edit with the entry it was made on, and tells the model once what it changed", async () => {
+        const id = "mcp-conflict-base"
+        write(id, twoCells("A", "B"))
+        const drawn = getHistory(id).at(-1)
+        write(id, twoCells("A", "B by AI"))
+        const aiVersion = write(id, twoCells("A", "B by AI, twice"))
+        // Made on the first drawing, before both AI writes
+        const stale = await postJson("/api/state", {
+            sessionId: id,
+            xml: twoCells("A by hand", "B"),
+            baseVersion: aiVersion - 2,
+        })
+        expect(stale.status).toBe(409)
+        expect(getHistory(id).at(-1)).toMatchObject({
+            source: "user",
+            basedOn: drawn?.id,
+        })
+        // The version cards count the edit from that entry
+        const list = JSON.parse(
+            (await request(`/api/history?sessionId=${id}`)).body,
+        )
+        expect(list.entries.at(-1).basedOn).toBe(drawn?.id)
+        // Only the user's own change, not the AI's writes undone
+        expect(takeLostEdits(id)).toEqual([
+            'While you were writing, the user changed the diagram by hand: modified a ("A by hand").',
+        ])
+        expect(takeLostEdits(id)).toEqual([])
+    })
+
+    it("tells the model of a user edit that lost to a write which changed nothing", async () => {
+        const id = "mcp-conflict-unchanged-write"
+        write(id, twoCells("A", "B"))
+        // The same document again (an update that changed no cell): History
+        // has it already, and no entry carries this version
+        const aiVersion = write(id, twoCells("A", "B"))
+        expect(getHistory(id)).toHaveLength(1)
+        const stale = await postJson("/api/state", {
+            sessionId: id,
+            xml: twoCells("A by hand", "B"),
+            baseVersion: aiVersion - 1,
+        })
+        expect(stale.status).toBe(409)
+        expect(JSON.parse(stale.body).savedToHistory).toBe(true)
+        expect(takeLostEdits(id)).toEqual([
+            'While you were writing, the user changed the diagram by hand: modified a ("A by hand").',
+        ])
+    })
+
+    it("has nothing to tell the model once the user edited again or restored a version", async () => {
+        const id = "mcp-conflict-moved-on"
+        const lose = async () => {
+            write(id, twoCells("A", "B"))
+            const aiVersion = write(id, twoCells("A", "B by AI"))
+            await postJson("/api/state", {
+                sessionId: id,
+                xml: twoCells("A by hand", "B"),
+                baseVersion: aiVersion - 1,
+            })
+            return aiVersion
+        }
+        // The user makes the change again, on the AI's diagram
+        const aiVersion = await lose()
+        const again = await postJson("/api/state", {
+            sessionId: id,
+            xml: twoCells("A by hand", "B by AI"),
+            baseVersion: aiVersion,
+        })
+        expect(again.status).toBe(200)
+        expect(takeLostEdits(id)).toEqual([])
+        // The user restores the version with their edit
+        await lose()
+        const kept = getHistory(id).at(-1)
+        expect(kept?.source).toBe("user")
+        restoreHistoryEntry(id, kept?.id ?? -1)
+        expect(takeLostEdits(id)).toEqual([])
     })
 
     it("asks for a save when a lost user edit is kept in history", async () => {
@@ -1013,6 +1101,23 @@ describe("canvas shell page", () => {
         expect(slash.headers.location).toBe("/shell/?mcp=mcp-shell-recent")
     })
 
+    it("is where an address without a path goes, unless the classic page is what start_session opens", async () => {
+        // Typed by hand as "localhost:6002": the classic page there does
+        // not answer get_selection
+        setState("mcp-root-recent", "<mxfile>recent</mxfile>")
+        const res = await request("/")
+        expect(res.status).toBe(302)
+        expect(res.headers.location).toMatch(/^\/shell\/\?mcp=mcp-/)
+        setShellDir(null)
+        try {
+            const classic = await request("/")
+            expect(classic.status).toBe(302)
+            expect(classic.headers.location).toMatch(/^\/\?mcp=mcp-/)
+        } finally {
+            setShellDir(shellDir)
+        }
+    })
+
     it("goes to the session id a link starts with when text is glued onto it", async () => {
         // DSH's chat made "…?mcp=mcp-mvx2w3vx-njlslo。截图…" one link
         const res = await request(
@@ -1209,6 +1314,27 @@ describe("history restore", () => {
         await thumbnail(id, "SVG-OF-SHOWN", version)
         expect(getHistory(id).at(-1)?.svg).toBe("SVG-OF-SHOWN")
         expect(getState(id)?.svg).toBe("SVG-OF-SHOWN")
+    })
+
+    it("gives the AI's write its thumbnail when a hand edit that lost the race is kept after it", async () => {
+        const id = "mcp-history-thumb-race"
+        const before = setState(id, page("before"))
+        const version = setState(id, page("ai"))
+        addHistory(id, page("ai"))
+        // The user edited the canvas before it showed the AI's write
+        const push = await postJson("/api/state", {
+            sessionId: id,
+            xml: page("user"),
+            svg: "SVG-OF-USER",
+            baseVersion: before,
+            stateId: getState(id)?.stateId,
+        })
+        expect(push.status).toBe(409)
+        await thumbnail(id, "SVG-OF-AI", version)
+        expect(getHistory(id).map((e) => [e.xml, e.svg])).toEqual([
+            [page("ai"), "SVG-OF-AI"],
+            [page("user"), "SVG-OF-USER"],
+        ])
     })
 
     it("drops a thumbnail that arrives after the next AI write", async () => {
@@ -1572,45 +1698,78 @@ describe("GET /api/history for the version cards", () => {
 })
 
 describe("bodies over the size limit", () => {
-    it("answers 413 after reading the whole body", async () => {
-        const mib = Buffer.alloc(1024 * 1024, "x")
-        // Still sending when the limit is passed, as a browser would be.
-        // A browser whose upload is cut off reports a network error.
-        const result = await new Promise<{ status?: number; sent: boolean }>(
-            (resolve) => {
-                let sent = false
-                const req = http.request(
-                    {
-                        host: "127.0.0.1",
-                        port,
-                        path: "/api/state",
-                        method: "POST",
-                        headers: {
-                            host: `localhost:${port}`,
-                            "x-drawio-token": getApiToken(),
-                            "content-type": "application/json",
-                        },
+    const mib = Buffer.alloc(1024 * 1024, "x")
+    const mibs = (count: number) => Array.from({ length: count }, () => mib)
+    // Still sending when the limit is passed, as a browser would be.
+    // A browser whose upload is cut off reports a network error.
+    const upload = (path: string, parts: Buffer[]) =>
+        new Promise<{ status?: number; sent: boolean }>((resolve) => {
+            let sent = false
+            const req = http.request(
+                {
+                    host: "127.0.0.1",
+                    port,
+                    path,
+                    method: "POST",
+                    headers: {
+                        host: `localhost:${port}`,
+                        "x-drawio-token": getApiToken(),
+                        "content-type": "application/json",
                     },
-                    (res) => {
-                        res.resume()
-                        res.on("end", () =>
-                            resolve({ status: res.statusCode, sent }),
-                        )
-                    },
-                )
-                req.on("error", () => resolve({ sent }))
-                const writeNext = (i: number) => {
-                    if (i === 15) {
-                        req.end(() => {
-                            sent = true
-                        })
-                        return
-                    }
-                    req.write(mib, () => setTimeout(() => writeNext(i + 1), 10))
+                },
+                (res) => {
+                    res.resume()
+                    res.on("end", () =>
+                        resolve({ status: res.statusCode, sent }),
+                    )
+                },
+            )
+            req.on("error", () => resolve({ sent }))
+            const writeNext = (i: number) => {
+                if (i === parts.length) {
+                    req.end(() => {
+                        sent = true
+                    })
+                    return
                 }
-                writeNext(0)
-            },
-        )
+                req.write(parts[i], () =>
+                    setTimeout(() => writeNext(i + 1), 10),
+                )
+            }
+            writeNext(0)
+        })
+
+    it("answers 413 after reading the whole body", async () => {
+        expect(await upload("/api/history-svg", mibs(15))).toEqual({
+            status: 413,
+            sent: true,
+        })
+    })
+
+    it("answers 413 to a diagram over the limit, which the page then tells the user", async () => {
+        const result = await upload("/api/state", [
+            Buffer.from('{"sessionId":"mcp-large-diagram","xml":"'),
+            ...mibs(15),
+            Buffer.from('"}'),
+        ])
         expect(result).toEqual({ status: 413, sent: true })
+        expect(getState("mcp-large-diagram")).toBeUndefined()
+    })
+
+    it("takes an export result larger than a diagram may be", async () => {
+        // A .drawio.svg holds the diagram's pictures twice: 11 MiB used to
+        // get 413, and export_diagram reported a timeout
+        const id = "mcp-large-export"
+        setState(id, "<mxfile/>")
+        requestExport(id, "svg")
+        const result = await upload("/api/state", [
+            Buffer.from(
+                `{"sessionId":"${id}","exportId":"${getState(id)?.exportId}","exportData":"`,
+            ),
+            ...mibs(11),
+            Buffer.from('"}'),
+        ])
+        expect(result).toEqual({ status: 200, sent: true })
+        expect(getState(id)?.exportData?.length).toBe(11 * 1024 * 1024)
     })
 })
