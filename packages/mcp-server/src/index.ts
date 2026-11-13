@@ -712,7 +712,7 @@ Accepted xml:
 2) A bare <mxGraphModel> with <root> (one page).
 3) A full <mxfile> with one or more <diagram> pages. Every page's <root> must start with <mxCell id="0"/><mxCell id="1" parent="0"/>.
 
-Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent only for shapes inside a container, no XML comments, and a diagram of up to about 12 shapes stays within x 0 to 800 and y 0 to 600 (larger ones grow, see the guide's Layout rules). A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.
+Rules: cells are siblings (never nested), ids are unique per page and start from "2", parent only for shapes inside a container, no XML comments, and shapes stay within x 0 to 800 and y 0 to 600. A style used by several cells is defined once with <mxStyle name="..." value="..."/> before the cells and used by name (see the drawing guide); html=1 and whiteSpace=wrap are added automatically.
 
 To clear the canvas to one blank page, send only the two root cells <mxCell id="0"/><mxCell id="1" parent="0"/>; the previous diagram stays in History.`,
         inputSchema: {
