@@ -155,6 +155,15 @@ describe("the swimlane guide's example", () => {
         ).toBe(100 * rows + 40)
     })
 
+    it("shows one example and names the guide for horizontal lanes", () => {
+        // A model copies the example it is shown: with both directions in
+        // one guide it drew rows for users who had not asked for them
+        const guide = type?.guide("draw", "edit") ?? ""
+        expect(guide.match(/<mxStyle name="next"/g)).toHaveLength(1)
+        expect(guide).toContain('"swimlane-horizontal"')
+        expect(DIAGRAM_TYPE_NAMES).toContain("swimlane-horizontal")
+    })
+
     it("puts every step in a lane, and no two steps of a lane in one row", () => {
         const laneIds = new Set(lanes.map((l) => l.getAttribute("id")))
         const steps = cells.filter(
@@ -166,6 +175,42 @@ describe("the swimlane guide's example", () => {
             return `${s.getAttribute("parent")}:${Math.floor((y - 40) / 100)}`
         })
         expect(new Set(places).size).toBe(places.length)
+    })
+})
+
+describe("the example of the swimlane guide for horizontal lanes", () => {
+    const type = DIAGRAM_TYPES.find((t) => t.name === "swimlane-horizontal")
+    const prepared = prepareNewDiagram(type?.example ?? "")
+    const cells = prepared.ok ? cellsOf(prepared.xml) : []
+    const lanes = cells.filter((c) =>
+        c.getAttribute("style")?.includes("swimlane"),
+    )
+    const number = (cell: Element, name: string) =>
+        Number(cell.querySelector("mxGeometry")?.getAttribute(name))
+
+    it("stacks lanes of one width, touching each other, names at the left", () => {
+        expect(lanes.map((l) => number(l, "y"))).toEqual([40, 160, 280])
+        expect(new Set(lanes.map((l) => number(l, "width"))).size).toBe(1)
+        expect(new Set(lanes.map((l) => number(l, "x"))).size).toBe(1)
+        for (const lane of lanes) {
+            expect(lane.getAttribute("style")).toContain("horizontal=0")
+        }
+    })
+
+    it("keeps every step right of the lane's name, one per lane and column", () => {
+        const laneIds = new Set(lanes.map((l) => l.getAttribute("id")))
+        const steps = cells.filter(
+            (c) => c.getAttribute("vertex") === "1" && !lanes.includes(c),
+        )
+        const places = steps.map((s) => {
+            expect(laneIds.has(s.getAttribute("parent"))).toBe(true)
+            expect(number(s, "x")).toBeGreaterThanOrEqual(50)
+            return `${s.getAttribute("parent")}:${Math.floor((number(s, "x") - 50) / 160)}`
+        })
+        expect(new Set(places).size).toBe(places.length)
+        // As wide as the columns need, as the guide says
+        const columns = new Set(places.map((p) => p.split(":")[1])).size
+        expect(number(lanes[0], "width")).toBe(160 * columns + 30)
     })
 })
 

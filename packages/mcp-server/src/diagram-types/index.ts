@@ -11,11 +11,16 @@
  * out on top of each other, so there is none.
  */
 import { sequence } from "./sequence.ts"
-import { swimlane } from "./swimlane.ts"
+import { swimlane, swimlaneHorizontal } from "./swimlane.ts"
 import type { DiagramType } from "./types.ts"
 import { usecase } from "./usecase.ts"
 
-export const DIAGRAM_TYPES: DiagramType[] = [sequence, swimlane, usecase]
+export const DIAGRAM_TYPES: DiagramType[] = [
+    sequence,
+    swimlane,
+    swimlaneHorizontal,
+    usecase,
+]
 
 export const DIAGRAM_TYPE_NAMES = DIAGRAM_TYPES.map((type) => type.name)
 

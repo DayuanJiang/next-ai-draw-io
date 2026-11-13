@@ -96,3 +96,8 @@ scored well on the three requests here and was removed after real ones: with
 nine or ten classes its boxes came out on top of each other. The first
 swimlane guide knew only lanes as rows and drew rows for users who asked for
 vertical lanes.
+
+A guide shows one example, since that is what the model copies. With a
+second example for lanes as rows in the swimlane guide, the model drew rows
+for half of the users who had not asked for them, so that direction is a
+type of its own (`swimlane-horizontal`).

@@ -33,6 +33,8 @@ Example (two actors, a system with four use cases):
 
 ${EXAMPLE}
 
+Where the user says what stands where (an actor's side, a use case at the top, columns) or how the lines run, do that. The rules below are for when they do not.
+
 The system
 - One container with the style "swimlane;startSize=30;" and the system's name as its value. Every use case is a child of it: parent = its id, x and y counted from its corner.
 - Size it to its use cases: w = 280 for one column of use cases, 440 for two; h = 80 × the use cases of the tallest column + 60.
@@ -40,14 +42,15 @@ The system
 Use cases
 - An ellipse with the name as its value, 160 wide (more for a long name: about 8 px per Latin letter, 15 px per CJK character, plus 40) and 50 tall.
 - Stack them in a column 80 px apart: x=40, y = 50, 130, 210, ... A use case that others include or extend goes in a second column at x=260, at the height of the ones that point to it.
+- With actors on both sides, the use cases of the right side's actors stand in the second column too, so every actor's lines stay on its own side. A use case that actors of both sides take part in stands alone at the top, between the columns (x=150, y=50), and the columns start below it at y=130.
 
 Actors
 - One cell per actor with the style "actor;" (draw.io's stick figure, the name below it), w=30, h=60. Never build a figure from circles and lines.
-- Actors stand outside the system: the people who start use cases on its left (x = system x - 120), other systems and helpers on its right (x = system right edge + 90), each at the height of the middle of its use cases.
+- Actors stand outside the system: the people who start use cases on its left (x = system x - 120), other systems and helpers on its right (x = system right edge + 90), each at the height of the middle of its use cases. Two actors on one side are at least 120 px apart, so that the name of one stays clear of the next.
 
 Lines
-- An actor and a use case it takes part in: a plain line, style "uses;".
-- Include and extend: a dashed arrow, style "include;", with «include» or «extend» as its value. It runs from the use case that includes to the included one, and from the extending use case to the one it extends.
+- An actor and a use case it takes part in: a straight line, style "uses;". Add no edgeStyle: a line with elbows runs around the system or through other use cases.
+- Include and extend: a straight dashed arrow, style "include;", with «include» or «extend» as its value. It runs from the use case that includes to the included one, and from the extending use case to the one it extends.
 
 Now call ${draw}. Write no text before the call.`,
 }
