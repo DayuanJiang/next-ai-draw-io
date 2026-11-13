@@ -2,7 +2,7 @@
 // a user would, and save what each run drew.
 //
 //   node scripts/eval-diagram-types/run.mjs <out dir> --base http://localhost:6103 --config guide
-//        [--model luna|haiku|sonnet] [--repeats 10] [--parallel 4]
+//        [--model luna|haiku|sonnet|opus] [--repeats 10] [--parallel 4]
 //        [--group sequence,special] [--only start,six] [--check <layout-check.js>]
 //
 // The page does everything the app does with an answer (the tool handlers,
@@ -55,6 +55,7 @@ const MODEL_OPTION = {
     luna: null,
     haiku: "claude-haiku-5-5",
     sonnet: "claude-sonnet-5-5",
+    opus: "claude-opus-5-5",
 }
 
 // --requests names another list of the same form, kept outside the
