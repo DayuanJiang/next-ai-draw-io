@@ -85,8 +85,10 @@ interface Item {
     plain: boolean
     /** A connector meets its outline, not its box */
     outline: "rhombus" | "ellipse" | null
-    /** No plain rectangle: a new path meets it in the middle of a side */
+    /** Its outline is not its box: a connector meets it in the middle of a side */
     centred: boolean
+    /** An icon or another drawn shape in a box: a connector meets it close to the middle of a side */
+    near: boolean
     named: boolean
     /** A filled shape that other shapes were drawn onto: a panel behind them */
     panel: boolean
@@ -367,6 +369,14 @@ export function repairLines(root: Element): string[] {
                         shape === "doubleEllipse"
                       ? "ellipse"
                       : null
+            // (draw.io ends a connector on the box of a shape unless the
+            // style names another outline)
+            const perimeter = styleValue(style, "perimeter")
+            const odd =
+                outline !== null ||
+                styleHas(style, "triangle") ||
+                styleHas(style, "hexagon") ||
+                (perimeter !== undefined && perimeter !== "rectanglePerimeter")
             items.set(cell.id, {
                 cell,
                 drawn: box,
@@ -379,12 +389,8 @@ export function repairLines(root: Element): string[] {
                     shape === "table",
                 plain,
                 outline,
-                centred:
-                    outline !== null ||
-                    shape !== undefined ||
-                    ["triangle", "hexagon", "cloud"].some((token) =>
-                        styleHas(style, token),
-                    ),
+                centred: odd,
+                near: !odd && shape !== undefined,
                 named: textOf(cell) !== "",
                 panel:
                     !plain && !none("fillColor") && !styleHas(style, "group"),
@@ -914,7 +920,7 @@ export function repairLines(root: Element): string[] {
             !line.around.has(item) &&
             !inEnd(item, line) &&
             !inTable(item)
-        const hits = (line: Line, path: Point[]): number => {
+        const hits = (line: Line, path: Point[], margin = 0): number => {
             let count = 0
             const through = (box: Box) => {
                 for (let i = 1; i < path.length; i++) {
@@ -934,7 +940,12 @@ export function repairLines(root: Element): string[] {
                     continue
                 }
                 if (item.area && through(shrink(item.area, 2))) count += 1
-                if (blocks(item, line) && through(core(item))) count += 1
+                if (
+                    blocks(item, line) &&
+                    through(shrink(core(item), -margin))
+                ) {
+                    count += 1
+                }
             }
             return count
         }
@@ -961,12 +972,9 @@ export function repairLines(root: Element): string[] {
                 (item) => blocks(item, line) && over(core(item), span, 0),
             )
         }
-        const wrong = lines.filter((line) =>
-            line.path ? hits(line, line.path) > 0 : between(line),
-        )
         // Two connectors that run on top of each other read as one, unless
-        // they leave one shape together or reach one together: the later
-        // of the two gets a path of its own
+        // they leave one shape together or reach one together
+        const wrong: Line[] = []
         const together = (p: Line, q: Line) => (p.a === q.a) !== (p.b === q.b)
         const riding = (line: Line, path: Point[]) => {
             let sum = 0
@@ -984,6 +992,178 @@ export function repairLines(root: Element): string[] {
             }
             return sum
         }
+
+        // A small step in a connector, where it goes on the same way after
+        // a short stretch sideways, says nothing: the two shapes are not
+        // quite in line, or a corner was written a little off. It is taken
+        // out by moving the stretch before it or the one after it over.
+        // A stretch that ends on a shape moves its end along the shape's
+        // side, a little way only: further on a rectangle than on an icon,
+        // hardly on an ellipse, not on a diamond
+        const smoothed = new Map<Line, { start: Point; end: Point }>()
+        const slack = (item: Item, size: number) =>
+            item.outline === "ellipse"
+                ? Math.min(12, size * 0.12)
+                : item.centred
+                  ? 0
+                  : item.near
+                    ? 10
+                    : Math.min(30, size * 0.35)
+        const smooth = (line: Line): boolean => {
+            if (!line.path) return false
+            let path = cornersOf(line.path)
+            const first = smoothed.get(line) ?? {
+                start: path[0],
+                end: path[path.length - 1],
+            }
+            // Where an end may stand on the step's line: around where it
+            // was drawn, and on the side it is on
+            const range = (item: Item, was: Point, sideways: boolean) => {
+                const side = sideOf(item.box, was)
+                const on = sideways
+                    ? side === "top" || side === "bottom"
+                    : side === "left" || side === "right"
+                if (!on) return [1, 0]
+                const lo = sideways ? item.box.x : item.box.y
+                const size = sideways ? item.box.w : item.box.h
+                const at = sideways ? was.x : was.y
+                const room = slack(item, size)
+                return [
+                    Math.max(lo + 4, at - room),
+                    Math.min(lo + size - 4, at + room),
+                ]
+            }
+            let changed = false
+            for (let round = 0; round < 8; round++) {
+                let next: Point[] | null = null
+                for (let i = 1; i + 2 < path.length && !next; i++) {
+                    const [a, b, c, d] = path.slice(i - 1, i + 3)
+                    const sideways = Math.abs(b.y - c.y) < 0.5
+                    const along = (q: Point) => (sideways ? q.x : q.y)
+                    const across = (q: Point) => (sideways ? q.y : q.x)
+                    const size = Math.abs(along(c) - along(b))
+                    if (
+                        size < 0.5 ||
+                        size > 30 ||
+                        Math.abs(along(a) - along(b)) > 0.5 ||
+                        Math.abs(along(c) - along(d)) > 0.5 ||
+                        (across(b) - across(a)) * (across(d) - across(c)) <= 0
+                    ) {
+                        continue
+                    }
+                    // A stretch that runs along the side of its own shape
+                    // before it steps away (draw.io draws that when the
+                    // first corner is not in line with the end): the end
+                    // stays, and the connector leaves the side straight
+                    // out to the line of the other stretch
+                    const out = (item: Item, port: Point) => {
+                        const side = sideOf(item.box, port)
+                        return sideways
+                            ? side === "right"
+                                ? 1
+                                : side === "left"
+                                  ? -1
+                                  : 0
+                            : side === "bottom"
+                              ? 1
+                              : side === "top"
+                                ? -1
+                                : 0
+                    }
+                    const hookA =
+                        i - 1 === 0 &&
+                        out(line.a, a) * (along(c) - along(b)) > 0
+                    const hookD =
+                        i + 2 === path.length - 1 &&
+                        out(line.b, d) * (along(b) - along(c)) > 0
+                    const atStart = i - 1 === 0 && !hookA
+                    const atEnd = i + 2 === path.length - 1 && !hookD
+                    const free = [-Infinity, Infinity]
+                    const forA = atStart
+                        ? range(line.a, first.start, sideways)
+                        : free
+                    const forD = atEnd
+                        ? range(line.b, first.end, sideways)
+                        : free
+                    const lo = Math.max(forA[0], forD[0])
+                    const hi = Math.min(forA[1], forD[1])
+                    // (no place that both ends may stand on)
+                    if (lo > hi + 0.5) continue
+                    const from = along(b)
+                    const to = along(c)
+                    // The line both stretches come to lie on: where the
+                    // one that ends on no shape moves over to the other;
+                    // for two that end on shapes, the rectangle's, then
+                    // the longer side's, or a place between
+                    const tries: number[] = []
+                    if (hookA || hookD) tries.push(hookA ? to : from)
+                    else if (atStart !== atEnd) tries.push(atStart ? from : to)
+                    else if (!atStart) tries.push(to, from)
+                    else {
+                        const sizeOf = (item: Item) =>
+                            sideways ? item.box.w : item.box.h
+                        const moveA =
+                            line.a.near !== line.b.near
+                                ? !line.a.near
+                                : sizeOf(line.a) >= sizeOf(line.b)
+                        tries.push(moveA ? to : from, moveA ? from : to)
+                        tries.push(
+                            Math.round(
+                                Math.min(hi, Math.max(lo, (from + to) / 2)),
+                            ),
+                        )
+                    }
+                    for (const wish of tries) {
+                        // (draw.io rounds its corners to a tenth: a place
+                        // half a pixel off is the same place)
+                        const at = Math.min(hi, Math.max(lo, wish))
+                        if (Math.abs(at - wish) > 0.5) continue
+                        const moved = (q: Point) =>
+                            sideways ? { x: at, y: q.y } : { x: q.x, y: at }
+                        // (the stretch that leads to the one that moves
+                        // must still run the way it ran)
+                        const turned = (q: Point, r: Point | undefined) =>
+                            r !== undefined &&
+                            (along(q) - along(r)) * (at - along(r)) < 0
+                        if (turned(a, path[i - 2]) || turned(d, path[i + 3])) {
+                            continue
+                        }
+                        const made = cornersOf([
+                            ...path.slice(0, i - 1),
+                            ...(hookA ? [a] : []),
+                            moved(a),
+                            moved(d),
+                            ...(hookD ? [d] : []),
+                            ...path.slice(i + 3),
+                        ])
+                        if (
+                            made.length < 2 ||
+                            hits(line, made, 6) > hits(line, path, 6) ||
+                            riding(line, made) > riding(line, path) + 5
+                        ) {
+                            continue
+                        }
+                        next = made
+                        break
+                    }
+                }
+                if (!next) break
+                path = next
+                changed = true
+            }
+            if (!changed) return false
+            line.path = path
+            smoothed.set(line, first)
+            return true
+        }
+        for (const line of lines) smooth(line)
+        wrong.push(
+            ...lines.filter((line) =>
+                line.path ? hits(line, line.path) > 0 : between(line),
+            ),
+        )
+        // The later of two connectors on top of each other gets a path of
+        // its own
         lines.forEach((line, i) => {
             const path = line.path
             if (!path || wrong.includes(line)) return
@@ -1114,6 +1294,7 @@ export function repairLines(root: Element): string[] {
             wrong.length === 0 &&
             !moving &&
             overlaps === 0 &&
+            smoothed.size === 0 &&
             !tags.some(cutOf)
         ) {
             return null
@@ -1311,6 +1492,7 @@ export function repairLines(root: Element): string[] {
                 ) {
                     if (values[i] > lo + size - inset) break
                     if (item.centred && i !== centreLine) continue
+                    if (item.near && Math.abs(values[i] - middle) > 10) continue
                     const dock = make(i, Math.abs(values[i] - middle))
                     if (!dock) continue
                     dock.cost += wanted && wanted !== side ? OTHER_SIDE : 0
@@ -1571,6 +1753,10 @@ export function repairLines(root: Element): string[] {
                 line.led = true
             }
         }
+        // (a new path with a small step loses it too)
+        for (const line of order) {
+            if (line.led) smooth(line)
+        }
         let left = overlaps
         let led = 0
         for (const line of wrong) {
@@ -1748,6 +1934,36 @@ export function repairLines(root: Element): string[] {
             }
         }
 
+        // A point on a shape's side as the place the connector's style
+        // names. On an ellipse draw.io ends the connector where the way
+        // from the middle to that place meets the outline: the place is
+        // set further out, so that the end comes to lie in line
+        const placeOn = (item: Item, p: Point) => {
+            // (to a hundredth of a pixel on the largest shapes: a place a
+            // little off would give the connector a step of its own)
+            const part = (v: number) => String(Math.round(v * 1e5) / 1e5)
+            let x = (p.x - item.box.x) / item.box.w
+            let y = (p.y - item.box.y) / item.box.h
+            if (item.outline === "ellipse") {
+                const stretch = (v: number) => {
+                    const off = (v - 0.5) * 2
+                    return Math.abs(off) < 0.999
+                        ? 0.5 + off / Math.sqrt(1 - off * off) / 2
+                        : v
+                }
+                // (the place on the side of its box, whatever point of
+                // the outline the connector ended at)
+                const side = sideOf(item.box, p)
+                if (side === "top" || side === "bottom") {
+                    x = stretch(x)
+                    y = side === "top" ? 0 : 1
+                } else if (side === "left" || side === "right") {
+                    y = stretch(y)
+                    x = side === "left" ? 0 : 1
+                }
+            }
+            return { x: part(x), y: part(y) }
+        }
         const apply = (): string[] => {
             if (apart || grown > 0 || fitted > 0) {
                 // The shapes, each counted from its parent's corner
@@ -1810,6 +2026,50 @@ export function repairLines(root: Element): string[] {
                 }
             }
             for (const write of todo) write()
+            // The connectors that lost a step: the end that moved as a
+            // place on its shape, and the corners that are left
+            let straight = 0
+            for (const [line, was] of smoothed) {
+                if (line.led || !line.path) continue
+                straight += 1
+                const path = line.path
+                const changes: Record<string, string | null> = {}
+                const end = (
+                    which: "exit" | "entry",
+                    item: Item,
+                    from: Point,
+                    to: Point,
+                ) => {
+                    if (
+                        Math.abs(from.x - to.x) < 0.5 &&
+                        Math.abs(from.y - to.y) < 0.5
+                    ) {
+                        return
+                    }
+                    const at = placeOn(item, to)
+                    changes[`${which}X`] = at.x
+                    changes[`${which}Y`] = at.y
+                    changes[`${which}Dx`] = "0"
+                    changes[`${which}Dy`] = "0"
+                    changes[`${which}Perimeter`] = null
+                }
+                end("exit", line.a, was.start, path[0])
+                end("entry", line.b, was.end, path[path.length - 1])
+                line.cell.inner.setAttribute(
+                    "style",
+                    withStyle(
+                        line.cell.inner.getAttribute("style") ?? "",
+                        changes,
+                    ),
+                )
+                setPoints(
+                    line.cell,
+                    path.slice(1, -1).map((p) => ({
+                        x: p.x - line.origin.x,
+                        y: p.y - line.origin.y,
+                    })),
+                )
+            }
             // The new paths: the corners as waypoints, and the two ends as
             // places on the shapes. As an orthogonal connector draw.io
             // leads it through exactly these corners, and leads it anew
@@ -1817,16 +2077,8 @@ export function repairLines(root: Element): string[] {
             for (const line of lines) {
                 if (!line.led || !line.path) continue
                 const path = line.path
-                const place = (item: Item, p: Point) => {
-                    const part = (v: number) =>
-                        String(Math.round(v * 1000) / 1000)
-                    return {
-                        x: part((p.x - item.box.x) / item.box.w),
-                        y: part((p.y - item.box.y) / item.box.h),
-                    }
-                }
-                const exit = place(line.a, path[0])
-                const entry = place(line.b, path[path.length - 1])
+                const exit = placeOn(line.a, path[0])
+                const entry = placeOn(line.b, path[path.length - 1])
                 line.cell.inner.setAttribute(
                     "style",
                     withStyle(line.cell.inner.getAttribute("style") ?? "", {
@@ -1878,6 +2130,11 @@ export function repairLines(root: Element): string[] {
                     kx === ky ? "" : kx > ky ? " sideways" : " up and down"
                 said.push(
                     `The server set the shapes ${Math.round((Math.max(kx, ky) - 1) * 100)}% further apart${way}, each at its size, to make room for the connectors and their texts.`,
+                )
+            }
+            if (straight > 0) {
+                said.push(
+                    `The server took a small step out of ${straight} connector${straight === 1 ? "" : "s"}, so that ${straight === 1 ? "it runs" : "they run"} straight there.`,
                 )
             }
             if (led > 0) {

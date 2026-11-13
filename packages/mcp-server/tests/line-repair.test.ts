@@ -176,6 +176,166 @@ describe("a connector that passes through a shape", () => {
     })
 })
 
+describe("a connector with a small step half way", () => {
+    // B stands 6 lower than A: draw.io leads the connector with a step
+    const row = `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="340" y="46" w="120" h="60"/>`
+
+    it("is made straight, by moving one of its ends along its side", () => {
+        const page = drawn(
+            `${row}<mxCell id="e" source="a" target="b" style="${ACROSS}"/>`,
+        )
+        expect(page.out.laid).toEqual([
+            "The server took a small step out of 1 connector, so that it runs straight there.",
+        ])
+        expect(page.paths.get("e")).toEqual([
+            { x: 160, y: 76 },
+            { x: 340, y: 76 },
+        ])
+        // (the shapes stay where they are)
+        expect(page.boxes.get("a")).toEqual({ x: 40, y: 40, w: 120, h: 60 })
+        expect(page.boxes.get("b")).toEqual({ x: 340, y: 46, w: 120, h: 60 })
+    })
+
+    it("keeps a step that is no small one", () => {
+        const page = drawn(
+            `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="340" y="90" w="120" h="60"/>
+<mxCell id="e" source="a" target="b" style="${ACROSS}"/>`,
+        )
+        expect(page.out.laid).toEqual([])
+    })
+
+    it("is made straight up and down as well", () => {
+        const page = drawn(
+            `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="46" y="200" w="120" h="60"/>
+<mxCell id="e" source="a" target="b" style="${ORTHOGONAL}exitX=0.5;exitY=1;entryX=0.5;entryY=0;"/>`,
+        )
+        expect(page.paths.get("e")).toEqual([
+            { x: 106, y: 100 },
+            { x: 106, y: 200 },
+        ])
+    })
+
+    it("moves the end on the rectangle, and leaves the one on the icon in its middle", () => {
+        const icon =
+            "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.route_53;html=1;"
+        const page = drawn(
+            `<mxCell id="a" value="Customer" x="40" y="40" w="90" h="50"/>
+<mxCell id="b" value="Route 53" style="${icon}" x="60" y="140" w="64" h="64"/>
+<mxCell id="e" source="a" target="b" style="${ORTHOGONAL}exitX=0.5;exitY=1;entryX=0.5;entryY=0;"/>`,
+        )
+        // (the icon's middle is at 92, the rectangle's at 85)
+        const path = page.paths.get("e") ?? []
+        for (const point of path) {
+            expect(Math.abs(point.x - 92)).toBeLessThan(0.05)
+        }
+        expect(path[0].y).toBe(90)
+        expect(path[path.length - 1].y).toBe(140)
+    })
+
+    it("shares the move between two icons, 10 each at most", () => {
+        const icon =
+            "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ec2;html=1;"
+        const two = (off: number) =>
+            drawn(
+                `<mxCell id="a" value="One" style="${icon}" x="40" y="40" w="64" h="64"/>
+<mxCell id="b" value="Two" style="${icon}" x="240" y="${40 + off}" w="64" h="64"/>
+<mxCell id="e" source="a" target="b" style="${ACROSS}"/>`,
+            )
+        // 16 apart: 8 each
+        expect(two(16).paths.get("e")).toEqual([
+            { x: 104, y: 80 },
+            { x: 240, y: 80 },
+        ])
+        // 24 apart: more than the two may move together
+        expect(two(24).out.laid).toEqual([])
+    })
+
+    it("moves an end a little on an ellipse, and the connector still ends on its outline", () => {
+        const page = drawn(
+            `<mxCell id="a" value="Start" style="ellipse;whiteSpace=wrap;html=1;" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="End" style="ellipse;whiteSpace=wrap;html=1;" x="340" y="45" w="120" h="60"/>
+<mxCell id="e" source="a" target="b" style="${ACROSS}"/>`,
+        )
+        expect(page.out.laid).toEqual([
+            "The server took a small step out of 1 connector, so that it runs straight there.",
+        ])
+        // As draw.io draws it from the new style: one straight stretch
+        const cell = page.cells.find((c) => c.id === "e")
+        const path = drawnPath(
+            { box: page.boxes.get("a") as Box, outline: "ellipse" },
+            { box: page.boxes.get("b") as Box, outline: "ellipse" },
+            cell?.style ?? "",
+            [],
+        )
+        expect(path).not.toBeNull()
+        for (const point of path ?? []) {
+            expect(Math.abs(point.y - 75)).toBeLessThan(0.3)
+        }
+    })
+
+    it("is taken out of the middle of a longer path too", () => {
+        // The model's own corners: down at 250, 8 to the right, and on down
+        const page = drawn(
+            `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="340" y="170" w="120" h="60"/>
+<mxCell id="e" edge="1" parent="1" source="a" target="b" style="${ACROSS}"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="250" y="70"/><mxPoint x="250" y="120"/><mxPoint x="258" y="120"/><mxPoint x="258" y="200"/></Array></mxGeometry></mxCell>`,
+        )
+        expect(page.out.laid).toEqual([
+            "The server took a small step out of 1 connector, so that it runs straight there.",
+        ])
+        expect(page.paths.get("e")).toEqual([
+            { x: 160, y: 70 },
+            { x: 258, y: 70 },
+            { x: 258, y: 200 },
+            { x: 340, y: 200 },
+        ])
+    })
+
+    it("leaves its shape straight out, where draw.io led it down the shape's side first", () => {
+        // The first corner is not in line with the end on A: draw.io runs
+        // the connector down A's right side to it
+        const page = drawn(
+            `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="340" y="170" w="120" h="60"/>
+<mxCell id="e" edge="1" parent="1" source="a" target="b" style="${ORTHOGONAL}exitX=1;exitY=0.55;entryX=0;entryY=0.5;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="190" y="120"/><mxPoint x="190" y="200"/></Array></mxGeometry></mxCell>`,
+        )
+        expect(page.paths.get("e")).toEqual([
+            { x: 160, y: 73 },
+            { x: 190, y: 73 },
+            { x: 190, y: 200 },
+            { x: 340, y: 200 },
+        ])
+    })
+
+    it("stays when taking it out would lead the connector through a shape", () => {
+        // The step at 250 keeps the connector clear of C
+        const page = drawn(
+            `<mxCell id="a" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="340" y="170" w="120" h="60"/>
+<mxCell id="c" value="C" x="262" y="90" w="60" h="20"/>
+<mxCell id="e" edge="1" parent="1" source="a" target="b" style="${ACROSS}"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="250" y="70"/><mxPoint x="250" y="140"/><mxPoint x="270" y="140"/><mxPoint x="270" y="200"/></Array></mxGeometry></mxCell>`,
+        )
+        expect(page.crosses("e", "c")).toBe(false)
+        const path = page.paths.get("e") ?? []
+        expect(path.some((p) => p.x === 250)).toBe(true)
+    })
+
+    it("stays in the middle of a diamond: the other end moves", () => {
+        const page = drawn(
+            `<mxCell id="a" value="A?" style="rhombus;whiteSpace=wrap;html=1;" x="40" y="40" w="120" h="60"/>
+<mxCell id="b" value="B" x="340" y="46" w="120" h="60"/>
+<mxCell id="e" source="a" target="b" style="${ACROSS}"/>`,
+        )
+        expect(page.paths.get("e")).toEqual([
+            { x: 160, y: 70 },
+            { x: 340, y: 70 },
+        ])
+    })
+})
+
 describe("a connector's text", () => {
     it("is moved off a shape to a free place on its connector", () => {
         // The text was set 45 below the line: onto the shape under it
@@ -243,7 +403,7 @@ describe("shapes", () => {
         const page = drawn(
             `<mxCell id="p" value="Group" style="swimlane;html=1;" x="40" y="40" w="200" h="120"/>
 <mxCell id="x" value="X" parent="p" x="130" y="40" w="120" h="60"/>
-<mxCell id="y" value="Y" x="440" y="70" w="120" h="60"/>
+<mxCell id="y" value="Y" x="440" y="80" w="120" h="60"/>
 <mxCell id="e" source="x" target="y" style="${ACROSS}"/>`,
         )
         expect(page.out.laid).toEqual([
