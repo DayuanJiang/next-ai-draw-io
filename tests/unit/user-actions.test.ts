@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { STORAGE_KEYS } from "@/lib/storage"
 
-// Each test loads the module fresh: it keeps the actions of one page load
+// Each test loads the modules fresh: they keep the actions of one page load
 async function load() {
     vi.resetModules()
-    return import("@/lib/user-actions")
+    return {
+        ...(await import("@/lib/user-actions")),
+        ...(await import("@/lib/usage-log")),
+    }
 }
 
 // Whether the server keeps a usage log, as /api/config says

@@ -1,14 +1,14 @@
-import { getApiEndpoint } from "@/lib/base-path"
-import { siteConfig } from "@/lib/site-config"
 import { STORAGE_KEYS } from "@/lib/storage"
 
 /**
  * What the user did in the editor, as names ("send", "export png"). A name
  * must never hold what the user typed or drew. The last few go with every
- * error report. A server that keeps a usage log (Langfuse is set up) gets
- * all of them, in the chat's session, to see how the app is used.
+ * error report. On a server that keeps a usage log, the web app's
+ * lib/usage-log.ts takes all of them. The sending lives there, in a module
+ * only the web app loads: the MCP server's canvas page shares the
+ * components that note actions, and its bundle must hold no sending code.
  */
-interface Action {
+export interface Action {
     name: string
     at: number
 }
@@ -20,8 +20,8 @@ const recent: Action[] = []
 const MAX_PENDING = 30
 let pending: Action[] = []
 let pendingSession: string | undefined
-let started = false
-let logging = false
+// Where the waiting actions go; without it they are dropped
+let sender: ((actions: Action[], sessionId?: string) => void) | null = null
 
 /** Notes something the user did (or an answer ended) */
 export function noteAction(name: string) {
@@ -30,10 +30,10 @@ export function noteAction(name: string) {
     if (recent.length > MAX_RECENT) recent.shift()
     // Another chat since the last action: what is waiting was the old one's
     const session = chatSessionId()
-    if (pendingSession && session !== pendingSession) sendActions()
+    if (pendingSession && session !== pendingSession) flushActions()
     pendingSession = session
     pending.push(action)
-    if (pending.length >= MAX_PENDING) sendActions()
+    if (pending.length >= MAX_PENDING) flushActions()
 }
 
 /** Notes an action that comes in runs, once per run: every shape dragged
@@ -59,44 +59,15 @@ export function chatSessionId(): string | undefined {
     }
 }
 
-/**
- * Called when the editor opens, once per page load: notes it, and sends the
- * actions from then on when the server keeps a usage log. They go when the
- * page is hidden or left, and every MAX_PENDING actions.
- */
-export function startUsageLog() {
-    if (started) return
-    started = true
-    noteAction("page open")
-    void siteConfig().then((config) => {
-        if (!config.usageLog) return
-        logging = true
-        document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState === "hidden") sendActions()
-        })
-        // Safari does not always report a closed tab as hidden
-        window.addEventListener("pagehide", sendActions)
-    })
+/** The usage log takes the waiting actions with this from now on */
+export function setActionSender(send: typeof sender) {
+    sender = send
 }
 
-function sendActions() {
+/** Hands the waiting actions to the usage log, with the chat they happened
+ * in */
+export function flushActions() {
     const actions = pending
-    const sessionId = pendingSession ?? chatSessionId()
     pending = []
-    if (!logging || actions.length === 0) return
-    const now = Date.now()
-    fetch(getApiEndpoint("/api/log-actions"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Still sent when the page is closing
-        keepalive: true,
-        body: JSON.stringify({
-            // How long ago each was, for the server to time them by its
-            // own clock: the user's may be wrong
-            actions: actions.map((a) => ({ name: a.name, ago: now - a.at })),
-            page: location.pathname.slice(0, 500),
-            version: process.env.APP_VERSION,
-            sessionId,
-        }),
-    }).catch(() => {})
+    if (actions.length > 0) sender?.(actions, pendingSession ?? chatSessionId())
 }
