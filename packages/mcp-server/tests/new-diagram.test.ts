@@ -578,3 +578,28 @@ describe("a number attribute written without its closing quote", () => {
         expect(repairNumberQuotes(cells)).toBe(cells)
     })
 })
+
+describe("a line written with waypoints and no ends", () => {
+    // GPT-6 Luna writes a sequence diagram's message to itself this way in
+    // some drawings. As a shape it was a text of no width at the corner of
+    // the page, one letter per line
+    const cells = `<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="3" value="loop"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="200" y="60"/><mxPoint x="200" y="90"/></Array></mxGeometry></mxCell>`
+
+    it("is a line, not a shape of no size", () => {
+        const out = prepareNewDiagram(cells)
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toMatch(/<mxCell id="3" value="loop" edge="1"/)
+        expect(out.xml).not.toMatch(/<mxCell id="3"[^>]*vertex="1"/)
+    })
+
+    it("leaves a text on an edge, which has a geometry and no waypoints, a shape", () => {
+        const out = prepareNewDiagram(
+            `<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/><mxCell id="3" value="B" x="240" y="40" w="120" h="60"/><mxCell id="4" source="2" target="3"/><mxCell id="5" value="yes" style="edgeLabel;" parent="4" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toMatch(/<mxCell id="5"[^>]*vertex="1"/)
+    })
+})

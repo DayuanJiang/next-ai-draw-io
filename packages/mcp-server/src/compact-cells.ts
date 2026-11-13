@@ -20,8 +20,9 @@
  * The long form stays accepted, and anything beyond the plain case (edge
  * waypoints, a label on an edge, a parent other than the layer) is written
  * the long way, so a cell may mix both: compact attributes with an explicit
- * parent, for example. A cell is an edge when it says so or connects a
- * source or target, a shape when it says so, has a size or has a geometry.
+ * parent, for example. A cell is an edge when it says so, connects a source
+ * or target or has waypoints; a shape when it says so, has a size or has a
+ * geometry.
  *
  * foldCells is the reverse, for the diagram shown to the model: it writes
  * the plain shapes and edges compactly and leaves everything else as it is,
@@ -44,6 +45,10 @@ const WRAPPED_CELL_BLOCK =
 // The cell's own geometry, as opposed to one inside its custom data
 const OWN_GEOMETRY =
     /<mxGeometry\b(?:[^<>"']|"[^"]*"|'[^']*')*?\bas=(?:"geometry"|'geometry')/
+
+// What only a line's geometry holds: waypoints, or an end that is a point
+const LINE_POINTS =
+    /<Array\b[^<>]*\bas=(?:"points"|'points')|<mxPoint\b[^<>]*\bas=(?:"(?:source|target)Point"|'(?:source|target)Point')/
 
 // The four compact attributes and the names draw.io uses for them
 const SIZE_ATTRS = new Map([
@@ -77,7 +82,13 @@ function kindOf(
     if (
         byName.get("edge") === "1" ||
         (byName.get("vertex") !== "1" &&
-            (byName.has("source") || byName.has("target")))
+            (byName.has("source") ||
+                byName.has("target") ||
+                // (a line written with its waypoints and no ends: models
+                // write a sequence diagram's message to itself this way.
+                // As a shape it would be a text of no width at the page's
+                // corner)
+                LINE_POINTS.test(body)))
     ) {
         return "edge"
     }
