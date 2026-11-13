@@ -960,7 +960,16 @@ export function MessageList() {
         // tell it, because the browser also moves the list up on its own
         // when the content changes.
         const take = (event: Event) => {
-            if (event instanceof WheelEvent && event.deltaY >= 0) return
+            if (event instanceof WheelEvent && event.deltaY >= 0) {
+                // A turn down that reaches the end follows again at once:
+                // when its smooth scroll arrives, the answer may have
+                // grown past the place it was heading for
+                const { scrollTop, scrollHeight, clientHeight } = scroller
+                if (scrollHeight - scrollTop - clientHeight < event.deltaY) {
+                    followRef.current = true
+                }
+                return
+            }
             if (event.type === "pointerdown" && event.target !== scroller) {
                 return
             }
