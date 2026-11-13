@@ -152,14 +152,13 @@ export function layoutSequence(root: Element): string[] {
         )
         .map((cell) => {
             const drawn = boxOf(cell) as Box
-            const tabH = Number(styleValue(cell.style, "height") ?? 30)
-            // (a message drawn in the frame's title row is the last one
-            // before the frame: models put it there now and then)
+            // What lies in the frame's box is in the frame, a message drawn
+            // in its title row too: it may be the last one before the
+            // frame or the first one of an alt's first part, and only the
+            // drawing says which box it is in
             const inside = messages
                 .map((m, i) =>
-                    m.y > drawn.y + tabH + 12 && m.y < drawn.y + drawn.h
-                        ? i
-                        : -1,
+                    m.y > drawn.y && m.y < drawn.y + drawn.h ? i : -1,
                 )
                 .filter((i) => i >= 0)
             return {
@@ -435,16 +434,24 @@ export function layoutSequence(root: Element): string[] {
         }
     }
     // The other shapes: in the row they had, as far from the lifeline left
-    // of them as they were
+    // of them as they were. A text that stood in a frame (the condition of
+    // its "else" part) stays in that frame, at its left
     for (const [cell, y] of itemY) {
         const box = boxOf(cell) as Box
+        const frame = styleHas(cell.style, "text")
+            ? frames
+                  .filter((f) => within({ ...box, w: 0, h: 0 }, f.drawn))
+                  .sort((a, b) => a.depth - b.depth)[0]
+            : undefined
         const drawnMiddles = drawnLife.map((b) => b.x + b.w / 2)
         let anchor = 0
         drawnMiddles.forEach((mx, i) => {
             if (mx <= box.x) anchor = i
         })
         move(cell, {
-            x: box.x + middle[anchor] - drawnMiddles[anchor],
+            x: frame
+                ? frame.left + 8
+                : box.x + middle[anchor] - drawnMiddles[anchor],
             y: top + y,
         })
     }
