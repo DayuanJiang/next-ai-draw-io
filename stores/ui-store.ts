@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { ErrorReport } from "@/lib/client-error-report"
+import { noteAction } from "@/lib/user-actions"
 
 export type SettingsTab = "models" | "general" | "drawing" | "about"
 /** The models tab: its provider list, the provider picker or a provider */
@@ -41,7 +42,7 @@ interface UiState {
     focusComposer: () => void
 }
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiState>((set, get) => ({
     panelOpen: true,
     heroDismissed: false,
     mobileView: "chat",
@@ -56,18 +57,27 @@ export const useUiStore = create<UiState>((set) => ({
     setHeroDismissed: (dismissed) => set({ heroDismissed: dismissed }),
     togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
     setMobileView: (view) => set({ mobileView: view }),
-    openSettings: (tab, modelsPage = "list") =>
-        set((state) => ({
-            settingsOpen: true,
-            settingsTab: tab ?? state.settingsTab,
-            modelsPage,
-        })),
+    openSettings: (tab, modelsPage = "list") => {
+        const settingsTab = tab ?? get().settingsTab
+        noteAction(`open settings ${settingsTab}`)
+        set({ settingsOpen: true, settingsTab, modelsPage })
+    },
     setSettingsOpen: (open) => set({ settingsOpen: open }),
-    setSettingsTab: (tab) => set({ settingsTab: tab }),
+    setSettingsTab: (tab) => {
+        noteAction(`settings tab ${tab}`)
+        set({ settingsTab: tab })
+    },
     setModelsPage: (page) => set({ modelsPage: page }),
-    openCompare: (versionId) => set({ compareVersionId: versionId }),
+    openCompare: (versionId) => {
+        // The dialog's previous and next buttons come here too
+        if (!get().compareVersionId) noteAction("compare versions")
+        set({ compareVersionId: versionId })
+    },
     closeCompare: () => set({ compareVersionId: null }),
-    setSaveDialogOpen: (open) => set({ saveDialogOpen: open }),
+    setSaveDialogOpen: (open) => {
+        if (open) noteAction("open save dialog")
+        set({ saveDialogOpen: open })
+    },
     openProblemReport: (report) => set({ problemReport: report }),
     closeProblemReport: () => set({ problemReport: null }),
     focusComposer: () =>

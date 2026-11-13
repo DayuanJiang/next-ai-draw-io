@@ -41,6 +41,7 @@ import { isTextFile } from "@/lib/pdf-utils"
 import { modKey } from "@/lib/platform"
 import type { FlattenedModel } from "@/lib/types/model-config"
 import { extractUrlContent } from "@/lib/url-utils"
+import { noteAction } from "@/lib/user-actions"
 import { cn } from "@/lib/utils"
 import { isSendKey, useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
@@ -332,7 +333,10 @@ export function Composer({
             imageTypes,
         )
         showValidationErrors(errors, dict)
-        if (validFiles.length > 0) setFiles([...attached, ...validFiles])
+        if (validFiles.length > 0) {
+            noteAction("attach file")
+            setFiles([...attached, ...validFiles])
+        }
         warnIfNoImageInput(validFiles, selectedModel, dict)
     }
 
@@ -428,6 +432,7 @@ export function Composer({
     // Called by the URL dialog (fromDialog) and by the link offered above
     // the box, which can be read while the dialog is open for another link
     const handleUrlExtract = async (url: string, fromDialog = false) => {
+        noteAction("attach url")
         setIsExtractingUrl(true)
         // Functional updates, so a removal or send made while extracting is
         // not overwritten when the request finishes
@@ -671,7 +676,10 @@ export function Composer({
                     label={dict.templates.myTemplates}
                     tooltipSide="top"
                     disabled={isDisabled}
-                    onClick={() => setTemplatesOpen(true)}
+                    onClick={() => {
+                        noteAction("open templates")
+                        setTemplatesOpen(true)
+                    }}
                 >
                     <BookMarked />
                 </IconButton>
@@ -680,7 +688,10 @@ export function Composer({
                     <ModelSelector
                         models={modelConfig.models}
                         selectedModelId={modelConfig.selectedModelId}
-                        onSelect={modelConfig.setSelectedModelId}
+                        onSelect={(modelId) => {
+                            noteAction("select model")
+                            modelConfig.setSelectedModelId(modelId)
+                        }}
                         onConfigure={() => openSettings("models")}
                         onAddProvider={() => openSettings("models", "picker")}
                         disabled={isDisabled}
@@ -743,7 +754,10 @@ export function Composer({
             <TemplateFormDialog
                 open={saveTemplateOpen}
                 onOpenChange={setSaveTemplateOpen}
-                onSuccess={() => setSaveTemplateOpen(false)}
+                onSuccess={() => {
+                    noteAction("save template")
+                    setSaveTemplateOpen(false)
+                }}
                 initialPrompt={input.trim()}
             />
             <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}>
@@ -764,6 +778,7 @@ export function Composer({
                         <TemplatePanel
                             currentInput={input}
                             onUseTemplate={(template) => {
+                                noteAction("use template")
                                 templatePickedRef.current = true
                                 setInput(template.prompt)
                                 setTemplatesOpen(false)

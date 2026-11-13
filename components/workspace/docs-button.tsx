@@ -8,6 +8,7 @@ import {
 } from "@/components/workspace/icon-button"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { usePathLocale } from "@/hooks/use-path-locale"
+import { noteAction } from "@/lib/user-actions"
 
 /** Opens the docs in the editor's language, in a new tab */
 export function DocsButton() {
@@ -20,6 +21,7 @@ export function DocsButton() {
                 target="_blank"
                 // A new tab loads the page itself: nothing to prefetch
                 prefetch={false}
+                onClick={() => noteAction("open docs")}
                 aria-label={label}
                 className={iconButtonClass}
                 data-testid="docs-button"

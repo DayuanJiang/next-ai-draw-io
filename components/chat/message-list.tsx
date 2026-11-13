@@ -31,6 +31,7 @@ import { getApiEndpoint } from "@/lib/base-path"
 import { type ChatMessageMetadata, noticeOf } from "@/lib/chat-message"
 import { useCopy } from "@/lib/clipboard"
 import { formatMessage } from "@/lib/i18n/utils"
+import { noteAction } from "@/lib/user-actions"
 import { cn } from "@/lib/utils"
 import { isSendKey, useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
@@ -81,7 +82,10 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     return (
         <ActionButton
             label={copied ? dict.chat.copied : label}
-            onClick={() => copy(text)}
+            onClick={() => {
+                noteAction("copy message")
+                copy(text)
+            }}
         >
             {copied ? <Check /> : <Copy />}
         </ActionButton>
@@ -488,6 +492,7 @@ function AssistantMessage({
             setFeedback(null)
             return
         }
+        noteAction(`vote ${value}`)
         setFeedback(value)
         if (value === "bad") setReasonsStep("ask")
         const sent = await postFeedback(value)

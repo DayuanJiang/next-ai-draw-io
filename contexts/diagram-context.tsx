@@ -25,12 +25,15 @@ import {
     canReplaceDiagram,
     commitDiagram,
     fitOpenedDiagram,
+    forgetCanvasInput,
     previewDiagram,
     resetPreview,
     revertPreview,
     selectPage,
+    takeCanvasInput,
 } from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
+import { noteActionOnce } from "@/lib/user-actions"
 import {
     BLANK_MXFILE,
     normalizeToMxfile,
@@ -202,6 +205,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         fit = false,
     ) => {
         if (!drawioRef.current) return
+        forgetCanvasInput()
         pageAfterLoadRef.current =
             pageId && xml.includes(`id="${pageId}"`) ? pageId : null
         fitAfterLoadRef.current = fit
@@ -415,6 +419,7 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // The editor bridge is shared: a page that is gone (another language
         // mounted a new one) must not change the new page's canvas
         if (!mountedRef.current) return null
+        forgetCanvasInput()
         // A real document ends a transient one; the user goes back to the
         // page they were on before it
         const pageBeforeTransient = transientRef.current
@@ -522,6 +527,9 @@ export function DiagramProvider({ children }: { children: React.ReactNode }) {
         // changed, and a save would put a chat that was only opened first
         // in the list
         if (withoutView(data.xml) === withoutView(chartXMLRef.current)) return
+        // The user worked in draw.io since the app last wrote the canvas:
+        // the change is theirs (draw.io saves what the app writes too)
+        if (takeCanvasInput()) noteActionOnce("edit by hand")
         updateChartXML(data.xml)
     }
 

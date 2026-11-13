@@ -21,6 +21,7 @@ import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { usePanelWidth } from "@/hooks/use-panel-width"
 import { modKey } from "@/lib/platform"
+import { noteAction } from "@/lib/user-actions"
 import { cn } from "@/lib/utils"
 import {
     PANEL_MAX_WIDTH,
@@ -208,7 +209,10 @@ export function ChatPanel({
                         <IconButton
                             label={dict.nav.hidePanel}
                             shortcut={`${modKey}B`}
-                            onClick={() => setPanelOpen(false)}
+                            onClick={() => {
+                                noteAction("hide chat panel")
+                                setPanelOpen(false)
+                            }}
                         >
                             <PanelRightClose />
                         </IconButton>

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { getAssetUrl } from "@/lib/base-path"
+import { noteAction } from "@/lib/user-actions"
 import { cn } from "@/lib/utils"
 import { useChatEngine } from "./chat-engine"
 import { Composer } from "./composer"
@@ -158,6 +159,7 @@ export function LobbyHero({
         [],
     )
     const applyExample = async (example: Example) => {
+        noteAction(`pick example ${example.key}`)
         const pick = ++pickCount.current
         engine.setInput(example.prompt)
         if (!example.file) {
@@ -305,7 +307,10 @@ export function LobbyHero({
                 </button>
                 <button
                     type="button"
-                    onClick={onDrawYourself}
+                    onClick={() => {
+                        noteAction("draw yourself")
+                        onDrawYourself()
+                    }}
                     className={startButtonClass}
                     data-testid="draw-yourself"
                 >

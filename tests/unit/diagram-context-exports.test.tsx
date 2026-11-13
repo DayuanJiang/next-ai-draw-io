@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react"
 import type React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { DiagramProvider, useDiagram } from "@/contexts/diagram-context"
+import { recentActions } from "@/lib/user-actions"
 import { useCanvasStore } from "@/stores/canvas-store"
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }))
@@ -9,14 +10,18 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn() } }))
 // it is recorded
 const selectPage = vi.fn((_id: string) => true)
 const fitOpenedDiagram = vi.fn()
+// Whether the user pressed a key or the pointer inside draw.io
+const takeCanvasInput = vi.fn(() => false)
 vi.mock("@/lib/drawio/editor-bridge", () => ({
     canReplaceDiagram: () => false,
     commitDiagram: vi.fn(),
     fitOpenedDiagram: () => fitOpenedDiagram(),
+    forgetCanvasInput: vi.fn(),
     previewDiagram: vi.fn(),
     resetPreview: vi.fn(),
     revertPreview: vi.fn(),
     selectPage: (id: string) => selectPage(id),
+    takeCanvasInput: () => takeCanvasInput(),
 }))
 
 const doc = (pages: string) => `<mxfile>${pages}</mxfile>`
@@ -283,5 +288,29 @@ describe("full loads", () => {
             result.current.onDrawioLoad()
         })
         expect(fitOpenedDiagram).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe("edits by hand", () => {
+    it("are noted when the diagram changes after the user's input in draw.io", () => {
+        const { result } = setup()
+        act(() => {
+            result.current.loadDiagram(doc(page("p1", "drawn")), true)
+            result.current.onDrawioLoad()
+            result.current.onDrawioLoad()
+        })
+        const autosave = (label: string) =>
+            act(() =>
+                result.current.handleDiagramAutoSave({
+                    xml: doc(page("p1", label)),
+                }),
+            )
+        // draw.io saves what the app wrote to the canvas too
+        autosave("written by the app")
+        expect(recentActions()).toEqual([])
+        takeCanvasInput.mockReturnValueOnce(true)
+        autosave("typed by the user")
+        expect(result.current.chartXML).toContain("typed by the user")
+        expect(recentActions()).toEqual(["edit by hand (0s ago)"])
     })
 })

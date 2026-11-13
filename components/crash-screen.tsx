@@ -6,11 +6,11 @@ import { ReportForm, type ReportStrings } from "@/components/problem-report"
 import { Button } from "@/components/ui/button"
 import {
     type ErrorReport,
-    recentActions,
     recordError,
     reloadForMissingChunk,
 } from "@/lib/client-error-report"
 import type { Dictionary } from "@/lib/i18n/dictionaries"
+import { recentActions } from "@/lib/user-actions"
 
 export type CrashStrings = Dictionary["crash"]
 

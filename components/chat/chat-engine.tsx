@@ -46,8 +46,6 @@ import {
 import { buildChatHeaders } from "@/lib/chat-request"
 import {
     isNetworkFailure,
-    noteAction,
-    recentActions,
     recordError,
     toastUnexpectedError,
 } from "@/lib/client-error-report"
@@ -68,6 +66,7 @@ import { STORAGE_KEYS } from "@/lib/storage"
 import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
 import { useQuotaManager } from "@/lib/use-quota-manager"
+import { noteAction, recentActions } from "@/lib/user-actions"
 import { formatXML, isRealDiagram } from "@/lib/utils"
 import { rememberImages } from "@/packages/mcp-server/src/embedded-images.ts"
 import { parseDrawioFileContent } from "@/packages/mcp-server/src/load-diagram.ts"
@@ -1737,6 +1736,7 @@ export function ChatEngineProvider({
                 files.length === 1 ? files[0].name : undefined,
             )
             if (cached) {
+                noteAction("cached answer")
                 const toolCallId = `cached-${Date.now()}`
                 // The attached picture shows in the message, as when sent
                 const fileParts: any[] = []
@@ -2344,6 +2344,7 @@ export function ChatEngineProvider({
             if (!sessionManager.isAvailable) return
             const isCurrent = id === sessionManager.currentSessionId
             if (isCurrent && !canStartTurn()) return
+            noteAction("delete chat")
             const remove = async () => {
                 const result = await sessionManager.deleteSession(id)
                 if (result.wasCurrentSession) {
@@ -2403,6 +2404,7 @@ export function ChatEngineProvider({
 
     const renameSession = useCallback(
         async (title: string) => {
+            noteAction("rename chat")
             const id = sessionManager.currentSessionId
             if (!id) {
                 // Not saved yet: use the title when the session is created

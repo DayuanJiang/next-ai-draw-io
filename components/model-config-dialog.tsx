@@ -66,6 +66,7 @@ import type {
     ProviderConfig,
     ProviderName,
 } from "@/lib/types/model-config"
+import { noteAction } from "@/lib/user-actions"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
 
@@ -701,6 +702,7 @@ export function ModelConfigDialog({
     const handleValidate = useCallback(async () => {
         if (!selectedProvider || !selectedProviderId) return
         if (!hasCredentials(selectedProvider)) return
+        noteAction("test models")
 
         // Need at least one model to validate
         if (selectedProvider.models.length === 0) {

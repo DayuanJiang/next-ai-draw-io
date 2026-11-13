@@ -21,11 +21,11 @@ import { IconButton } from "@/components/workspace/icon-button"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { usePanelWidth } from "@/hooks/use-panel-width"
-import { noteAction } from "@/lib/client-error-report"
 import { setAppShortcutHandler, setFileTitle } from "@/lib/drawio/editor-bridge"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { modKey } from "@/lib/platform"
 import { STORAGE_KEYS } from "@/lib/storage"
+import { noteAction, startUsageLog } from "@/lib/user-actions"
 import { cn, isRealDiagram } from "@/lib/utils"
 import { useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
@@ -125,6 +125,7 @@ export function Workspace() {
     useEffect(() => {
         hydrate()
     }, [hydrate])
+    useEffect(startUsageLog, [])
     useSavedLocale()
 
     return (
@@ -192,6 +193,7 @@ function WorkspaceLayout() {
             // ⌘⇧B stays with the browser (Chrome's bookmarks bar)
             if (!event.shiftKey && (event.key === "b" || event.key === "B")) {
                 if (isMobile) return false
+                noteAction("toggle chat panel")
                 togglePanel()
                 // Shown again, its input takes the focus, which went to
                 // <body> when the panel was hidden
@@ -346,7 +348,10 @@ function WorkspaceLayout() {
                                         shortcut={`${modKey}B`}
                                         // The button goes away: the focus
                                         // moves on to the panel's input
-                                        onClick={focusComposer}
+                                        onClick={() => {
+                                            noteAction("show chat panel")
+                                            focusComposer()
+                                        }}
                                         data-testid="show-panel"
                                     >
                                         <PanelRightOpen />

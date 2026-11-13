@@ -39,6 +39,7 @@ import { getApiEndpoint } from "@/lib/base-path"
 import { i18n, type Locale } from "@/lib/i18n/config"
 import { formatMessage } from "@/lib/i18n/utils"
 import { STORAGE_KEYS } from "@/lib/storage"
+import { noteAction } from "@/lib/user-actions"
 import { cn } from "@/lib/utils"
 import {
     type SendShortcut,
@@ -203,6 +204,7 @@ function GeneralTab({ open }: { open: boolean }) {
     // stay open on this tab (the UI store keeps both across the change).
     const changeLanguage = (lang: string) =>
         engine.leavePage((sessionId) => {
+            noteAction("change language")
             localStorage.setItem(STORAGE_KEYS.locale, lang)
             // Keep the desktop app's menu language in sync
             window.electronAPI
@@ -294,7 +296,10 @@ function GeneralTab({ open }: { open: boolean }) {
                     <Segmented<ThemePreference>
                         label={t.theme}
                         value={theme}
-                        onChange={setTheme}
+                        onChange={(theme) => {
+                            noteAction("change theme")
+                            setTheme(theme)
+                        }}
                         options={[
                             {
                                 value: "light",
@@ -510,9 +515,10 @@ function DrawingTab() {
                 <Segmented<"styled" | "minimal">
                     label={t.diagramStyle}
                     value={settings.minimalStyle ? "minimal" : "styled"}
-                    onChange={(value) =>
+                    onChange={(value) => {
+                        noteAction("change diagram style")
                         settings.setMinimalStyle(value === "minimal")
-                    }
+                    }}
                     options={[
                         { value: "styled", label: dict.chat.styledMode },
                         { value: "minimal", label: dict.chat.minimalStyle },
