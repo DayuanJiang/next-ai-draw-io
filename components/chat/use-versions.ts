@@ -3,13 +3,13 @@ import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { useDiagram } from "@/contexts/diagram-context"
 import { useDictionary } from "@/hooks/use-dictionary"
-import { noteAction } from "@/lib/client-error-report"
 import { diffDiagrams, isSameDocument } from "@/lib/diagram-diff"
 import {
     clearHighlights,
     highlightChangedCells,
 } from "@/lib/drawio/editor-bridge"
 import { formatMessage } from "@/lib/i18n/utils"
+import { noteAction } from "@/lib/user-actions"
 import { BLANK_MXFILE } from "@/packages/mcp-server/src/pages.ts"
 import { useVersionsStore } from "@/stores/versions-store"
 

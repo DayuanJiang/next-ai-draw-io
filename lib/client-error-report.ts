@@ -1,6 +1,6 @@
 import { toast } from "sonner"
 import { getApiEndpoint } from "@/lib/base-path"
-import { STORAGE_KEYS } from "@/lib/storage"
+import { chatSessionId, recentActions } from "@/lib/user-actions"
 import { useUiStore } from "@/stores/ui-store"
 
 /**
@@ -42,25 +42,6 @@ const CHUNK_RELOAD_PAUSE_MS = 15 * 60_000
 
 let enabled: Promise<boolean> | undefined
 const recorded = new Set<string>()
-// The user's last actions, names only, sent with every report so it shows
-// what led to the error
-const MAX_ACTIONS = 10
-const actions: { name: string; at: number }[] = []
-
-/** Notes something the user did (or an answer ended), for the reports of
- * errors that follow. Names only, never what was typed or drawn. */
-export function noteAction(name: string) {
-    actions.push({ name, at: Date.now() })
-    if (actions.length > MAX_ACTIONS) actions.shift()
-}
-
-/** The recent actions, oldest first, with how long ago each was */
-export function recentActions(now = Date.now()): string[] {
-    return actions.map(
-        (a) => `${a.name} (${Math.round((now - a.at) / 1000)}s ago)`,
-    )
-}
-
 /** Whether the server keeps reports (Langfuse is set up); asked once per
  * page load. Without it the page offers a GitHub issue instead. */
 export function reportsEnabled(): Promise<boolean> {
@@ -250,13 +231,4 @@ export function isNetworkFailure(message: string): boolean {
 function shorten(text: string, share: number): string {
     const chars = Array.from(text)
     return chars.slice(0, Math.floor(chars.length * share)).join("")
-}
-
-// The chat's Langfuse session, so a report sits next to its chat traces
-function chatSessionId(): string | undefined {
-    try {
-        return localStorage.getItem(STORAGE_KEYS.sessionId) || undefined
-    } catch {
-        return undefined
-    }
 }

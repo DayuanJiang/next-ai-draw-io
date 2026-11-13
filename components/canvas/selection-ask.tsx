@@ -3,6 +3,7 @@ import { ButtonTooltip } from "@/components/workspace/icon-button"
 import { useDictionary } from "@/hooks/use-dictionary"
 import { openFormatPanel } from "@/lib/drawio/editor-bridge"
 import { isMac, modKey } from "@/lib/platform"
+import { noteAction } from "@/lib/user-actions"
 import { useCanvasStore } from "@/stores/canvas-store"
 import { useUiStore } from "@/stores/ui-store"
 
@@ -91,7 +92,10 @@ export function SelectionAsk({
                 >
                     <button
                         type="button"
-                        onClick={focusComposer}
+                        onClick={() => {
+                            noteAction("ask about selection")
+                            focusComposer()
+                        }}
                         className={iconButton}
                         aria-label={dict.workspace.askAi}
                         data-testid="selection-ask"
@@ -111,7 +115,10 @@ export function SelectionAsk({
                 >
                     <button
                         type="button"
-                        onClick={openFormatPanel}
+                        onClick={() => {
+                            noteAction("open format panel")
+                            openFormatPanel()
+                        }}
                         className={iconButton}
                         aria-label={dict.workspace.editStyle}
                         data-testid="selection-style"

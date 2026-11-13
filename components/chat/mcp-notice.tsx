@@ -8,6 +8,7 @@ import { useDictionary } from "@/hooks/use-dictionary"
 import { usePathLocale } from "@/hooks/use-path-locale"
 import { getAssetUrl } from "@/lib/base-path"
 import { STORAGE_KEYS } from "@/lib/storage"
+import { noteAction } from "@/lib/user-actions"
 import { cn } from "@/lib/utils"
 
 /**
@@ -21,6 +22,7 @@ function useVideoClosed() {
         setClosed(localStorage.getItem(STORAGE_KEYS.mcpVideoClosed) === "true")
     }, [])
     const close = () => {
+        noteAction("close mcp notice")
         localStorage.setItem(STORAGE_KEYS.mcpVideoClosed, "true")
         setClosed(true)
     }
@@ -83,6 +85,7 @@ function NoticeLink({ className }: { className?: string }) {
             target="_blank"
             // A new tab loads the page itself: nothing to prefetch
             prefetch={false}
+            onClick={() => noteAction("open mcp page")}
             className={cn("group flex min-w-0 items-center gap-3", className)}
         >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/20">

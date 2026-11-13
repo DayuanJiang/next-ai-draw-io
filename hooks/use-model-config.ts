@@ -18,6 +18,7 @@ import {
     type ProviderConfig,
     type ProviderName,
 } from "@/lib/types/model-config"
+import { noteAction } from "@/lib/user-actions"
 
 // A provider of a known type that holds a list of models
 const isKnownProvider = (p: { provider: string; models?: unknown }) =>
@@ -244,6 +245,7 @@ export function useModelConfig(): UseModelConfigReturn {
 
     const addProvider = useCallback(
         (provider: ProviderName): ProviderConfig => {
+            noteAction("add provider")
             const newProvider = createProviderConfig(provider)
             setConfig((prev) => ({
                 ...prev,
@@ -268,6 +270,7 @@ export function useModelConfig(): UseModelConfigReturn {
 
     const deleteProvider = useCallback(
         (providerId: string) => {
+            noteAction("delete provider")
             setConfig((prev) => {
                 const provider = prev.providers.find((p) => p.id === providerId)
                 const modelIds = provider?.models.map((m) => m.id) || []

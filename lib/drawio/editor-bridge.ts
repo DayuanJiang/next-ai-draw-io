@@ -33,6 +33,26 @@ export function setAppShortcutHandler(
     appShortcutHandler = handler
 }
 
+// The user pressed a key or the pointer inside draw.io since the app last
+// changed the canvas itself: a change of the diagram that follows is theirs
+let canvasInput = false
+const noteCanvasInput = () => {
+    canvasInput = true
+}
+
+/** The app changes the canvas itself now */
+export function forgetCanvasInput() {
+    canvasInput = false
+}
+
+/** Whether the user worked inside draw.io since the last call, or since
+ * the app last changed the canvas */
+export function takeCanvasInput(): boolean {
+    const had = canvasInput
+    canvasInput = false
+    return had
+}
+
 function warnOnce(key: string, message: string) {
     if (warned.has(key)) return
     warned.add(key)
@@ -1142,9 +1162,13 @@ function installListeners(): () => void {
     }
     const frameDocument = win.document as Document | undefined
     frameDocument?.addEventListener("keydown", onKeyDown, true)
-    cleanups.push(() =>
-        frameDocument?.removeEventListener("keydown", onKeyDown, true),
-    )
+    frameDocument?.addEventListener("keydown", noteCanvasInput, true)
+    frameDocument?.addEventListener("pointerdown", noteCanvasInput, true)
+    cleanups.push(() => {
+        frameDocument?.removeEventListener("keydown", onKeyDown, true)
+        frameDocument?.removeEventListener("keydown", noteCanvasInput, true)
+        frameDocument?.removeEventListener("pointerdown", noteCanvasInput, true)
+    })
 
     // draw.io adds its menus and dialogs to its body, and the shape picker
     // (from the arrows next to a selection) to the canvas, and removes them

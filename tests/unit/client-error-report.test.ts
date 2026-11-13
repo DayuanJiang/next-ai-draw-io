@@ -238,17 +238,9 @@ describe("githubIssueUrl", () => {
 })
 
 describe("recent actions", () => {
-    it("keeps the last ten, oldest first, with how long ago", async () => {
-        const { noteAction, recentActions } = await load()
-        for (let i = 1; i <= 12; i++) noteAction(`action ${i}`)
-        const actions = recentActions(Date.now() + 5000)
-        expect(actions).toHaveLength(10)
-        expect(actions[0]).toBe("action 3 (5s ago)")
-        expect(actions[9]).toBe("action 12 (5s ago)")
-    })
-
     it("go with every report and into the GitHub issue", async () => {
-        const { noteAction, sendErrorReport, githubIssueUrl } = await load()
+        const { sendErrorReport, githubIssueUrl } = await load()
+        const { noteAction } = await import("@/lib/user-actions")
         noteAction("send")
         noteAction("answer failed")
         const report = {
@@ -273,7 +265,8 @@ describe("recent actions", () => {
 
 describe("actions at the time of the error", () => {
     it("are taken when the error is recorded, not when it is sent", async () => {
-        const { noteAction, recordError } = await load()
+        const { recordError } = await load()
+        const { noteAction } = await import("@/lib/user-actions")
         noteAction("send")
         const pending = recordError({ kind: "chat-error", message: "boom" })
         noteAction("new chat")
