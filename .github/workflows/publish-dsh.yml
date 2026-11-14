@@ -27,12 +27,12 @@ jobs:
         working-directory: packages/dsh-plugin
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           registry-url: "https://registry.npmjs.org"
 
       # Trusted publishing requires npm >= 11.5.1
