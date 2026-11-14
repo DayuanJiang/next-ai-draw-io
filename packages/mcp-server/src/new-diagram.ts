@@ -8,6 +8,8 @@ import {
     rootAndLayersOf,
 } from "./compact-cells.ts"
 import { reviewCells } from "./diagram-operations.ts"
+import { layoutOfType } from "./diagram-types/layouts.ts"
+import { repairLines } from "./diagram-types/line-repair.ts"
 import {
     generatePageId,
     hasCells,
@@ -39,6 +41,8 @@ export type NewDiagram =
           fixes: string[]
           /** What the model should know about the drawing (reviewCells) */
           notes: string[]
+          /** What the layout of the diagram's type did; also among the fixes and the notes */
+          laid: string[]
       }
     | { ok: false; error: string }
 
@@ -205,7 +209,7 @@ function addMissingRootCells(xml: string): string {
  * expanded and the default styles added on the fixed XML, so repaired cells
  * get them too.
  */
-export function prepareNewModel(input: string): NewDiagram {
+export function prepareNewModel(input: string, type?: string): NewDiagram {
     const stripped = stripWrapping(input)
     if (!stripped) {
         return {
@@ -258,27 +262,49 @@ export function prepareNewModel(input: string): NewDiagram {
     const roots = Array.from(doc.querySelectorAll("root"))
     const repairs: string[] = []
     const notes: string[] = []
+    const laid: string[] = []
+    // The layout of the type the model named, or else the repair of
+    // connectors that pass through shapes, before the review: the review
+    // then sees the cells where they end up
+    const layout = layoutOfType(type) ?? repairLines
     roots.forEach((root, index) => {
         const page = roots.length > 1 ? `Page ${index + 1}: ` : ""
+        try {
+            laid.push(...layout(root).map((change) => page + change))
+        } catch (error) {
+            // (the drawing is shown as the model wrote it: it reads every
+            // kind of drawing, and a failure here must not cost the user
+            // the diagram)
+            console.error("layout failed", error)
+        }
         const review = reviewCells(root)
         repairs.push(...review.repairs.map((repair) => page + repair))
         notes.push(...review.notes.map((note) => page + note))
     })
-    if (repairs.length > 0) xml = new XMLSerializer().serializeToString(doc)
+    if (repairs.length > 0 || laid.length > 0) {
+        xml = new XMLSerializer().serializeToString(doc)
+    }
     return {
         ok: true,
         xml,
-        fixes: [...closed, ...fixes, ...repairs],
-        notes: [...repairs, ...notes],
+        fixes: [...closed, ...fixes, ...repairs, ...laid],
+        notes: [...repairs, ...laid, ...notes],
+        laid,
     }
 }
 
-/** prepareNewModel, and the model turned into an <mxfile> */
+/**
+ * prepareNewModel, and the model turned into an <mxfile>. `type` is the
+ * diagram type the model named for its drawing: a type with a layout
+ * (diagram-types/layouts.ts) gets its shapes spaced and its lines led.
+ * Every other drawing gets the repair of diagram-types/line-repair.ts.
+ */
 export function prepareNewDiagram(
     input: string,
     page: { pageId?: string; pageName?: string } = {},
+    type?: string,
 ): NewDiagram {
-    const model = prepareNewModel(input)
+    const model = prepareNewModel(input, type)
     if (!model.ok) return model
     let normalized = normalizeToMxfile(model.xml, page)
     if (!normalized) {

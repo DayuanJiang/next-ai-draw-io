@@ -462,6 +462,19 @@ describe("what a drawing tells the model about its cells", () => {
         )
     })
 
+    it("writes a stereotype typed as <<name>> with « and », which draw.io shows", () => {
+        const out = prepareNewDiagram(
+            `${A}${B}<mxCell id="5" value="&lt;&lt;include&gt;&gt;" source="2" target="3"/><mxCell id="6" value="x &lt;&lt; 2" x="40" y="140" w="120" h="60"/>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain('<mxCell id="5" value="«include»"')
+        expect(out.xml).toContain('<mxCell id="6" value="x &lt;&lt; 2"')
+        expect(out.fixes).toEqual([
+            "Wrote <<name>> as «name» in: 5. A label is HTML, so draw.io takes <name> for a tag and shows only <>.",
+        ])
+    })
+
     it("writes an embedded picture the way draw.io does, without ;base64", () => {
         const out = prepareNewDiagram(
             '<mxCell id="2" style="shape=image;image=data:image/png;base64,iVBORw0KGgo=;" x="0" y="0" w="40" h="40"/>',
@@ -563,5 +576,61 @@ describe("a number attribute written without its closing quote", () => {
         const cells = `<mxCell id="2" value='Write w="78 h="38"/> like this' x="40" y="40" w="120" h="60"/>
 <mxCell id="3" value="5 &lt; 6" style="rounded=1;" x="40" y="140" w="120" h="60"/>`
         expect(repairNumberQuotes(cells)).toBe(cells)
+    })
+})
+
+describe("a wrapped cell with its parent written on the wrapper", () => {
+    // draw.io reads parent, style and geometry only on the mxCell inside. A
+    // model put them on the <object> of every step of a swimlane diagram:
+    // the steps, placed from their lane's corner, all stood in the page's
+    const LANE =
+        '<mxCell id="2" value="Lane" style="swimlane;startSize=30;" x="40" y="40" w="220" h="300"/>'
+
+    it("moves parent and style to the cell, so the step stays in its lane", () => {
+        const out = prepareNewDiagram(
+            `${LANE}<object label="Step" tooltip="more" id="3" parent="2" style="rounded=1;"><mxCell x="40" y="50" w="140" h="60"/></object>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<object label="Step" tooltip="more" id="3"><mxCell style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="2">',
+        )
+        expect(out.notes).toEqual([])
+    })
+
+    it("keeps what the cell says itself, and the wrapper's own data", () => {
+        const out = prepareNewDiagram(
+            `${LANE}<UserObject label="Step" link="https://example.com" id="3" parent="9"><mxCell parent="2" x="40" y="50" w="140" h="60"/></UserObject>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toContain(
+            '<UserObject label="Step" link="https://example.com" id="3" parent="9"><mxCell vertex="1" parent="2"',
+        )
+    })
+})
+
+describe("a line written with waypoints and no ends", () => {
+    // GPT-6 Luna writes a sequence diagram's message to itself this way in
+    // some drawings. As a shape it was a text of no width at the corner of
+    // the page, one letter per line
+    const cells = `<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/>
+<mxCell id="3" value="loop"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="200" y="60"/><mxPoint x="200" y="90"/></Array></mxGeometry></mxCell>`
+
+    it("is a line, not a shape of no size", () => {
+        const out = prepareNewDiagram(cells)
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toMatch(/<mxCell id="3" value="loop" edge="1"/)
+        expect(out.xml).not.toMatch(/<mxCell id="3"[^>]*vertex="1"/)
+    })
+
+    it("leaves a text on an edge, which has a geometry and no waypoints, a shape", () => {
+        const out = prepareNewDiagram(
+            `<mxCell id="2" value="A" x="40" y="40" w="120" h="60"/><mxCell id="3" value="B" x="240" y="40" w="120" h="60"/><mxCell id="4" source="2" target="3"/><mxCell id="5" value="yes" style="edgeLabel;" parent="4" connectable="0"><mxGeometry x="-0.5" relative="1" as="geometry"/></mxCell>`,
+        )
+        expect(out.ok).toBe(true)
+        if (!out.ok) return
+        expect(out.xml).toMatch(/<mxCell id="5"[^>]*vertex="1"/)
     })
 })

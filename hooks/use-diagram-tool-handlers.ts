@@ -25,6 +25,16 @@ import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 // model works on, so the canvas page keeps its own id and name
 const NEW_PAGE = { pageId: "page-1", pageName: "Page-1" }
 
+// The type the model named for a drawing whose output was cut off, for the
+// append_diagram call that completes it
+let truncatedType: string | undefined
+
+/** What the layout of the diagram's type did, for the tool result */
+const laidText = (laid: string[]) =>
+    laid.length > 0
+        ? ` ${laid.join(" ")} The cells on the canvas now have these positions and paths.`
+        : ""
+
 interface ToolCall {
     toolCallId: string
     toolName: string
@@ -210,7 +220,7 @@ export function useDiagramToolHandlers({
         addToolOutput: AddToolOutputFn,
         originalXml: string | undefined,
     ) => {
-        const { xml } = toolCall.input as { xml: string }
+        const { xml, type } = toolCall.input as { xml: string; type?: string }
 
         // Check if XML is truncated (incomplete mxCell indicates truncated output)
         const isTruncated = !isMxCellXmlComplete(xml)
@@ -218,6 +228,7 @@ export function useDiagramToolHandlers({
         if (isTruncated) {
             // Store the partial XML for continuation via append_diagram
             partialXmlRef.current = xml
+            truncatedType = type
             // The half drawn preview stays while append_diagram finishes
             // it; the chat engine brings this diagram back if that never
             // happens
@@ -259,7 +270,7 @@ NEXT STEP: Call append_diagram with the continuation XML.
         // One undo step (and a version) right away, before the screenshot
         // check: a stop, another chat or a hand edit during the check then
         // finds the diagram already in place
-        const prepared = prepareNewDiagram(withImages(finalXml), NEW_PAGE)
+        const prepared = prepareNewDiagram(withImages(finalXml), NEW_PAGE, type)
         if (prepared.ok) {
             commit(
                 onAiPage(prepared.xml),
@@ -267,6 +278,7 @@ NEXT STEP: Call append_diagram with the continuation XML.
                 prepared.fixes.length === 0,
             )
         }
+        const displayed = `Successfully displayed the diagram.${prepared.ok ? laidText(prepared.laid) : ""}`
         const validationError = prepared.ok ? null : prepared.error
 
         if (validationError) {
@@ -400,7 +412,7 @@ ${finalXml}
                         addToolOutput({
                             tool: "display_diagram",
                             toolCallId: toolCall.toolCallId,
-                            output: "Successfully displayed the diagram.",
+                            output: displayed,
                         })
                         return
                     }
@@ -422,7 +434,7 @@ ${finalXml}
             addToolOutput({
                 tool: "display_diagram",
                 toolCallId: toolCall.toolCallId,
-                output: "Successfully displayed the diagram.",
+                output: displayed,
             })
         }
     }
@@ -587,7 +599,12 @@ Start your continuation with the NEXT character after where it stopped.`,
             const finalXml = partialXmlRef.current
             partialXmlRef.current = "" // Reset
 
-            const prepared = prepareNewDiagram(withImages(finalXml), NEW_PAGE)
+            const prepared = prepareNewDiagram(
+                withImages(finalXml),
+                NEW_PAGE,
+                truncatedType,
+            )
+            truncatedType = undefined
             // The continuation ends here, drawn or not: it takes the stored
             // originals, so the preview code undoes none of them later
             const originalXml = takeOriginals()
@@ -621,7 +638,7 @@ Please use display_diagram with corrected XML.`,
                 addToolOutput({
                     tool: "append_diagram",
                     toolCallId: toolCall.toolCallId,
-                    output: "Diagram assembly complete and displayed successfully.",
+                    output: `Diagram assembly complete and displayed successfully.${prepared.ok ? laidText(prepared.laid) : ""}`,
                 })
             }
         } else {

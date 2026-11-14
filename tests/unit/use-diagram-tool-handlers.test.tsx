@@ -273,6 +273,82 @@ describe("display_diagram and undo", () => {
     })
 })
 
+describe("a drawing with a diagram type", () => {
+    // Two lanes; the line from A to C skips the row of B, which stands in
+    // its way
+    const lanes = `<mxCell id="2" value="One" style="swimlane;startSize=30;" x="40" y="40" w="220" h="340"/>
+<mxCell id="3" value="Two" style="swimlane;startSize=30;" x="260" y="40" w="220" h="340"/>
+<mxCell id="4" value="A" parent="2" x="40" y="50" w="140" h="60"/>
+<mxCell id="5" value="B" parent="2" x="40" y="150" w="140" h="60"/>
+<mxCell id="6" value="C" parent="2" x="40" y="250" w="140" h="60"/>
+<mxCell id="7" value="D" parent="3" x="40" y="150" w="140" h="60"/>
+<mxCell id="8" source="4" target="6"/>
+<mxCell id="9" source="4" target="7"/>`
+    const laid =
+        "The server placed the 4 steps on the grid of their lanes and gave the 2 connectors paths through the gaps between them, so no line crosses a step."
+
+    it("lays the drawing out and tells the model so", async () => {
+        const { onDisplayChart, addToolOutput, call } = setup("")
+        await call("display_diagram", { xml: lanes, type: "swimlane" })
+        // The line past B has corners now
+        expect(onDisplayChart.mock.calls[0][0]).toMatch(
+            /<mxCell id="8"[^>]*>\s*<mxGeometry[^>]*>\s*<Array as="points">/,
+        )
+        expect(addToolOutput.mock.lastCall?.[0].output).toBe(
+            `Successfully displayed the diagram. ${laid} The cells on the canvas now have these positions and paths.`,
+        )
+    })
+
+    it("only leads the connector through a shape around it when no type is named", async () => {
+        const { onDisplayChart, addToolOutput, call } = setup("")
+        await call("display_diagram", { xml: lanes })
+        const shown = onDisplayChart.mock.calls[0][0]
+        // The line past B has corners now; the steps stand where they
+        // were drawn, and the other line is as it was written
+        expect(shown).toMatch(
+            /<mxCell id="8"[^>]*>\s*<mxGeometry[^>]*>\s*<Array as="points">/,
+        )
+        expect(shown).toMatch(
+            /<mxCell id="5"[^>]*>\s*<mxGeometry[^>]*x="40"[^>]*y="150"/,
+        )
+        expect(shown).not.toMatch(
+            /<mxCell id="9"[^>]*>\s*<mxGeometry[^>]*>\s*<Array/,
+        )
+        expect(addToolOutput.mock.lastCall?.[0].output).toBe(
+            "Successfully displayed the diagram. The server gave 1 connector that passed through a shape or a text, or ran on top of another connector, a new path. The cells on the canvas now have these positions and paths.",
+        )
+    })
+
+    it("draws a drawing without such a problem as written", async () => {
+        const { onDisplayChart, addToolOutput, call } = setup("")
+        await call("display_diagram", {
+            xml: lanes.replace('<mxCell id="8" source="4" target="6"/>', ""),
+        })
+        expect(onDisplayChart.mock.calls[0][0]).not.toContain("<Array")
+        expect(addToolOutput.mock.lastCall?.[0].output).toBe(
+            "Successfully displayed the diagram.",
+        )
+    })
+
+    it("keeps the type of a cut off drawing for the call that completes it", async () => {
+        const { onDisplayChart, addToolOutput, call, append } = setup("")
+        const cut = lanes.lastIndexOf("<mxCell")
+        await call(
+            "display_diagram",
+            {
+                xml: `${lanes.slice(0, cut)}<mxCell id="9" source="4"`,
+                type: "swimlane",
+            },
+            "d1",
+        )
+        await append(' target="7"/>')
+        expect(onDisplayChart.mock.lastCall?.[0]).toContain(
+            '<Array as="points">',
+        )
+        expect(addToolOutput.mock.lastCall?.[0].output).toContain(laid)
+    })
+})
+
 describe("a cut off drawing", () => {
     it("is replaced starting from the diagram before it", async () => {
         const { refs, onDisplayChart, call } = setup("")

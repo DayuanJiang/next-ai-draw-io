@@ -633,6 +633,8 @@
         "editing": "正在修改圖表…",
         "loadingLibrary": "正在讀取圖形庫…",
         "libraryLoaded": "讀取了圖形庫",
+        "loadingGuide": "正在讀取畫法說明…",
+        "guideLoaded": "讀取了畫法說明",
         "failed": "這次沒有成功",
         "failedRetrying": "這次沒有成功，正在重試",
         "stopped": "已停止",

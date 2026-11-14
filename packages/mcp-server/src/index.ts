@@ -41,6 +41,7 @@ import {
     guideWithCustomInstructions,
 } from "./custom-instructions.ts"
 import { notesText } from "./diagram-operations.ts"
+import { DIAGRAM_TYPE_NAMES, getDiagramGuide } from "./diagram-types/index.ts"
 import { installDomPolyfill } from "./dom.ts"
 import { DRAWING_GUIDE } from "./drawing-guide.ts"
 import { editDiagram, targetPageXml } from "./edit-diagram.ts"
@@ -434,6 +435,14 @@ function commitDocument(
  * a stray point is removed), and the log never reaches the model. A repair
  * that is also among the write's notes (reviewCells) is told there, once.
  */
+// A plain string: a name outside the list must not fail the call
+const diagramTypeSchema = z
+    .string()
+    .optional()
+    .describe(
+        "The diagram's type, only when you draw by a guide of get_drawing_guide topic=<type>: the guide says which. Leave it out for every other diagram.",
+    )
+
 function fixesNote(fixes: string[], notes: string[]) {
     const told = fixes.filter((fix) => !notes.includes(fix))
     return told.length > 0
@@ -469,18 +478,36 @@ registerTool(
         description:
             "Return the drawing guide: XML format, layout, edge routing, style and editing rules. " +
             "start_session already returns it; call this only if the guide is no longer in your context. " +
-            "With topic, returns a short XML reference for tables, layers or groups.",
+            "With topic, returns a short XML reference for tables, layers or groups, " +
+            `or the drawing guide of a diagram type (${DIAGRAM_TYPE_NAMES.join(", ")}): call that before drawing a diagram of the type.`,
         inputSchema: {
             topic: z
-                .enum(["tables", "layers", "groups"])
+                .string()
                 .optional()
                 .describe(
-                    "Return only the XML reference for this topic instead of the whole guide.",
+                    `Return only this topic instead of the whole guide: tables, layers, groups, or a diagram type (${DIAGRAM_TYPE_NAMES.join(", ")}).`,
                 ),
         },
         annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ topic }) => ok(topic ? XML_REFERENCE[topic] : guideText()),
+    async ({ topic }) => {
+        if (!topic) return ok(guideText())
+        const name = topic.trim().toLowerCase()
+        if (Object.hasOwn(XML_REFERENCE, name)) {
+            return ok(XML_REFERENCE[name as keyof typeof XML_REFERENCE])
+        }
+        // The user's own drawing rules come along, as with the whole guide
+        const guide = getDiagramGuide(
+            name,
+            "create_new_diagram",
+            "edit_diagram",
+        )
+        return guide.ok
+            ? ok(guideWithCustomInstructions(guide.text))
+            : fail(
+                  `${guide.error} Other topics: ${Object.keys(XML_REFERENCE).join(", ")}.`,
+              )
+    },
 )
 
 // Tool: get_shape_library
@@ -721,15 +748,18 @@ To clear the canvas to one blank page, send only the two root cells <mxCell id="
                 .describe(
                     "REQUIRED: the mxCell elements of one page, a bare <mxGraphModel>, or a full <mxfile> with one or more <diagram> pages.",
                 ),
+            type: diagramTypeSchema,
             screenshot: screenshotSchema,
         },
         annotations: { openWorldHint: false },
     },
-    async ({ xml: inputXml, screenshot }) => {
+    async ({ xml: inputXml, type, screenshot }) => {
         const session = activeSession()
         // The pictures get_diagram showed as references go back in
         const prepared = prepareNewDiagram(
             restoreImageData(inputXml, session.xml),
+            {},
+            type,
         )
         if (!prepared.ok) {
             log.error(prepared.error)
@@ -1953,10 +1983,11 @@ registerTool(
                 .describe(
                     "Optional starting content: the mxCell elements of the page, or a bare <mxGraphModel>. If omitted the page starts blank.",
                 ),
+            type: diagramTypeSchema,
         },
         annotations: { destructiveHint: false, openWorldHint: false },
     },
-    async ({ name, id, xml }) => {
+    async ({ name, id, xml, type }) => {
         const loaded = await loadMxfileForMutation()
         if (!loaded.ok) return fail(loaded.message)
 
@@ -1969,6 +2000,7 @@ registerTool(
             // The pictures get_diagram showed as references go back in
             const prepared = prepareNewModel(
                 restoreImageData(xml, currentSession?.xml),
+                type,
             )
             if (!prepared.ok) return fail(prepared.error)
             if (prepared.fixes.length > 0) {

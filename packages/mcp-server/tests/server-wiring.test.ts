@@ -222,6 +222,40 @@ describe("MCP server wiring", () => {
         expect(text).toContain("shape=table")
         expect(text).not.toContain("Edge routing rules")
     })
+
+    it("serves a diagram type's guide with topic=sequence, with the user's rules", async () => {
+        const result = await callTool("get_drawing_guide", {
+            topic: "sequence",
+        })
+        expect(result.isError).toBeFalsy()
+        const text = textOf(result)
+        expect(text).toContain("shape=umlLifeline")
+        // Written for this server's tools
+        expect(text).toContain(
+            'Now call create_new_diagram with type="sequence".',
+        )
+        expect(text).not.toContain("Edge routing rules")
+        expect(
+            text.endsWith(`\n\n## Custom Instructions\n${CUSTOM_RULE}`),
+        ).toBe(true)
+    })
+
+    it("names the topics when asked for one it does not have", async () => {
+        const result = await callTool("get_drawing_guide", {
+            topic: "flowchart",
+        })
+        expect(result.isError).toBe(true)
+        expect(textOf(result)).toContain("sequence")
+        expect(textOf(result)).toContain("tables")
+    })
+
+    it("lists the diagram types with a guide in the drawing guide", async () => {
+        const text = textOf(await callTool("get_drawing_guide", {}))
+        expect(text).toContain("topic=<type>")
+        expect(text).toContain(
+            "(sequence, swimlane, swimlane-horizontal, usecase)",
+        )
+    })
 })
 
 describe("load_diagram dual-source arguments", () => {
@@ -281,6 +315,51 @@ describe("MCP server wiring with a session, without a preview tab", () => {
                 "classic preview page cannot read the selection",
             )
         }
+    })
+
+    it("lays out a drawing whose type the model named, and says so as a note", async () => {
+        const guide = textOf(
+            await callTool("get_drawing_guide", { topic: "swimlane" }),
+        )
+        expect(guide).toContain(
+            'Now call create_new_diagram with type="swimlane".',
+        )
+        // Two lanes; the line from A to C skips the row of B
+        const lanes = `<mxCell id="2" value="One" style="swimlane;startSize=30;" x="40" y="40" w="220" h="340"/>
+<mxCell id="3" value="Two" style="swimlane;startSize=30;" x="260" y="40" w="220" h="340"/>
+<mxCell id="4" value="A" parent="2" x="40" y="50" w="140" h="60"/>
+<mxCell id="5" value="B" parent="2" x="40" y="150" w="140" h="60"/>
+<mxCell id="6" value="C" parent="2" x="40" y="250" w="140" h="60"/>
+<mxCell id="7" value="D" parent="3" x="40" y="150" w="140" h="60"/>
+<mxCell id="8" source="4" target="6"/>
+<mxCell id="9" source="4" target="7"/>`
+        const plain = textOf(
+            await callTool("create_new_diagram", { xml: lanes }),
+        )
+        expect(plain).not.toContain("The server placed")
+        const laid = textOf(
+            await callTool("create_new_diagram", {
+                xml: lanes,
+                type: "swimlane",
+            }),
+        )
+        expect(laid).toContain(
+            "The server placed the 4 steps on the grid of their lanes and gave the 2 connectors paths through the gaps between them",
+        )
+        // The model's XML was not wrong: no "Auto-fixed" for a layout
+        expect(laid).not.toContain("Auto-fixed in your XML")
+        expect(textOf(await callTool("get_diagram", {}))).toContain(
+            '<Array as="points">',
+        )
+        // A new page takes a type the same way
+        const page = textOf(
+            await callTool("add_page", {
+                name: "Lanes",
+                xml: lanes,
+                type: "swimlane",
+            }),
+        )
+        expect(page).toContain("The server placed the 4 steps")
     })
 
     it("tells the model what each write did and that the outline is no part of the diagram", async () => {

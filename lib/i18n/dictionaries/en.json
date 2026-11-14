@@ -633,6 +633,8 @@
         "editing": "Changing the diagram…",
         "loadingLibrary": "Loading a shape library…",
         "libraryLoaded": "Loaded a shape library",
+        "loadingGuide": "Reading a drawing guide…",
+        "guideLoaded": "Read a drawing guide",
         "failed": "This attempt failed",
         "failedRetrying": "This attempt failed, trying again",
         "stopped": "Stopped",
