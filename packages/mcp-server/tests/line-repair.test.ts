@@ -323,6 +323,22 @@ describe("a connector with a small step half way", () => {
         expect(path.some((p) => p.x === 250)).toBe(true)
     })
 
+    it("stays where the connectors fan out of one shape: straight, it would cross its neighbour or run close beside it", () => {
+        // Two leaves of a mind map on the left of their module. The lower
+        // leaf's connector has a step of 15; at the leaf's height it would
+        // cross the upper one, a little lower it would run 3 beside it
+        const module = `<mxCell id="m" value="Module" x="180" y="210" w="140" h="50"/>`
+        const upper = `<mxCell id="l1" value="Leaf 1" x="0" y="160" w="140" h="30"/>
+<mxCell id="f1" source="m" target="l1" style="${ORTHOGONAL}exitX=0;exitY=0.2;entryX=1;entryY=0.5;"/>`
+        const lower = `<mxCell id="l2" value="Leaf 2" x="0" y="200" w="140" h="30"/>
+<mxCell id="f2" source="m" target="l2" style="${ORTHOGONAL}exitX=0;exitY=0.4;entryX=1;entryY=0.5;"/>`
+        expect(drawn(module + upper + lower).out.laid).toEqual([])
+        // (alone, the lower one is made straight)
+        expect(drawn(module + lower).out.laid).toEqual([
+            "The server took a small step out of 1 connector, so that it runs straight there.",
+        ])
+    })
+
     it("stays in the middle of a diamond: the other end moves", () => {
         const page = drawn(
             `<mxCell id="a" value="A?" style="rhombus;whiteSpace=wrap;html=1;" x="40" y="40" w="120" h="60"/>

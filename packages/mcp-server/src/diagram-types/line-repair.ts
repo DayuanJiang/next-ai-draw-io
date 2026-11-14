@@ -205,8 +205,29 @@ function sizeOf(text: string, style: string, fontSize: number) {
     }
 }
 
-/** How far two paths run on top of each other */
-function onEachOtherFor(p: Point[], q: Point[]): number {
+/** How often two paths cross each other (an end on the other path is no crossing) */
+function crossingsOf(p: Point[], q: Point[]): number {
+    const side = (a: Point, b: Point, c: Point) => {
+        const turn = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+        return Math.abs(turn) < 1e-6 ? 0 : Math.sign(turn)
+    }
+    let count = 0
+    for (let i = 1; i < p.length; i++) {
+        for (let j = 1; j < q.length; j++) {
+            if (
+                side(p[i - 1], p[i], q[j - 1]) * side(p[i - 1], p[i], q[j]) <
+                    0 &&
+                side(q[j - 1], q[j], p[i - 1]) * side(q[j - 1], q[j], p[i]) < 0
+            ) {
+                count += 1
+            }
+        }
+    }
+    return count
+}
+
+/** How far two paths run on top of each other, or less than `within` apart side by side */
+function onEachOtherFor(p: Point[], q: Point[], within = 2): number {
     let sum = 0
     for (let i = 1; i < p.length; i++) {
         const a = p[i - 1]
@@ -217,11 +238,11 @@ function onEachOtherFor(p: Point[], q: Point[]): number {
             const flat =
                 Math.abs(a.y - b.y) < 0.5 &&
                 Math.abs(c.y - d.y) < 0.5 &&
-                Math.abs(a.y - c.y) < 2
+                Math.abs(a.y - c.y) < within
             const upright =
                 Math.abs(a.x - b.x) < 0.5 &&
                 Math.abs(c.x - d.x) < 0.5 &&
-                Math.abs(a.x - c.x) < 2
+                Math.abs(a.x - c.x) < within
             if (flat) {
                 sum += Math.max(
                     0,
@@ -994,6 +1015,27 @@ export function repairLines(root: Element): string[] {
             }
             return sum
         }
+        // How a path lies to the other connectors: how often it crosses
+        // them, and how far it runs close beside them (those into the same
+        // shape too: 3 apart they read as one thick line)
+        const others = (line: Line) =>
+            lines.filter(
+                (other) =>
+                    other !== line &&
+                    other.path &&
+                    !(wrong.includes(other) && !other.led),
+            )
+        const crossing = (line: Line, path: Point[]) =>
+            others(line).reduce(
+                (sum, other) => sum + crossingsOf(path, other.path as Point[]),
+                0,
+            )
+        const beside = (line: Line, path: Point[]) =>
+            others(line).reduce(
+                (sum, other) =>
+                    sum + onEachOtherFor(path, other.path as Point[], 8),
+                0,
+            )
 
         // A small step in a connector, where it goes on the same way after
         // a short stretch sideways, says nothing: the two shapes are not
@@ -1001,7 +1043,9 @@ export function repairLines(root: Element): string[] {
         // out by moving the stretch before it or the one after it over.
         // A stretch that ends on a shape moves its end along the shape's
         // side, a little way only: further on a rectangle than on an icon,
-        // hardly on an ellipse, not on a diamond
+        // hardly on an ellipse, not on a diamond. A step stays where taking
+        // it out would make the connector cross another one or run close
+        // beside it (the connectors that fan out of one shape)
         const smoothed = new Map<Line, { start: Point; end: Point }>()
         const slack = (item: Item, size: number) =>
             item.outline === "ellipse"
@@ -1141,7 +1185,9 @@ export function repairLines(root: Element): string[] {
                         if (
                             made.length < 2 ||
                             hits(line, made, 6) > hits(line, path, 6) ||
-                            riding(line, made) > riding(line, path) + 5
+                            riding(line, made) > riding(line, path) + 5 ||
+                            beside(line, made) > beside(line, path) + 5 ||
+                            crossing(line, made) > crossing(line, path)
                         ) {
                             continue
                         }
