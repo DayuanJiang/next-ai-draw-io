@@ -258,6 +258,19 @@ AI_MODEL=your_model_id
 QINIU_BASE_URL=https://your-custom-endpoint
 ```
 
+### Lazu
+
+```bash
+LAZU_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-5-5
+```
+
+在“设置”的“模型”标签页里，应用会用您的 Key 从 Lazu 读取模型列表。也可以设置自定义端点（例如自托管 Lazu 网关）；不设置时默认使用 `https://api.lazu.ai/v1`：
+
+```bash
+LAZU_BASE_URL=https://your-custom-endpoint/v1
+```
+
 ### Vercel AI Gateway
 
 Vercel AI Gateway 让您用一个 API Key 使用多家 AI 服务商。登录更简单，切换服务商时也不用管理多个 API Key。
@@ -409,7 +422,7 @@ AI_MODEL=your_model_id
 如果您设置了多家服务商的 API Key，就必须设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # 或：openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, lazu, custom
 ```
 
 ## 为所有用户提供多个模型

@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/66b9f12f-219f-4d62-acc0-0725e6850eec
 
 **用**
 
--   支持 25 家模型服务商，可以在浏览器里填自己的 API Key，Key 只保存在本地
+-   支持 26 家模型服务商，可以在浏览器里填自己的 API Key，Key 只保存在本地
 -   支持推理的模型会显示思考过程
 -   深色模式；界面有英文、简体中文、繁体中文、日文
 
@@ -144,7 +144,7 @@ Codex、VS Code、Cursor 等客户端的配置、全部工具，以及和其他 
 
 ### 和 draw.io 自带的 AI 有什么不同
 
-draw.io 自带 Generate 工具（Arrange > Insert > Generate）。它在 draw.io 里运行，可以用免费的托管模型，也可以填自己的 API key；把图、页面或选中的图形附加到对话里，它就能修改。Next AI Draw.io 每条消息都会带上当前画布，包括你手动做的修改；AI 的每次修改都是一个可以对比或恢复的版本；支持 25 家模型服务商，包括通过 Ollama 使用本地模型，在演示站、桌面应用和自己的服务器上都能用。
+draw.io 自带 Generate 工具（Arrange > Insert > Generate）。它在 draw.io 里运行，可以用免费的托管模型，也可以填自己的 API key；把图、页面或选中的图形附加到对话里，它就能修改。Next AI Draw.io 每条消息都会带上当前画布，包括你手动做的修改；AI 的每次修改都是一个可以对比或恢复的版本；支持 26 家模型服务商，包括通过 Ollama 使用本地模型，在演示站、桌面应用和自己的服务器上都能用。
 
 ## 自己部署
 
@@ -172,7 +172,7 @@ npm run dev
 
 ### 模型与服务商
 
-支持 AWS Bedrock（默认）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、腾讯云 EdgeOne、字节跳动豆包、ModelScope、智谱 GLM、通义千问、七牛云、Kimi、MiniMax、Novita、小米 MiMo、Atlas Cloud，以及一个可填任意地址的 OpenAI 兼容预设（vLLM、LM Studio、网关），共 25 家。各家的环境变量和注意事项见[服务商配置指南](./ai-providers.md)。
+支持 AWS Bedrock（默认）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、腾讯云 EdgeOne、字节跳动豆包、ModelScope、智谱 GLM、通义千问、七牛云、Kimi、MiniMax、Novita、小米 MiMo、Atlas Cloud、Lazu，以及一个可填任意地址的 OpenAI 兼容预设（vLLM、LM Studio、网关），共 26 家。各家的环境变量和注意事项见[服务商配置指南](./ai-providers.md)。
 
 **选哪个模型**：这项任务要生成格式严格的长文本（draw.io XML），请选能力较强的模型，小模型容易画出错误的图。
 
