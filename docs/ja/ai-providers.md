@@ -258,6 +258,19 @@ AI_MODEL=your_model_id
 QINIU_BASE_URL=https://your-custom-endpoint
 ```
 
+### Lazu
+
+```bash
+LAZU_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-5-5
+```
+
+設定の「モデル」タブでキーを入力すると、アプリが Lazu からモデル一覧を読み込みます。必要に応じてカスタムエンドポイント（セルフホストした Lazu ゲートウェイなど）を設定できます。設定しない場合は `https://api.lazu.ai/v1` が使われます。
+
+```bash
+LAZU_BASE_URL=https://your-custom-endpoint/v1
+```
+
 ### Vercel AI Gateway
 
 Vercel AI Gateway では、1 つの API キーで多くの AI プロバイダーを使えます。サインインが簡単になり、複数の API キーを管理しなくてもプロバイダーを切り替えられます。
@@ -409,7 +422,7 @@ AI_MODEL=your_model_id
 複数のプロバイダーの API キーを設定した場合は、`AI_PROVIDER` を設定する必要があります。
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # または: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, lazu, custom
 ```
 
 ## 全ユーザーに複数のモデルを提供する

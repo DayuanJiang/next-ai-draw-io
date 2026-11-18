@@ -325,6 +325,17 @@ const defs = {
         apiKeyUrl: "https://www.qiniu.com/ai/models",
         modelList: "openai",
     },
+    lazu: {
+        label: "Lazu",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "LAZU",
+        defaultBaseUrl: "https://api.lazu.ai/v1",
+        apiKeyUrl: "https://lazu.ai/console/token",
+        modelList: "openai",
+        icon: "cloud",
+    },
     gateway: {
         label: "AI Gateway",
         sdk: "gateway",

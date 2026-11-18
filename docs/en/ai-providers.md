@@ -258,6 +258,19 @@ Optionally, set a custom endpoint:
 QINIU_BASE_URL=https://your-custom-endpoint
 ```
 
+### Lazu
+
+```bash
+LAZU_API_KEY=your_api_key
+AI_MODEL=claude-sonnet-5-5
+```
+
+In the Models tab of Settings, the app loads the model list from Lazu with your key. Optionally, set a custom endpoint (for example, a self-hosted Lazu gateway). Without one, `https://api.lazu.ai/v1` is used:
+
+```bash
+LAZU_BASE_URL=https://your-custom-endpoint/v1
+```
+
 ### Vercel AI Gateway
 
 Vercel AI Gateway gives you many AI providers through one API key. Signing in is simpler, and you can switch providers without managing several API keys.
@@ -409,7 +422,7 @@ If you set the API key of only one provider, the server detects that provider an
 If you set API keys for several providers, you must set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, lazu, custom
 ```
 
 ## Offer several models to all users
