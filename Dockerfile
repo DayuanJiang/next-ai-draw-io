@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Next.js
 
 # Stage 1: Install dependencies
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -13,7 +13,7 @@ ARG ELECTRON_SKIP_BINARY_DOWNLOAD=1
 RUN npm install
 
 # Stage 2: Build application
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 
 # Copy node_modules from deps stage
@@ -45,7 +45,7 @@ ENV NEXT_PUBLIC_SELFHOSTED="${NEXT_PUBLIC_SELFHOSTED}"
 RUN npm run build
 
 # Stage 3: Production runtime
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
