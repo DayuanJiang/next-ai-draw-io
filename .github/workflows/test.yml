@@ -38,6 +38,9 @@ jobs:
       - name: Run unit tests
         run: npm run test -- --run
 
+      - name: Run DSH plugin tests
+        run: npm --prefix packages/dsh-plugin test
+
   # The MCP server package: its own vitest (its DOM polyfill, linkedom, needs
   # `environment: node`, while the root vitest uses jsdom for the Next.js
   # app), the npm package as it is built, the draw.io file list, and the

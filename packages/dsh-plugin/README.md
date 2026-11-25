@@ -12,13 +12,19 @@ Use the profile you start DSH with (`web` for `dsh web`). You need Node.js 18 or
 
 ## Use
 
-Ask, for example, "Read this repo and draw its architecture". The agent calls `start_session` and replies with the preview link. Click it: the preview opens in DSH's right sidebar, and the diagram appears as it is drawn. The plugin turns on DSH's sidebar browser, which the web profile leaves off by default.
+Ask, for example, "Read this repo and draw its architecture". On a local DSH Web or Desktop client with the sidebar and session projection APIs (available in Desktop `0.2.2-rc.5`), the **Draw.io** tab opens when the agent starts or resumes the live canvas. You can return to it from the right-sidebar guide. Each conversation keeps its own canvas link. After restarting the MCP server, ask the agent to resume the saved diagram if the old canvas link stops responding.
+
+The agent still returns the preview link. On clients where the Draw.io tab is unavailable, use that link to open the preview in DSH's sidebar browser or your browser.
 
 The agent checks its drawing with `screenshot_diagram`. That works once the preview is open, and only with a model that accepts images; with a text-only model, DSH passes a short note instead of the picture.
 
 The tools are named `mcp__drawio__<tool>`: `start_session`, `create_new_diagram`, `edit_diagram`, `get_diagram`, `screenshot_diagram`, `export_diagram`, `restore_version` and more. See the [MCP server README](https://github.com/DayuanJiang/next-ai-draw-io/tree/main/packages/mcp-server#readme) for the full list and its settings.
 
 Profiles without the sidebar, such as `tui` and `headless`, print `patch: entry "ui-sidebar-browser" not found` at start; it does no harm. There, open the preview link in your browser.
+
+### Open a saved `.drawio` file
+
+The live tab follows the conversation's MCP canvas. To open a saved `.drawio` diagram directly from DSH's file tree, install the optional [Draw.io file editor](https://github.com/zhang-guo-wen/dsh-drawioedit) in the same profile. Without a file editor, DSH may show the file's XML. The optional editor saves edits back to the opened file.
 
 ## Settings
 
