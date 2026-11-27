@@ -295,6 +295,21 @@ AI_MODEL=openai/gpt-4o
 
 从 [Vercel AI Gateway 仪表板](https://vercel.com/ai-gateway) 获取您的 API Key。
 
+### LLMTR
+
+```bash
+LLMTR_API_KEY=your_api_key
+AI_MODEL=qwen/qwen3.8-flash
+```
+
+应用没有内置 LLMTR 的模型列表。在“设置”的“模型”标签页里，应用会用您的 Key 从 LLMTR 读取模型列表。模型 ID 使用 `vendor/model` 形式，例如 `qwen/qwen3.8-flash`。请在 https://llmtr.com/dashboard/keys 创建密钥。
+
+也可以设置自定义端点。不设置时使用 `https://llmtr.com/v1`：
+
+```bash
+LLMTR_BASE_URL=https://your-custom-endpoint
+```
+
 ### Amazon Bedrock
 
 Bedrock 用 AWS 凭证登录。因为没有 API Key 可供检测，服务端无法自动选中这家服务商，请设置 `AI_PROVIDER`：
@@ -409,7 +424,7 @@ AI_MODEL=your_model_id
 如果您设置了多家服务商的 API Key，就必须设置 `AI_PROVIDER`：
 
 ```bash
-AI_PROVIDER=google  # 或：openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # 或：openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, llmtr, custom
 ```
 
 ## 为所有用户提供多个模型

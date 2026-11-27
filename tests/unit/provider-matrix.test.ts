@@ -157,6 +157,7 @@ const MATRIX_PROVIDERS: ProviderName[] = [
     "mimo",
     "atlascloud",
     "custom",
+    "llmtr",
 ]
 
 /** The model id each provider runs in the matrix (the first of its former suggested list, or test-model) */
@@ -186,6 +187,7 @@ const MATRIX_MODEL_IDS: Record<ProviderName, string> = {
     mimo: "mimo-v2.5-pro",
     atlascloud: "qwen/qwen3.5-flash",
     custom: "test-model",
+    llmtr: "qwen/qwen3.8-flash",
 }
 
 /** Model ids whose providerOptions the snapshot records for openai and google */
@@ -483,7 +485,7 @@ describe("provider behavior snapshot", () => {
     })
 
     it("matches the recorded behavior", async () => {
-        // The matrix: 25 providers, 22 shapes, 9 environments
+        // The matrix: 26 providers, 22 shapes, 9 environments
         for (const provider of MATRIX_PROVIDERS) {
             await matrix(provider, MATRIX_MODEL_IDS[provider])
         }

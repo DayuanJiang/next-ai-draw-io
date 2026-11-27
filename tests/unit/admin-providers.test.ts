@@ -672,6 +672,7 @@ describe("credEnvNames", () => {
             atlascloud: "ATLASCLOUD",
             qiniu: "QINIU",
             gateway: "AI_GATEWAY",
+            llmtr: "LLMTR",
             bedrock: null,
             vertexai: null,
             azure: "AZURE",
