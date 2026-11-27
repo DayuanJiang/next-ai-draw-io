@@ -3,7 +3,7 @@
  * Serves draw.io embed with state sync and history UI
  */
 
-import { randomBytes, randomUUID } from "node:crypto"
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto"
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs"
 import http from "node:http"
 import { dirname, extname, join, posix, resolve, sep } from "node:path"
@@ -83,6 +83,21 @@ const API_TOKEN = randomBytes(16).toString("hex")
 
 export function getApiToken(): string {
     return API_TOKEN
+}
+
+// Compared in constant time so the response time does not reveal how many
+// leading characters of a guess were right. timingSafeEqual throws on buffers
+// of different lengths, so the length check comes first; the token length is
+// fixed and public, so that early return leaks nothing. A missing header is
+// rejected as before.
+function hasValidApiToken(header: string | string[] | undefined): boolean {
+    if (typeof header !== "string") return false
+    const provided = Buffer.from(header)
+    const expected = Buffer.from(API_TOKEN)
+    return (
+        provided.length === expected.length &&
+        timingSafeEqual(provided, expected)
+    )
 }
 
 // The trimmed draw.io copy that scripts/fetch-drawio.mjs puts in dist/drawio,
@@ -797,7 +812,7 @@ function routeRequest(
 
     if (
         url.pathname.startsWith("/api/") &&
-        req.headers["x-drawio-token"] !== API_TOKEN
+        !hasValidApiToken(req.headers["x-drawio-token"])
     ) {
         res.writeHead(403)
         res.end("Forbidden")
