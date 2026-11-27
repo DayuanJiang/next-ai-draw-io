@@ -38,7 +38,7 @@ Web アプリ、Windows / macOS / Linux 向けデスクトップアプリ、そ�
 
 **使う**
 
--   25 のモデルプロバイダーに対応。自分の API キーをブラウザに入力でき、キーは端末内にだけ保存される
+-   26 のモデルプロバイダーに対応。自分の API キーをブラウザに入力でき、キーは端末内にだけ保存される
 -   推論するモデルは思考過程を表示
 -   ダークモード。UI は英語、簡体字中国語、繁体字中国語、日本語に対応
 
@@ -144,7 +144,7 @@ Codex、VS Code、Cursor などの設定、すべてのツール、ほかの dra
 
 ### draw.io 標準の AI との違い
 
-draw.io には Generate ツール（Arrange > Insert > Generate）があります。draw.io の中で無料のホスト型モデルか自分の API キーで動き、チャットに添付したダイアグラム、ページ、選択中の図形を変更できます。Next AI Draw.io はメッセージごとに、手作業の変更も含めた現在のキャンバスを送ります。AI の変更はすべてバージョンになり、比較や復元ができます。Ollama のローカルモデルを含む 25 のプロバイダーに対応し、デモサイト、デスクトップアプリ、自分のサーバーのどれでも使えます。
+draw.io には Generate ツール（Arrange > Insert > Generate）があります。draw.io の中で無料のホスト型モデルか自分の API キーで動き、チャットに添付したダイアグラム、ページ、選択中の図形を変更できます。Next AI Draw.io はメッセージごとに、手作業の変更も含めた現在のキャンバスを送ります。AI の変更はすべてバージョンになり、比較や復元ができます。Ollama のローカルモデルを含む 26 のプロバイダーに対応し、デモサイト、デスクトップアプリ、自分のサーバーのどれでも使えます。
 
 ## 自分でホストする
 
@@ -172,7 +172,7 @@ npm run dev
 
 ### モデルとプロバイダー
 
-AWS Bedrock（既定）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、Tencent EdgeOne、ByteDance Doubao、ModelScope、Zhipu GLM、Qwen、Qiniu、Kimi、MiniMax、Novita、Xiaomi MiMo、Atlas Cloud、および任意の URL を使える OpenAI 互換プリセット（vLLM、LM Studio、ゲートウェイ）の 25 プロバイダーに対応しています。各プロバイダーの環境変数と注意点は[プロバイダー設定ガイド](./ai-providers.md)にあります。
+AWS Bedrock（既定）、OpenAI、Anthropic、Google AI、Google Vertex AI、Azure OpenAI、Ollama、OpenRouter、AIHubMix、DeepSeek、SiliconFlow、SGLang、Vercel AI Gateway、Tencent EdgeOne、ByteDance Doubao、ModelScope、Zhipu GLM、Qwen、Qiniu、Kimi、MiniMax、Novita、Xiaomi MiMo、Atlas Cloud、LLMTR、および任意の URL を使える OpenAI 互換プリセット（vLLM、LM Studio、ゲートウェイ）の 26 プロバイダーに対応しています。各プロバイダーの環境変数と注意点は[プロバイダー設定ガイド](./ai-providers.md)にあります。
 
 **どのモデルを選ぶか**：厳密な形式の長いテキスト（draw.io の XML）を生成するタスクなので、能力の高いモデルを選んでください。小さなモデルは壊れた図を出しがちです。
 

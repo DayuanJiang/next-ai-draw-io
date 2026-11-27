@@ -52,6 +52,7 @@ describe("the provider record", () => {
                 "atlascloud",
                 "qiniu",
                 "gateway",
+                "llmtr",
                 "vertexai",
                 "azure",
                 "sglang",
@@ -179,6 +180,7 @@ describe("the picker's order", () => {
                     "atlascloud",
                     "qiniu",
                     "gateway",
+                    "llmtr",
                 ],
             },
             {

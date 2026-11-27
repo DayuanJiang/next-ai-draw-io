@@ -237,6 +237,67 @@ describe("Atlas Cloud provider", () => {
     })
 })
 
+describe("LLMTR provider", () => {
+    let createCompatibleMock: ReturnType<typeof vi.fn>
+    beforeEach(async () => {
+        vi.stubEnv("LLMTR_BASE_URL", undefined)
+
+        const mod = await import("@ai-sdk/openai-compatible")
+        createCompatibleMock = mod.createOpenAICompatible as ReturnType<
+            typeof vi.fn
+        >
+        createCompatibleMock.mockClear()
+    })
+
+    it("uses LLMTR default endpoint with LLMTR_API_KEY", () => {
+        vi.stubEnv("LLMTR_API_KEY", "server-llmtr-key")
+
+        getAIModel({
+            provider: "llmtr",
+            modelId: "qwen/qwen3.8-flash",
+        })
+
+        // An OpenAI-compatible API; includeUsage keeps quota tracking working
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "llmtr",
+            apiKey: "server-llmtr-key",
+            baseURL: "https://llmtr.com/v1",
+            includeUsage: true,
+        })
+    })
+
+    it("uses custom LLMTR base URL when provided", () => {
+        getAIModel({
+            provider: "llmtr",
+            apiKey: "client-llmtr-key",
+            baseUrl: "https://proxy.example.com/v1",
+            modelId: "qwen/qwen3.8-max",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "llmtr",
+            apiKey: "client-llmtr-key",
+            baseURL: "https://proxy.example.com/v1",
+            includeUsage: true,
+        })
+    })
+
+    it("drops an endpoint path pasted along with the base URL", () => {
+        getAIModel({
+            provider: "llmtr",
+            apiKey: "client-llmtr-key",
+            baseUrl: "https://proxy.example.com/v1/chat/completions/",
+            modelId: "qwen/qwen3.8-max",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                baseURL: "https://proxy.example.com/v1",
+            }),
+        )
+    })
+})
+
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
     let createDeepSeekMock: ReturnType<typeof vi.fn>
     beforeEach(async () => {

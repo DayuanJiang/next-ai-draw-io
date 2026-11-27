@@ -295,6 +295,21 @@ AI_MODEL=openai/gpt-4o
 
 API キーは [Vercel AI Gateway のダッシュボード](https://vercel.com/ai-gateway)で取得してください。
 
+### LLMTR
+
+```bash
+LLMTR_API_KEY=your_api_key
+AI_MODEL=qwen/qwen3.8-flash
+```
+
+アプリには LLMTR のモデル一覧が組み込まれていません。設定の「モデル」タブでキーを入力すると、アプリが LLMTR からモデル一覧を読み込みます。モデル ID は `vendor/model` 形式です（例: `qwen/qwen3.8-flash`）。キーは https://llmtr.com/dashboard/keys で作成できます。
+
+必要に応じて、カスタムエンドポイントを設定できます。設定しない場合は `https://llmtr.com/v1` が使われます。
+
+```bash
+LLMTR_BASE_URL=https://your-custom-endpoint
+```
+
 ### Amazon Bedrock
 
 Bedrock は AWS の認証情報でサインインします。検出できる API キーがないので、サーバーはこのプロバイダーを自動では選べません。`AI_PROVIDER` を設定してください。
@@ -409,7 +424,7 @@ AI_MODEL=your_model_id
 複数のプロバイダーの API キーを設定した場合は、`AI_PROVIDER` を設定する必要があります。
 
 ```bash
-AI_PROVIDER=google  # または: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # または: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, llmtr, custom
 ```
 
 ## 全ユーザーに複数のモデルを提供する

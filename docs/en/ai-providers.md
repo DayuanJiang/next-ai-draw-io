@@ -295,6 +295,21 @@ When you use a custom base URL, you must also set `AI_GATEWAY_API_KEY`.
 
 Get your API key from the [Vercel AI Gateway dashboard](https://vercel.com/ai-gateway).
 
+### LLMTR
+
+```bash
+LLMTR_API_KEY=your_api_key
+AI_MODEL=qwen/qwen3.8-flash
+```
+
+The app has no built-in model list for LLMTR. In the Models tab of Settings, it loads the list from LLMTR with your key. Model IDs use the `vendor/model` form, for example `qwen/qwen3.8-flash`. Create a key at https://llmtr.com/dashboard/keys.
+
+Optionally, set a custom endpoint. Without one, `https://llmtr.com/v1` is used:
+
+```bash
+LLMTR_BASE_URL=https://your-custom-endpoint
+```
+
 ### Amazon Bedrock
 
 Bedrock signs in with AWS credentials. With no API key to detect, the server cannot pick this provider by itself, so set `AI_PROVIDER`:
@@ -409,7 +424,7 @@ If you set the API key of only one provider, the server detects that provider an
 If you set API keys for several providers, you must set `AI_PROVIDER`:
 
 ```bash
-AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, custom
+AI_PROVIDER=google  # or: openai, anthropic, google, vertexai, azure, bedrock, ollama, openrouter, aihubmix, deepseek, siliconflow, sglang, gateway, edgeone, doubao, modelscope, glm, qwen, qiniu, kimi, minimax, novita, mimo, atlascloud, llmtr, custom
 ```
 
 ## Offer several models to all users

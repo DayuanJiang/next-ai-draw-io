@@ -338,6 +338,17 @@ const defs = {
         ownRequestPath: true,
         logo: "vercel",
     },
+    llmtr: {
+        label: "LLMTR",
+        sdk: "openai-compatible",
+        credential: "apiKey",
+        group: "aggregators",
+        envPrefix: "LLMTR",
+        defaultBaseUrl: "https://llmtr.com/v1",
+        apiKeyUrl: "https://llmtr.com/dashboard/keys",
+        modelList: "openai",
+        icon: "sparkles",
+    },
 
     // Cloud platforms
     bedrock: {
