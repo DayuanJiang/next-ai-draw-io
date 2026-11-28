@@ -43,3 +43,17 @@ describe("gemini-extension.json", () => {
         expect(extension.version).toBe(pkg.version)
     })
 })
+
+describe("the Claude plugin", () => {
+    // Anthropic's plugin directory refuses a launcher with @latest, so the
+    // plugin names the exact version: a release changes it here too, and
+    // raises the plugin's own version in .claude-plugin/plugin.json
+    it("runs the MCP server at the version of the package", () => {
+        const plugin = JSON.parse(read("packages/claude-plugin/.mcp.json"))
+        const pkg = JSON.parse(read("packages/mcp-server/package.json"))
+        expect(plugin.mcpServers.drawio).toEqual({
+            command: "npx",
+            args: [`@next-ai-drawio/mcp-server@${pkg.version}`],
+        })
+    })
+})
