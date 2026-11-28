@@ -133,6 +133,29 @@ describe("trusted remote preview", () => {
             ).status,
         ).toBe(403)
     })
+    it("rejects a wrong preview token of the same or a different length", async () => {
+        const token = server.getApiToken()
+        const sameLengthWrong = `${token.slice(0, -1)}${token.endsWith("0") ? "1" : "0"}`
+        for (const wrong of [
+            sameLengthWrong,
+            token.slice(0, -1),
+            `${token}0`,
+            "x",
+        ]) {
+            expect(
+                (
+                    await request("/api/state?sessionId=mcp-remote", {
+                        "x-drawio-token": wrong,
+                    })
+                ).status,
+            ).toBe(403)
+        }
+        expect(sameLengthWrong).toHaveLength(token.length)
+        expect(sameLengthWrong).not.toBe(token)
+        expect(
+            (await request("/api/state?sessionId=mcp-remote")).status,
+        ).not.toBe(403)
+    })
     it("preserves tokens, same-origin framing and localhost access", async () => {
         expect(
             (
