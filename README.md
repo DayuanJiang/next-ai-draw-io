@@ -42,6 +42,10 @@ Available as a web app, a desktop app for Windows, macOS and Linux, and an MCP s
 -   Models that reason show their thinking
 -   Dark mode; the interface is available in English, Simplified Chinese, Traditional Chinese and Japanese
 
+### AWS architecture diagrams from text
+
+Describe your system in plain text and Next AI Draw.io draws the AWS architecture diagram with the official AWS icons. It is free and open source, and the result is a normal draw.io file that you can edit by hand and export as `.drawio`, `.png` or `.svg`. It also redraws a screenshot or a PDF, and through the MCP server it reads your Terraform, CDK or CloudFormation files and draws what they define. See [AWS architecture diagrams from text](https://next-ai-drawio.jiang.jp/en/docs/aws-architecture).
+
 ## Examples
 
 <div align="center">

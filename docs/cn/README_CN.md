@@ -42,6 +42,10 @@ https://github.com/user-attachments/assets/66b9f12f-219f-4d62-acc0-0725e6850eec
 -   支持推理的模型会显示思考过程
 -   深色模式；界面有英文、简体中文、繁体中文、日文
 
+### 用文字生成 AWS 架构图
+
+用文字描述你的系统，Next AI Draw.io 就用 AWS 官方图标画出架构图。它免费、开源，画出来的是普通的 draw.io 文件，可以手动修改，也可以导出为 `.drawio`、`.png` 或 `.svg`。它还能照着截图或 PDF 重画，也能通过 MCP 服务器读取你的 Terraform、CDK、CloudFormation 文件，画出其中定义的架构。详见[用文字生成 AWS 架构图](https://next-ai-drawio.jiang.jp/zh/docs/aws-architecture)。
+
 ## 示例
 
 <div align="center">
