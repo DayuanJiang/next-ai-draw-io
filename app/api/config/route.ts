@@ -24,7 +24,7 @@ export async function GET() {
         // What a message's pictures may come to for the server's own
         // model, when AI_MODEL alone names it: it is in no list the page
         // reads, so the page cannot tell by the model's id
-        imageBudget: imageBudgetOf(env.AI_MODEL),
+        imageBudget: imageBudgetOf(env.AI_MODEL?.trim()),
         // Whether the editor's actions are kept (in Langfuse)
         usageLog: !!getLangfuseClient(),
     })
