@@ -39,10 +39,26 @@ const TEXT_EXTENSIONS = [
 ]
 
 /**
+ * unpdf's PDF.js (since unpdf 1.9) reads Iterator.prototype as it loads.
+ * Safari before 18.4 and Chrome before 122 have no Iterator: there every
+ * PDF failed with "Iterator is not defined". What all iterators inherit
+ * from is in those browsers too; only its name is missing.
+ */
+export function ensureIterator() {
+    if ("Iterator" in globalThis) return
+    const iterator = () => {}
+    iterator.prototype = Object.getPrototypeOf(
+        Object.getPrototypeOf([][Symbol.iterator]()),
+    )
+    Object.assign(globalThis, { Iterator: iterator })
+}
+
+/**
  * Extract text content from a PDF file
  * Uses unpdf library for client-side extraction
  */
 export async function extractPdfText(file: File): Promise<string> {
+    ensureIterator()
     const buffer = await file.arrayBuffer()
     // Pass raw bytes so unpdf destroys the PDF document when it is done
     const { text } = await extractText(new Uint8Array(buffer), {
