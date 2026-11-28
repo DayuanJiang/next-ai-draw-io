@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { SINGLE_BOX_XML } from "./fixtures/diagrams"
 import {
     expect,
@@ -12,6 +13,29 @@ const ONE_PIXEL_PNG = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
     "base64",
 )
+
+// A PNG of noise, 880 x 680: 1.8 MB of data however it is written. Under
+// the app's own 2 MB a file, over what GPT-6 Luna on Bedrock takes.
+async function noisePng(page: Page) {
+    const noise = Buffer.from(
+        await page.evaluate(() => {
+            const canvas = document.createElement("canvas")
+            canvas.width = 880
+            canvas.height = 680
+            const context = canvas.getContext("2d")
+            if (!context) throw new Error("no canvas")
+            const pixels = context.createImageData(880, 680)
+            for (let i = 0; i < pixels.data.length; i++) {
+                pixels.data[i] = i % 4 === 3 ? 255 : Math.random() * 256
+            }
+            context.putImageData(pixels, 0, 0)
+            return canvas.toDataURL("image/png").split(",")[1]
+        }),
+        "base64",
+    )
+    expect(noise.length).toBeGreaterThan(1_750_000)
+    return noise
+}
 
 test.describe("File Upload", () => {
     test("upload button opens file picker", async ({ page }) => {
@@ -114,25 +138,7 @@ test.describe("File Upload", () => {
             },
         })
 
-        // Noise of 880 x 680 is 1.8 MB of data as any PNG: under the
-        // app's own 2 MB a file, over what the model takes
-        const noise = Buffer.from(
-            await page.evaluate(() => {
-                const canvas = document.createElement("canvas")
-                canvas.width = 880
-                canvas.height = 680
-                const context = canvas.getContext("2d")
-                if (!context) throw new Error("no canvas")
-                const pixels = context.createImageData(880, 680)
-                for (let i = 0; i < pixels.data.length; i++) {
-                    pixels.data[i] = i % 4 === 3 ? 255 : Math.random() * 256
-                }
-                context.putImageData(pixels, 0, 0)
-                return canvas.toDataURL("image/png").split(",")[1]
-            }),
-            "base64",
-        )
-        expect(noise.length).toBeGreaterThan(1_750_000)
+        const noise = await noisePng(page)
         await getAttachmentInput(page).setInputFiles([
             { name: "noise.png", mimeType: "image/png", buffer: noise },
             { name: "dot.png", mimeType: "image/png", buffer: ONE_PIXEL_PNG },
@@ -144,18 +150,72 @@ test.describe("File Upload", () => {
             timeout: 15000,
         })
 
-        const [large, small] = request.messages
-            .at(-1)
-            .parts.filter((p: any) => p.type === "file")
         const bytes = (part: any) =>
             Buffer.from(part.url.split(",")[1], "base64")
+        const pictures = () =>
+            request.messages
+                .findLast((m: any) => m.role === "user")
+                .parts.filter((p: any) => p.type === "file")
         // The large picture went out a little smaller (a PNG's width is
         // at byte 16), the small one as it was
+        const [large, small] = pictures()
         expect(large.mediaType).toBe("image/png")
         const width = bytes(large).readUInt32BE(16)
         expect(width).toBeLessThan(860)
         expect(width).toBeGreaterThan(700)
         expect(bytes(small).equals(ONE_PIXEL_PNG)).toBe(true)
+
+        // The message sent again goes out the same way
+        request = null
+        await page.getByRole("button", { name: "Regenerate response" }).click()
+        await expect.poll(() => request).not.toBeNull()
+        expect(bytes(pictures()[0]).readUInt32BE(16)).toBe(width)
+    })
+
+    test("sends a picture as it is to a model without that limit", async ({
+        page,
+    }) => {
+        let request: any = null
+        await page.route("**/api/chat", async (route) => {
+            request = route.request().postDataJSON()
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse("Here it is."),
+            })
+        })
+        // The same model on OpenAI's own API
+        await openApp(page, {
+            config: {
+                version: 1,
+                selectedModelId: "m1",
+                providers: [
+                    {
+                        id: "p1",
+                        provider: "openai",
+                        apiKey: "k1",
+                        models: [{ id: "m1", modelId: "gpt-6-luna" }],
+                    },
+                ],
+            },
+        })
+        const noise = await noisePng(page)
+        await getAttachmentInput(page).setInputFiles({
+            name: "noise.png",
+            mimeType: "image/png",
+            buffer: noise,
+        })
+        await expect(page.getByAltText("noise.png")).toBeVisible()
+        await sendMessage(page, "Draw this")
+        await expect(page.getByText("Here it is.")).toBeVisible({
+            timeout: 15000,
+        })
+        const file = request.messages
+            .at(-1)
+            .parts.find((p: any) => p.type === "file")
+        expect(
+            Buffer.from(file.url.split(",")[1], "base64").equals(noise),
+        ).toBe(true)
     })
 
     test("shows error for oversized file", async ({ page }) => {

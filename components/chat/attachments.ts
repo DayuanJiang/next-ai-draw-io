@@ -164,6 +164,14 @@ function drawn(bitmap: ImageBitmap, scale: number) {
     return { canvas, size: pngSizeEstimate(data, canvas.width) }
 }
 
+const pngOf = (canvas: HTMLCanvasElement) =>
+    new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error("no PNG"))),
+            "image/png",
+        ),
+    )
+
 /**
  * The size no picture may be over for all of them to fit the budget together:
  * the small ones keep their size, the large ones share what is left
@@ -218,10 +226,13 @@ export async function fitImages(
                 sent.push(file)
                 continue
             }
-            const png = await new Promise<Blob | null>((resolve) =>
-                drawings[i].canvas.toBlob(resolve, "image/png"),
-            )
-            if (!png) throw new Error("no PNG")
+            let png = await pngOf(drawings[i].canvas)
+            // The server takes no file over the size limit
+            while (png.size > MAX_IMAGE_SIZE) {
+                scales[i] *= 0.9
+                drawings[i] = drawn(bitmaps[i], scales[i])
+                png = await pngOf(drawings[i].canvas)
+            }
             sent.push(
                 new File([png], `${file.name.replace(/\.[^.]+$/, "")}.png`, {
                     type: "image/png",
@@ -234,6 +245,56 @@ export async function fitImages(
     } finally {
         for (const bitmap of bitmaps) bitmap.close()
     }
+}
+
+// What fitImageParts made of a message's parts: a turn asks the model
+// several times, with the same message each time
+const fittedParts = new WeakMap<any[], { budget: number; parts: any[] }>()
+
+/**
+ * A message's parts with its pictures fitted to the budget (fitImages).
+ * Done on the request: a message sent again with another model
+ * (regenerate, edit, retry) is fitted to that model.
+ */
+export async function fitImageParts(
+    parts: any[],
+    budget: number,
+): Promise<any[]> {
+    const known = fittedParts.get(parts)
+    if (known?.budget === budget) return known.parts
+    const pictures = parts.filter(
+        (part) =>
+            part.type === "file" &&
+            SUPPORTED_IMAGE_TYPES.includes(part.mediaType) &&
+            String(part.url).startsWith("data:"),
+    )
+    const files = pictures.map((part, i) => {
+        const bytes = Uint8Array.from(atob(part.url.split(",")[1]), (c) =>
+            c.charCodeAt(0),
+        )
+        return new File([bytes], `picture-${i}`, { type: part.mediaType })
+    })
+    const fitted = await fitImages(files, budget)
+    const urls = await Promise.all(
+        fitted.map((file, i) =>
+            file === files[i]
+                ? pictures[i].url
+                : new Promise<string>((resolve, reject) => {
+                      const reader = new FileReader()
+                      reader.onload = () => resolve(reader.result as string)
+                      reader.onerror = () => reject(reader.error)
+                      reader.readAsDataURL(file)
+                  }),
+        ),
+    )
+    const result = parts.map((part) => {
+        const i = pictures.indexOf(part)
+        return i < 0 || fitted[i] === files[i]
+            ? part
+            : { ...part, url: urls[i], mediaType: fitted[i].type }
+    })
+    fittedParts.set(parts, { budget, parts: result })
+    return result
 }
 
 /**

@@ -82,7 +82,7 @@ import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 import { useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
 import { useVersionsStore } from "@/stores/versions-store"
-import { fitImages, imageBudgetOf } from "./attachments"
+import { fitImageParts, imageBudgetOf } from "./attachments"
 import { APPENDED_FILE_SECTIONS_PATTERN } from "./message-text"
 import { useDiagramStreaming } from "./use-diagram-streaming"
 import { useVersions } from "./use-versions"
@@ -562,21 +562,38 @@ export function ChatEngineProvider({
         () =>
             new DefaultChatTransport<ChatUIMessage>({
                 api: getApiEndpoint("/api/chat"),
-                prepareSendMessagesRequest: ({
+                prepareSendMessagesRequest: async ({
                     id,
                     messages,
                     body,
                     trigger,
                     messageId,
-                }) => ({
-                    body: {
-                        ...body,
-                        id,
-                        messages: withoutOldImagesAndThinking(messages),
-                        trigger,
-                        messageId,
-                    },
-                }),
+                }) => {
+                    const sent = withoutOldImagesAndThinking(messages)
+                    // Some models take only so much picture data in one
+                    // request. The pictures are in the newest user message,
+                    // also when it is sent again (regenerate, edit, retry).
+                    const budget = imageBudgetOf(getSelectedAIConfig().aiModel)
+                    const newest = sent.map((m) => m.role).lastIndexOf("user")
+                    if (budget && newest >= 0) {
+                        sent[newest] = {
+                            ...sent[newest],
+                            parts: await fitImageParts(
+                                sent[newest].parts,
+                                budget,
+                            ),
+                        }
+                    }
+                    return {
+                        body: {
+                            ...body,
+                            id,
+                            messages: sent,
+                            trigger,
+                            messageId,
+                        },
+                    }
+                },
             }),
         [],
     )
@@ -1556,14 +1573,7 @@ export function ChatEngineProvider({
         imageParts?: any[],
     ): Promise<string> => {
         let userText = baseText
-        // Some models take only so much picture data in one request
-        const budget = imageBudgetOf(
-            modelConfig.models.find((m) => m.id === modelConfig.selectedModelId)
-                ?.modelId,
-        )
-        const sendFiles =
-            imageParts && budget ? await fitImages(files, budget) : files
-        for (const file of sendFiles) {
+        for (const file of files) {
             if (isPdfFile(file)) {
                 const extracted = pdfData.get(file)
                 if (extracted?.text) {
