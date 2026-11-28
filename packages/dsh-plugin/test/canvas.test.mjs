@@ -253,11 +253,23 @@ test("opens and focuses each session's canvas, and disposes only its own tabs", 
     commit("a")
     assert.deepEqual(actions, [])
     assert.equal(canvas("a").props.src, first)
+    assert.equal(canvas("a").props.key, 2)
+    // The preview's feedback link opens a new window.
+    assert.match(
+        canvas("a").props.sandbox,
+        /allow-popups allow-popups-to-escape-sandbox/,
+    )
     canvasA.set({ seq: 18, url: first, reveal: true })
     renderObserver("a")
     assert.deepEqual(actions, [])
     for (const effect of effects.splice(0)) effect()
     assert.deepEqual(actions, ["open a"])
+    // A new start_session result for the same URL loads the frame again.
+    assert.equal(canvas("a").props.src, first)
+    assert.equal(canvas("a").props.key, 18)
+    // The end of the turn keeps the loaded frame.
+    canvasA.set({ seq: 18, url: first, reveal: false })
+    assert.equal(canvas("a").props.key, 18)
     mounted.set("b")
     commit("a")
     commit("b")

@@ -79,10 +79,14 @@ window.__ModuleLoader__.load({
             if (!canEmbed(url))
                 return h("div", { style: emptyStyle }, t("localOnly"))
             return h("iframe", {
+                // Each start_session result has a new seq: load the frame
+                // again. A tab restored while the MCP server was down then
+                // shows the canvas once the agent resumes the session.
+                key: canvas.seq,
                 src: url.href,
                 title: t("title"),
                 sandbox:
-                    "allow-scripts allow-same-origin allow-forms allow-downloads",
+                    "allow-scripts allow-same-origin allow-forms allow-downloads allow-popups allow-popups-to-escape-sandbox",
                 referrerPolicy: "no-referrer",
                 style: { ...panelStyle, display: "block", border: 0 },
             })

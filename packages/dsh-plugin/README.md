@@ -22,10 +22,6 @@ The tools are named `mcp__drawio__<tool>`: `start_session`, `create_new_diagram`
 
 Profiles without the sidebar, such as `tui` and `headless`, print `patch: entry "ui-sidebar-browser" not found` at start; it does no harm. There, open the preview link in your browser.
 
-### Open a saved `.drawio` file
-
-The live tab follows the conversation's MCP canvas. To open a saved `.drawio` diagram directly from DSH's file tree, install the optional [Draw.io file editor](https://github.com/zhang-guo-wen/dsh-drawioedit) in the same profile. Without a file editor, DSH may show the file's XML. The optional editor saves edits back to the opened file.
-
 ## Settings
 
 The plugin runs `npx -y @next-ai-drawio/mcp-server@latest`. To pass more settings such as `DRAWIO_LANG`, override the `mcp-drawio` row in your profile's `cordis.patch.yml`:
