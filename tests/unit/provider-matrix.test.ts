@@ -156,6 +156,7 @@ const MATRIX_PROVIDERS: ProviderName[] = [
     "novita",
     "mimo",
     "atlascloud",
+    "lazu",
     "custom",
 ]
 
@@ -185,6 +186,7 @@ const MATRIX_MODEL_IDS: Record<ProviderName, string> = {
     novita: "minimax/minimax-m3",
     mimo: "mimo-v2.5-pro",
     atlascloud: "qwen/qwen3.5-flash",
+    lazu: "claude-sonnet-5-5",
     custom: "test-model",
 }
 

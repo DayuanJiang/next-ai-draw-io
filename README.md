@@ -38,7 +38,7 @@ Available as a web app, a desktop app for Windows, macOS and Linux, and an MCP s
 
 **Use**
 
--   25 model providers, including an OpenAI-compatible preset for any other URL; enter your own API key in the browser and it stays on your machine
+-   26 model providers, including an OpenAI-compatible preset for any other URL; enter your own API key in the browser and it stays on your machine
 -   Models that reason show their thinking
 -   Dark mode; the interface is available in English, Simplified Chinese, Traditional Chinese and Japanese
 
@@ -156,7 +156,7 @@ If you keep changing a diagram after the AI has drawn it, use Next AI Draw.io. Y
 
 ### Compared with draw.io's built-in AI
 
-draw.io has its own Generate tool (Arrange > Insert > Generate). It runs inside draw.io on a free hosted model or your own API key, and it can change a diagram, page or selection that you attach to its chat. Next AI Draw.io sends the current canvas, including your hand edits, with every message, turns every AI change into a version you can compare or restore, and works with 25 providers, including local models through Ollama, on the demo site, in the desktop app or on your own server.
+draw.io has its own Generate tool (Arrange > Insert > Generate). It runs inside draw.io on a free hosted model or your own API key, and it can change a diagram, page or selection that you attach to its chat. Next AI Draw.io sends the current canvas, including your hand edits, with every message, turns every AI change into a version you can compare or restore, and works with 26 providers, including local models through Ollama, on the demo site, in the desktop app or on your own server.
 
 ## Self-host
 
@@ -184,7 +184,7 @@ Open [http://localhost:6002](http://localhost:6002).
 
 ### Models and providers
 
-25 providers are supported: AWS Bedrock (default), OpenAI, Anthropic, Google AI, Google Vertex AI, Azure OpenAI, Ollama, OpenRouter, AIHubMix, DeepSeek, SiliconFlow, SGLang, Vercel AI Gateway, Tencent EdgeOne, ByteDance Doubao, ModelScope, Zhipu GLM, Qwen, Qiniu, Kimi, MiniMax, Novita, Xiaomi MiMo, Atlas Cloud, and an OpenAI-compatible preset for any other URL (vLLM, LM Studio, a gateway). The environment variables and notes for each are in the [provider configuration guide](./docs/en/ai-providers.md).
+26 providers are supported: AWS Bedrock (default), OpenAI, Anthropic, Google AI, Google Vertex AI, Azure OpenAI, Ollama, OpenRouter, AIHubMix, DeepSeek, SiliconFlow, SGLang, Vercel AI Gateway, Tencent EdgeOne, ByteDance Doubao, ModelScope, Zhipu GLM, Qwen, Qiniu, Kimi, MiniMax, Novita, Xiaomi MiMo, Atlas Cloud, Lazu, and an OpenAI-compatible preset for any other URL (vLLM, LM Studio, a gateway). The environment variables and notes for each are in the [provider configuration guide](./docs/en/ai-providers.md).
 
 **Which model**: the task is to produce long text in a strict format (draw.io XML), so pick a capable model; small models tend to produce broken diagrams.
 

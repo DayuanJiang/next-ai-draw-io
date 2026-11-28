@@ -671,6 +671,7 @@ describe("credEnvNames", () => {
             novita: "NOVITA",
             atlascloud: "ATLASCLOUD",
             qiniu: "QINIU",
+            lazu: "LAZU",
             gateway: "AI_GATEWAY",
             bedrock: null,
             vertexai: null,

@@ -235,6 +235,22 @@ describe("Atlas Cloud provider", () => {
             }),
         )
     })
+
+    it("uses Lazu default endpoint with LAZU_API_KEY", () => {
+        vi.stubEnv("LAZU_API_KEY", "server-lazu-key")
+
+        getAIModel({
+            provider: "lazu",
+            modelId: "claude-sonnet-5-5",
+        })
+
+        expect(createCompatibleMock).toHaveBeenCalledWith({
+            name: "lazu",
+            apiKey: "server-lazu-key",
+            baseURL: "https://api.lazu.ai/v1",
+            includeUsage: true,
+        })
+    })
 })
 
 describe("Kimi provider uses createDeepSeek for reasoning_content support", () => {
