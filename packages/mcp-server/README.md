@@ -93,17 +93,17 @@ Restart the client, then ask, for example, "Read this repo and draw its architec
 - **Pages and export**: multi-page diagrams; save as `.drawio`, `.png`, `.svg` or `.drawio.svg`. Images get a 20 px margin and a white background (`transparent: true` for none); an SVG keeps its light colors in a viewer's dark mode.
 - **Offline**: the draw.io editor ships inside the package.
 
-## Choosing a draw.io MCP server
+## Why Next AI Draw.io is better than draw.io's official MCP server
 
-Several MCP servers draw draw.io diagrams. As of October 2026 they differ like this:
+If you keep changing a diagram after the AI has drawn it, use Next AI Draw.io. You and the AI share one canvas, so the AI sees what you select and what you change.
 
-| Server | How you see and change the diagram | A good fit when |
+| What you do | draw.io's official MCP server and plugin | Next AI Draw.io |
 |---|---|---|
-| This server, `@next-ai-drawio/mcp-server` | A live draw.io canvas in your browser. The AI reads it back, including your hand edits and selection; its changes are outlined, Ctrl+Z takes them back, and earlier versions can be restored | You and the AI take turns on the same diagram |
-| draw.io's official [`@drawio/mcp`](https://github.com/jgraph/drawio-mcp) | Opens each diagram from XML, CSV or Mermaid in the draw.io editor in a new tab; no tool reads it back | You want the diagram in the full draw.io editor and edit it yourself from there |
-| draw.io's hosted MCP app, `https://mcp.draw.io/mcp` | Shows the diagram inside the chat in Claude.ai, ChatGPT, VS Code or Cursor, with nothing to install; the diagram is sent to draw.io's server | You work in a chat app and want to see the diagram in the conversation |
-| draw.io's plugin for Claude Code, Codex CLI and Copilot CLI | A skill that writes `.drawio` files; PNG, SVG and PDF export needs draw.io Desktop | You want diagram files in your repository without an MCP server |
-| [`lgazo/drawio-mcp-server`](https://github.com/lgazo/drawio-mcp-server) | A draw.io editor on localhost, or your own draw.io through a browser extension; tools create, read, update and delete single shapes, layers and pages | You want fine-grained tools, several documents at once, or Mermaid import |
+| Select two shapes and say "make these two red" | The AI does not know which two | **The AI changes those two** |
+| Change the diagram by hand | The AI sees it only after you save it to a file | **The AI reads the canvas before it edits** |
+| Want to know what the AI changed | Nothing on the diagram shows it | **The change is outlined** |
+| Want to take the AI's change back | Ask the AI to change it again | **Press Ctrl+Z** |
+| Want to watch the AI draw | It opens when it is done | **You watch it being drawn** |
 
 ## Saved diagrams
 

@@ -142,6 +142,18 @@ claude mcp add --scope user drawio -- npx @next-ai-drawio/mcp-server@latest
 
 Codex、VS Code、Cursor 等客户端的配置、全部工具，以及和其他 draw.io MCP 服务器的对比，见 [MCP 服务器页面](https://next-ai-drawio.jiang.jp/zh/mcp)。
 
+### 为什么 Next AI Draw.io 比 draw.io 官方的 MCP 服务器更好
+
+AI 画完图你还要接着改，就用 Next AI Draw.io。你和 AI 用同一块画布，你选中什么、改了什么，AI 都看得到。
+
+| 你做的事 | draw.io 官方的 MCP 服务器和插件 | Next AI Draw.io |
+|---|---|---|
+| 选中两个图形，说“把这两个改成红色” | AI 不知道是哪两个 | **AI 直接改这两个** |
+| 自己动手改了图 | 先保存成文件，AI 才看得到 | **AI 修改前先读画布** |
+| 想知道 AI 改了哪里 | 图上没有标记 | **改动被框出来** |
+| 想撤回 AI 的修改 | 让 AI 重新改一遍 | **按 Ctrl+Z** |
+| 想看着 AI 画 | 画完才打开 | **边画边看** |
+
 ### 和 draw.io 自带的 AI 有什么不同
 
 draw.io 自带 Generate 工具（Arrange > Insert > Generate）。它在 draw.io 里运行，可以用免费的托管模型，也可以填自己的 API key；把图、页面或选中的图形附加到对话里，它就能修改。Next AI Draw.io 每条消息都会带上当前画布，包括你手动做的修改；AI 的每次修改都是一个可以对比或恢复的版本；支持 25 家模型服务商，包括通过 Ollama 使用本地模型，在演示站、桌面应用和自己的服务器上都能用。
