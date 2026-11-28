@@ -104,6 +104,19 @@ describe("classifyLLMError", () => {
         })
     })
 
+    it("names the pictures when Bedrock refuses an OpenAI model's request", () => {
+        // GPT-6 Luna, for more picture data than it takes: a plain 400
+        // that names no cause
+        expect(
+            classifyLLMError(
+                apiError(
+                    400,
+                    "The model returned the following errors: The provided request is not valid",
+                ),
+            ).code,
+        ).toBe("images_too_large")
+    })
+
     it("does not call a 403 an invalid key", () => {
         expect(classifyLLMError(apiError(403, "Forbidden")).code).toBe(
             "forbidden",

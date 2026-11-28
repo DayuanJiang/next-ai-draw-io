@@ -24,6 +24,8 @@ type LLMErrorCode =
     | "images_unsupported"
     // The model reads images, but not this one
     | "image_unreadable"
+    // More picture data in one request than the model takes
+    | "images_too_large"
     | "tools_unsupported"
     | "output_truncated"
     | "provider_unavailable"
@@ -55,6 +57,14 @@ const SPECIFIC_TEXTS: Array<[RegExp, LLMErrorCode]> = [
         // The image format could not be determined"
         /image processing failed|image format could not be determined/i,
         "image_unreadable",
+    ],
+    [
+        // Bedrock, for an OpenAI model (GPT-6 Luna) whose request holds more
+        // picture data than it takes: "The model returned the following
+        // errors: The provided request is not valid". It names no cause; in
+        // the demo's log every request it refused had pictures.
+        /The provided request is not valid/i,
+        "images_too_large",
     ],
     [
         // OpenRouter: "No endpoints found that support image input"

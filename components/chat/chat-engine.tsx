@@ -36,7 +36,7 @@ import {
 import { useValidateDiagram } from "@/hooks/use-validate-diagram"
 import { getApiEndpoint } from "@/lib/base-path"
 import { findCachedResponse } from "@/lib/cached-responses"
-import { withoutOldImagesAndThinking } from "@/lib/chat-helpers"
+import { imageBudgetOf, withoutOldImagesAndThinking } from "@/lib/chat-helpers"
 import {
     type ChatToolName,
     type ChatUIMessage,
@@ -63,6 +63,7 @@ import { isLookupTool } from "@/lib/lookup-tools"
 import { isPdfFile, isTextFile } from "@/lib/pdf-utils"
 import type { SessionMetadata, StoredMessage } from "@/lib/session-storage"
 import { sanitizeMessages } from "@/lib/session-storage"
+import { siteConfig } from "@/lib/site-config"
 import { STORAGE_KEYS } from "@/lib/storage"
 import type { UrlData } from "@/lib/url-utils"
 import { type FileData, useFileProcessor } from "@/lib/use-file-processor"
@@ -82,6 +83,7 @@ import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 import { useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
 import { useVersionsStore } from "@/stores/versions-store"
+import { fitImageParts } from "./attachments"
 import { APPENDED_FILE_SECTIONS_PATTERN } from "./message-text"
 import { useDiagramStreaming } from "./use-diagram-streaming"
 import { useVersions } from "./use-versions"
@@ -487,6 +489,7 @@ export function ChatEngineProvider({
     const requestProviderIdRef = useRef<string | undefined>(undefined)
     // The model of this turn's requests, for error reports
     const requestModelRef = useRef<string | undefined>(undefined)
+    const requestModelIdRef = useRef<string | undefined>(undefined)
     // Whether that model has a thinking switch, and it is on
     const requestThinkingOnRef = useRef(false)
     // Presses of Stop: a check that began before one still knows of it after
@@ -561,21 +564,44 @@ export function ChatEngineProvider({
         () =>
             new DefaultChatTransport<ChatUIMessage>({
                 api: getApiEndpoint("/api/chat"),
-                prepareSendMessagesRequest: ({
+                prepareSendMessagesRequest: async ({
                     id,
                     messages,
                     body,
                     trigger,
                     messageId,
-                }) => ({
-                    body: {
-                        ...body,
-                        id,
-                        messages: withoutOldImagesAndThinking(messages),
-                        trigger,
-                        messageId,
-                    },
-                }),
+                }) => {
+                    const sent = withoutOldImagesAndThinking(messages)
+                    // Some models take only so much picture data in one
+                    // request. The pictures are in the newest user message,
+                    // also when it is sent again (regenerate, edit, retry).
+                    // The model is the one the turn's headers name; the
+                    // server's own model has no id here, the server says
+                    // what it takes.
+                    const modelId = requestModelIdRef.current
+                    const budget = modelId
+                        ? imageBudgetOf(modelId)
+                        : (await siteConfig()).imageBudget
+                    const newest = sent.map((m) => m.role).lastIndexOf("user")
+                    if (budget && newest >= 0) {
+                        sent[newest] = {
+                            ...sent[newest],
+                            parts: await fitImageParts(
+                                sent[newest].parts,
+                                budget,
+                            ),
+                        }
+                    }
+                    return {
+                        body: {
+                            ...body,
+                            id,
+                            messages: sent,
+                            trigger,
+                            messageId,
+                        },
+                    }
+                },
             }),
         [],
     )
@@ -1635,6 +1661,7 @@ export function ChatEngineProvider({
         requestModelRef.current = config.aiProvider
             ? `${config.aiProvider}/${config.aiModel}`
             : config.selectedModelId || "server default"
+        requestModelIdRef.current = config.aiModel
         requestThinkingOnRef.current = config.thinkingEnabled === "true"
 
         const selected = selectedCells.map(({ id, label }) => ({ id, label }))

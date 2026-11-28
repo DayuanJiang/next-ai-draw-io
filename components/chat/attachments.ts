@@ -91,6 +91,193 @@ export async function shrinkImage(file: File): Promise<File> {
 }
 
 /**
+ * About the bytes a picture (canvas pixels, four bytes each) comes to as a
+ * PNG written fast: every byte less the one above it, a run of equal bytes
+ * for next to nothing, the other bytes by how rare their value is
+ */
+export function pngSizeEstimate(
+    rgba: Uint8ClampedArray,
+    width: number,
+): number {
+    const row = width * 4
+    // How often each value stands alone, and the runs in pieces of 258
+    const counts = new Float64Array(256)
+    let runs = 0
+    let last = -1
+    let length = 0
+    const endRun = () => {
+        if (length >= 4) {
+            counts[last]++
+            runs += Math.ceil((length - 1) / 258)
+        } else if (length > 0) {
+            counts[last] += length
+        }
+    }
+    for (let i = 0; i < rgba.length; i++) {
+        // Not the transparency
+        if ((i & 3) === 3) continue
+        const value = (rgba[i] - (i >= row ? rgba[i - row] : 0)) & 255
+        if (value === last) {
+            length++
+        } else {
+            endRun()
+            last = value
+            length = 1
+        }
+    }
+    endRun()
+    const alone = counts.reduce((sum, n) => sum + n, 0)
+    let bits = runs * 14
+    for (const n of counts) if (n > 0) bits -= n * Math.log2(n / alone)
+    return bits / 8
+}
+
+// The picture drawn at a scale, with what it comes to
+function drawn(bitmap: ImageBitmap, scale: number) {
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("no canvas")
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
+    return { canvas, size: pngSizeEstimate(data, canvas.width) }
+}
+
+const pngOf = (canvas: HTMLCanvasElement) =>
+    new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error("no PNG"))),
+            "image/png",
+        ),
+    )
+
+/**
+ * The size no picture may be over for all of them to fit the budget together:
+ * the small ones keep their size, the large ones share what is left
+ */
+export function shareOf(sizes: number[], budget: number): number {
+    const sorted = [...sizes].sort((a, b) => a - b)
+    let left = budget
+    for (const [i, size] of sorted.entries()) {
+        const share = left / (sorted.length - i)
+        if (size > share) return share
+        left -= size
+    }
+    return Number.POSITIVE_INFINITY
+}
+
+/**
+ * The files with their largest pictures scaled down until all the pictures
+ * come to no more than budget bytes (by pngSizeEstimate): a small diagram
+ * next to a photo stays as it is. A scaled down picture becomes a PNG.
+ * Pictures that fit are returned as they are, and so is everything when a
+ * picture cannot be read here: the provider then says what is wrong with it.
+ */
+export async function fitImages(
+    files: File[],
+    budget: number,
+): Promise<File[]> {
+    const pictures = files.filter((f) => SUPPORTED_IMAGE_TYPES.includes(f.type))
+    if (pictures.length === 0) return files
+    const bitmaps: ImageBitmap[] = []
+    try {
+        for (const file of pictures) bitmaps.push(await createImageBitmap(file))
+        const scales = bitmaps.map(() => 1)
+        const drawings = bitmaps.map((bitmap) => drawn(bitmap, 1))
+        const total = () => drawings.reduce((sum, d) => sum + d.size, 0)
+        // The size follows the number of pixels closely: the first round
+        // fits as a rule
+        for (let round = 0; round < 6 && total() > budget; round++) {
+            const share = shareOf(
+                drawings.map((d) => d.size),
+                budget,
+            )
+            for (const [i, { size }] of drawings.entries()) {
+                if (size <= share) continue
+                scales[i] *= Math.sqrt(share / size) * 0.95
+                drawings[i] = drawn(bitmaps[i], scales[i])
+            }
+        }
+        const sent: File[] = []
+        for (const file of files) {
+            const i = pictures.indexOf(file)
+            if (i < 0 || scales[i] === 1) {
+                sent.push(file)
+                continue
+            }
+            let png = await pngOf(drawings[i].canvas)
+            // The server takes no file over the size limit
+            while (png.size > MAX_IMAGE_SIZE) {
+                scales[i] *= 0.9
+                drawings[i] = drawn(bitmaps[i], scales[i])
+                png = await pngOf(drawings[i].canvas)
+            }
+            sent.push(
+                new File([png], `${file.name.replace(/\.[^.]+$/, "")}.png`, {
+                    type: "image/png",
+                }),
+            )
+        }
+        return sent
+    } catch {
+        return files
+    } finally {
+        for (const bitmap of bitmaps) bitmap.close()
+    }
+}
+
+// What fitImageParts made of a message's parts: a turn asks the model
+// several times, with the same message each time
+const fittedParts = new WeakMap<any[], { budget: number; parts: any[] }>()
+
+/**
+ * A message's parts with its pictures fitted to the budget (fitImages).
+ * Done on the request: a message sent again with another model
+ * (regenerate, edit, retry) is fitted to that model.
+ */
+export async function fitImageParts(
+    parts: any[],
+    budget: number,
+): Promise<any[]> {
+    const known = fittedParts.get(parts)
+    if (known?.budget === budget) return known.parts
+    const pictures = parts.filter(
+        (part) =>
+            part.type === "file" &&
+            SUPPORTED_IMAGE_TYPES.includes(part.mediaType) &&
+            String(part.url).startsWith("data:"),
+    )
+    const files = pictures.map((part, i) => {
+        const bytes = Uint8Array.from(atob(part.url.split(",")[1]), (c) =>
+            c.charCodeAt(0),
+        )
+        return new File([bytes], `picture-${i}`, { type: part.mediaType })
+    })
+    const fitted = await fitImages(files, budget)
+    const urls = await Promise.all(
+        fitted.map((file, i) =>
+            file === files[i]
+                ? pictures[i].url
+                : new Promise<string>((resolve, reject) => {
+                      const reader = new FileReader()
+                      reader.onload = () => resolve(reader.result as string)
+                      reader.onerror = () => reject(reader.error)
+                      reader.readAsDataURL(file)
+                  }),
+        ),
+    )
+    const result = parts.map((part) => {
+        const i = pictures.indexOf(part)
+        return i < 0 || fitted[i] === files[i]
+            ? part
+            : { ...part, url: urls[i], mediaType: fitted[i].type }
+    })
+    fittedParts.set(parts, { budget, parts: result })
+    return result
+}
+
+/**
  * The image format each picture's content is in, read from its first bytes
  * (undefined: none the models read). The type the browser reports only
  * repeats the file's name.

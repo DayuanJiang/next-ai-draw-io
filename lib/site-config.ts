@@ -6,14 +6,22 @@ export interface SiteConfig {
     gaId?: string
     /** The server keeps a usage log of the editor's actions */
     usageLog?: boolean
+    /** What a message's pictures may come to for the server's own model */
+    imageBudget?: number
 }
 
 let config: Promise<SiteConfig> | undefined
 
-/** Asked once per page load; empty when the server cannot be reached */
+/**
+ * Asked once per page load; empty when the server cannot be reached, and
+ * asked again the next time
+ */
 export function siteConfig(): Promise<SiteConfig> {
     config ??= fetch(getApiEndpoint("/api/config"))
         .then((res) => res.json())
-        .catch(() => ({}))
+        .catch(() => {
+            config = undefined
+            return {}
+        })
     return config
 }
