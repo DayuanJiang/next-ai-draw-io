@@ -38,8 +38,8 @@ export type McpTexts = {
     compareHeading: string
     compareIntro: string
     compareColumns: [string, string, string]
-    /** In the order of COMPARE_LINKS on the page */
-    compareRows: { server: string; how: string; fit: string }[]
+    /** What the reader does, with the official tools, with this server */
+    compareRows: [string, string, string][]
     toolsHeading: string
     toolsColumns: [string, string]
     /** In the order of TOOLS on the page */
@@ -127,40 +127,41 @@ Then tell me how to reload so its tools show up.`,
                 text: "Save `.drawio`, `.png`, `.svg` or `.drawio.svg`. The draw.io editor ships inside the package and works offline, and every diagram is saved for a later conversation.",
             },
         ],
-        compareHeading: "Choosing a draw.io MCP server",
+        compareHeading:
+            "Why Next AI Draw.io is better than draw.io's official MCP server",
         compareIntro:
-            "Several MCP servers draw draw.io diagrams. As of October 2026 they differ like this:",
+            "If you keep changing a diagram after the AI has drawn it, use Next AI Draw.io. You and the AI share one canvas, so the AI sees what you select and what you change.",
         compareColumns: [
-            "Server",
-            "How you see and change the diagram",
-            "A good fit when",
+            "What you do",
+            "draw.io's official MCP server and plugin",
+            "Next AI Draw.io",
         ],
         compareRows: [
-            {
-                server: "This server, `@next-ai-drawio/mcp-server`",
-                how: "A live draw.io canvas in your browser. The AI reads it back, including your hand edits and selection; its changes are outlined, Ctrl+Z takes them back, and earlier versions can be restored",
-                fit: "You and the AI take turns on the same diagram",
-            },
-            {
-                server: "draw.io's official `@drawio/mcp`",
-                how: "Opens each diagram from XML, CSV or Mermaid in the draw.io editor in a new tab; no tool reads it back",
-                fit: "You want the diagram in the full draw.io editor and edit it yourself from there",
-            },
-            {
-                server: "draw.io's hosted MCP app, `https://mcp.draw.io/mcp`",
-                how: "Shows the diagram inside the chat in Claude.ai, ChatGPT, VS Code or Cursor, with nothing to install; the diagram is sent to draw.io's server",
-                fit: "You work in a chat app and want to see the diagram in the conversation",
-            },
-            {
-                server: "draw.io's plugin for Claude Code, Codex CLI and Copilot CLI",
-                how: "A skill that writes `.drawio` files; PNG, SVG and PDF export needs draw.io Desktop",
-                fit: "You want diagram files in your repository without an MCP server",
-            },
-            {
-                server: "`lgazo/drawio-mcp-server`",
-                how: "A draw.io editor on localhost, or your own draw.io through a browser extension; tools create, read, update and delete single shapes, layers and pages",
-                fit: "You want fine-grained tools, several documents at once, or Mermaid import",
-            },
+            [
+                'Select two shapes and say "make these two red"',
+                "The AI does not know which two",
+                "The AI changes those two",
+            ],
+            [
+                "Change the diagram by hand",
+                "The AI sees it only after you save it to a file",
+                "The AI reads the canvas before it edits",
+            ],
+            [
+                "Want to know what the AI changed",
+                "Nothing on the diagram shows it",
+                "The change is outlined",
+            ],
+            [
+                "Want to take the AI's change back",
+                "Ask the AI to change it again",
+                "Press Ctrl+Z",
+            ],
+            [
+                "Want to watch the AI draw",
+                "It opens when it is done",
+                "You watch it being drawn",
+            ],
         ],
         toolsHeading: "Tools",
         toolsColumns: ["Tool", "What it does"],
@@ -256,36 +257,29 @@ Then tell me how to reload so its tools show up.`,
                 text: "可以保存为 `.drawio`、`.png`、`.svg` 或 `.drawio.svg`。draw.io 编辑器打包在里面，离线也能用；每张图都会保存，之后的对话可以接着画。",
             },
         ],
-        compareHeading: "如何选择 draw.io MCP 服务器",
+        compareHeading:
+            "为什么 Next AI Draw.io 比 draw.io 官方的 MCP 服务器更好",
         compareIntro:
-            "能画 draw.io 图表的 MCP 服务器有好几个。截至 2026 年 10 月，它们的区别如下：",
-        compareColumns: ["服务器", "如何查看和修改图表", "适合的情况"],
+            "AI 画完图您还要接着改，就用 Next AI Draw.io。您和 AI 用同一块画布，您选中什么、改了什么，AI 都看得到。",
+        compareColumns: [
+            "您做的事",
+            "draw.io 官方的 MCP 服务器和插件",
+            "Next AI Draw.io",
+        ],
         compareRows: [
-            {
-                server: "本服务器 `@next-ai-drawio/mcp-server`",
-                how: "浏览器里一块实时的 draw.io 画布。AI 能读回画布，包括您的手动修改和选中的图形；它的修改会被框出来，Ctrl+Z 可以撤回，也能恢复之前的版本",
-                fit: "您和 AI 轮流修改同一张图",
-            },
-            {
-                server: "draw.io 官方的 `@drawio/mcp`",
-                how: "把用 XML、CSV 或 Mermaid 生成的图在新标签页的 draw.io 编辑器里打开；没有读回图表的工具",
-                fit: "您想在完整的 draw.io 编辑器里自己继续编辑",
-            },
-            {
-                server: "draw.io 托管的 MCP 应用 `https://mcp.draw.io/mcp`",
-                how: "在 Claude.ai、ChatGPT、VS Code 或 Cursor 的对话里直接显示图表，无需安装；图表会发送到 draw.io 的服务器",
-                fit: "您在聊天应用里工作，想在对话中看到图",
-            },
-            {
-                server: "draw.io 为 Claude Code、Codex CLI 和 Copilot CLI 做的插件",
-                how: "一个写 `.drawio` 文件的技能；导出 PNG、SVG 和 PDF 需要 draw.io 桌面版",
-                fit: "您想在仓库里得到图表文件，不想用 MCP 服务器",
-            },
-            {
-                server: "`lgazo/drawio-mcp-server`",
-                how: "localhost 上的 draw.io 编辑器，或通过浏览器扩展连接您自己的 draw.io；工具可以逐个创建、读取、更新和删除图形、图层和页面",
-                fit: "您需要细粒度的工具、同时处理多个文档，或导入 Mermaid",
-            },
+            [
+                "选中两个图形，说“把这两个改成红色”",
+                "AI 不知道是哪两个",
+                "AI 直接改这两个",
+            ],
+            [
+                "自己动手改了图",
+                "先保存成文件，AI 才看得到",
+                "AI 修改前先读画布",
+            ],
+            ["想知道 AI 改了哪里", "图上没有标记", "改动被框出来"],
+            ["想撤回 AI 的修改", "让 AI 重新改一遍", "按 Ctrl+Z"],
+            ["想看着 AI 画", "画完才打开", "边画边看"],
         ],
         toolsHeading: "工具",
         toolsColumns: ["工具", "作用"],
@@ -381,36 +375,41 @@ Then tell me how to reload so its tools show up.`,
                 text: "`.drawio`、`.png`、`.svg`、`.drawio.svg` で保存できます。draw.io エディタを同梱しているのでオフラインでも動き、図は保存されるので後の会話で続きを描けます。",
             },
         ],
-        compareHeading: "draw.io MCP サーバーの選び方",
+        compareHeading:
+            "Next AI Draw.io が draw.io 公式の MCP サーバーより優れている理由",
         compareIntro:
-            "draw.io の図を描ける MCP サーバーはいくつかあります。2026 年 10 月時点での違いは次のとおりです。",
-        compareColumns: ["サーバー", "図の見方と変え方", "向いている場面"],
+            "AI が描いた図をそのあとも直していくなら、Next AI Draw.io を使ってください。あなたと AI が同じキャンバスを使うので、何を選択し、何を変えたかが AI に見えます。",
+        compareColumns: [
+            "あなたの操作",
+            "draw.io 公式の MCP サーバーとプラグイン",
+            "Next AI Draw.io",
+        ],
         compareRows: [
-            {
-                server: "このサーバー `@next-ai-drawio/mcp-server`",
-                how: "ブラウザのライブ draw.io キャンバス。AI は手での編集や選択も含めてキャンバスを読み取れます。AI の変更は枠で示され、Ctrl+Z で取り消せ、以前のバージョンも復元できます",
-                fit: "あなたと AI が交互に同じ図を直していくとき",
-            },
-            {
-                server: "draw.io 公式の `@drawio/mcp`",
-                how: "XML、CSV、Mermaid から作った図を、新しいタブの draw.io エディタで開きます。図を読み取るツールはありません",
-                fit: "完全な draw.io エディタで、自分で編集を続けたいとき",
-            },
-            {
-                server: "draw.io がホストする MCP アプリ `https://mcp.draw.io/mcp`",
-                how: "Claude.ai、ChatGPT、VS Code、Cursor のチャット内に図を表示します。インストール不要で、図は draw.io のサーバーに送られます",
-                fit: "チャットアプリで作業していて、会話の中で図を見たいとき",
-            },
-            {
-                server: "Claude Code、Codex CLI、Copilot CLI 向けの draw.io プラグイン",
-                how: "`.drawio` ファイルを書き出すスキルです。PNG、SVG、PDF への書き出しには draw.io Desktop が必要です",
-                fit: "MCP サーバーなしで、リポジトリに図のファイルを置きたいとき",
-            },
-            {
-                server: "`lgazo/drawio-mcp-server`",
-                how: "localhost の draw.io エディタか、ブラウザ拡張機能経由で自分の draw.io を使います。図形、レイヤー、ページを 1 つずつ作成、読み取り、更新、削除するツールがあります",
-                fit: "細かいツール、複数ドキュメントの同時操作、Mermaid の読み込みが必要なとき",
-            },
+            [
+                "図形を 2 つ選択して「この 2 つを赤にして」と言う",
+                "AI にはどの 2 つか分からない",
+                "AI がその 2 つを変更する",
+            ],
+            [
+                "自分の手で図を直した",
+                "ファイルに保存すると AI に見える",
+                "AI は編集の前にキャンバスを読む",
+            ],
+            [
+                "AI がどこを変えたか知りたい",
+                "図の上に印は付かない",
+                "変更箇所が枠で示される",
+            ],
+            [
+                "AI の変更を取り消したい",
+                "AI にもう一度直してもらう",
+                "Ctrl+Z を押す",
+            ],
+            [
+                "AI が描くところを見たい",
+                "描き終わってから開く",
+                "描いている途中も見える",
+            ],
         ],
         toolsHeading: "ツール",
         toolsColumns: ["ツール", "内容"],
@@ -506,36 +505,29 @@ Then tell me how to reload so its tools show up.`,
                 text: "可以儲存為 `.drawio`、`.png`、`.svg` 或 `.drawio.svg`。draw.io 編輯器打包在裡面，離線也能用；每張圖都會儲存，之後的對話可以接著畫。",
             },
         ],
-        compareHeading: "如何選擇 draw.io MCP 伺服器",
+        compareHeading:
+            "為什麼 Next AI Draw.io 比 draw.io 官方的 MCP 伺服器更好",
         compareIntro:
-            "能畫 draw.io 圖表的 MCP 伺服器有好幾個。截至 2026 年 10 月，它們的差異如下：",
-        compareColumns: ["伺服器", "如何查看和修改圖表", "適合的情況"],
+            "AI 畫完圖您還要接著改，就用 Next AI Draw.io。您和 AI 用同一塊畫布，您選取什麼、改了什麼，AI 都看得到。",
+        compareColumns: [
+            "您做的事",
+            "draw.io 官方的 MCP 伺服器和外掛",
+            "Next AI Draw.io",
+        ],
         compareRows: [
-            {
-                server: "本伺服器 `@next-ai-drawio/mcp-server`",
-                how: "瀏覽器裡一塊即時的 draw.io 畫布。AI 能讀回畫布，包括您的手動修改和選取的圖形；它的修改會被框出來，Ctrl+Z 可以撤回，也能還原之前的版本",
-                fit: "您和 AI 輪流修改同一張圖",
-            },
-            {
-                server: "draw.io 官方的 `@drawio/mcp`",
-                how: "把用 XML、CSV 或 Mermaid 產生的圖在新分頁的 draw.io 編輯器裡開啟；沒有讀回圖表的工具",
-                fit: "您想在完整的 draw.io 編輯器裡自己繼續編輯",
-            },
-            {
-                server: "draw.io 託管的 MCP 應用 `https://mcp.draw.io/mcp`",
-                how: "在 Claude.ai、ChatGPT、VS Code 或 Cursor 的對話裡直接顯示圖表，無需安裝；圖表會傳送到 draw.io 的伺服器",
-                fit: "您在聊天應用裡工作，想在對話中看到圖",
-            },
-            {
-                server: "draw.io 為 Claude Code、Codex CLI 和 Copilot CLI 做的外掛",
-                how: "一個寫 `.drawio` 檔案的技能；匯出 PNG、SVG 和 PDF 需要 draw.io 桌面版",
-                fit: "您想在儲存庫裡得到圖表檔案，不想用 MCP 伺服器",
-            },
-            {
-                server: "`lgazo/drawio-mcp-server`",
-                how: "localhost 上的 draw.io 編輯器，或透過瀏覽器擴充功能連接您自己的 draw.io；工具可以逐一建立、讀取、更新和刪除圖形、圖層和頁面",
-                fit: "您需要細粒度的工具、同時處理多個文件，或匯入 Mermaid",
-            },
+            [
+                "選取兩個圖形，說「把這兩個改成紅色」",
+                "AI 不知道是哪兩個",
+                "AI 直接改這兩個",
+            ],
+            [
+                "自己動手改了圖",
+                "先儲存成檔案，AI 才看得到",
+                "AI 修改前先讀畫布",
+            ],
+            ["想知道 AI 改了哪裡", "圖上沒有標記", "改動被框出來"],
+            ["想撤回 AI 的修改", "讓 AI 重新改一遍", "按 Ctrl+Z"],
+            ["想看著 AI 畫", "畫完才開啟", "邊畫邊看"],
         ],
         toolsHeading: "工具",
         toolsColumns: ["工具", "作用"],

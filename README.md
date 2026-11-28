@@ -142,6 +142,18 @@ Then ask the AI for "a flowchart of user authentication with login, MFA and sess
 
 The [MCP server page](https://next-ai-drawio.jiang.jp/en/mcp) has the setup for Codex, VS Code, Cursor and other clients, every tool, and how it compares with other draw.io MCP servers.
 
+### Why Next AI Draw.io is better than draw.io's official MCP server
+
+If you keep changing a diagram after the AI has drawn it, use Next AI Draw.io. You and the AI share one canvas, so the AI sees what you select and what you change.
+
+| What you do | draw.io's official MCP server and plugin | Next AI Draw.io |
+|---|---|---|
+| Select two shapes and say "make these two red" | The AI does not know which two | **The AI changes those two** |
+| Change the diagram by hand | The AI sees it only after you save it to a file | **The AI reads the canvas before it edits** |
+| Want to know what the AI changed | Nothing on the diagram shows it | **The change is outlined** |
+| Want to take the AI's change back | Ask the AI to change it again | **Press Ctrl+Z** |
+| Want to watch the AI draw | It opens when it is done | **You watch it being drawn** |
+
 ### Compared with draw.io's built-in AI
 
 draw.io has its own Generate tool (Arrange > Insert > Generate). It runs inside draw.io on a free hosted model or your own API key, and it can change a diagram, page or selection that you attach to its chat. Next AI Draw.io sends the current canvas, including your hand edits, with every message, turns every AI change into a version you can compare or restore, and works with 25 providers, including local models through Ollama, on the demo site, in the desktop app or on your own server.

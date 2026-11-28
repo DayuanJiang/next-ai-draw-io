@@ -40,16 +40,6 @@ const OTHERS_JSON = `{
   }
 }`
 
-// The servers' pages, in the order of the comparison rows, as linked from
-// the MCP server README
-const COMPARE_LINKS = [
-    NPM_URL,
-    "https://github.com/jgraph/drawio-mcp",
-    undefined,
-    undefined,
-    "https://github.com/lgazo/drawio-mcp-server",
-]
-
 // The tools, in the order of their texts
 const TOOLS = [
     ["start_session"],
@@ -275,42 +265,33 @@ export default async function Mcp({ params }: Props) {
                         <table className={table}>
                             <thead className="bg-canvas">
                                 <tr>
-                                    {t.compareColumns.map((column) => (
-                                        <th key={column} className={th}>
+                                    {t.compareColumns.map((column, i) => (
+                                        <th
+                                            key={column}
+                                            className={`${th} ${i === 2 ? "bg-marker-soft/40" : ""}`}
+                                        >
                                             {column}
                                         </th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody className="[&>tr:last-child>td]:border-b-0">
-                                {t.compareRows.map((row, i) => (
-                                    <tr
-                                        key={row.server}
-                                        className={`${tr} ${i === 0 ? "bg-marker-soft/40" : ""}`}
-                                    >
-                                        <td
-                                            className={`${td} font-medium md:w-[24%]`}
-                                        >
-                                            {COMPARE_LINKS[i] ? (
-                                                <a
-                                                    href={COMPARE_LINKS[i]}
-                                                    className="hover:underline"
-                                                >
-                                                    <Inline text={row.server} />
-                                                </a>
-                                            ) : (
-                                                <Inline text={row.server} />
-                                            )}
+                                {t.compareRows.map((row) => (
+                                    <tr key={row[0]} className={tr}>
+                                        <td className={`${td} md:w-[36%]`}>
+                                            {row[0]}
                                         </td>
                                         <td
                                             className={`${td} text-muted-foreground`}
                                         >
                                             {label(t.compareColumns[1])}
-                                            <Inline text={row.how} />
+                                            {row[1]}
                                         </td>
-                                        <td className={`${td} md:w-[26%]`}>
+                                        <td
+                                            className={`${td} font-semibold md:w-[28%] md:bg-marker-soft/40`}
+                                        >
                                             {label(t.compareColumns[2])}
-                                            {row.fit}
+                                            {row[2]}
                                         </td>
                                     </tr>
                                 ))}
