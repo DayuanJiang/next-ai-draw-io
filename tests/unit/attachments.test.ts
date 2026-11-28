@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
 import {
-    imageBudgetOf,
     pngSizeEstimate,
     readImageTypes,
     shareOf,
     validateFiles,
 } from "@/components/chat/attachments"
+import { imageBudgetOf } from "@/lib/chat-helpers"
 import en from "@/lib/i18n/dictionaries/en.json"
 
 // As the message box does: read what the pictures are, then validate

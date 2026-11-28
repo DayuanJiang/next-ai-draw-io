@@ -172,6 +172,51 @@ test.describe("File Upload", () => {
         expect(bytes(pictures()[0]).readUInt32BE(16)).toBe(width)
     })
 
+    test("scales a picture down for the server's own model when the server says so", async ({
+        page,
+    }) => {
+        // A server with AI_MODEL alone lists no models: the page cannot
+        // tell by the model's id, and the server says what it takes
+        let request: any = null
+        await page.route("**/api/chat", async (route) => {
+            request = route.request().postDataJSON()
+            await route.fulfill({
+                status: 200,
+                contentType: "text/event-stream",
+                body: createTextOnlyResponse("Here it is."),
+            })
+        })
+        await page.route("**/api/config", (route) =>
+            route.fulfill({
+                contentType: "application/json",
+                body: JSON.stringify({
+                    accessCodeRequired: false,
+                    imageBudget: 1_700_000,
+                }),
+            }),
+        )
+        await openApp(page)
+        await getAttachmentInput(page).setInputFiles({
+            name: "noise.png",
+            mimeType: "image/png",
+            buffer: await noisePng(page),
+        })
+        await expect(page.getByAltText("noise.png")).toBeVisible()
+        await sendMessage(page, "Draw this")
+        await expect(page.getByText("Here it is.")).toBeVisible({
+            timeout: 15000,
+        })
+        const file = request.messages
+            .at(-1)
+            .parts.find((p: any) => p.type === "file")
+        const width = Buffer.from(
+            file.url.split(",")[1],
+            "base64",
+        ).readUInt32BE(16)
+        expect(width).toBeLessThan(860)
+        expect(width).toBeGreaterThan(700)
+    })
+
     test("sends a picture as it is to a model without that limit", async ({
         page,
     }) => {

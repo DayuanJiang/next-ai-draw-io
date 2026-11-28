@@ -6,6 +6,8 @@ export interface SiteConfig {
     gaId?: string
     /** The server keeps a usage log of the editor's actions */
     usageLog?: boolean
+    /** What a message's pictures may come to for the server's own model */
+    imageBudget?: number
 }
 
 let config: Promise<SiteConfig> | undefined

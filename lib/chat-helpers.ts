@@ -11,6 +11,26 @@ import { hasCells } from "@/packages/mcp-server/src/pages.ts"
 export const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 export const MAX_FILES = 5
 
+// What the pictures of one message may come to for an OpenAI model on Amazon
+// Bedrock (GPT-6 Luna there). Since 2026-11-25 Bedrock answers "The provided
+// request is not valid" when the pictures of a request hold too much data.
+// It does not count the files' sizes (a 350 KB photo of 1550 x 1160 fails)
+// but about what the decoded pictures come to as PNGs written fast, with a
+// limit near 2.5 MB. Of some 250 requests with real photos and screenshots,
+// measured with pngSizeEstimate (attachments.ts), the smallest that failed came to 2.0 MB.
+const BEDROCK_OPENAI_IMAGE_BYTES = 1_700_000
+
+/**
+ * How many bytes the pictures of one message may come to (by
+ * pngSizeEstimate in the chat's attachments) for this model; undefined when no such limit is known
+ */
+export function imageBudgetOf(modelId: string | undefined): number | undefined {
+    // Bedrock's ids: openai.gpt-6-luna, global.openai.gpt-6-luna
+    return /(^|\.)openai\./.test(modelId ?? "")
+        ? BEDROCK_OPENAI_IMAGE_BYTES
+        : undefined
+}
+
 // How the image formats every provider reads begin, a character for each byte
 const IMAGE_STARTS: Record<string, RegExp> = {
     "image/png": /^\x89PNG/,
