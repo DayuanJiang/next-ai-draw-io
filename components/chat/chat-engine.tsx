@@ -82,6 +82,7 @@ import { type SelectedCell, useCanvasStore } from "@/stores/canvas-store"
 import { useSettingsStore } from "@/stores/settings-store"
 import { useUiStore } from "@/stores/ui-store"
 import { useVersionsStore } from "@/stores/versions-store"
+import { fitImages, imageBudgetOf } from "./attachments"
 import { APPENDED_FILE_SECTIONS_PATTERN } from "./message-text"
 import { useDiagramStreaming } from "./use-diagram-streaming"
 import { useVersions } from "./use-versions"
@@ -1555,7 +1556,14 @@ export function ChatEngineProvider({
         imageParts?: any[],
     ): Promise<string> => {
         let userText = baseText
-        for (const file of files) {
+        // Some models take only so much picture data in one request
+        const budget = imageBudgetOf(
+            modelConfig.models.find((m) => m.id === modelConfig.selectedModelId)
+                ?.modelId,
+        )
+        const sendFiles =
+            imageParts && budget ? await fitImages(files, budget) : files
+        for (const file of sendFiles) {
             if (isPdfFile(file)) {
                 const extracted = pdfData.get(file)
                 if (extracted?.text) {

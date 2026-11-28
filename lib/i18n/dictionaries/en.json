@@ -188,6 +188,7 @@
             "context_too_long": "The conversation is too long for this model. Start a new chat or pick a model with a larger context.",
             "images_unsupported": "This model doesn't support image input.",
             "image_unreadable": "The provider could not read an attached image. Save it again as PNG or JPEG, then attach it again.",
+            "images_too_large": "The provider refused this request. If it has pictures, they hold more data than this model takes: attach fewer or smaller pictures.",
             "tools_unsupported": "This model doesn't support tool calls, which drawing needs. Pick another model.",
             "output_truncated": "The output was cut off before the diagram was complete. Try a simpler request or raise the output limit in settings.",
             "output_truncated_thinking": "Thinking used up most of the output limit, so the diagram was not finished. Turn off Thinking mode for this model in model settings, or try a simpler request.",

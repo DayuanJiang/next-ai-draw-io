@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { readImageTypes, validateFiles } from "@/components/chat/attachments"
+import {
+    imageBudgetOf,
+    pngSizeEstimate,
+    readImageTypes,
+    shareOf,
+    validateFiles,
+} from "@/components/chat/attachments"
 import en from "@/lib/i18n/dictionaries/en.json"
 
 // As the message box does: read what the pictures are, then validate
@@ -66,5 +72,49 @@ describe("validateFiles", () => {
         expect(attached.size).toBe(picked.size)
         // By these a file picked a second time is known
         expect(attached.lastModified).toBe(picked.lastModified)
+    })
+})
+
+// GPT-6 Luna on Amazon Bedrock refuses a request whose pictures hold too
+// much data: the largest pictures are scaled down before they are sent
+describe("pictures for a model that takes only so much picture data", () => {
+    it("knows the limit of OpenAI models on Bedrock, and of no other", () => {
+        expect(imageBudgetOf("global.openai.gpt-6-luna")).toBeGreaterThan(0)
+        expect(imageBudgetOf("openai.gpt-6-luna")).toBeGreaterThan(0)
+        // OpenAI's own API, OpenRouter, Claude on Bedrock, no model
+        expect(imageBudgetOf("gpt-6-luna")).toBeUndefined()
+        expect(imageBudgetOf("openai/gpt-6-luna")).toBeUndefined()
+        expect(
+            imageBudgetOf("global.anthropic.claude-sonnet-5-5"),
+        ).toBeUndefined()
+        expect(imageBudgetOf(undefined)).toBeUndefined()
+    })
+
+    it("lets the small pictures keep their size", () => {
+        // All fit
+        expect(shareOf([100, 100, 100], 300)).toBe(Number.POSITIVE_INFINITY)
+        // A diagram of 10 next to two photos of 500: the photos share 400
+        expect(shareOf([500, 10, 500], 410)).toBe(200)
+        // One picture alone gets the whole budget
+        expect(shareOf([1000], 130)).toBe(130)
+        expect(shareOf([10, 20, 1000], 130)).toBe(100)
+    })
+
+    it("counts a flat picture as next to nothing and noise in full", () => {
+        const width = 100
+        const flat = new Uint8ClampedArray(width * 100 * 4).fill(255)
+        expect(pngSizeEstimate(flat, width)).toBeLessThan(400)
+
+        // The same numbers on every run
+        let seed = 1
+        const noise = new Uint8ClampedArray(width * 100 * 4)
+        for (let i = 0; i < noise.length; i++) {
+            seed = (seed * 48271) % 2147483647
+            noise[i] = i % 4 === 3 ? 255 : (seed >> 8) & 255
+        }
+        // Three bytes a pixel that nothing can make smaller
+        const size = pngSizeEstimate(noise, width)
+        expect(size).toBeGreaterThan(29_000)
+        expect(size).toBeLessThan(30_500)
     })
 })
