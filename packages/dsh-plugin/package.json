@@ -1,6 +1,17 @@
 {
     "name": "@next-ai-drawio/dsh",
-    "version": "0.1.0",
+    "version": "0.1.1",
+    "type": "module",
+    "exports": {
+        ".": "./index.js",
+        "./client": "./client.js",
+        "./package.json": "./package.json",
+        "./locale/*.json": "./locale/*.json",
+        "./icon": "./icon.png"
+    },
+    "scripts": {
+        "test": "node --test test/*.test.mjs"
+    },
     "description": "draw.io diagrams in DeepSeek Harness: the AI draws on a live canvas in the sidebar that you can also edit by hand, with versions and undo",
     "keywords": [
         "dsh",
@@ -26,6 +37,8 @@
     },
     "icon": "./icon.png",
     "files": [
+        "index.js",
+        "client.js",
         "cordis.patch.yml",
         "icon.png",
         "locale",
@@ -35,6 +48,15 @@
         "access": "public"
     },
     "dsh": {
+        "client": {
+            "platform": "web",
+            "immediately": true,
+            "inject": [
+                "@deepseek-ai/dsh-client-ui-sidebar-right",
+                "@deepseek-ai/dsh-client-ui-conversation",
+                "@deepseek-ai/dsh-api-session-controller"
+            ]
+        },
         "bundle": {
             "patch": "./cordis.patch.yml"
         }

@@ -12,7 +12,9 @@ Use the profile you start DSH with (`web` for `dsh web`). You need Node.js 18 or
 
 ## Use
 
-Ask, for example, "Read this repo and draw its architecture". The agent calls `start_session` and replies with the preview link. Click it: the preview opens in DSH's right sidebar, and the diagram appears as it is drawn. The plugin turns on DSH's sidebar browser, which the web profile leaves off by default.
+Ask, for example, "Read this repo and draw its architecture". On a local DSH Web or Desktop client with the sidebar and session projection APIs (available in Desktop `0.2.2-rc.5`), the **Draw.io** tab opens when the agent starts or resumes the live canvas. You can return to it from the right-sidebar guide. Each conversation keeps its own canvas link. After restarting the MCP server, ask the agent to resume the saved diagram if the old canvas link stops responding.
+
+The agent still returns the preview link. On clients where the Draw.io tab is unavailable, use that link to open the preview in DSH's sidebar browser or your browser.
 
 The agent checks its drawing with `screenshot_diagram`. That works once the preview is open, and only with a model that accepts images; with a text-only model, DSH passes a short note instead of the picture.
 

@@ -2,12 +2,15 @@
 #
 # Mounts the @next-ai-drawio/mcp-server MCP server over stdio. Its tools show
 # up as mcp__drawio__start_session, mcp__drawio__create_new_diagram and so on.
-# start_session returns the preview link; clicking it in the chat opens the
-# live preview in DSH's right sidebar.
+# The sidebar integration observes successful start_session results.
+# The browser link still works on profiles without the live canvas tab.
 #
 # Install through DSH's plugin manager: dsh plugin --profile web add @next-ai-drawio/dsh
 
 - insert:
+    - id: drawio-live-canvas
+      name: '@next-ai-drawio/dsh'
+      config: {}
     - id: mcp-drawio
       name: '@deepseek-ai/dsh-mcp-client'
       config:
