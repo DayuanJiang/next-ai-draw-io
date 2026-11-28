@@ -42,6 +42,10 @@ Web アプリ、Windows / macOS / Linux 向けデスクトップアプリ、そ�
 -   推論するモデルは思考過程を表示
 -   ダークモード。UI は英語、簡体字中国語、繁体字中国語、日本語に対応
 
+### テキストから AWS 構成図を作る
+
+システムを文章で説明すると、Next AI Draw.io が AWS 公式アイコンで構成図を描きます。無料のオープンソースで、できあがるのは普通の draw.io ファイルです。手で直すことも、`.drawio`、`.png`、`.svg` で書き出すこともできます。スクリーンショットや PDF から描き直すことも、MCP サーバー経由で Terraform、CDK、CloudFormation のファイルを読んで構成を図にすることもできます。詳しくは[テキストから AWS 構成図を作る](https://next-ai-drawio.jiang.jp/ja/docs/aws-architecture)をご覧ください。
+
 ## 例
 
 <div align="center">
